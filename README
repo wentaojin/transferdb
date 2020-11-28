@@ -1,0 +1,25 @@
+# Transferdb
+
+异构数据库模式表定义包括表 strunct，view，唯一或非唯一索引，主键或唯一键或外键，自动生成表定义并向MySQL构建表。只支持Oracle转换Mysql
+
+transferdb migrate
+
+```
+
+使用事项：
+
+最好在装有 oracle 环境下 oracle 用户运行
+需要把 oracle client instantclient-basic-linux.x64-19.8.0.0.0dbru.zip 上传解压，并配置LD_LIBRARY_PATH 环境变量
+使用方法:
+
+1、上传解压 instantclient-basic-linux.x64-19.8.0.0.0dbru.zip（该压缩包位于 client 目录） 到指定目录，比如：/home/oracle/instantclient_19_8  
+
+2、查看环境变量 LD_LIBRARY_PATH
+echo $LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=$ORACLE_HOME/lib:$ORACLE_HOME/rdbms/lib:/lib:/usr/lib:/home/oracle/instantclient_19_8 
+
+3、migrate 配置文件 migrate.toml 样例位于 conf 目录下,详情请见说明以及配置
+4、$ ./transferdb migrate -c migrate.toml 
+```
+
+

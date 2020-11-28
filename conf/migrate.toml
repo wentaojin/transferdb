@@ -1,0 +1,43 @@
+# sample convert command TOML document
+
+[source]
+# source db type,only support oracle
+datasource = "oracle"
+host = "172.16.4.65"
+username = "marvin"
+password = "marvin"
+port = "1521"
+# type oracle show service name
+dbName = "ORCL"
+# configure exporter convert schema
+schema = "tidb"
+# includeTable and excludeTable cannot coexist,
+# if includeTable and excludeTable all exist, Then the according to includeTable rule export convert
+includeTable = []
+excludeTable = []
+# control view create,if false ,it show view don't create,if true, view would auto create,But if view exist cross schema,
+# eg:  create view scott.emp_view2 as select * from scott.emp,marvin.t2;
+# if target.schema marvin.t2 not exist,view create in the target.schema would report error:
+# Failed: Error 1146: Table 'marvin.t2' doesn't exist
+viewCreate = true
+
+
+[target]
+# target db type, Only mysql, target db would create table with the same database
+datasource = "mysql"
+host = "172.16.4.31"
+username = "root"
+password = ""
+port = "5110"
+# configure importer db, target.dbName and source.dbName configure the different dbName, show rename dbname
+# type mysql only exist schema, schema representative dbname,this parameter does not take effect
+dbName = "marvin"
+# configure importer schema, target.schema and source.schema configure the different schema,show rename schema
+schema = "marvin"
+# for existing table or database specific behaviors, true means to rename and then create,
+# false means to skip and print warn record, default false
+behavior = false
+
+[global]
+# control the maximum number of concurrent groutinue
+maxProcs = 8
