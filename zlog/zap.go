@@ -16,19 +16,25 @@ limitations under the License.
 package zlog
 
 import (
-	"os"
-
+	"github.com/WentaoJin/dbsyncer/pkg/config"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 var Logger *zap.Logger
 
-// NewZapLogger new zap logger
-func NewZapLogger() (err error) {
+// 初始化日志 logger
+func NewZapLogger(cfg *config.CfgFile) (err error) {
+	writeSyncer := getLogWriter(cfg.LogConfig.LogFile, cfg.LogConfig.MaxSize, cfg.LogConfig.MaxBackups, cfg.LogConfig.MaxAge,
+		cfg.LogConfig.Compress)
 	encoder := getEncoder()
 	var l = new(zapcore.Level)
-	core := zapcore.NewCore(encoder, zapcore.AddSync(os.Stdout), l)
+	err = l.UnmarshalText([]byte(cfg.LogConfig.LogLevel))
+	if err != nil {
+		return
+	}
+	core := zapcore.NewCore(encoder, writeSyncer, l)
 	Logger = zap.New(core, zap.AddCaller())
 	return
 }
@@ -41,4 +47,15 @@ func getEncoder() zapcore.Encoder {
 	encoderConfig.EncodeDuration = zapcore.SecondsDurationEncoder
 	encoderConfig.EncodeCaller = zapcore.ShortCallerEncoder
 	return zapcore.NewConsoleEncoder(encoderConfig)
+}
+
+func getLogWriter(filename string, maxSize, maxBackup, maxAge int, compress bool) zapcore.WriteSyncer {
+	lumberJackLogger := &lumberjack.Logger{
+		Filename:   filename,
+		MaxSize:    maxSize,
+		MaxBackups: maxBackup,
+		MaxAge:     maxAge,
+		Compress:   compress,
+	}
+	return zapcore.AddSync(lumberJackLogger)
 }

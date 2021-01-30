@@ -13,34 +13,28 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package main
+package db
 
 import (
-	"log"
-	"net/http"
-	_ "net/http/pprof"
-	"os"
+	"database/sql"
+	"fmt"
+	"time"
 
-	"github.com/WentaoJin/transferdb/cmd"
-	"github.com/WentaoJin/transferdb/zlog"
+	_ "github.com/godror/godror"
 )
 
-func init() {
-	if err := zlog.NewZapLogger(); err != nil {
-		log.Fatalf("New global zap logger failed: %v", err)
+// 创建 oracle 数据库引擎
+func NewOracleDBEngine(dsn string) (*sql.DB, error) {
+	sqlDB, err := sql.Open("godror", dsn)
+	if err != nil {
+		return sqlDB, fmt.Errorf("error on initializing oracle database connection: %v", err)
 	}
-}
-
-func main() {
-	go func() {
-		if err := http.ListenAndServe(":9696", nil); err != nil {
-			log.Fatal(err)
-		}
-		os.Exit(0)
-	}()
-	app := &cmd.App{}
-	cmder := cmd.Cmd(app)
-	if err := cmder.Execute(); err != nil {
-		log.Fatalln(err)
+	err = sqlDB.Ping()
+	if err != nil {
+		return sqlDB, fmt.Errorf("error on ping oracle database connection:%v", err)
 	}
+	sqlDB.SetMaxIdleConns(10)
+	sqlDB.SetMaxOpenConns(20)
+	sqlDB.SetConnMaxLifetime(time.Hour)
+	return sqlDB, nil
 }
