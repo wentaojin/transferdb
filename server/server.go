@@ -19,11 +19,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/WentaoJin/dbsyncer/pkg/config"
+	"github.com/WentaoJin/transferdb/pkg/config"
 
-	"github.com/WentaoJin/dbsyncer/pkg/reverser"
+	"github.com/WentaoJin/transferdb/pkg/reverser"
 
-	"github.com/WentaoJin/dbsyncer/db"
+	"github.com/WentaoJin/transferdb/db"
 )
 
 func Run(cfg *config.CfgFile, mode string) error {

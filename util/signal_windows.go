@@ -22,7 +22,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/WentaoJin/dbsyncer/zlog"
+	"github.com/WentaoJin/transferdb/zlog"
 
 	"go.uber.org/zap"
 )

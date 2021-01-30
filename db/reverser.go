@@ -19,10 +19,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/WentaoJin/dbsyncer/zlog"
+	"github.com/WentaoJin/transferdb/zlog"
 	"go.uber.org/zap"
 
-	"github.com/WentaoJin/dbsyncer/util"
+	"github.com/WentaoJin/transferdb/util"
 )
 
 func (e *Engine) IsExistMySQLSchema(schemaName string) (bool, error) {
@@ -138,7 +138,8 @@ func (e *Engine) GetOracleTableColumn(schemaName string, tableName string) ([]ma
 	 and t.column_name = c.column_name
      and t.owner = c.owner
 	 and t.table_name = upper('%s')
-	 and t.owner = upper('%s')`,
+	 and t.owner = upper('%s')
+    order by t.COLUMN_ID`,
 		strings.ToUpper(tableName),
 		strings.ToUpper(schemaName))
 	_, res, err := Query(e.OracleDB, querySQL)
@@ -183,6 +184,26 @@ func (e *Engine) GetOracleTableUniqueKey(schemaName string, tableName string) ([
  group by cu.constraint_name`,
 		strings.ToUpper(tableName),
 		strings.ToUpper(schemaName))
+	_, res, err := Query(e.OracleDB, querySQL)
+	if err != nil {
+		return res, err
+	}
+	return res, nil
+}
+
+func (e *Engine) GetOracleTableCheckKey(schemaName string, tableName string) ([]map[string]string, error) {
+	querySQL := fmt.Sprintf(`select cu.constraint_name,SEARCH_CONDITION
+          from all_cons_columns cu, all_constraints au
+         where cu.constraint_name = au.constraint_name
+           and au.constraint_type = 'C'
+           and au.STATUS = 'ENABLED'
+           and upper(au.SEARCH_CONDITION_VC) not like upper('%s')
+           and upper(au.table_name) = upper('%s')
+           and upper(cu.owner) = upper('%s')`,
+		"% IS NOT NULL%",
+		strings.ToUpper(tableName),
+		strings.ToUpper(schemaName),
+	)
 	_, res, err := Query(e.OracleDB, querySQL)
 	if err != nil {
 		return res, err

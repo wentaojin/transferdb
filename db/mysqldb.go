@@ -19,7 +19,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/WentaoJin/dbsyncer/zlog"
+	"github.com/WentaoJin/transferdb/zlog"
 
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"

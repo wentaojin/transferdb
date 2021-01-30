@@ -20,10 +20,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/WentaoJin/dbsyncer/zlog"
+	"github.com/WentaoJin/transferdb/zlog"
 	"go.uber.org/zap"
 
-	"github.com/WentaoJin/dbsyncer/db"
+	"github.com/WentaoJin/transferdb/db"
 )
 
 // 任务
@@ -224,12 +224,12 @@ func (t Table) reverserOracleTableColumnToMySQL() ([]string, error) {
 				}
 			}
 			modifyColumnType = changeOracleTableColumnType(originColumnType, t.ColumnTypes, buildInColumnType)
-			columnMeta = generateOracleTableColumnMetaByIntType(columnName, modifyColumnType, rowCol)
+			columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, rowCol)
 		case "BFILE":
 			originColumnType = "BFILE"
 			buildInColumnType = "VARCHAR(255)"
 			modifyColumnType = changeOracleTableColumnType(originColumnType, t.ColumnTypes, buildInColumnType)
-			columnMeta = generateOracleTableColumnMetaByStringType(columnName, modifyColumnType, rowCol)
+			columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, rowCol)
 		case "CHAR":
 			originColumnType = fmt.Sprintf("CHAR(%s)", rowCol["DATA_LENGTH"])
 			if lengthValue < 256 {
@@ -237,7 +237,7 @@ func (t Table) reverserOracleTableColumnToMySQL() ([]string, error) {
 			}
 			buildInColumnType = fmt.Sprintf("VARCHAR(%s)", rowCol["DATA_LENGTH"])
 			modifyColumnType = changeOracleTableColumnType(originColumnType, t.ColumnTypes, buildInColumnType)
-			columnMeta = generateOracleTableColumnMetaByStringType(columnName, modifyColumnType, rowCol)
+			columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, rowCol)
 		case "CHARACTER":
 			originColumnType = fmt.Sprintf("CHARACTER(%s)", rowCol["DATA_LENGTH"])
 			if lengthValue < 256 {
@@ -245,22 +245,22 @@ func (t Table) reverserOracleTableColumnToMySQL() ([]string, error) {
 			}
 			buildInColumnType = fmt.Sprintf("VARCHAR(%s)", rowCol["DATA_LENGTH"])
 			modifyColumnType = changeOracleTableColumnType(originColumnType, t.ColumnTypes, buildInColumnType)
-			columnMeta = generateOracleTableColumnMetaByStringType(columnName, modifyColumnType, rowCol)
+			columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, rowCol)
 		case "CLOB":
 			originColumnType = "CLOB"
 			buildInColumnType = "LONGTEXT"
 			modifyColumnType = changeOracleTableColumnType(originColumnType, t.ColumnTypes, buildInColumnType)
-			columnMeta = generateOracleTableColumnMetaByStringType(columnName, modifyColumnType, rowCol)
+			columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, rowCol)
 		case "BLOB":
 			originColumnType = "BLOB"
 			buildInColumnType = "BLOB"
 			modifyColumnType = changeOracleTableColumnType(originColumnType, t.ColumnTypes, buildInColumnType)
-			columnMeta = generateOracleTableColumnMetaByStringType(columnName, modifyColumnType, rowCol)
+			columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, rowCol)
 		case "DATE":
 			originColumnType = "DATE"
 			buildInColumnType = "DATETIME"
 			modifyColumnType = changeOracleTableColumnType(originColumnType, t.ColumnTypes, buildInColumnType)
-			columnMeta = generateOracleTableColumnMetaByStringType(columnName, modifyColumnType, rowCol)
+			columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, rowCol)
 		case "DECIMAL":
 			switch {
 			case scaleValue == 0 && precisionValue == 0:
@@ -271,7 +271,7 @@ func (t Table) reverserOracleTableColumnToMySQL() ([]string, error) {
 				buildInColumnType = fmt.Sprintf("DECIMAL(%s,%s)", rowCol["DATA_PRECISION"], rowCol["DATA_SCALE"])
 			}
 			modifyColumnType = changeOracleTableColumnType(originColumnType, t.ColumnTypes, buildInColumnType)
-			columnMeta = generateOracleTableColumnMetaByIntType(columnName, modifyColumnType, rowCol)
+			columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, rowCol)
 		case "DEC":
 			switch {
 			case scaleValue == 0 && precisionValue == 0:
@@ -282,12 +282,12 @@ func (t Table) reverserOracleTableColumnToMySQL() ([]string, error) {
 				buildInColumnType = fmt.Sprintf("DECIMAL(%s,%s)", rowCol["DATA_PRECISION"], rowCol["DATA_SCALE"])
 			}
 			modifyColumnType = changeOracleTableColumnType(originColumnType, t.ColumnTypes, buildInColumnType)
-			columnMeta = generateOracleTableColumnMetaByIntType(columnName, modifyColumnType, rowCol)
+			columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, rowCol)
 		case "DOUBLE PRECISION":
 			originColumnType = "DOUBLE PRECISION"
 			buildInColumnType = "DOUBLE PRECISION"
 			modifyColumnType = changeOracleTableColumnType(originColumnType, t.ColumnTypes, buildInColumnType)
-			columnMeta = generateOracleTableColumnMetaByFloatType(columnName, modifyColumnType, rowCol)
+			columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, rowCol)
 		case "FLOAT":
 			originColumnType = "FLOAT"
 			if precisionValue == 0 {
@@ -295,37 +295,37 @@ func (t Table) reverserOracleTableColumnToMySQL() ([]string, error) {
 			}
 			buildInColumnType = "DOUBLE"
 			modifyColumnType = changeOracleTableColumnType(originColumnType, t.ColumnTypes, buildInColumnType)
-			columnMeta = generateOracleTableColumnMetaByFloatType(columnName, modifyColumnType, rowCol)
+			columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, rowCol)
 		case "INTEGER":
 			originColumnType = "INTEGER"
 			buildInColumnType = "INT"
 			modifyColumnType = changeOracleTableColumnType(originColumnType, t.ColumnTypes, buildInColumnType)
-			columnMeta = generateOracleTableColumnMetaByIntType(columnName, modifyColumnType, rowCol)
+			columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, rowCol)
 		case "INT":
 			originColumnType = "INTEGER"
 			buildInColumnType = "INT"
 			modifyColumnType = changeOracleTableColumnType(originColumnType, t.ColumnTypes, buildInColumnType)
-			columnMeta = generateOracleTableColumnMetaByIntType(columnName, modifyColumnType, rowCol)
+			columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, rowCol)
 		case "LONG":
 			originColumnType = "LONG"
 			buildInColumnType = "LONGTEXT"
 			modifyColumnType = changeOracleTableColumnType(originColumnType, t.ColumnTypes, buildInColumnType)
-			columnMeta = generateOracleTableColumnMetaByStringType(columnName, modifyColumnType, rowCol)
+			columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, rowCol)
 		case "LONG RAW":
 			originColumnType = "LONG RAW"
 			buildInColumnType = "LONGBLOB"
 			modifyColumnType = changeOracleTableColumnType(originColumnType, t.ColumnTypes, buildInColumnType)
-			columnMeta = generateOracleTableColumnMetaByStringType(columnName, modifyColumnType, rowCol)
+			columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, rowCol)
 		case "BINARY_FLOAT":
 			originColumnType = "BINARY_FLOAT"
 			buildInColumnType = "DOUBLE"
 			modifyColumnType = changeOracleTableColumnType(originColumnType, t.ColumnTypes, buildInColumnType)
-			columnMeta = generateOracleTableColumnMetaByFloatType(columnName, modifyColumnType, rowCol)
+			columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, rowCol)
 		case "BINARY_DOUBLE":
 			originColumnType = "BINARY_DOUBLE"
 			buildInColumnType = "DOUBLE"
 			modifyColumnType = changeOracleTableColumnType(originColumnType, t.ColumnTypes, buildInColumnType)
-			columnMeta = generateOracleTableColumnMetaByFloatType(columnName, modifyColumnType, rowCol)
+			columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, rowCol)
 		case "NCHAR":
 			originColumnType = fmt.Sprintf("NCHAR(%s)", rowCol["DATA_LENGTH"])
 			if lengthValue < 256 {
@@ -333,27 +333,27 @@ func (t Table) reverserOracleTableColumnToMySQL() ([]string, error) {
 			}
 			buildInColumnType = fmt.Sprintf("NVARCHAR(%s)", rowCol["DATA_LENGTH"])
 			modifyColumnType = changeOracleTableColumnType(originColumnType, t.ColumnTypes, buildInColumnType)
-			columnMeta = generateOracleTableColumnMetaByStringType(columnName, modifyColumnType, rowCol)
+			columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, rowCol)
 		case "NCHAR VARYING":
 			originColumnType = "NCHAR VARYING"
 			buildInColumnType = fmt.Sprintf("NCHAR VARYING(%s)", rowCol["DATA_LENGTH"])
 			modifyColumnType = changeOracleTableColumnType(originColumnType, t.ColumnTypes, buildInColumnType)
-			columnMeta = generateOracleTableColumnMetaByStringType(columnName, modifyColumnType, rowCol)
+			columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, rowCol)
 		case "NCLOB":
 			originColumnType = "NCLOB"
 			buildInColumnType = "TEXT"
 			modifyColumnType = changeOracleTableColumnType(originColumnType, t.ColumnTypes, buildInColumnType)
-			columnMeta = generateOracleTableColumnMetaByStringType(columnName, modifyColumnType, rowCol)
+			columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, rowCol)
 		case "NUMERIC":
 			originColumnType = fmt.Sprintf("NUMERIC(%s,%s)", rowCol["DATA_PRECISION"], rowCol["DATA_SCALE"])
 			buildInColumnType = fmt.Sprintf("NUMERIC(%s,%s)", rowCol["DATA_PRECISION"], rowCol["DATA_SCALE"])
 			modifyColumnType = changeOracleTableColumnType(originColumnType, t.ColumnTypes, buildInColumnType)
-			columnMeta = generateOracleTableColumnMetaByIntType(columnName, modifyColumnType, rowCol)
+			columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, rowCol)
 		case "NVARCHAR2":
 			originColumnType = fmt.Sprintf("NVARCHAR2(%s)", rowCol["DATA_LENGTH"])
 			buildInColumnType = fmt.Sprintf("NVARCHAR(%s)", rowCol["DATA_LENGTH"])
 			modifyColumnType = changeOracleTableColumnType(originColumnType, t.ColumnTypes, buildInColumnType)
-			columnMeta = generateOracleTableColumnMetaByStringType(columnName, modifyColumnType, rowCol)
+			columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, rowCol)
 		case "RAW":
 			originColumnType = fmt.Sprintf("RAW(%s)", rowCol["DATA_LENGTH"])
 			if lengthValue < 256 {
@@ -361,42 +361,42 @@ func (t Table) reverserOracleTableColumnToMySQL() ([]string, error) {
 			}
 			buildInColumnType = fmt.Sprintf("VARBINARY(%s)", rowCol["DATA_LENGTH"])
 			modifyColumnType = changeOracleTableColumnType(originColumnType, t.ColumnTypes, buildInColumnType)
-			columnMeta = generateOracleTableColumnMetaByStringType(columnName, modifyColumnType, rowCol)
+			columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, rowCol)
 		case "real":
 			originColumnType = "real"
 			buildInColumnType = "DOUBLE"
 			modifyColumnType = changeOracleTableColumnType(originColumnType, t.ColumnTypes, buildInColumnType)
-			columnMeta = generateOracleTableColumnMetaByFloatType(columnName, modifyColumnType, rowCol)
+			columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, rowCol)
 		case "ROWID":
 			originColumnType = "ROWID"
 			buildInColumnType = "CHAR(10)"
 			modifyColumnType = changeOracleTableColumnType(originColumnType, t.ColumnTypes, buildInColumnType)
-			columnMeta = generateOracleTableColumnMetaByStringType(columnName, modifyColumnType, rowCol)
+			columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, rowCol)
 		case "SMALLINT":
 			originColumnType = "SMALLINT"
 			buildInColumnType = "DECIMAL(38)"
 			modifyColumnType = changeOracleTableColumnType(originColumnType, t.ColumnTypes, buildInColumnType)
-			columnMeta = generateOracleTableColumnMetaByIntType(columnName, modifyColumnType, rowCol)
+			columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, rowCol)
 		case "UROWID":
 			originColumnType = "UROWID"
 			buildInColumnType = fmt.Sprintf("VARCHAR(%s)", rowCol["DATA_LENGTH"])
 			modifyColumnType = changeOracleTableColumnType(originColumnType, t.ColumnTypes, buildInColumnType)
-			columnMeta = generateOracleTableColumnMetaByStringType(columnName, modifyColumnType, rowCol)
+			columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, rowCol)
 		case "VARCHAR2":
 			originColumnType = fmt.Sprintf("VARCHAR2(%s)", rowCol["DATA_LENGTH"])
 			buildInColumnType = fmt.Sprintf("VARCHAR(%s)", rowCol["DATA_LENGTH"])
 			modifyColumnType = changeOracleTableColumnType(originColumnType, t.ColumnTypes, buildInColumnType)
-			columnMeta = generateOracleTableColumnMetaByStringType(columnName, modifyColumnType, rowCol)
+			columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, rowCol)
 		case "VARCHAR":
 			originColumnType = fmt.Sprintf("VARCHAR(%s)", rowCol["DATA_LENGTH"])
 			buildInColumnType = fmt.Sprintf("VARCHAR(%s)", rowCol["DATA_LENGTH"])
 			modifyColumnType = changeOracleTableColumnType(originColumnType, t.ColumnTypes, buildInColumnType)
-			columnMeta = generateOracleTableColumnMetaByStringType(columnName, modifyColumnType, rowCol)
+			columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, rowCol)
 		case "XMLTYPE":
 			originColumnType = "XMLTYPE"
 			buildInColumnType = "LONGTEXT"
 			modifyColumnType = changeOracleTableColumnType(originColumnType, t.ColumnTypes, buildInColumnType)
-			columnMeta = generateOracleTableColumnMetaByStringType(columnName, modifyColumnType, rowCol)
+			columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, rowCol)
 		default:
 			if strings.Contains(rowCol["DATA_TYPE"], "INTERVAL") {
 				originColumnType = rowCol["DATA_TYPE"]
@@ -412,7 +412,7 @@ func (t Table) reverserOracleTableColumnToMySQL() ([]string, error) {
 				buildInColumnType = "TEXT"
 			}
 			modifyColumnType = changeOracleTableColumnType(originColumnType, t.ColumnTypes, buildInColumnType)
-			columnMeta = generateOracleTableColumnMetaByStringType(columnName, modifyColumnType, rowCol)
+			columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, rowCol)
 		}
 		columnMetas = append(columnMetas, columnMeta)
 	}
@@ -433,20 +433,24 @@ func (t Table) reverserOracleTableKeyToMySQL() ([]string, error) {
 	if err != nil {
 		return keysMeta, err
 	}
+	checkKeyMap, err := t.Engine.GetOracleTableCheckKey(t.SourceSchemaName, t.SourceTableName)
+	if err != nil {
+		return keysMeta, err
+	}
 	if len(primaryKeyMap) > 1 {
 		return keysMeta, fmt.Errorf("oracle schema [%s] table [%s] primary key exist multiple values: [%v]", t.SourceSchemaName, t.SourceTableName, primaryKeyMap)
 	}
-	if len(primaryKeyMap) != 0 {
+	if len(primaryKeyMap) > 0 {
 		pk := fmt.Sprintf("PRIMARY KEY (%s)", strings.ToLower(primaryKeyMap[0]["COLUMN_LIST"]))
 		keysMeta = append(keysMeta, pk)
 	}
-	if len(uniqueKeyMap) != 0 {
+	if len(uniqueKeyMap) > 0 {
 		for _, rowUKCol := range uniqueKeyMap {
 			uk := fmt.Sprintf("UNIQUE KEY `%s` (%s)", strings.ToLower(rowUKCol["CONSTRAINT_NAME"]), strings.ToLower(rowUKCol["COLUMN_LIST"]))
 			keysMeta = append(keysMeta, uk)
 		}
 	}
-	if len(foreignKeyMap) != 0 {
+	if len(foreignKeyMap) > 0 {
 		for _, rowFKCol := range foreignKeyMap {
 			fk := fmt.Sprintf("CONSTRAINT `%s` FOREIGN KEY(`%s`) REFERENCES `%s`(`%s`)",
 				strings.ToLower(rowFKCol["CONSTRAINT_NAME"]),
@@ -455,6 +459,15 @@ func (t Table) reverserOracleTableKeyToMySQL() ([]string, error) {
 				strings.ToLower(rowFKCol["RCOLUMN_NAME"]))
 			keysMeta = append(keysMeta, fk)
 		}
+	}
+	if len(checkKeyMap) > 0 {
+		for _, rowCKCol := range checkKeyMap {
+			ck := fmt.Sprintf("CONSTRAINT `%s` CHECK (%s)",
+				strings.ToLower(rowCKCol["CONSTRAINT_NAME"]),
+				strings.ToLower(rowCKCol["SEARCH_CONDITION"]))
+			keysMeta = append(keysMeta, ck)
+		}
+
 	}
 	return keysMeta, nil
 }
@@ -484,7 +497,7 @@ func changeOracleTableColumnType(originColumnType string, columnTypes []ColumnTy
 	return buildInColumnType
 }
 
-func generateOracleTableColumnMetaByStringType(columnName, columnType string, rowCol map[string]string) string {
+func generateOracleTableColumnMetaByType(columnName, columnType string, rowCol map[string]string) string {
 	var (
 		nullable string
 		colMeta  string
@@ -500,82 +513,29 @@ func generateOracleTableColumnMetaByStringType(columnName, columnType string, ro
 	}
 
 	if nullable == "NULL" {
-		if rowCol["COMMENTS"] != "" {
+		switch {
+		case rowCol["COMMENTS"] != "" && rowCol["DATA_DEFAULT"] != "":
+			colMeta = fmt.Sprintf("`%s` %s DEFAULT %s COMMENT '%s'", columnName, columnType, rowCol["DATA_DEFAULT"], rowCol["COMMENTS"])
+		case rowCol["COMMENTS"] != "" && rowCol["DATA_DEFAULT"] == "":
 			colMeta = fmt.Sprintf("`%s` %s COMMENT '%s'", columnName, columnType, rowCol["COMMENTS"])
+		case rowCol["COMMENTS"] == "" && rowCol["DATA_DEFAULT"] != "":
+			colMeta = fmt.Sprintf("`%s` %s DEFAULT %s", columnName, columnType, rowCol["DATA_DEFAULT"])
+		case rowCol["COMMENTS"] == "" && rowCol["DATA_DEFAULT"] == "":
+			colMeta = fmt.Sprintf("`%s` %s", columnName, columnType)
 		}
-		colMeta = fmt.Sprintf("`%s` %s", columnName, columnType)
-		return colMeta
 	} else {
-		if rowCol["COMMENTS"] != "" {
-			colMeta = fmt.Sprintf("`%s` %s %s DEFAULT '%s' COMMENT '%s'", columnName, columnType, nullable, rowCol["DATA_DEFAULT"], rowCol["COMMENTS"])
+		switch {
+		case rowCol["COMMENTS"] != "" && rowCol["DATA_DEFAULT"] != "":
+			colMeta = fmt.Sprintf("`%s` %s %s DEFAULT %s COMMENT '%s'", columnName, columnType, nullable, rowCol["DATA_DEFAULT"], rowCol["COMMENTS"])
 			return colMeta
-		}
-		colMeta = fmt.Sprintf("`%s` %s %s DEFAULT '%s'", columnName, columnType, nullable, rowCol["DATA_DEFAULT"])
-	}
-
-	return colMeta
-}
-
-func generateOracleTableColumnMetaByIntType(columnName, columnType string, rowCol map[string]string) string {
-	var (
-		nullable string
-		colMeta  string
-	)
-
-	columnName = strings.ToLower(columnName)
-	columnType = strings.ToLower(columnType)
-
-	if rowCol["NULLABLE"] == "Y" {
-		nullable = "NULL"
-	} else {
-		nullable = "NOT NULL"
-	}
-
-	if nullable == "NULL" {
-		if rowCol["COMMENTS"] != "" {
-			colMeta = fmt.Sprintf("`%s` %s COMMENT '%s'", columnName, columnType, rowCol["COMMENTS"])
-		}
-		colMeta = fmt.Sprintf("`%s` %s", columnName, columnType)
-	} else {
-		defaultIntValue, _ := strconv.Atoi(rowCol["DATA_DEFAULT"])
-		if rowCol["COMMENTS"] != "" {
-			colMeta = fmt.Sprintf("`%s` %s %s DEFAULT %d COMMENT '%s'", columnName, columnType, nullable, defaultIntValue, rowCol["COMMENTS"])
+		case rowCol["COMMENTS"] != "" && rowCol["DATA_DEFAULT"] == "":
+			colMeta = fmt.Sprintf("`%s` %s %s COMMENT '%s'", columnName, columnType, nullable, rowCol["COMMENTS"])
+		case rowCol["COMMENTS"] == "" && rowCol["DATA_DEFAULT"] != "":
+			colMeta = fmt.Sprintf("`%s` %s %s DEFAULT %s", columnName, columnType, nullable, rowCol["DATA_DEFAULT"])
 			return colMeta
+		case rowCol["COMMENTS"] == "" && rowCol["DATA_DEFAULT"] == "":
+			colMeta = fmt.Sprintf("`%s` %s %s", columnName, columnType, nullable)
 		}
-		colMeta = fmt.Sprintf("`%s` %s %s DEFAULT %d", columnName, columnType, nullable, defaultIntValue)
 	}
-	return colMeta
-
-}
-
-func generateOracleTableColumnMetaByFloatType(columnName, columnType string, rowCol map[string]string) string {
-	var (
-		nullable string
-		colMeta  string
-	)
-
-	columnName = strings.ToLower(columnName)
-	columnType = strings.ToLower(columnType)
-
-	if rowCol["NULLABLE"] == "Y" {
-		nullable = "NULL"
-	} else {
-		nullable = "NOT NULL"
-	}
-
-	if nullable == "NULL" {
-		if rowCol["COMMENTS"] != "" {
-			colMeta = fmt.Sprintf("`%s` %s COMMENT '%s'", columnName, columnType, rowCol["COMMENTS"])
-		}
-		colMeta = fmt.Sprintf("`%s` %s", columnName, columnType)
-	} else {
-		defaultFloatValue, _ := strconv.ParseFloat(rowCol["DATA_DEFAULT"], 64)
-		if rowCol["COMMENTS"] != "" {
-			colMeta = fmt.Sprintf("`%s` %s %s DEFAULT %f COMMENT '%s'", columnName, columnType, nullable, defaultFloatValue, rowCol["COMMENTS"])
-			return colMeta
-		}
-		colMeta = fmt.Sprintf("`%s` %s %s DEFAULT %f", columnName, columnType, nullable, defaultFloatValue)
-	}
-
 	return colMeta
 }

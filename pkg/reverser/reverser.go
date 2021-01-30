@@ -20,10 +20,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/WentaoJin/dbsyncer/db"
-	"github.com/WentaoJin/dbsyncer/pkg/config"
-	"github.com/WentaoJin/dbsyncer/util"
-	"github.com/WentaoJin/dbsyncer/zlog"
+	"github.com/WentaoJin/transferdb/db"
+	"github.com/WentaoJin/transferdb/pkg/config"
+	"github.com/WentaoJin/transferdb/util"
+	"github.com/WentaoJin/transferdb/zlog"
+
 	"github.com/xxjwxc/gowp/workpool"
 	"go.uber.org/zap"
 )
@@ -178,22 +179,26 @@ func generateOracleToMySQLTables(engine *db.Engine, cfg *config.CfgFile) ([]Tabl
 	for _, tbl := range exporterTableSlice {
 		if len(customTableNameSlice) != 0 {
 			for _, tblName := range customTableNameSlice {
-				tableNameSlice = append(tableNameSlice, map[string]TableName{
-					tbl: {
-						SourceTableName: tbl,
-						TargetTableName: tblName.GetCustomTableName(tbl),
-					},
-				})
+				if strings.ToUpper(tbl) == strings.ToUpper(tblName.SourceTableName) {
+					if tblName.TargetTableName != "" {
+						tableNameSlice = append(tableNameSlice, map[string]TableName{
+							tbl: {
+								SourceTableName: tbl,
+								TargetTableName: tblName.TargetTableName,
+							},
+						})
+					}
+				}
 			}
+		} else {
+			tableNameSlice = append(tableNameSlice, map[string]TableName{
+				tbl: {
+					SourceTableName: tbl,
+					TargetTableName: tbl,
+				},
+			})
 		}
-		tableNameSlice = append(tableNameSlice, map[string]TableName{
-			tbl: {
-				SourceTableName: tbl,
-				TargetTableName: tbl,
-			},
-		})
 	}
-	fmt.Printf("custome table name: %v\n", tableNameSlice)
 
 	customSchemaColumnTypeSlice, err := engine.GetCustomSchemaColumnTypeMap(cfg.SourceConfig.SchemaName)
 	if err != nil {
@@ -203,8 +208,6 @@ func generateOracleToMySQLTables(engine *db.Engine, cfg *config.CfgFile) ([]Tabl
 	if err != nil {
 		return []Table{}, err
 	}
-	fmt.Printf("custome schema type: %v\n", customSchemaColumnTypeSlice)
-	fmt.Printf("custome table type: %v\n", customTableColumnTypeSlice)
 
 	// 加载字段类型转换规则
 	// 字段类型转换规则判断，默认采用内置默认字段类型转换

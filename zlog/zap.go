@@ -16,7 +16,7 @@ limitations under the License.
 package zlog
 
 import (
-	"github.com/WentaoJin/dbsyncer/pkg/config"
+	"github.com/WentaoJin/transferdb/pkg/config"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/natefinch/lumberjack.v2"

@@ -84,18 +84,6 @@ func (e *Engine) GetCustomSchemaColumnTypeMap(schemaName string) ([]CustomSchema
 	return c, nil
 }
 
-func (c *CustomTableNameMap) GetCustomTableName(tableName string) string {
-	var tbl string
-	if tableName == c.SourceTableName {
-		if c.TargetTableName != "" {
-			tbl = c.TargetTableName
-		} else {
-			tbl = c.SourceTableName
-		}
-	}
-	return tbl
-}
-
 func (c *CustomSchemaColumnTypeMap) GetCustomSchemaColumnType() string {
 	var colType string
 	if c.TargetColumnType != "" {
