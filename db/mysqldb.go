@@ -88,9 +88,12 @@ func NewMySQLEngineGeneralDB(username string, password string, host string, port
 // 初始化同步表结构
 func (e *Engine) InitMysqlEngineDB() error {
 	if err := e.GormDB.AutoMigrate(
-		&CustomTableNameMap{},
+		// todo: 自定义表名适配删除 - 数据同步未处理表名不一致
+		//&CustomTableNameMap{},
 		&CustomTableColumnTypeMap{},
 		&CustomSchemaColumnTypeMap{},
+		&TableFullMeta{},
+		&TableIncrementMeta{},
 	); err != nil {
 		return fmt.Errorf("init mysql engine db data failed: %v", err)
 	}

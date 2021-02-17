@@ -26,9 +26,9 @@ import (
 	"github.com/WentaoJin/transferdb/db"
 )
 
+// 程序运行
 func Run(cfg *config.CfgFile, mode string) error {
-	// 程序运行
-	switch strings.TrimSpace(mode) {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
 	case "prepare":
 		// 初始化程序表结构 - only prepare 阶段
 		mysqlEngine, err := db.NewMySQLEnginePrepareDB(
@@ -45,14 +45,24 @@ func Run(cfg *config.CfgFile, mode string) error {
 			return err
 		}
 	case "reverse":
-		engine, err := reverser.NewReverseEngineDB(cfg)
+		engine, err := NewEngineDB(cfg)
 		if err != nil {
 			return err
 		}
 		if err := reverser.ReverseOracleToMySQLTable(engine, cfg); err != nil {
 			return err
 		}
-	case "run":
+	case "full":
+		engine, err := NewEngineDB(cfg)
+		if err != nil {
+			return err
+		}
+		if err := LoaderTableFullData(cfg, engine); err != nil {
+			return err
+		}
+	case "increment":
+
+	case "all":
 
 	default:
 		return fmt.Errorf("flag [mode] can not null or value configure error")

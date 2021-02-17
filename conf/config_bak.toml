@@ -2,56 +2,28 @@
 #   1、程序运行前，首先需要初始化程序数据表
 #   2、配置表结构转换规则，
 #   - 优先级：表字段类型 > 库字段类型 两者都没配置默认采用内置转换规则
-# reverse（必须）:
+# reverser（必须）:
 #   1、根据内置表结构转换规则或者手工配置表结构转换规则进行 schema 迁移
-# all:
-#   1、全量数据迁移
-#   2、增量数据迁移
-# full:
-#   2、全量数据迁移
-# increment:
-#   1、增量数据迁移
 [app]
-# 程序迁移模式
-run-mode = "all"
-# 安全模式(默认前 10 分钟自动开启)
-safe-mode = false
-
-[reverse]
 # 任务并发
-reverse-threads = 8
-
-[full]
-# 按照表级别操作导出导入
-# 任务 batch 数
-# 1、用于判断每张表切分多少份
-# 2、代表每个并发处理多少行
-worker-batch = 5
-# 任务并发数
-worker-threads = 3
-
-[increment]
-# 转换并发数
-translator-threads = 3
-# 应用并发数
-applier-threads = 10
+worker-threads = 8
 
 [source]
 # 源端 oracle 连接串
 # 样例：用户名/密码@IP:端口/实例名
-dsn = "system/marvin@172.16.4.206:1521/marvinpdb"
+dsn = "system/marvin@192.168.0.125:1521/marvinpdb"
 # 源端迁移 schema
 schema-name = "system"
 # 源端迁移任务表
 # include-table 和 exclude-table 不能同时配置，两者只能配置一个,如果两个都没配置则全迁移
-include-table = ["marvin1","marvin2","marvin3","test31"]
+include-table = ["marvin1","marvin2","marvin3"]
 exclude-table = []
 
 [target]
 # 目标端 mysql 连接串
 username = "marvin"
 password = "marvin"
-host = "172.16.4.206"
+host = "192.168.0.234"
 port = 5000
 # 目标端元数据库
 # CREATE DATABASE IF NOT EXIST dbsyncer_meta

@@ -24,15 +24,32 @@ import (
 
 // 程序配置文件
 type CfgFile struct {
-	AppConfig    AppConfig    `toml:"app" json:"app"`
-	SourceConfig SourceConfig `toml:"source" json:"source"`
-	TargetConfig TargetConfig `toml:"target" json:"target"`
-	LogConfig    LogConfig    `toml:"log" json:"log"`
+	AppConfig       AppConfig       `toml:"app" json:"app"`
+	ReverseConfig   ReverseConfig   `toml:"reverse" json:"reverse"`
+	FullConfig      FullConfig      `toml:"full" json:"full"`
+	IncrementConfig IncrementConfig `toml:"increment" json:"increment"`
+	SourceConfig    SourceConfig    `toml:"source" json:"source"`
+	TargetConfig    TargetConfig    `toml:"target" json:"target"`
+	LogConfig       LogConfig       `toml:"log" json:"log"`
 }
 
 type AppConfig struct {
-	RunMode       string `toml:"run-mode" json:"run-mode"`
-	WorkerThreads int    `toml:"worker-threads" json:"worker-threads"`
+	RunMode  string `toml:"run-mode" json:"run-mode"`
+	SafeMode bool   `toml:"safe-mode" json:"safe-mode"`
+}
+
+type ReverseConfig struct {
+	ReverseThreads int `toml:"reverse-threads" json:"reverse-threads"`
+}
+
+type FullConfig struct {
+	WorkerBatch   int `toml:"worker-batch" json:"worker-batch"`
+	WorkerThreads int `toml:"worker-threads" json:"worker-threads"`
+}
+
+type IncrementConfig struct {
+	TranslatorThreads int `toml:"translator-threads" json:"translator-threads"`
+	ApplierThreads    int `toml:"Applier-threads" json:"Applier-threads"`
 }
 
 type SourceConfig struct {

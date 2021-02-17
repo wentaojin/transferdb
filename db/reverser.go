@@ -75,29 +75,6 @@ AND upper(index_name) = upper('%s')`, schemaName, tableName, indexName)
 	return true
 }
 
-func (e *Engine) IsExistOracleSchema(schemaName string) error {
-	schemas, err := e.getOracleSchema()
-	if err != nil {
-		return err
-	}
-	if !util.IsContainString(schemas, strings.ToUpper(schemaName)) {
-		return fmt.Errorf("oracle schema [%s] isn't exist in the database", schemaName)
-	}
-	return nil
-}
-
-func (e *Engine) IsExistOracleTable(schemaName string, includeTables []string) error {
-	tables, err := e.getOracleTable(schemaName)
-	if err != nil {
-		return err
-	}
-	ok, noExistTables := util.IsSubsetString(tables, includeTables)
-	if !ok {
-		return fmt.Errorf("oracle include-tables values [%v] isn't exist in the db schema [%v]", noExistTables, schemaName)
-	}
-	return nil
-}
-
 func (e *Engine) FilterDifferenceOracleTable(schemaName string, excludeTables []string) ([]string, error) {
 	tables, err := e.getOracleTable(schemaName)
 	if err != nil {

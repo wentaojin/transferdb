@@ -22,6 +22,9 @@ import (
 	"gorm.io/gorm"
 )
 
+// 事务 batch 数
+var InsertBatchSize = 500
+
 // 定义数据库引擎
 type Engine struct {
 	OracleDB *sql.DB
@@ -67,4 +70,55 @@ func Query(db *sql.DB, querySQL string) ([]string, []map[string]string, error) {
 		res = append(res, row)
 	}
 	return cols, res, nil
+}
+
+// 查询按行返回对应字段以及行数据
+func QueryRows(db *sql.DB, querySQL string) ([]string, [][]string, error) {
+	var (
+		cols       []string
+		actualRows [][]string
+		err        error
+	)
+	rows, err := db.Query(querySQL)
+	if err == nil {
+		defer rows.Close()
+	}
+
+	if err != nil {
+		return cols, actualRows, err
+	}
+
+	cols, err = rows.Columns()
+	if err != nil {
+		return cols, actualRows, err
+	}
+	// Read all rows.
+	for rows.Next() {
+		rawResult := make([][]byte, len(cols))
+		result := make([]string, len(cols))
+		dest := make([]interface{}, len(cols))
+		for i := range rawResult {
+			dest[i] = &rawResult[i]
+		}
+
+		err = rows.Scan(dest...)
+		if err != nil {
+			return cols, actualRows, err
+		}
+
+		for i, raw := range rawResult {
+			if raw == nil {
+				result[i] = "NULL"
+			} else {
+				val := string(raw)
+				result[i] = val
+			}
+		}
+
+		actualRows = append(actualRows, result)
+	}
+	if err = rows.Err(); err != nil {
+		return cols, actualRows, err
+	}
+	return cols, actualRows, nil
 }

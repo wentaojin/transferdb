@@ -16,7 +16,6 @@ limitations under the License.
 package reverser
 
 import (
-	"database/sql"
 	"fmt"
 	"strings"
 
@@ -29,29 +28,6 @@ import (
 	"go.uber.org/zap"
 )
 
-func NewReverseEngineDB(cfg *config.CfgFile) (*db.Engine, error) {
-	var (
-		engine *db.Engine
-		oraDB  *sql.DB
-		err    error
-	)
-	oraDB, err = db.NewOracleDBEngine(cfg.SourceConfig.DSN)
-	if err != nil {
-		return engine, err
-	}
-	engine, err = db.NewMySQLEngineGeneralDB(
-		cfg.TargetConfig.Username,
-		cfg.TargetConfig.Password,
-		cfg.TargetConfig.Host,
-		cfg.TargetConfig.Port,
-		cfg.TargetConfig.MetaSchema)
-	if err != nil {
-		return engine, err
-	}
-	engine.OracleDB = oraDB
-	return engine, nil
-}
-
 func ReverseOracleToMySQLTable(engine *db.Engine, cfg *config.CfgFile) error {
 	if err := reverseOracleToMySQLTableInspect(engine, cfg); err != nil {
 		return err
@@ -63,8 +39,8 @@ func ReverseOracleToMySQLTable(engine *db.Engine, cfg *config.CfgFile) error {
 	}
 
 	// 设置工作池
-	// 设置 goroutine 数以及过期时间 1s
-	wp := workpool.New(cfg.AppConfig.WorkerThreads)
+	// 设置 goroutine 数
+	wp := workpool.New(cfg.ReverseConfig.ReverseThreads)
 
 	for _, tbl := range tables {
 		wp.DoWait(func() error {
@@ -171,33 +147,41 @@ func generateOracleToMySQLTables(engine *db.Engine, cfg *config.CfgFile) ([]Tabl
 	)
 	columnTypesMap = make(map[string][]ColumnType)
 
-	customTableNameSlice, err := engine.GetCustomTableNameMap(cfg.SourceConfig.SchemaName)
-	if err != nil {
-		return []Table{}, err
-	}
+	// todo: 自定义表名适配删除 - 数据同步未处理表名不一致
+	//customTableNameSlice, err := engine.GetCustomTableNameMap(cfg.SourceConfig.SchemaName)
+	//if err != nil {
+	//	return []Table{}, err
+	//}
 
 	for _, tbl := range exporterTableSlice {
-		if len(customTableNameSlice) != 0 {
-			for _, tblName := range customTableNameSlice {
-				if strings.ToUpper(tbl) == strings.ToUpper(tblName.SourceTableName) {
-					if tblName.TargetTableName != "" {
-						tableNameSlice = append(tableNameSlice, map[string]TableName{
-							tbl: {
-								SourceTableName: tbl,
-								TargetTableName: tblName.TargetTableName,
-							},
-						})
-					}
-				}
-			}
-		} else {
-			tableNameSlice = append(tableNameSlice, map[string]TableName{
-				tbl: {
-					SourceTableName: tbl,
-					TargetTableName: tbl,
-				},
-			})
-		}
+		tableNameSlice = append(tableNameSlice, map[string]TableName{
+			tbl: {
+				SourceTableName: tbl,
+				TargetTableName: tbl,
+			},
+		})
+		// todo: 自定义表名适配删除 - 数据同步未处理表名不一致
+		//if len(customTableNameSlice) != 0 {
+		//	for _, tblName := range customTableNameSlice {
+		//		if strings.ToUpper(tbl) == strings.ToUpper(tblName.SourceTableName) {
+		//			if tblName.TargetTableName != "" {
+		//				tableNameSlice = append(tableNameSlice, map[string]TableName{
+		//					tbl: {
+		//						SourceTableName: tbl,
+		//						TargetTableName: tblName.TargetTableName,
+		//					},
+		//				})
+		//			}
+		//		}
+		//	}
+		//} else {
+		//	tableNameSlice = append(tableNameSlice, map[string]TableName{
+		//		tbl: {
+		//			SourceTableName: tbl,
+		//			TargetTableName: tbl,
+		//		},
+		//	})
+		//}
 	}
 
 	customSchemaColumnTypeSlice, err := engine.GetCustomSchemaColumnTypeMap(cfg.SourceConfig.SchemaName)

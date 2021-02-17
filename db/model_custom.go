@@ -27,7 +27,7 @@ import (
 // 自定义表结构名称转换规则 - table 级别
 // 如果同步表未单独配置表结构名称转换规则 ，则采用源表默认
 type CustomTableNameMap struct {
-	ID               uint       `gorm:"primary_key;comment:'自增编号'" json:"id"`
+	ID               uint       `gorm:"primary_key;autoIncrement;comment:'自增编号'" json:"id"`
 	SourceSchemaName string     `gorm:"not null;index:unique_schema_table,unique;comment:'源端库 schema'" json:"source_schema_name"`
 	SourceTableName  string     `gorm:"not null;index:unique_schema_table,unique;comment:'源端表名'" json:"source_table_name"`
 	TargetTableName  string     `gorm:"not null;index:unique_schema_table,unique;comment:'目标表名'" json:"target_table_name"`
@@ -39,7 +39,7 @@ type CustomTableNameMap struct {
 // 如果同步表未单独配置 table 级别字段类型映射规则，并且未单独配置 schema 级别字段类型映射规则，则采用程序内置规则转换
 // 优先级： table > schema > internal
 type CustomTableColumnTypeMap struct {
-	ID               uint       `gorm:"primary_key;comment:'自增编号'" json:"id"`
+	ID               uint       `gorm:"primary_key;autoIncrement;comment:'自增编号'" json:"id"`
 	SourceSchemaName string     `gorm:"not null;index:unique_schema_table_col,unique;comment:'源端库 schema'" json:"source_schema_name"`
 	SourceTableName  string     `gorm:"not null;index:unique_schema_table_col,unique;comment:'源端表名'" json:"source_table_name"`
 	SourceColumnType string     `gorm:"not null;index:unique_schema_table_col,unique;comment:'源端表字段类型'" json:"source_column_type"`
@@ -50,7 +50,7 @@ type CustomTableColumnTypeMap struct {
 
 // 自定义表结构字段类型转换规则 - schema 级别
 type CustomSchemaColumnTypeMap struct {
-	ID               uint       `gorm:"primary_key;comment:'自增编号'" json:"id"`
+	ID               uint       `gorm:"primary_key;autoIncrement;comment:'自增编号'" json:"id"`
 	SourceSchemaName string     `gorm:"not null;index:unique_schema_col,unique;comment:'源端库 schema'" json:"source_schema_name"`
 	SourceColumnType string     `gorm:"not null;index:unique_schema_col,unique;comment:'源端表字段类型'" json:"source_column_type"`
 	TargetColumnType string     `gorm:"not null;index:unique_schema_col,unique;comment:'目标表字段类型'" json:"target_column_type"`

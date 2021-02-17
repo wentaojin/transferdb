@@ -17,6 +17,7 @@ package util
 
 import (
 	"strings"
+	"unicode/utf8"
 
 	"github.com/scylladb/go-set"
 	"github.com/scylladb/go-set/strset"
@@ -89,4 +90,13 @@ func FilterIntersectionStringItems(originItems, newItems []string) []string {
 		s2.Add(strings.ToLower(t))
 	}
 	return strset.Intersection(s1, s2).List()
+}
+
+// 删除字符中最后一个字母
+func TrimLastChar(s string) string {
+	r, size := utf8.DecodeLastRuneInString(s)
+	if r == utf8.RuneError && (size == 0 || size == 1) {
+		size = 0
+	}
+	return s[:len(s)-size]
 }
