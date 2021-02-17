@@ -4,12 +4,12 @@
 #   - 优先级：表字段类型 > 库字段类型 两者都没配置默认采用内置转换规则
 # reverse（必须）:
 #   1、根据内置表结构转换规则或者手工配置表结构转换规则进行 schema 迁移
-# all:
+# all: TODO
 #   1、全量数据迁移
 #   2、增量数据迁移
-# full:
+# full: DONE -> 待测试
 #   2、全量数据迁移
-# increment:
+# increment: TODO
 #   1、增量数据迁移
 [app]
 # 程序迁移模式
@@ -39,7 +39,7 @@ applier-threads = 10
 [source]
 # 源端 oracle 连接串
 # 样例：用户名/密码@IP:端口/实例名
-dsn = "system/marvin@172.16.4.206:1521/marvinpdb"
+dsn = "system/marvin@192.168.2.90:1521/marvinpdb"
 # 源端迁移 schema
 schema-name = "system"
 # 源端迁移任务表
@@ -51,7 +51,7 @@ exclude-table = []
 # 目标端 mysql 连接串
 username = "marvin"
 password = "marvin"
-host = "172.16.4.206"
+host = "192.168.2.90"
 port = 5000
 # 目标端元数据库
 # CREATE DATABASE IF NOT EXIST dbsyncer_meta
