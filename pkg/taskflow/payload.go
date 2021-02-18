@@ -42,7 +42,8 @@ func SyncTableFullRecordToMySQL(cfg *config.CfgFile, engine *db.Engine, oracleSQ
 	zlog.Logger.Info("full table data extractor start",
 		zap.String("schema", cfg.SourceConfig.SchemaName),
 		zap.String("table", targetTableName),
-		zap.Float64("cost", endTime.Sub(startTime).Hours()))
+		zap.String("cost", endTime.Sub(startTime).String()),
+	)
 
 	// 转换数据
 	startTime = time.Now()
@@ -60,7 +61,7 @@ func SyncTableFullRecordToMySQL(cfg *config.CfgFile, engine *db.Engine, oracleSQ
 	zlog.Logger.Info("full table data translator start",
 		zap.String("schema", cfg.SourceConfig.SchemaName),
 		zap.String("table", targetTableName),
-		zap.Float64("cost", endTime.Sub(startTime).Hours()))
+		zap.String("cost", endTime.Sub(startTime).String()))
 
 	// 应用数据
 	startTime = time.Now()
@@ -76,7 +77,7 @@ func SyncTableFullRecordToMySQL(cfg *config.CfgFile, engine *db.Engine, oracleSQ
 	zlog.Logger.Info("full table data applier start",
 		zap.String("schema", cfg.SourceConfig.SchemaName),
 		zap.String("table", targetTableName),
-		zap.Float64("cost", endTime.Sub(startTime).Hours()))
+		zap.String("cost", endTime.Sub(startTime).String()))
 	return nil
 }
 

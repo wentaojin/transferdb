@@ -110,11 +110,11 @@ func LoaderTableFullData(cfg *config.CfgFile, engine *db.Engine) error {
 		zlog.Logger.Info("single full table data loader finished",
 			zap.String("schema", cfg.SourceConfig.SchemaName),
 			zap.String("table", table),
-			zap.Float64("cost", endTime.Sub(startTime).Hours()))
+			zap.String("cost", endTime.Sub(startTime).String()))
 	}
 	endTime := time.Now()
 	zlog.Logger.Info("all full table data loader finished",
 		zap.String("schema", cfg.SourceConfig.SchemaName),
-		zap.Float64("cost", endTime.Sub(startTime).Hours()))
+		zap.String("cost", endTime.Sub(startTime).String()))
 	return nil
 }
