@@ -34,8 +34,7 @@ type CfgFile struct {
 }
 
 type AppConfig struct {
-	RunMode  string `toml:"run-mode" json:"run-mode"`
-	SafeMode bool   `toml:"safe-mode" json:"safe-mode"`
+	SafeMode bool `toml:"safe-mode" json:"safe-mode"`
 }
 
 type ReverseConfig struct {

@@ -12,8 +12,6 @@
 # increment: TODO
 #   1、增量数据迁移
 [app]
-# 程序迁移模式
-run-mode = "all"
 # 安全模式(默认前 10 分钟自动开启)
 safe-mode = false
 
