@@ -43,15 +43,11 @@ func SyncTableFullRecordToMySQL(cfg *config.CfgFile, engine *db.Engine, oracleSQ
 		cfg.AppConfig.SafeMode)
 	// 应用数据
 	for _, sql := range sqlSlice {
-		if err := applierTableFullRecord(sql, p.Engine); err != nil {
+		if err := applierTableFullRecord(sql, engine); err != nil {
 			return err
 		}
 	}
 	return nil
-}
-
-func ClearMySQLTableFullMetaRecord(engine *db.Engine, deleteSQL string) {
-
 }
 
 /*
