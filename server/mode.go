@@ -58,6 +58,10 @@ func NewEngineDB(cfg *config.CfgFile) (*db.Engine, error) {
 
 // 全量数据导出导入
 func LoaderTableFullData(cfg *config.CfgFile, engine *db.Engine) error {
+	startTime := time.Now()
+	zlog.Logger.Info("all full table data loader start",
+		zap.String("schema", cfg.SourceConfig.SchemaName))
+
 	transferTableSlice, err := taskflow.GetTransferTableSliceByCfg(cfg, engine)
 	if err != nil {
 		return err
@@ -83,7 +87,7 @@ func LoaderTableFullData(cfg *config.CfgFile, engine *db.Engine) error {
 		wp := workpool.New(cfg.FullConfig.WorkerThreads)
 		// 表同步任务开始
 		startTime := time.Now()
-		zlog.Logger.Info("full table data loader start",
+		zlog.Logger.Info("single full table data loader start",
 			zap.String("schema", cfg.SourceConfig.SchemaName),
 			zap.String("table", table))
 
@@ -103,10 +107,14 @@ func LoaderTableFullData(cfg *config.CfgFile, engine *db.Engine) error {
 			return err
 		}
 		endTime := time.Now()
-		zlog.Logger.Info("full table data loader finished",
+		zlog.Logger.Info("single full table data loader finished",
 			zap.String("schema", cfg.SourceConfig.SchemaName),
 			zap.String("table", table),
 			zap.Float64("cost", endTime.Sub(startTime).Hours()))
 	}
+	endTime := time.Now()
+	zlog.Logger.Info("all full table data loader finished",
+		zap.String("schema", cfg.SourceConfig.SchemaName),
+		zap.Float64("cost", endTime.Sub(startTime).Hours()))
 	return nil
 }
