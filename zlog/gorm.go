@@ -87,13 +87,13 @@ func (l GormLogger) Trace(ctx context.Context, begin time.Time, fc func() (strin
 	switch {
 	case err != nil && l.LogLevel >= gormLogger.Error:
 		sql, rows := fc()
-		l.logger().Error("SlowThreshold", zap.Error(err), zap.Duration("elapsed", elapsed), zap.Int64("rows", rows), zap.String("sql", sql))
+		l.logger().Error("slow-threshold", zap.Error(err), zap.Duration("elapsed", elapsed), zap.Int64("rows", rows), zap.String("sql", sql))
 	case l.SlowThreshold != 0 && elapsed > l.SlowThreshold && l.LogLevel >= gormLogger.Warn:
 		sql, rows := fc()
-		l.logger().Warn("SlowThreshold", zap.Duration("elapsed", elapsed), zap.Int64("rows", rows), zap.String("sql", sql))
+		l.logger().Warn("slow-threshold", zap.Duration("elapsed", elapsed), zap.Int64("rows", rows), zap.String("sql", sql))
 	case l.LogLevel >= gormLogger.Info:
 		sql, rows := fc()
-		l.logger().Debug("SlowThreshold", zap.Duration("elapsed", elapsed), zap.Int64("rows", rows), zap.String("sql", sql))
+		l.logger().Debug("slow-threshold", zap.Duration("elapsed", elapsed), zap.Int64("rows", rows), zap.String("sql", sql))
 	}
 }
 

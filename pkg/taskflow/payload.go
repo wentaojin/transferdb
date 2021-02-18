@@ -18,6 +18,7 @@ package taskflow
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/WentaoJin/transferdb/pkg/config"
 
@@ -29,24 +30,53 @@ import (
 // 全量同步任务
 func SyncTableFullRecordToMySQL(cfg *config.CfgFile, engine *db.Engine, oracleSQL, targetTableName string, insertBatchSize int) error {
 	// 捕获数据
+	startTime := time.Now()
+	zlog.Logger.Info("full table data extractor start",
+		zap.String("schema", cfg.SourceConfig.SchemaName),
+		zap.String("table", targetTableName))
 	columns, rowsResult, err := extractorTableFullRecord(engine, oracleSQL)
 	if err != nil {
 		return err
 	}
+	endTime := time.Now()
+	zlog.Logger.Info("full table data extractor start",
+		zap.String("schema", cfg.SourceConfig.SchemaName),
+		zap.String("table", targetTableName),
+		zap.Float64("cost", endTime.Sub(startTime).Hours()))
+
 	// 转换数据
+	startTime = time.Now()
+	zlog.Logger.Info("full table data translator start",
+		zap.String("schema", cfg.SourceConfig.SchemaName),
+		zap.String("table", targetTableName))
 	sqlSlice := translatorTableFullRecord(
 		cfg.TargetConfig.SchemaName,
 		targetTableName,
 		columns,
 		rowsResult,
 		insertBatchSize,
-		cfg.AppConfig.SafeMode)
+		true)
+	endTime = time.Now()
+	zlog.Logger.Info("full table data translator start",
+		zap.String("schema", cfg.SourceConfig.SchemaName),
+		zap.String("table", targetTableName),
+		zap.Float64("cost", endTime.Sub(startTime).Hours()))
+
 	// 应用数据
+	startTime = time.Now()
+	zlog.Logger.Info("full table data applier start",
+		zap.String("schema", cfg.SourceConfig.SchemaName),
+		zap.String("table", targetTableName))
 	for _, sql := range sqlSlice {
 		if err := applierTableFullRecord(sql, engine); err != nil {
 			return err
 		}
 	}
+	endTime = time.Now()
+	zlog.Logger.Info("full table data applier start",
+		zap.String("schema", cfg.SourceConfig.SchemaName),
+		zap.String("table", targetTableName),
+		zap.Float64("cost", endTime.Sub(startTime).Hours()))
 	return nil
 }
 

@@ -19,11 +19,23 @@ import (
 	"database/sql"
 	"fmt"
 
+	"github.com/WentaoJin/transferdb/zlog"
+	"go.uber.org/zap"
+
 	"gorm.io/gorm"
 )
 
-// 事务 batch 数
-var InsertBatchSize = 500
+var (
+	// 事务 batch 数
+	InsertBatchSize = 500
+	// Oracle/Mysql 对于 'NULL' 统一字符 NULL 处理，查询出来转成 NULL,所以需要判断处理
+	// 查询字段值 NULL
+	// 如果字段值 = NULLABLE 则表示值是 NULL
+	// 如果字段值 = "" 则表示值是空字符串
+	// 如果字段值 = 'NULL' 则表示值是 NULL 字符串
+	// 如果字段值 = 'null' 则表示值是 null 字符串
+	IsNull = "NULLABLE"
+)
 
 // 定义数据库引擎
 type Engine struct {
@@ -34,6 +46,8 @@ type Engine struct {
 
 // 查询返回表字段列和对应的字段行数据
 func Query(db *sql.DB, querySQL string) ([]string, []map[string]string, error) {
+	zlog.Logger.Info("exec sql",
+		zap.String("sql", fmt.Sprintf("%v", querySQL)))
 	var (
 		cols []string
 		res  []map[string]string
@@ -65,60 +79,17 @@ func Query(db *sql.DB, querySQL string) ([]string, []map[string]string, error) {
 		row := make(map[string]string)
 		for k, v := range values {
 			key := cols[k]
-			row[key] = string(v)
+			// 数据库类型 MySQL NULL 是 NULL，空字符串是空字符串
+			// 数据库类型 Oracle NULL、空字符串归于一类 NULL
+			// Oracle/Mysql 对于 'NULL' 统一字符 NULL 处理，查询出来转成 NULL,所以需要判断处理
+			if v == nil { // 处理 NULL 情况，当数据库类型 MySQL 等于 nil
+				row[key] = IsNull
+			} else {
+				// 处理空字符串以及其他值情况
+				row[key] = string(v)
+			}
 		}
 		res = append(res, row)
 	}
 	return cols, res, nil
-}
-
-// 查询按行返回对应字段以及行数据
-func QueryRows(db *sql.DB, querySQL string) ([]string, [][]string, error) {
-	var (
-		cols       []string
-		actualRows [][]string
-		err        error
-	)
-	rows, err := db.Query(querySQL)
-	if err == nil {
-		defer rows.Close()
-	}
-
-	if err != nil {
-		return cols, actualRows, err
-	}
-
-	cols, err = rows.Columns()
-	if err != nil {
-		return cols, actualRows, err
-	}
-	// Read all rows.
-	for rows.Next() {
-		rawResult := make([][]byte, len(cols))
-		result := make([]string, len(cols))
-		dest := make([]interface{}, len(cols))
-		for i := range rawResult {
-			dest[i] = &rawResult[i]
-		}
-
-		err = rows.Scan(dest...)
-		if err != nil {
-			return cols, actualRows, err
-		}
-
-		for i, raw := range rawResult {
-			if raw == nil {
-				result[i] = "NULL"
-			} else {
-				val := string(raw)
-				result[i] = val
-			}
-		}
-
-		actualRows = append(actualRows, result)
-	}
-	if err = rows.Err(); err != nil {
-		return cols, actualRows, err
-	}
-	return cols, actualRows, nil
 }

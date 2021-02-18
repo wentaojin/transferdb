@@ -62,7 +62,8 @@ func GetTransferTableSliceByCfg(cfg *config.CfgFile, engine *db.Engine) ([]strin
 // 根据配置文件生成同步表元数据
 // 1、获取一致性 SCN 写入增量表元数据（用于增量同步起始点，可能存在重复执行，默认前 10 分钟 safe-mode）
 // 2、按要求切分，写入全量表数据并按照要求全量导出并导入
-func GenerateCheckpointMeta(cfg *config.CfgFile, engine *db.Engine, exporterTableSlice []string) error {
+func GenerateCheckpointMeta(cfg *config.CfgFile, engine *db.Engine, fullTblSlice, incrementTblSlice []string) error {
+	// 全量同步前，获取 SCN ，ALL 模式下增量同步起始点，需要获取 table_increment_meta 中 global_scn 最小 POS 位点开始
 	globalSCN, err := engine.GetOracleCurrentSnapshotSCN()
 	if err != nil {
 		return err
@@ -70,20 +71,33 @@ func GenerateCheckpointMeta(cfg *config.CfgFile, engine *db.Engine, exporterTabl
 
 	// 设置工作池
 	// 设置 goroutine 数
-	wp := workpool.New(cfg.FullConfig.WorkerBatch)
-	for _, tbl := range exporterTableSlice {
-		wp.DoWait(func() error {
-			if err := engine.InitMySQLTableFullMeta(cfg.SourceConfig.SchemaName, tbl, cfg.FullConfig.WorkerBatch); err != nil {
-				return err
-			}
-			if err := engine.InitMySQLTableIncrementMeta(cfg.SourceConfig.SchemaName, tbl, globalSCN); err != nil {
-				return err
-			}
-			return nil
-		})
+	if len(fullTblSlice) > 0 {
+		wp := workpool.New(cfg.FullConfig.WorkerBatch)
+		for _, tbl := range fullTblSlice {
+			wp.DoWait(func() error {
+				if err := engine.InitMySQLTableFullMeta(cfg.SourceConfig.SchemaName, tbl, cfg.FullConfig.WorkerBatch); err != nil {
+					return err
+				}
+				return nil
+			})
+		}
+		if err = wp.Wait(); err != nil {
+			return err
+		}
 	}
-	if err = wp.Wait(); err != nil {
-		return err
+	if len(incrementTblSlice) > 0 {
+		wp := workpool.New(cfg.FullConfig.WorkerBatch)
+		for _, tbl := range incrementTblSlice {
+			wp.DoWait(func() error {
+				if err := engine.InitMySQLTableIncrementMeta(cfg.SourceConfig.SchemaName, tbl, globalSCN); err != nil {
+					return err
+				}
+				return nil
+			})
+		}
+		if err = wp.Wait(); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -91,7 +105,7 @@ func GenerateCheckpointMeta(cfg *config.CfgFile, engine *db.Engine, exporterTabl
 // 根据配置文件表，获取用于导出 oracle 表记录 SQL 以及清理元数据库表记录删除 SQL
 func GenerateMySQLTableFullMetaSQL(cfg *config.CfgFile, engine *db.Engine, tableName string) ([]string, string, error) {
 	oraSQL, err := engine.GetMySQLTableFullMetaRowIDSQLRecord(
-		cfg.TargetConfig.SchemaName,
+		cfg.TargetConfig.MetaSchema,
 		"table_full_meta",
 		fmt.Sprintf("WHERE upper(source_schema_name)=upper('%s') AND upper(source_table_name)=upper('%s')",
 			cfg.SourceConfig.SchemaName, tableName),
@@ -101,8 +115,8 @@ func GenerateMySQLTableFullMetaSQL(cfg *config.CfgFile, engine *db.Engine, table
 	}
 
 	sqlDelete := fmt.Sprintf("DELETE FROM %s WHERE %s",
-		fmt.Sprintf("%s.%s", cfg.TargetConfig.SchemaName, tableName),
-		fmt.Sprintf("WHERE upper(source_schema_name)=upper('%s') AND upper(source_table_name)=upper('%s')",
+		fmt.Sprintf("%s.%s", cfg.TargetConfig.MetaSchema, "table_full_meta"),
+		fmt.Sprintf("upper(source_schema_name)=upper('%s') AND upper(source_table_name)=upper('%s')",
 			cfg.SourceConfig.SchemaName, tableName))
 
 	return oraSQL, sqlDelete, nil

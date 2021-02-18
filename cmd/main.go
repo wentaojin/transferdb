@@ -17,16 +17,15 @@ package main
 
 import (
 	"flag"
-	"github.com/WentaoJin/transferdb/pkg/config"
-	"github.com/WentaoJin/transferdb/server"
-	"github.com/WentaoJin/transferdb/zlog"
 	"log"
 	"net/http"
 	"os"
 
+	"github.com/WentaoJin/transferdb/pkg/config"
+	"github.com/WentaoJin/transferdb/server"
+	"github.com/WentaoJin/transferdb/zlog"
+
 	"go.uber.org/zap"
-
-
 )
 
 var (
@@ -53,6 +52,6 @@ func main() {
 	}
 	// 程序运行
 	if err := server.Run(cfg, *mode); err != nil {
-		zlog.Logger.Fatal("Server run failed", zap.String("error", err.Error()))
+		zlog.Logger.Fatal("server run failed", zap.String("error", err.Error()))
 	}
 }

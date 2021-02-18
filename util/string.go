@@ -16,6 +16,7 @@ limitations under the License.
 package util
 
 import (
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -99,4 +100,10 @@ func TrimLastChar(s string) string {
 		size = 0
 	}
 	return s[:len(s)-size]
+}
+
+// 判断字符是否是数字
+func IsNum(s string) bool {
+	_, err := strconv.ParseFloat(s, 64)
+	return err == nil
 }

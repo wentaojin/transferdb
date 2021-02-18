@@ -17,34 +17,61 @@ package db
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 
 	"github.com/WentaoJin/transferdb/util"
 )
 
-// 判断下游元数据库全量以及增量数据表是否存在记录
-// 1、存在表示之前启动过任务，则根据下游库记录继续运行（safe-mode 默认十分钟)
-// 2、不存在表示之前未启动过任务，新开始任务
-func (e *Engine) IsExistMySQLTableMetaRecord() (bool, error) {
-	tfm := &TableFullMeta{}
-	tim := &TableIncrementMeta{}
-	tfmRecordCounts, err := tfm.GetTableFullMetaRecordCounts(e)
-	if err != nil {
-		return false, err
+// 全量阶段判断是否存在元数据表存在记录，若不存在则初始化全量元数据表以及增量元数据表全量开始 SCN 号，若存在则表示运行过全量任务
+// 该函数只应用于全量同步模式或者 ALL 同步模式
+// ALL 模式：
+//		- 全量任务全 safe-mode 模式
+//		- 增量任务 safe-mode 默认十分钟，其他正常模式
+func (e *Engine) IsNotExistFullStageMySQLTableMetaRecord(schemaName string, tableSlice []string) ([]string, []string, error) {
+	var (
+		tblFullSlice      []string
+		tblIncrementSlice []string
+	)
+	for _, table := range tableSlice {
+		tfm := &TableFullMeta{}
+		tim := &TableIncrementMeta{}
+		tfmRecordCounts, err := tfm.GetTableFullMetaRecordCounts(schemaName, table, e)
+		if err != nil {
+			return tblFullSlice, tblIncrementSlice, err
+		}
+		timRecordCounts, err := tim.GetTableIncrementMetaRecordCounts(schemaName, table, e)
+		if err != nil {
+			return tblFullSlice, tblIncrementSlice, err
+		}
+		switch {
+		case tfmRecordCounts > 0 && timRecordCounts == 0:
+			tblIncrementSlice = append(tblIncrementSlice, table)
+		case tfmRecordCounts == 0 && timRecordCounts > 0:
+			tblFullSlice = append(tblFullSlice, table)
+		case tfmRecordCounts == 0 && timRecordCounts == 0:
+			tblFullSlice = append(tblFullSlice, table)
+			tblIncrementSlice = append(tblIncrementSlice, table)
+		}
 	}
-
-	timRecordCounts, err := tim.GetTableIncrementMetaRecordCounts(e)
-	if err != nil {
-		return false, err
-	}
-
-	switch {
-	case tfmRecordCounts == 0 && timRecordCounts == 0:
-		return false, nil
-	default:
-		return true, nil
-	}
+	return tblFullSlice, tblIncrementSlice, nil
 }
+
+// 增量任务判断元数据表起始同步 SCN 点，该函数只用于增量同步模式 -> 全量非 transferdb 工具导入
+//func (e *Engine) IsExistMySQLTableIncrementMetaRecord(schemaName string, tableSlice []string) ([]string, error) {
+//	var tblSlice []string
+//	for _, table := range tableSlice {
+//		tim := &TableIncrementMeta{}
+//		timRecordCounts, err := tim.GetTableIncrementMetaRecordCounts(schemaName, table, e)
+//		if err != nil {
+//			return tblSlice, err
+//		}
+//		if timRecordCounts == 0 {
+//			tblSlice = append(tblSlice, table)
+//		}
+//	}
+//	return tblSlice, nil
+//}
 
 func (e *Engine) GetMySQLTableFullMetaRowIDSQLRecord(schemaName, tableName, queryCond string) ([]string, error) {
 	querySQL := fmt.Sprintf(`SELECT
@@ -67,28 +94,11 @@ func (e *Engine) GetMySQLTableFullMetaRowIDSQLRecord(schemaName, tableName, quer
 func (e *Engine) ClearMySQLTableFullMetaRecord(tableName, deleteSQL string) error {
 	_, err := e.MysqlDB.Exec(deleteSQL)
 	if err != nil {
-		return fmt.Errorf("clear mysql meta schema table [table_full_meta] reocrd with [%s] failed: %v", tableName, err.Error())
+		return fmt.Errorf("clear mysql meta schema table [table_full_meta] reocrd with source table [%s] failed: %v, running sql: [%v]",
+			tableName, err.Error(), deleteSQL)
 	}
 	return nil
 }
-
-//func (e *Engine) GetMySQLTableFullMetaIDRecordByPage(schemaName, tableName, colName, queryCond string, pageNums int) ([]string, error) {
-//	querySQL := fmt.Sprintf(`SELECT
-//	%[1]s AS DATA
-//FROM
-//	( SELECT %[1]s, ROW_NUMBER ( ) OVER ( ORDER BY %[1]s ) AS RowNumber FROM ( SELECT %[1]s FROM %[2]s %[3]s) AS S ) AS T
-//WHERE
-//	RowNumber %% %[4]d = 1`, colName, fmt.Sprintf("%s.%s", schemaName, tableName), queryCond, pageNums)
-//	_, res, err := Query(e.MysqlDB, querySQL)
-//	if err != nil {
-//		return []string{}, err
-//	}
-//	var sli []string
-//	for _, r := range res {
-//		sli = append(sli, r["DATA"])
-//	}
-//	return sli, nil
-//}
 
 func (e *Engine) GetOracleCurrentSnapshotSCN() (string, error) {
 	_, res, err := Query(e.OracleDB, `select dbms_flashback.get_system_change_number AS SCN from dual`)
@@ -110,11 +120,11 @@ func (e *Engine) InitMySQLTableFullMeta(schemaName, tableName string, extractorB
 
 	// 用于判断是否需要切分
 	// 当行数少于 parallel*10000 则不切分
-	parallel := tableRows / extractorBatch
+	parallel := math.Ceil(float64(tableRows) / float64(extractorBatch))
 
-	if tableRows > parallel*10000 {
+	if tableRows > extractorBatch {
 		if !ok {
-			if err := e.getOracleNormalTableTableFullMetaByRowID(schemaName, tableName, parallel); err != nil {
+			if err := e.getOracleNormalTableTableFullMetaByRowID(schemaName, tableName, int(parallel)); err != nil {
 				return err
 			}
 		} else {
@@ -123,7 +133,7 @@ func (e *Engine) InitMySQLTableFullMeta(schemaName, tableName string, extractorB
 				return err
 			}
 			for _, subPart := range subPartNames {
-				if err := e.getOraclePartitionTableTableFullMetaByRowID(schemaName, tableName, subPart, parallel); err != nil {
+				if err := e.getOraclePartitionTableTableFullMetaByRowID(schemaName, tableName, subPart, int(parallel)); err != nil {
 					return err
 				}
 			}
@@ -163,7 +173,7 @@ func (e *Engine) InitMySQLTableIncrementMeta(schemaName, tableName string, globa
 }
 
 func (e *Engine) GetOracleTableRecordByRowIDSQL(sql string) ([]string, [][]string, error) {
-	cols, res, err := QueryRows(e.OracleDB, sql)
+	cols, res, err := QueryOracleRows(e.OracleDB, sql)
 	if err != nil {
 		return []string{}, [][]string{}, err
 	}
@@ -198,7 +208,7 @@ func (e *Engine) getOracleNormalTableTableFullMetaByRowID(schemaName, tableName 
                                                block_id) - 0.01) /
                              (SUM(blocks) over() / %d)) grp,
                        ext.blocks
-                  FROM dba_extents ext, dba_objects obj
+                   FROM dba_extents ext, dba_objects obj
                  WHERE UPPER(ext.segment_name) = UPPER('%s')
                    AND UPPER(ext.owner) = UPPER('%s')
                    AND obj.owner = ext.owner
@@ -219,7 +229,7 @@ func (e *Engine) getOracleNormalTableTableFullMetaByRowID(schemaName, tableName 
 		fullMetas = append(fullMetas, TableFullMeta{
 			SourceSchemaName: schemaName,
 			SourceTableName:  tableName,
-			RowIdSQL:         r["DATA"],
+			RowidSQL:         r["DATA"],
 		})
 		fullMetaIdx = append(fullMetaIdx, idx)
 	}
@@ -294,7 +304,7 @@ func (e *Engine) getOraclePartitionTableTableFullMetaByRowID(schemaName, tableNa
 		fullMetas = append(fullMetas, TableFullMeta{
 			SourceSchemaName: schemaName,
 			SourceTableName:  tableName,
-			RowIdSQL:         r["DATA"],
+			RowidSQL:         r["DATA"],
 		})
 		fullMetaIdx = append(fullMetaIdx, idx)
 	}
@@ -321,7 +331,7 @@ func (e *Engine) getOraclePartitionTableTableFullMetaByRowID(schemaName, tableNa
 }
 
 func (e *Engine) getOracleTableRowsByStatistics(schemaName, tableName string) (int, error) {
-	querySQL := fmt.Sprintf(`select NUM_ROWS
+	querySQL := fmt.Sprintf(`select NVL(NUM_ROWS,0) AS NUM_ROWS
   from all_tables
  where upper(OWNER) = upper('%s')
    and upper(table_name) = upper('%s')`, schemaName, tableName)
@@ -329,9 +339,11 @@ func (e *Engine) getOracleTableRowsByStatistics(schemaName, tableName string) (i
 	if err != nil {
 		return 0, err
 	}
+
 	numRows, err := strconv.Atoi(res[0]["NUM_ROWS"])
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("get oracle schema table [%v] rows by statistics falied: %v",
+			fmt.Sprintf("%s.%s", schemaName, tableName), err)
 	}
 	return numRows, nil
 }
@@ -355,8 +367,7 @@ func (e *Engine) getOracleSubPartitionTable(schemaName, tableName string) ([]str
 	_, res, err := Query(e.OracleDB, fmt.Sprintf(`select PARTITION_NAME
   from ALL_TAB_PARTITIONS
  where upper(TABLE_OWNER) = upper('%s')
-   AND upper(table_name) = upper('%s');
-`, schemaName, tableName))
+   AND upper(table_name) = upper('%s')`, schemaName, tableName))
 	if err != nil {
 		return []string{}, err
 	}

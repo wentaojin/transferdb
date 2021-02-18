@@ -36,9 +36,8 @@ applier-threads = 10
 
 [source]
 # 源端 oracle 连接串
-# 样例：用户名/密码@IP:端口/实例名
-dsn = "system/marvin@192.168.2.90:1521/marvinpdb"
-# 源端迁移 schema
+# 样例：oracle://用户名/密码@tnsname_servicename
+dsn = "oracle://marvin:marvin@orcl"
 schema-name = "system"
 # 源端迁移任务表
 # include-table 和 exclude-table 不能同时配置，两者只能配置一个,如果两个都没配置则全迁移

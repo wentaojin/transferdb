@@ -105,7 +105,7 @@ func reverseOracleToMySQLTableInspect(engine *db.Engine, cfg *config.CfgFile) er
 				}
 			} else {
 				// 表跳过重命名以及创建
-				zlog.Logger.Warn("Appear Warning",
+				zlog.Logger.Warn("appear warning",
 					zap.String("schema", cfg.TargetConfig.SchemaName),
 					zap.String("table", tbl),
 					zap.String("warn",

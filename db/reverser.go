@@ -174,10 +174,8 @@ func (e *Engine) GetOracleTableCheckKey(schemaName string, tableName string) ([]
          where cu.constraint_name = au.constraint_name
            and au.constraint_type = 'C'
            and au.STATUS = 'ENABLED'
-           and upper(au.SEARCH_CONDITION_VC) not like upper('%s')
            and upper(au.table_name) = upper('%s')
            and upper(cu.owner) = upper('%s')`,
-		"% IS NOT NULL%",
 		strings.ToUpper(tableName),
 		strings.ToUpper(schemaName),
 	)

@@ -169,7 +169,7 @@ tp4 TIMESTAMP(5) WITH TIME ZONE,
 xt XMLTYPE
 );
 
-create table test32( id int primary key,sex varchar(2) check(sex in ('男,女')),age int, constraint CK_sage1 check(age >1 and age<10));
+create table test32( id int primary key,sex varchar(2) check(sex in ('man','woman')),age int, constraint CK_sage1 check(age >1 and age<10));
 
 
 
@@ -186,9 +186,9 @@ insert into db_meta.custom_schema_column_type_maps (source_schema_name,source_co
 
 /*带检查约束表结构*/
 create table t_stu(
-  stuid      number(10)   primary key,
-  stuname    varchar2(20) not null,
-  stusex     varchar2(2)  default '男' check(stusex in('男','女'))
+    stuid      number(10)   primary key,
+    stuname    varchar2(20) not null,
+    stusex     varchar2(2)  check(stusex in('man','woman'))
 );
 CREATE TABLE t_stu1 ( stuid NUMBER ( 10, 2 ) primary key, stuname VARCHAR2 ( 20 ) NOT NULL, stusex VARCHAR2 ( 2 ) );
 CREATE TABLE t_stu2 ( stuid NUMBER ( 11, 0 ) primary key, stuname VARCHAR2 ( 20 ) NOT NULL, stusex VARCHAR2 ( 2 ) );

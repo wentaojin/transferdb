@@ -18,6 +18,11 @@ package server
 import (
 	"database/sql"
 	"fmt"
+	"time"
+
+	"go.uber.org/zap"
+
+	"github.com/WentaoJin/transferdb/zlog"
 
 	"github.com/xxjwxc/gowp/workpool"
 
@@ -53,18 +58,18 @@ func NewEngineDB(cfg *config.CfgFile) (*db.Engine, error) {
 
 // 全量数据导出导入
 func LoaderTableFullData(cfg *config.CfgFile, engine *db.Engine) error {
-	isExist, err := engine.IsExistMySQLTableMetaRecord()
-	if err != nil {
-		return err
-	}
 	transferTableSlice, err := taskflow.GetTransferTableSliceByCfg(cfg, engine)
 	if err != nil {
 		return err
 	}
-	if !isExist {
-		if err := taskflow.GenerateCheckpointMeta(cfg, engine, transferTableSlice); err != nil {
-			return err
-		}
+
+	fullTblSlice, incrementTblSlice, err := engine.IsNotExistFullStageMySQLTableMetaRecord(cfg.SourceConfig.SchemaName, transferTableSlice)
+	if err != nil {
+		return err
+	}
+
+	if err := taskflow.GenerateCheckpointMeta(cfg, engine, fullTblSlice, incrementTblSlice); err != nil {
+		return err
 	}
 
 	for _, table := range transferTableSlice {
@@ -77,6 +82,11 @@ func LoaderTableFullData(cfg *config.CfgFile, engine *db.Engine) error {
 		// 初始化 worker pool
 		wp := workpool.New(cfg.FullConfig.WorkerThreads)
 		// 表同步任务开始
+		startTime := time.Now()
+		zlog.Logger.Info("full table data loader start",
+			zap.String("schema", cfg.SourceConfig.SchemaName),
+			zap.String("table", table))
+
 		for _, oracleSQL := range oraQuerySlice {
 			wp.DoWait(func() error {
 				if err := taskflow.SyncTableFullRecordToMySQL(cfg, engine, oracleSQL, table, db.InsertBatchSize); err != nil {
@@ -86,12 +96,17 @@ func LoaderTableFullData(cfg *config.CfgFile, engine *db.Engine) error {
 			})
 		}
 		if err := wp.Wait(); err != nil {
-			fmt.Println(err)
+			return fmt.Errorf("worker pool groutinue run failed: %v", err.Error())
 		}
 		// 清理元数据表记录
 		if err := engine.ClearMySQLTableFullMetaRecord(table, mysqlDelSQL); err != nil {
 			return err
 		}
+		endTime := time.Now()
+		zlog.Logger.Info("full table data loader finished",
+			zap.String("schema", cfg.SourceConfig.SchemaName),
+			zap.String("table", table),
+			zap.Float64("cost", endTime.Sub(startTime).Hours()))
 	}
 	return nil
 }

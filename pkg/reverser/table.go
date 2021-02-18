@@ -17,6 +17,7 @@ package reverser
 
 import (
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -86,7 +87,7 @@ func (t Table) GenerateAndExecMySQLCreateTableSQL() error {
 			t.TargetSchemaName, modifyTableName, tableMeta)
 	}
 
-	zlog.Logger.Info("Exec SQL",
+	zlog.Logger.Info("exec sql",
 		zap.String("schema", t.TargetSchemaName),
 		zap.String("table", modifyTableName),
 		zap.String("sql", fmt.Sprintf("%v", createTableSQL)))
@@ -462,10 +463,17 @@ func (t Table) reverserOracleTableKeyToMySQL() ([]string, error) {
 	}
 	if len(checkKeyMap) > 0 {
 		for _, rowCKCol := range checkKeyMap {
-			ck := fmt.Sprintf("CONSTRAINT `%s` CHECK (%s)",
-				strings.ToLower(rowCKCol["CONSTRAINT_NAME"]),
-				strings.ToLower(rowCKCol["SEARCH_CONDITION"]))
-			keysMeta = append(keysMeta, ck)
+			// 排除非空约束检查
+			match, err := regexp.MatchString(`(^.*)(?i:IS NOT NULL)`, rowCKCol["SEARCH_CONDITION"])
+			if err != nil {
+				return keysMeta, fmt.Errorf("check constraint remove not null failed: %v", err)
+			}
+			if !match {
+				ck := fmt.Sprintf("CONSTRAINT `%s` CHECK (%s)",
+					strings.ToLower(rowCKCol["CONSTRAINT_NAME"]),
+					strings.ToLower(rowCKCol["SEARCH_CONDITION"]))
+				keysMeta = append(keysMeta, ck)
+			}
 		}
 
 	}
