@@ -92,8 +92,11 @@ func LoaderTableFullData(cfg *config.CfgFile, engine *db.Engine) error {
 			zap.String("table", table))
 
 		for _, oracleSQL := range oraQuerySlice {
-			wp.DoWait(func() error {
-				if err := taskflow.SyncTableFullRecordToMySQL(cfg, engine, oracleSQL, table, db.InsertBatchSize); err != nil {
+			// 变量替换，直接使用原变量会导致并发输出有问题
+			tbl := table
+			oraSQL := oracleSQL
+			wp.Do(func() error {
+				if err := taskflow.SyncTableFullRecordToMySQL(cfg, engine, oraSQL, tbl, db.InsertBatchSize); err != nil {
 					return err
 				}
 				return nil
@@ -103,14 +106,26 @@ func LoaderTableFullData(cfg *config.CfgFile, engine *db.Engine) error {
 			return fmt.Errorf("worker pool groutinue run failed: %v", err.Error())
 		}
 		// 清理元数据表记录
-		if err := engine.ClearMySQLTableFullMetaRecord(table, mysqlDelSQL); err != nil {
-			return err
-		}
 		endTime := time.Now()
-		zlog.Logger.Info("single full table data loader finished",
-			zap.String("schema", cfg.SourceConfig.SchemaName),
-			zap.String("table", table),
-			zap.String("cost", endTime.Sub(startTime).String()))
+		if wp.IsDone() {
+			if err := engine.ClearMySQLTableFullMetaRecord(table, mysqlDelSQL); err != nil {
+				return err
+			}
+			zlog.Logger.Info("single full table data loader finished",
+				zap.String("schema", cfg.SourceConfig.SchemaName),
+				zap.String("table", table),
+				zap.String("cost", endTime.Sub(startTime).String()))
+		} else {
+			zlog.Logger.Error("single full table data loader failed",
+				zap.String("schema", cfg.SourceConfig.SchemaName),
+				zap.String("table", table),
+				zap.String("cost", endTime.Sub(startTime).String()),
+				zap.Error(fmt.Errorf("full task failed, please  directly rerunning task")))
+			return fmt.Errorf("single  [%s.%s] full table data loader failed, please directly rerunning task",
+				cfg.SourceConfig.SchemaName,
+				table)
+		}
+
 	}
 	endTime := time.Now()
 	zlog.Logger.Info("all full table data loader finished",

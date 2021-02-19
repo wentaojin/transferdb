@@ -31,7 +31,7 @@ import (
 func SyncTableFullRecordToMySQL(cfg *config.CfgFile, engine *db.Engine, oracleSQL, targetTableName string, insertBatchSize int) error {
 	// 捕获数据
 	startTime := time.Now()
-	zlog.Logger.Info("full table data extractor start",
+	zlog.Logger.Info("single full table data extractor start",
 		zap.String("schema", cfg.SourceConfig.SchemaName),
 		zap.String("table", targetTableName))
 	columns, rowsResult, err := extractorTableFullRecord(engine, oracleSQL)
@@ -39,7 +39,7 @@ func SyncTableFullRecordToMySQL(cfg *config.CfgFile, engine *db.Engine, oracleSQ
 		return err
 	}
 	endTime := time.Now()
-	zlog.Logger.Info("full table data extractor start",
+	zlog.Logger.Info("single full table data extractor finished",
 		zap.String("schema", cfg.SourceConfig.SchemaName),
 		zap.String("table", targetTableName),
 		zap.String("cost", endTime.Sub(startTime).String()),
@@ -47,7 +47,7 @@ func SyncTableFullRecordToMySQL(cfg *config.CfgFile, engine *db.Engine, oracleSQ
 
 	// 转换数据
 	startTime = time.Now()
-	zlog.Logger.Info("full table data translator start",
+	zlog.Logger.Info("single full table data translator start",
 		zap.String("schema", cfg.SourceConfig.SchemaName),
 		zap.String("table", targetTableName))
 	sqlSlice := translatorTableFullRecord(
@@ -58,14 +58,14 @@ func SyncTableFullRecordToMySQL(cfg *config.CfgFile, engine *db.Engine, oracleSQ
 		insertBatchSize,
 		true)
 	endTime = time.Now()
-	zlog.Logger.Info("full table data translator start",
+	zlog.Logger.Info("single full table data translator finished",
 		zap.String("schema", cfg.SourceConfig.SchemaName),
 		zap.String("table", targetTableName),
 		zap.String("cost", endTime.Sub(startTime).String()))
 
 	// 应用数据
 	startTime = time.Now()
-	zlog.Logger.Info("full table data applier start",
+	zlog.Logger.Info("single full table data applier start",
 		zap.String("schema", cfg.SourceConfig.SchemaName),
 		zap.String("table", targetTableName))
 	for _, sql := range sqlSlice {
@@ -74,7 +74,7 @@ func SyncTableFullRecordToMySQL(cfg *config.CfgFile, engine *db.Engine, oracleSQ
 		}
 	}
 	endTime = time.Now()
-	zlog.Logger.Info("full table data applier start",
+	zlog.Logger.Info("single full table data applier finished",
 		zap.String("schema", cfg.SourceConfig.SchemaName),
 		zap.String("table", targetTableName),
 		zap.String("cost", endTime.Sub(startTime).String()))

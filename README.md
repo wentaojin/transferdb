@@ -11,15 +11,14 @@ transferdb 用于异构数据库迁移（ Oracle 数据库 -> MySQL 数据库）
 使用事项
 
 ```
-最好在装有 oracle 环境下 oracle 用户运行
-需要把 oracle client instantclient-basic-linux.x64-19.8.0.0.0dbru.zip 上传解压，并配置 LD_LIBRARY_PATH 环境变量
+把 oracle client instantclient-basic-linux.x64-19.8.0.0.0dbru.zip 上传解压，并配置 LD_LIBRARY_PATH 环境变量
 使用方法:
 
-1、上传解压 instantclient-basic-linux.x64-19.8.0.0.0dbru.zip（该压缩包位于 client 目录） 到指定目录，比如：/home/oracle/instantclient_19_8  
+1、上传解压 instantclient-basic-linux.x64-19.8.0.0.0dbru.zip（该压缩包位于 client 目录） 到指定目录，比如：/data1/soft/client/instantclient_19_8
 
 2、查看环境变量 LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=/data1/soft/client/instantclient_19_8
 echo $LD_LIBRARY_PATH
-export LD_LIBRARY_PATH=$ORACLE_HOME/lib:$ORACLE_HOME/rdbms/lib:/lib:/usr/lib:/home/oracle/instantclient_19_8 
 
 3、transferdb 配置文件 config.toml 样例位于 conf 目录下,详情请见说明以及配置
 4、$ ./transferdb --config config.toml --mode prepare

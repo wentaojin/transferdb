@@ -18,6 +18,7 @@ package reverser
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/WentaoJin/transferdb/db"
 	"github.com/WentaoJin/transferdb/pkg/config"
@@ -29,6 +30,11 @@ import (
 )
 
 func ReverseOracleToMySQLTable(engine *db.Engine, cfg *config.CfgFile) error {
+	startTime := time.Now()
+	zlog.Logger.Info("reverse table oracle to mysql start",
+		zap.String("schema", cfg.SourceConfig.SchemaName),
+		zap.String("config", cfg.String()))
+
 	if err := reverseOracleToMySQLTableInspect(engine, cfg); err != nil {
 		return err
 	}
@@ -42,8 +48,10 @@ func ReverseOracleToMySQLTable(engine *db.Engine, cfg *config.CfgFile) error {
 	// 设置 goroutine 数
 	wp := workpool.New(cfg.ReverseConfig.ReverseThreads)
 
-	for _, tbl := range tables {
-		wp.DoWait(func() error {
+	for _, table := range tables {
+		// 变量替换，直接使用原变量会导致并发输出有问题
+		tbl := table
+		wp.Do(func() error {
 			if err := tbl.GenerateAndExecMySQLCreateTableSQL(); err != nil {
 				return err
 			}
@@ -55,6 +63,17 @@ func ReverseOracleToMySQLTable(engine *db.Engine, cfg *config.CfgFile) error {
 	}
 	if err = wp.Wait(); err != nil {
 		return err
+	}
+
+	endTime := time.Now()
+	if wp.IsDone() {
+		zlog.Logger.Info("reverse table oracle to mysql finished",
+			zap.String("cost", endTime.Sub(startTime).String()))
+	} else {
+		zlog.Logger.Info("reverse table oracle to mysql failed",
+			zap.String("cost", endTime.Sub(startTime).String()),
+			zap.Error(fmt.Errorf("reverse table task failed, please clear and rerunning")))
+		return fmt.Errorf("reverse table task failed, please clear and rerunning")
 	}
 	return nil
 }

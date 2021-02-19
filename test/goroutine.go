@@ -34,10 +34,10 @@ func main() {
 	for i := 0; i < 3; i++ {
 
 		wp := workpool.New(2)
-
 		for _, dt := range data {
-			wp.DoWait(func() error {
-				fmt.Println(dt)
+			ft := dt
+			wp.Do(func() error {
+				fmt.Println(ft)
 				return nil
 			})
 		}

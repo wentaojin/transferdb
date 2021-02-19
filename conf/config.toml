@@ -13,6 +13,7 @@
 #   1、增量数据迁移
 [app]
 # 安全模式(默认前 10 分钟自动开启)
+# 只针对增量任务同步有效
 safe-mode = false
 
 [reverse]
@@ -36,8 +37,8 @@ applier-threads = 10
 
 [source]
 # 源端 oracle 连接串
-# 样例：oracle://用户名/密码@tnsname_servicename
-dsn = "oracle://marvin:marvin@orcl"
+# 样例：用户名/密码@主机地址:数据库端口/实例名
+dsn = "marvin/marvin@172.16.4.65:1521/orcl"
 schema-name = "system"
 # 源端迁移任务表
 # include-table 和 exclude-table 不能同时配置，两者只能配置一个,如果两个都没配置则全迁移
