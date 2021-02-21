@@ -32,17 +32,18 @@ func main() {
 	fmt.Println(data)
 
 	for i := 0; i < 3; i++ {
-
+		var gather []int
 		wp := workpool.New(2)
 		for _, dt := range data {
 			ft := dt
 			wp.Do(func() error {
-				fmt.Println(ft)
+				gather = append(gather, ft...)
 				return nil
 			})
 		}
 		if err := wp.Wait(); err != nil {
 			fmt.Println(err)
 		}
+		fmt.Println(gather)
 	}
 }

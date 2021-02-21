@@ -7,7 +7,7 @@
 # all: TODO
 #   1、全量数据迁移
 #   2、增量数据迁移
-# full: DONE -> 待测试
+# full: DONE
 #   2、全量数据迁移
 # increment: TODO
 #   1、增量数据迁移
@@ -15,6 +15,9 @@
 # 安全模式(默认前 10 分钟自动开启)
 # 只针对增量任务同步有效
 safe-mode = false
+# 事务 batch 数
+# 用于数据写入 batch 提交事务数
+insert-batch-size = 500
 
 [reverse]
 # 任务并发
@@ -24,24 +27,25 @@ reverse-threads = 8
 # 按照表级别操作导出导入
 # 任务 batch 数
 # 1、用于判断每张表切分多少份
-# 2、代表每个并发处理多少行
+# 2、代表并发处理多少行数
 worker-batch = 5
 # 任务并发数
 worker-threads = 3
+# 关于全量断点恢复
+#   - 若想断点恢复，设置 enable-checkpoint true,首次一旦运行则 batch 数不能调整，
+#   - 若不想断点恢复或者重新调整 batch 数，设置 enable-checkpoint false,重新运行全量任务
+enable-checkpoint = true
 
 [increment]
-# 转换并发数
-translator-threads = 3
-# 应用并发数
-applier-threads = 10
+# TODO：待完善
 
 [source]
 # 源端 oracle 连接串
 # 样例：用户名/密码@主机地址:数据库端口/实例名
-dsn = "marvin/marvin@172.16.4.65:1521/orcl"
+dsn = "marvin/marvin@192.168.10.2:1521/orcl"
 schema-name = "system"
 # 源端迁移任务表
-# include-table 和 exclude-table 不能同时配置，两者只能配置一个,如果两个都没配置则全迁移
+# include-table 和 exclude-table 不能同时配置，两者只能配置一个,如果两个都没配置则 Schema 内表全迁移
 include-table = ["marvin1","marvin2","marvin3","test31"]
 exclude-table = []
 

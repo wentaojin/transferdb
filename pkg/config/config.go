@@ -34,7 +34,8 @@ type CfgFile struct {
 }
 
 type AppConfig struct {
-	SafeMode bool `toml:"safe-mode" json:"safe-mode"`
+	SafeMode        bool `toml:"safe-mode" json:"safe-mode"`
+	InsertBatchSize int  `toml:"insert-batch-size" json:"insert-batch-size"`
 }
 
 type ReverseConfig struct {
@@ -42,8 +43,9 @@ type ReverseConfig struct {
 }
 
 type FullConfig struct {
-	WorkerBatch   int `toml:"worker-batch" json:"worker-batch"`
-	WorkerThreads int `toml:"worker-threads" json:"worker-threads"`
+	WorkerBatch      int  `toml:"worker-batch" json:"worker-batch"`
+	WorkerThreads    int  `toml:"worker-threads" json:"worker-threads"`
+	EnableCheckpoint bool `toml:"enable-checkpoint" json:"enable-checkpoint"`
 }
 
 type IncrementConfig struct {

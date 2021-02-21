@@ -31,14 +31,15 @@ import (
 
 func ReverseOracleToMySQLTable(engine *db.Engine, cfg *config.CfgFile) error {
 	startTime := time.Now()
+	zlog.Logger.Info("Welcome to transferdb", zap.String("config", cfg.String()))
 	zlog.Logger.Info("reverse table oracle to mysql start",
-		zap.String("schema", cfg.SourceConfig.SchemaName),
-		zap.String("config", cfg.String()))
+		zap.String("schema", cfg.SourceConfig.SchemaName))
 
 	if err := reverseOracleToMySQLTableInspect(engine, cfg); err != nil {
 		return err
 	}
 
+	// 获取待转换表
 	tables, err := generateOracleToMySQLTables(engine, cfg)
 	if err != nil {
 		return err
@@ -141,19 +142,41 @@ func generateOracleToMySQLTables(engine *db.Engine, cfg *config.CfgFile) ([]Tabl
 		exporterTableSlice []string
 		err                error
 	)
-
-	if len(cfg.SourceConfig.IncludeTable) != 0 {
+	switch {
+	case len(cfg.SourceConfig.IncludeTable) != 0 && len(cfg.SourceConfig.ExcludeTable) == 0:
 		if err := engine.IsExistOracleTable(cfg.SourceConfig.SchemaName, cfg.SourceConfig.IncludeTable); err != nil {
 			return []Table{}, err
 		}
 		exporterTableSlice = append(exporterTableSlice, cfg.SourceConfig.IncludeTable...)
-	}
-
-	if len(cfg.SourceConfig.ExcludeTable) != 0 {
+	case len(cfg.SourceConfig.IncludeTable) == 0 && len(cfg.SourceConfig.ExcludeTable) != 0:
 		exporterTableSlice, err = engine.FilterDifferenceOracleTable(cfg.SourceConfig.SchemaName, cfg.SourceConfig.ExcludeTable)
 		if err != nil {
 			return []Table{}, err
 		}
+	case len(cfg.SourceConfig.IncludeTable) == 0 && len(cfg.SourceConfig.ExcludeTable) == 0:
+		exporterTableSlice, err = engine.GetOracleTable(cfg.SourceConfig.SchemaName)
+		if err != nil {
+			return []Table{}, err
+		}
+	default:
+		return []Table{}, fmt.Errorf("source config params include-table/exclude-table cannot exist at the same time")
+	}
+
+	if len(exporterTableSlice) == 0 {
+		return []Table{}, fmt.Errorf("exporter table slice can not null from reverse task")
+	}
+
+	// 筛选过滤分区表并打印警告
+	partitionTables, err := engine.FilterOraclePartitionTable(cfg.SourceConfig.SchemaName, exporterTableSlice)
+	if err != nil {
+		return []Table{}, err
+	}
+
+	if len(partitionTables) != 0 {
+		zlog.Logger.Warn("partition tables",
+			zap.String("schema", cfg.SourceConfig.SchemaName),
+			zap.String("partition table list", fmt.Sprintf("%v", partitionTables)),
+			zap.String("suggest", "if necessary, please manually convert and process the tables in the above list"))
 	}
 
 	// 数据库查询获取自定义表结构转换规则

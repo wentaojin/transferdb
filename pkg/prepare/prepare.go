@@ -14,3 +14,38 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 package prepare
+
+import (
+	"time"
+
+	"go.uber.org/zap"
+
+	"github.com/WentaoJin/transferdb/db"
+	"github.com/WentaoJin/transferdb/pkg/config"
+	"github.com/WentaoJin/transferdb/zlog"
+)
+
+// 初始化程序表结构 - only prepare 阶段
+// 同步环境准备
+func TransferDBEnvPrepare(cfg *config.CfgFile) error {
+	startTime := time.Now()
+	zlog.Logger.Info("Welcome to transferdb", zap.String("config", cfg.String()))
+	zlog.Logger.Info("prepare tansferdb env start")
+	mysqlEngine, err := db.NewMySQLEnginePrepareDB(
+		cfg.TargetConfig.Username,
+		cfg.TargetConfig.Password,
+		cfg.TargetConfig.Host,
+		cfg.TargetConfig.Port,
+		cfg.TargetConfig.MetaSchema,
+	)
+	if err != nil {
+		return err
+	}
+	if err := mysqlEngine.InitMysqlEngineDB(); err != nil {
+		return err
+	}
+	endTime := time.Now()
+	zlog.Logger.Info("prepare tansferdb env finished",
+		zap.String("cost", endTime.Sub(startTime).String()))
+	return nil
+}

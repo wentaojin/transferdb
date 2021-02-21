@@ -17,14 +17,41 @@ package taskflow
 
 import (
 	"fmt"
+	"time"
+
+	"github.com/xxjwxc/gowp/workpool"
+
+	"github.com/WentaoJin/transferdb/zlog"
+	"go.uber.org/zap"
 
 	"github.com/WentaoJin/transferdb/db"
 )
 
-func applierTableFullRecord(sql string, engine *db.Engine) error {
-	_, err := engine.MysqlDB.Exec(sql)
-	if err != nil {
-		return fmt.Errorf("bulk insert mysql [%s] falied:%v", sql, err)
+// 表数据应用 -> 全量任务
+func applierTableFullRecord(targetSchemaName, targetTableName string, workerThreads int, sqlSlice []string, engine *db.Engine) error {
+	startTime := time.Now()
+	zlog.Logger.Info("single full table data applier start",
+		zap.String("schema", targetSchemaName),
+		zap.String("table", targetTableName))
+
+	wp := workpool.New(workerThreads)
+	for _, sql := range sqlSlice {
+		s := sql
+		wp.Do(func() error {
+			_, err := engine.MysqlDB.Exec(s)
+			if err != nil {
+				return fmt.Errorf("single full table data bulk insert mysql [%s] falied:%v", sql, err)
+			}
+			return nil
+		})
 	}
+	if err := wp.Wait(); err != nil {
+		return err
+	}
+	endTime := time.Now()
+	zlog.Logger.Info("single full table data applier finished",
+		zap.String("schema", targetSchemaName),
+		zap.String("table", targetTableName),
+		zap.String("cost", endTime.Sub(startTime).String()))
 	return nil
 }

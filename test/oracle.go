@@ -27,8 +27,10 @@ func main() {
 	if err != nil {
 		fmt.Println(err)
 	}
-
-	cols, res, err := db.QueryOracleRows(sqlDB, "select * from marvin.t1")
+	engine := db.Engine{
+		OracleDB: sqlDB,
+	}
+	cols, res, err := engine.QueryFormatOracleRows("select * from marvin.t1")
 	if err != nil {
 		fmt.Println(err)
 	}

@@ -76,7 +76,7 @@ AND upper(index_name) = upper('%s')`, schemaName, tableName, indexName)
 }
 
 func (e *Engine) FilterDifferenceOracleTable(schemaName string, excludeTables []string) ([]string, error) {
-	tables, err := e.getOracleTable(schemaName)
+	tables, err := e.GetOracleTable(schemaName)
 	if err != nil {
 		return []string{}, err
 	}
@@ -254,7 +254,7 @@ func (e *Engine) getOracleSchema() ([]string, error) {
 	return schemas, nil
 }
 
-func (e *Engine) getOracleTable(schemaName string) ([]string, error) {
+func (e *Engine) GetOracleTable(schemaName string) ([]string, error) {
 	var (
 		tables []string
 		err    error
@@ -269,6 +269,52 @@ func (e *Engine) getOracleTable(schemaName string) ([]string, error) {
 		}
 	}
 	return tables, nil
+}
+
+func (e *Engine) FilterOraclePartitionTable(schemaName string, tableSlice []string) ([]string, error) {
+	_, res, err := Query(e.OracleDB, fmt.Sprintf(`select table_name AS TABLE_NAME
+  from dba_tables
+ where partitioned = 'YES'
+   and upper(owner) = upper('%s')`, schemaName))
+	if err != nil {
+		return []string{}, err
+	}
+
+	var tables []string
+	for _, r := range res {
+		tables = append(tables, r["TABLE_NAME"])
+	}
+	return util.FilterIntersectionStringItems(tableSlice, tables), nil
+}
+
+func (e *Engine) isOraclePartitionTable(schemaName, tableName string) (bool, error) {
+	_, res, err := Query(e.OracleDB, fmt.Sprintf(`select count(1) AS COUNT
+  from dba_tables
+ where partitioned = 'YES'
+   and upper(owner) = upper('%s')
+   and upper(table_name) = upper('%s')`, schemaName, tableName))
+	if err != nil {
+		return false, err
+	}
+	if res[0]["COUNT"] == "0" {
+		return false, nil
+	}
+	return true, nil
+}
+
+func (e *Engine) getOracleSubPartitionTable(schemaName, tableName string) ([]string, error) {
+	_, res, err := Query(e.OracleDB, fmt.Sprintf(`select PARTITION_NAME
+  from ALL_TAB_PARTITIONS
+ where upper(TABLE_OWNER) = upper('%s')
+   AND upper(table_name) = upper('%s')`, schemaName, tableName))
+	if err != nil {
+		return []string{}, err
+	}
+	var partsName []string
+	for _, r := range res {
+		partsName = append(partsName, r["PARTITION_NAME"])
+	}
+	return partsName, nil
 }
 
 func (e *Engine) getMySQLSchema() ([]string, error) {

@@ -15,68 +15,99 @@ limitations under the License.
 */
 package taskflow
 
+import "C"
 import (
 	"encoding/json"
 	"fmt"
 	"time"
 
-	"github.com/WentaoJin/transferdb/pkg/config"
-
 	"github.com/WentaoJin/transferdb/db"
+	"github.com/WentaoJin/transferdb/pkg/config"
 	"github.com/WentaoJin/transferdb/zlog"
+
 	"go.uber.org/zap"
 )
 
-// 全量同步任务
-func SyncTableFullRecordToMySQL(cfg *config.CfgFile, engine *db.Engine, oracleSQL, targetTableName string, insertBatchSize int) error {
-	// 捕获数据
+/*
+	全量同步任务
+*/
+// 全量数据导出导入
+func LoaderOracleTableFullDataToMySQL(cfg *config.CfgFile, engine *db.Engine) error {
 	startTime := time.Now()
-	zlog.Logger.Info("single full table data extractor start",
-		zap.String("schema", cfg.SourceConfig.SchemaName),
-		zap.String("table", targetTableName))
-	columns, rowsResult, err := extractorTableFullRecord(engine, oracleSQL)
+	zlog.Logger.Info("Welcome to transferdb", zap.String("config", cfg.String()))
+	zlog.Logger.Info("all full table data loader start",
+		zap.String("schema", cfg.SourceConfig.SchemaName))
+
+	transferTableSlice, err := getTransferTableSliceByCfg(cfg, engine)
 	if err != nil {
 		return err
 	}
-	endTime := time.Now()
-	zlog.Logger.Info("single full table data extractor finished",
-		zap.String("schema", cfg.SourceConfig.SchemaName),
-		zap.String("table", targetTableName),
-		zap.String("cost", endTime.Sub(startTime).String()),
-	)
 
-	// 转换数据
-	startTime = time.Now()
-	zlog.Logger.Info("single full table data translator start",
-		zap.String("schema", cfg.SourceConfig.SchemaName),
-		zap.String("table", targetTableName))
-	sqlSlice := translatorTableFullRecord(
-		cfg.TargetConfig.SchemaName,
-		targetTableName,
-		columns,
-		rowsResult,
-		insertBatchSize,
-		true)
-	endTime = time.Now()
-	zlog.Logger.Info("single full table data translator finished",
-		zap.String("schema", cfg.SourceConfig.SchemaName),
-		zap.String("table", targetTableName),
-		zap.String("cost", endTime.Sub(startTime).String()))
-
-	// 应用数据
-	startTime = time.Now()
-	zlog.Logger.Info("single full table data applier start",
-		zap.String("schema", cfg.SourceConfig.SchemaName),
-		zap.String("table", targetTableName))
-	for _, sql := range sqlSlice {
-		if err := applierTableFullRecord(sql, engine); err != nil {
+	// 关于全量断点恢复
+	//  - 若想断点恢复，设置 enable-checkpoint true,首次一旦运行则 batch 数不能调整，
+	//  - 若不想断点恢复或者重新调整 batch 数，设置 enable-checkpoint false,重新运行全量任务
+	if !cfg.FullConfig.EnableCheckpoint {
+		if err := engine.TruncateMySQLTableFullAndIncrementMetaRecord(cfg.TargetConfig.MetaSchema); err != nil {
 			return err
 		}
 	}
-	endTime = time.Now()
-	zlog.Logger.Info("single full table data applier finished",
+	fullTblSlice, incrementTblSlice, err := engine.IsNotExistFullStageMySQLTableMetaRecord(cfg.SourceConfig.SchemaName, transferTableSlice)
+	if err != nil {
+		return err
+	}
+
+	//根据配置文件生成同步表元数据
+	if err := generateCheckpointMeta(cfg, engine, fullTblSlice, incrementTblSlice); err != nil {
+		return err
+	}
+
+	// 表同步任务开始
+	for _, table := range transferTableSlice {
+		oracleRowIDSQL, err := getMySQLTableFullMetaRowIDSQL(cfg, engine, table)
+		if err != nil {
+			return err
+		}
+		for _, sql := range oracleRowIDSQL {
+			// 抽取 Oracle 数据
+			columns, rowsResult, err := extractorTableFullRecord(engine, cfg.SourceConfig.SchemaName, table, sql)
+			if err != nil {
+				return err
+			}
+
+			if len(rowsResult) == 0 {
+				return fmt.Errorf("oracle schema [%v] table [%v] data return null rows", cfg.SourceConfig.SchemaName, table)
+			}
+
+			// 转换 Oracle 数据 -> MySQL
+			mysqlSQLSlice, err := translatorTableFullRecord(
+				cfg.TargetConfig.SchemaName,
+				table,
+				columns,
+				rowsResult,
+				cfg.FullConfig.WorkerThreads,
+				cfg.AppConfig.InsertBatchSize,
+				true,
+			)
+			if err != nil {
+				return err
+			}
+
+			// 应用 Oracle 数据 -> MySQL
+			if err := applierTableFullRecord(cfg.TargetConfig.SchemaName, table, cfg.FullConfig.WorkerThreads, mysqlSQLSlice,
+				engine); err != nil {
+				return err
+			}
+
+			// 表数据同步成功，清理断点记录
+			if err := clearMySQLTableFullMetaRowIDSQL(cfg, engine, table, sql); err != nil {
+				return err
+			}
+		}
+	}
+
+	endTime := time.Now()
+	zlog.Logger.Info("all full table data loader finished",
 		zap.String("schema", cfg.SourceConfig.SchemaName),
-		zap.String("table", targetTableName),
 		zap.String("cost", endTime.Sub(startTime).String()))
 	return nil
 }
@@ -84,7 +115,7 @@ func SyncTableFullRecordToMySQL(cfg *config.CfgFile, engine *db.Engine, oracleSQ
 /*
 	增量同步任务
 */
-type Payload struct {
+type IncrementPayload struct {
 	Engine           *db.Engine
 	TargetSchemaName string
 	TargetTableName  string
@@ -94,12 +125,12 @@ type Payload struct {
 }
 
 // 任务同步
-func (p *Payload) Do() error {
+func (p *IncrementPayload) Do() error {
 	return nil
 }
 
 // 序列化
-func (p *Payload) Marshal() string {
+func (p *IncrementPayload) Marshal() string {
 	b, err := json.Marshal(&p)
 	if err != nil {
 		zlog.Logger.Error("MarshalTaskToString",

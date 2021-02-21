@@ -23,9 +23,10 @@ import (
 // 全量同步元数据表
 type TableFullMeta struct {
 	ID               uint       `gorm:"primary_key;autoIncrement;comment:'自增编号'" json:"id"`
-	SourceSchemaName string     `gorm:"not null;index:idx_schema_name;comment:'源端 schema'" json:"source_schema_name"`
-	SourceTableName  string     `gorm:"not null;index:idx_schema_table;comment:'源端表名'" json:"source_table_name"`
-	RowidSQL         string     `gorm:"comment:'表 rowid 切分SQL'" json:"rowid_sql"`
+	SourceSchemaName string     `gorm:"not null;index:idx_schema_table_rowid;comment:'源端 schema'" json:"source_schema_name"`
+	SourceTableName  string     `gorm:"not null;index:idx_schema_table_rowid;comment:'源端表名'" json:"source_table_name"`
+	RowidSQL         string     `gorm:"not null;index:idx_schema_table_rowid;comment:'表 rowid 切分SQL'" json:"rowid_sql"`
+	IsPartition      string     `gorm:"comment:'是否是分区表'" json:"is_partition"` // 同步转换统一转换成非分区表，此处只做标志
 	CreatedAt        *time.Time `gorm:"type:timestamp;not null;default:current_timestamp;comment:'创建时间'" json:"createdAt"`
 	UpdatedAt        *time.Time `gorm:"type:timestamp;not null on update current_timestamp;default:current_timestamp;comment:'更新时间'" json:"updatedAt"`
 }

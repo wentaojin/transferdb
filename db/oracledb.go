@@ -21,9 +21,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/WentaoJin/transferdb/zlog"
-	"go.uber.org/zap"
-
 	"github.com/WentaoJin/transferdb/util"
 
 	_ "github.com/godror/godror"
@@ -57,7 +54,7 @@ func (e *Engine) IsExistOracleSchema(schemaName string) error {
 }
 
 func (e *Engine) IsExistOracleTable(schemaName string, includeTables []string) error {
-	tables, err := e.getOracleTable(schemaName)
+	tables, err := e.GetOracleTable(schemaName)
 	if err != nil {
 		return err
 	}
@@ -69,32 +66,30 @@ func (e *Engine) IsExistOracleTable(schemaName string, includeTables []string) e
 }
 
 // 查询 Oracle 数据并按行返回对应字段以及行数据 -> 按字段类型返回行数据
-func QueryOracleRows(db *sql.DB, querySQL string) ([]string, [][]string, error) {
-	zlog.Logger.Info("exec sql",
-		zap.String("sql", fmt.Sprintf("%v", querySQL)))
+func (e *Engine) QueryFormatOracleRows(querySQL string) ([]string, []string, error) {
 	var (
 		cols       []string
-		actualRows [][]string
 		err        error
+		rowsResult []string
 	)
-	rows, err := db.Query(querySQL)
+	rows, err := e.OracleDB.Query(querySQL)
 	if err == nil {
 		defer rows.Close()
 	}
 	if err != nil {
-		return cols, actualRows, err
+		return cols, rowsResult, err
 	}
 
 	cols, err = rows.Columns()
 	if err != nil {
-		return cols, actualRows, err
+		return cols, rowsResult, err
 	}
 
 	// 用于判断字段值是数字还是字符
 	var columnTypes []string
 	colTypes, err := rows.ColumnTypes()
 	if err != nil {
-		return cols, actualRows, err
+		return cols, rowsResult, err
 	}
 
 	for _, ct := range colTypes {
@@ -103,6 +98,7 @@ func QueryOracleRows(db *sql.DB, querySQL string) ([]string, [][]string, error) 
 	}
 
 	// Read all rows
+	var actualRows [][]string
 	for rows.Next() {
 		rawResult := make([][]byte, len(cols))
 		result := make([]string, len(cols))
@@ -113,7 +109,7 @@ func QueryOracleRows(db *sql.DB, querySQL string) ([]string, [][]string, error) 
 
 		err = rows.Scan(dest...)
 		if err != nil {
-			return cols, actualRows, err
+			return cols, rowsResult, err
 		}
 
 		for i, raw := range rawResult {
@@ -139,8 +135,15 @@ func QueryOracleRows(db *sql.DB, querySQL string) ([]string, [][]string, error) 
 		}
 		actualRows = append(actualRows, result)
 	}
+
 	if err = rows.Err(); err != nil {
-		return cols, actualRows, err
+		return cols, rowsResult, err
 	}
-	return cols, actualRows, nil
+
+	for _, row := range actualRows {
+		//数据按行返回，格式如下：(1,2) (2,3) ,用于数据拼接 batch
+		rowsResult = append(rowsResult, fmt.Sprintf("(%s)", strings.Join(row, ",")))
+	}
+
+	return cols, rowsResult, nil
 }

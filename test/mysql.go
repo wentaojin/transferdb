@@ -22,7 +22,7 @@ import (
 )
 
 func main() {
-	engine, err := db.NewMySQLEngineGeneralDB("marvin", "marvin", "172.16.4.206", 5000, "steven")
+	engine, err := db.NewMySQLEngineGeneralDB("marvin", "marvin", "192.168.2.30", 5000, "steven")
 	if err != nil {
 		fmt.Println(err)
 	}

@@ -20,6 +20,9 @@ import (
 	"math"
 	"strconv"
 
+	"github.com/WentaoJin/transferdb/zlog"
+	"go.uber.org/zap"
+
 	"github.com/WentaoJin/transferdb/util"
 )
 
@@ -91,12 +94,47 @@ func (e *Engine) GetMySQLTableFullMetaRowIDSQLRecord(schemaName, tableName, quer
 
 // 清理全量同步任务元数据表
 // 全量每成功同步一张表，再清理断点记录
-func (e *Engine) ClearMySQLTableFullMetaRecord(tableName, deleteSQL string) error {
+func (e *Engine) ClearMySQLTableFullMetaRecord(schemaName, tableName, deleteSQL string) error {
 	_, err := e.MysqlDB.Exec(deleteSQL)
 	if err != nil {
-		return fmt.Errorf("clear mysql meta schema table [table_full_meta] reocrd with source table [%s] failed: %v, running sql: [%v]",
-			tableName, err.Error(), deleteSQL)
+		return fmt.Errorf(
+			`running sql: [%v], clear mysql meta schema [%s] table [table_full_meta] reocrd with source table [%s] failed: %v`,
+			deleteSQL, schemaName, tableName, err.Error())
 	}
+	zlog.Logger.Info("clear meta",
+		zap.String("schema", schemaName),
+		zap.String("table", tableName),
+		zap.String("sql", deleteSQL),
+		zap.String("status", "success"))
+
+	return nil
+}
+
+// 清理全量同步任务元数据表
+func (e *Engine) TruncateMySQLTableFullAndIncrementMetaRecord(schemaName string) error {
+	truncSQL := fmt.Sprintf(`TRUNCATE TABLE %s.table_full_meta`, schemaName)
+	_, err := e.MysqlDB.Query(truncSQL)
+	if err != nil {
+		return fmt.Errorf("truncate mysql meta schema table [table_full_meta] reocrd failed: %v, running sql: [%v]",
+			err.Error(), truncSQL)
+	}
+	zlog.Logger.Info("exec sql",
+		zap.String("schema", schemaName),
+		zap.String("table", "table_full_meta"),
+		zap.String("sql", truncSQL),
+		zap.String("status", "success"))
+
+	truncSQL = fmt.Sprintf(`TRUNCATE TABLE %s.table_increment_meta`, schemaName)
+	_, err = e.MysqlDB.Query(truncSQL)
+	if err != nil {
+		return fmt.Errorf("truncate mysql meta schema table [table_increment_meta] reocrd failed: %v, running sql: [%v]",
+			err.Error(), truncSQL)
+	}
+	zlog.Logger.Info("exec sql",
+		zap.String("schema", schemaName),
+		zap.String("table", "table_increment_meta"),
+		zap.String("sql", truncSQL),
+		zap.String("status", "success"))
 	return nil
 }
 
@@ -108,51 +146,29 @@ func (e *Engine) GetOracleCurrentSnapshotSCN() (string, error) {
 	return res[0]["SCN"], nil
 }
 
-func (e *Engine) InitMySQLTableFullMeta(schemaName, tableName string, extractorBatch int) error {
+func (e *Engine) InitMySQLTableFullMeta(schemaName, tableName string, extractorBatch, insertBatchSize int) error {
 	tableRows, err := e.getOracleTableRowsByStatistics(schemaName, tableName)
-	if err != nil {
-		return err
-	}
-	ok, err := e.isOraclePartitionTable(schemaName, tableName)
 	if err != nil {
 		return err
 	}
 
 	// 用于判断是否需要切分
 	// 当行数少于 parallel*10000 则不切分
+	zlog.Logger.Info("get oracle table statistics rows",
+		zap.String("schema", schemaName),
+		zap.String("table", tableName),
+		zap.Int("rows", tableRows))
+
 	parallel := math.Ceil(float64(tableRows) / float64(extractorBatch))
 
+	// Oracle 表数据切分数根据 sum(数据块数) / parallel
 	if tableRows > extractorBatch {
-		if !ok {
-			if err := e.getOracleNormalTableTableFullMetaByRowID(schemaName, tableName, int(parallel)); err != nil {
-				return err
-			}
-		} else {
-			subPartNames, err := e.getOracleSubPartitionTable(schemaName, tableName)
-			if err != nil {
-				return err
-			}
-			for _, subPart := range subPartNames {
-				if err := e.getOraclePartitionTableTableFullMetaByRowID(schemaName, tableName, subPart, int(parallel)); err != nil {
-					return err
-				}
-			}
+		if err := e.getOracleNormalTableTableFullMetaByRowID(schemaName, tableName, int(parallel), insertBatchSize); err != nil {
+			return err
 		}
 	} else {
-		if !ok {
-			if err := e.getOracleNormalTableTableFullMetaByRowID(schemaName, tableName, 1); err != nil {
-				return err
-			}
-		} else {
-			subPartNames, err := e.getOracleSubPartitionTable(schemaName, tableName)
-			if err != nil {
-				return err
-			}
-			for _, subPart := range subPartNames {
-				if err := e.getOraclePartitionTableTableFullMetaByRowID(schemaName, tableName, subPart, 1); err != nil {
-					return err
-				}
-			}
+		if err := e.getOracleNormalTableTableFullMetaByRowID(schemaName, tableName, 1, insertBatchSize); err != nil {
+			return err
 		}
 	}
 
@@ -172,15 +188,17 @@ func (e *Engine) InitMySQLTableIncrementMeta(schemaName, tableName string, globa
 	return nil
 }
 
-func (e *Engine) GetOracleTableRecordByRowIDSQL(sql string) ([]string, [][]string, error) {
-	cols, res, err := QueryOracleRows(e.OracleDB, sql)
+func (e *Engine) GetOracleTableRecordByRowIDSQL(sql string) ([]string, []string, error) {
+	zlog.Logger.Info("exec sql",
+		zap.String("sql", fmt.Sprintf("%v", sql)))
+	cols, res, err := e.QueryFormatOracleRows(sql)
 	if err != nil {
-		return []string{}, [][]string{}, err
+		return []string{}, []string{}, err
 	}
 	return cols, res, nil
 }
 
-func (e *Engine) getOracleNormalTableTableFullMetaByRowID(schemaName, tableName string, parallel int) error {
+func (e *Engine) getOracleNormalTableTableFullMetaByRowID(schemaName, tableName string, parallel, insertBatchSize int) error {
 	querySQL := fmt.Sprintf(`select rownum,
        'select * from %s.%s where rowid between ' || chr(39) ||
        dbms_rowid.rowid_create(1, DOI, lo_fno, lo_block, 0) || chr(39) ||
@@ -230,18 +248,19 @@ func (e *Engine) getOracleNormalTableTableFullMetaByRowID(schemaName, tableName 
 			SourceSchemaName: schemaName,
 			SourceTableName:  tableName,
 			RowidSQL:         r["DATA"],
+			IsPartition:      "N",
 		})
 		fullMetaIdx = append(fullMetaIdx, idx)
 	}
 
 	// 划分 batch 数(500)
-	if len(fullMetas) <= InsertBatchSize {
+	if len(fullMetas) <= insertBatchSize {
 		if err := e.GormDB.Create(&fullMetas).Error; err != nil {
 			return fmt.Errorf("gorm create table [%s.%s] full meta failed: %v", schemaName, tableName, err)
 		}
 	} else {
 		var fullMetaBatch []TableFullMeta
-		splitNums := len(fullMetas) / InsertBatchSize
+		splitNums := len(fullMetas) / insertBatchSize
 		splitMetaIdxSlice := util.SplitIntSlice(fullMetaIdx, int64(splitNums))
 		for _, ms := range splitMetaIdxSlice {
 			for _, idx := range ms {
@@ -253,80 +272,6 @@ func (e *Engine) getOracleNormalTableTableFullMetaByRowID(schemaName, tableName 
 		}
 	}
 
-	return nil
-}
-
-func (e *Engine) getOraclePartitionTableTableFullMetaByRowID(schemaName, tableName, partTableName string, parallel int) error {
-	querySQL := fmt.Sprintf(`select rownum,'select * from %s.%s rowid between ' || chr(39) ||
-       dbms_rowid.rowid_create(1, DOI, lo_fno, lo_block, 0) || chr(39) ||
-       ' and  ' || chr(39) ||
-       dbms_rowid.rowid_create(1, DOI, hi_fno, hi_block, 1000000) ||
-       chr(39) DATA
-  from (SELECT DISTINCT DOI,
-                        grp,
-                        first_value(relative_fno) over(partition BY DOI, grp order by relative_fno, block_id rows BETWEEN unbounded preceding AND unbounded following) lo_fno,
-                        first_value(block_id) over(partition BY DOI, grp order by relative_fno, block_id rows BETWEEN unbounded preceding AND unbounded following) lo_block,
-                        last_value(relative_fno) over(partition BY DOI, grp order by relative_fno, block_id rows BETWEEN unbounded preceding AND unbounded following) hi_fno,
-                        last_value(block_id + blocks - 1) over(partition BY DOI, grp order by relative_fno, block_id rows BETWEEN unbounded preceding AND unbounded following) hi_block,
-                        SUM(blocks) over(partition BY DOI, grp) sum_blocks,
-                        SUBOBJECT_NAME
-          FROM (SELECT obj.OBJECT_ID,
-                       obj.SUBOBJECT_NAME,
-                       obj.DATA_OBJECT_ID as DOI,
-                       ext.relative_fno,
-                       ext.block_id,
-                       (SUM(blocks) over()) SUM,
-                       (SUM(blocks)
-                        over(ORDER BY DATA_OBJECT_ID, relative_fno, block_id) - 0.01) sum_fno,
-                       TRUNC((SUM(blocks) over(ORDER BY DATA_OBJECT_ID,
-                                               relative_fno,
-                                               block_id) - 0.01) /
-                             (SUM(blocks) over() / %d)) grp,
-                       ext.blocks
-                  FROM dba_extents ext, dba_objects obj
-                 WHERE ext.segment_name = UPPER('%s')           --物理表
-                   AND ext.owner = UPPER('%s')                         --schema
-                   AND obj.owner = ext.owner
-                   AND obj.object_name = ext.segment_name
-                   AND obj.DATA_OBJECT_ID IS NOT NULL
-                   AND obj.subobject_name = UPPER('%s') --分区表
-                 ORDER BY DATA_OBJECT_ID, relative_fno, block_id)
-         order by DOI, grp)`, schemaName, tableName, parallel, tableName, schemaName, partTableName)
-	_, res, err := Query(e.OracleDB, querySQL)
-	if err != nil {
-		return err
-	}
-	var (
-		fullMetas   []TableFullMeta
-		fullMetaIdx []int
-	)
-	for idx, r := range res {
-		fullMetas = append(fullMetas, TableFullMeta{
-			SourceSchemaName: schemaName,
-			SourceTableName:  tableName,
-			RowidSQL:         r["DATA"],
-		})
-		fullMetaIdx = append(fullMetaIdx, idx)
-	}
-
-	// 划分 batch 数(500)
-	if len(fullMetas) <= InsertBatchSize {
-		if err := e.GormDB.Create(&fullMetas).Error; err != nil {
-			return fmt.Errorf("gorm create partiton table [%s.%s] full meta failed: %v", schemaName, tableName, err)
-		}
-	} else {
-		var fullMetaBatch []TableFullMeta
-		splitNums := len(fullMetas) / InsertBatchSize
-		splitMetaIdxSlice := util.SplitIntSlice(fullMetaIdx, int64(splitNums))
-		for _, ms := range splitMetaIdxSlice {
-			for _, idx := range ms {
-				fullMetaBatch = append(fullMetaBatch, fullMetas[idx])
-			}
-			if err := e.GormDB.Create(&fullMetaBatch).Error; err != nil {
-				return fmt.Errorf("gorm create partiton table [%s.%s] full meta failed: %v", schemaName, tableName, err)
-			}
-		}
-	}
 	return nil
 }
 
@@ -346,34 +291,4 @@ func (e *Engine) getOracleTableRowsByStatistics(schemaName, tableName string) (i
 			fmt.Sprintf("%s.%s", schemaName, tableName), err)
 	}
 	return numRows, nil
-}
-
-func (e *Engine) isOraclePartitionTable(schemaName, tableName string) (bool, error) {
-	_, res, err := Query(e.OracleDB, fmt.Sprintf(`select count(1) AS COUNT
-  from dba_tables
- where partitioned = 'YES'
-   and upper(owner) = upper('%s')
-   and upper(table_name) = upper('%s')`, schemaName, tableName))
-	if err != nil {
-		return false, err
-	}
-	if res[0]["COUNT"] == "0" {
-		return false, nil
-	}
-	return true, nil
-}
-
-func (e *Engine) getOracleSubPartitionTable(schemaName, tableName string) ([]string, error) {
-	_, res, err := Query(e.OracleDB, fmt.Sprintf(`select PARTITION_NAME
-  from ALL_TAB_PARTITIONS
- where upper(TABLE_OWNER) = upper('%s')
-   AND upper(table_name) = upper('%s')`, schemaName, tableName))
-	if err != nil {
-		return []string{}, err
-	}
-	var partsName []string
-	for _, r := range res {
-		partsName = append(partsName, r["PARTITION_NAME"])
-	}
-	return partsName, nil
 }

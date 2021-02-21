@@ -17,53 +17,80 @@ package taskflow
 
 import (
 	"fmt"
+	"math"
 	"strings"
+	"sync"
+	"time"
+
+	"github.com/xxjwxc/gowp/workpool"
+
+	"github.com/WentaoJin/transferdb/zlog"
+	"go.uber.org/zap"
 
 	"github.com/WentaoJin/transferdb/util"
 )
 
 // 全量数据导出导入期间，运行安全模式
 // INSERT INTO 语句替换成 REPLACE INTO 语句
-func translatorTableFullRecord(schemaName, tableName string, columns []string, rows [][]string, insertBatchSize int, safeMode bool) []string {
-	var (
-		sqlSlice []string
-		val      string
-	)
-	sql := generateMySQLPrepareInsertSQLStatement(schemaName, tableName, columns, safeMode)
-	rowCounts := len(rows)
+// 转换表数据 -> 全量任务
+func translatorTableFullRecord(
+	targetSchemaName, targetTableName string,
+	columns []string, rowsResult []string, workerThreads, insertBatchSize int, safeMode bool) ([]string, error) {
+	startTime := time.Now()
+	zlog.Logger.Info("single full table data translator start",
+		zap.String("schema", targetSchemaName),
+		zap.String("table", targetTableName))
+
+	var sqlSlice []string
+	sqlPrefix := generateMySQLPrepareInsertSQLStatement(targetSchemaName, targetTableName, columns, safeMode)
+	rowCounts := len(rowsResult)
+
 	if rowCounts <= insertBatchSize {
-		for _, row := range rows {
-			val += fmt.Sprintf("(%s),", strings.Join(row, ","))
-		}
-		sqlSlice = append(sqlSlice, fmt.Sprintf("%s%s", sql, util.TrimLastChar(val)))
+		sqlSlice = append(sqlSlice, fmt.Sprintf("%s %s", sqlPrefix, strings.Join(rowsResult, ",")))
 	} else {
 		// 数据行按照 batch 拼接拆分
-		splitsNums := rowCounts / insertBatchSize
-		multiBatchRows := util.SplitMultipleStringSlice(rows, int64(splitsNums))
+		// 向上取整，多切 batch，防止数据丢失
+		splitsNums := math.Ceil(float64(rowCounts) / float64(insertBatchSize))
+		multiBatchRows := util.SplitMultipleStringSlice(rowsResult, int64(splitsNums))
+
+		// 保证并发 Slice Append 安全
+		var lock sync.Mutex
+		wp := workpool.New(workerThreads)
 		for _, batchRows := range multiBatchRows {
-			for _, rows := range batchRows {
-				val += fmt.Sprintf("(%s),", strings.Join(rows, ","))
-			}
-			sqlSlice = append(sqlSlice, fmt.Sprintf("%s%s", sql, util.TrimLastChar(val)))
+			rows := batchRows
+			wp.Do(func() error {
+				lock.Lock()
+				sqlSlice = append(sqlSlice, fmt.Sprintf("%s %s", sqlPrefix, strings.Join(rows, ",")))
+				lock.Unlock()
+				return nil
+			})
+		}
+		if err := wp.Wait(); err != nil {
+			return sqlSlice, err
 		}
 	}
-	return sqlSlice
+	endTime := time.Now()
+	zlog.Logger.Info("single full table data translator finished",
+		zap.String("schema", targetSchemaName),
+		zap.String("table", targetTableName),
+		zap.String("cost", endTime.Sub(startTime).String()))
+	return sqlSlice, nil
 }
 
 // 拼接 SQL 语句
-func generateMySQLPrepareInsertSQLStatement(schemaName, tableName string, columns []string, safeMode bool) string {
+func generateMySQLPrepareInsertSQLStatement(targetSchemaName, targetTableName string, columns []string, safeMode bool) string {
 	var prepareSQL string
 	column := fmt.Sprintf("(%s)", strings.Join(columns, ","))
 	if safeMode {
 		prepareSQL = fmt.Sprintf("REPLACE INTO %s.%s %s VALUES ",
-			schemaName,
-			tableName,
+			targetSchemaName,
+			targetTableName,
 			column,
 		)
 	} else {
 		prepareSQL = fmt.Sprintf("INSERT INTO %s.%s %s VALUES ",
-			schemaName,
-			tableName,
+			targetSchemaName,
+			targetTableName,
 			column,
 		)
 	}

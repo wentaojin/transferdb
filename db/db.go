@@ -26,8 +26,6 @@ import (
 )
 
 var (
-	// 事务 batch 数
-	InsertBatchSize = 500
 	// Oracle/Mysql 对于 'NULL' 统一字符 NULL 处理，查询出来转成 NULL,所以需要判断处理
 	// 查询字段值 NULL
 	// 如果字段值 = NULLABLE 则表示值是 NULL
