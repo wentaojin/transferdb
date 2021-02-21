@@ -21,6 +21,8 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/WentaoJin/transferdb/pkg/signal"
+
 	"github.com/WentaoJin/transferdb/pkg/config"
 	"github.com/WentaoJin/transferdb/server"
 	"github.com/WentaoJin/transferdb/zlog"
@@ -50,6 +52,12 @@ func main() {
 	if err := zlog.NewZapLogger(cfg); err != nil {
 		log.Fatalf("create global zap logger failed: %v", err)
 	}
+
+	// 信号量监听处理
+	signal.SetupSignalHandler(func(b bool) {
+		os.Exit(0)
+	})
+
 	// 程序运行
 	if err := server.Run(cfg, *mode); err != nil {
 		zlog.Logger.Fatal("server run failed", zap.String("error", err.Error()))

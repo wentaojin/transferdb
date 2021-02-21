@@ -52,8 +52,8 @@ func SplitIntSlice(arr []int, num int64) [][]int {
 }
 
 // 多重数组拆分
-func SplitMultipleStringSlice(arr [][]string, num int64) [][][]string {
-	var segmens = make([][][]string, 0)
+func SplitMultipleStringSlice(arr []string, num int64) [][]string {
+	var segmens = make([][]string, 0)
 	if num == 0 {
 		segmens = append(segmens, arr)
 		return segmens
