@@ -82,11 +82,9 @@ func getTransferTableSliceByCfg(cfg *config.CfgFile, engine *db.Engine) ([]strin
 	return exporterTableSlice, nil
 }
 
-// 根据配置文件生成同步表元数据
-// 1、获取一致性 SCN 写入增量表元数据（用于增量同步起始点，可能存在重复执行，默认前 10 分钟 safe-mode）
-// 2、按要求切分，写入全量表数据并按照要求全量导出并导入
-func generateCheckpointMeta(cfg *config.CfgFile, engine *db.Engine, fullTblSlice, incrementTblSlice []string) error {
-	// 全量同步前，获取 SCN ，ALL 模式下增量同步起始点，需要获取 table_increment_meta 中 global_scn 最小 POS 位点开始
+// 根据配置文件生成同步表元数据 [table_full_meta]
+func generateTableFullTaskCheckpointMeta(cfg *config.CfgFile, engine *db.Engine, fullTblSlice []string) error {
+	// 全量同步前，获取 SCN ，全量模式下增量同步起始点
 	globalSCN, err := engine.GetOracleCurrentSnapshotSCN()
 	if err != nil {
 		return err
@@ -103,30 +101,13 @@ func generateCheckpointMeta(cfg *config.CfgFile, engine *db.Engine, fullTblSlice
 			insertBatchSize := cfg.AppConfig.InsertBatchSize
 			sourceSchemaName := cfg.SourceConfig.SchemaName
 			wp.DoWait(func() error {
-				if err := engine.InitMySQLTableFullMeta(sourceSchemaName, tbl, workerBatch, insertBatchSize); err != nil {
+				if err := engine.InitMySQLTableFullMeta(sourceSchemaName, tbl, globalSCN, workerBatch, insertBatchSize); err != nil {
 					return err
 				}
 				return nil
 			})
 		}
-		if err = wp.Wait(); err != nil {
-			return err
-		}
-	}
-	if len(incrementTblSlice) > 0 {
-		wp := workpool.New(cfg.FullConfig.WorkerThreads)
-		for _, table := range incrementTblSlice {
-			// 变量替换，直接使用原变量会导致并发输出有问题
-			tbl := table
-			sourceSchemaName := cfg.SourceConfig.SchemaName
-			wp.DoWait(func() error {
-				if err := engine.InitMySQLTableIncrementMeta(sourceSchemaName, tbl, globalSCN); err != nil {
-					return err
-				}
-				return nil
-			})
-		}
-		if err = wp.Wait(); err != nil {
+		if err := wp.Wait(); err != nil {
 			return err
 		}
 	}

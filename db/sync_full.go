@@ -111,7 +111,7 @@ func (e *Engine) ClearMySQLTableFullMetaRecord(schemaName, tableName, deleteSQL 
 }
 
 // 清理全量同步任务元数据表
-func (e *Engine) TruncateMySQLTableFullAndIncrementMetaRecord(schemaName string) error {
+func (e *Engine) TruncateMySQLTableFullMetaRecord(schemaName string) error {
 	truncSQL := fmt.Sprintf(`TRUNCATE TABLE %s.table_full_meta`, schemaName)
 	_, err := e.MysqlDB.Query(truncSQL)
 	if err != nil {
@@ -121,18 +121,6 @@ func (e *Engine) TruncateMySQLTableFullAndIncrementMetaRecord(schemaName string)
 	zlog.Logger.Info("exec sql",
 		zap.String("schema", schemaName),
 		zap.String("table", "table_full_meta"),
-		zap.String("sql", truncSQL),
-		zap.String("status", "success"))
-
-	truncSQL = fmt.Sprintf(`TRUNCATE TABLE %s.table_increment_meta`, schemaName)
-	_, err = e.MysqlDB.Query(truncSQL)
-	if err != nil {
-		return fmt.Errorf("truncate mysql meta schema table [table_increment_meta] reocrd failed: %v, running sql: [%v]",
-			err.Error(), truncSQL)
-	}
-	zlog.Logger.Info("exec sql",
-		zap.String("schema", schemaName),
-		zap.String("table", "table_increment_meta"),
 		zap.String("sql", truncSQL),
 		zap.String("status", "success"))
 	return nil
@@ -146,7 +134,7 @@ func (e *Engine) GetOracleCurrentSnapshotSCN() (string, error) {
 	return res[0]["SCN"], nil
 }
 
-func (e *Engine) InitMySQLTableFullMeta(schemaName, tableName string, extractorBatch, insertBatchSize int) error {
+func (e *Engine) InitMySQLTableFullMeta(schemaName, tableName, globalSCN string, extractorBatch, insertBatchSize int) error {
 	tableRows, err := e.getOracleTableRowsByStatistics(schemaName, tableName)
 	if err != nil {
 		return err
@@ -163,11 +151,11 @@ func (e *Engine) InitMySQLTableFullMeta(schemaName, tableName string, extractorB
 
 	// Oracle 表数据切分数根据 sum(数据块数) / parallel
 	if tableRows > extractorBatch {
-		if err := e.getOracleNormalTableTableFullMetaByRowID(schemaName, tableName, int(parallel), insertBatchSize); err != nil {
+		if err := e.getOracleNormalTableTableFullMetaByRowID(schemaName, tableName, globalSCN, int(parallel), insertBatchSize); err != nil {
 			return err
 		}
 	} else {
-		if err := e.getOracleNormalTableTableFullMetaByRowID(schemaName, tableName, 1, insertBatchSize); err != nil {
+		if err := e.getOracleNormalTableTableFullMetaByRowID(schemaName, tableName, globalSCN, 1, insertBatchSize); err != nil {
 			return err
 		}
 	}
@@ -198,7 +186,7 @@ func (e *Engine) GetOracleTableRecordByRowIDSQL(sql string) ([]string, []string,
 	return cols, res, nil
 }
 
-func (e *Engine) getOracleNormalTableTableFullMetaByRowID(schemaName, tableName string, parallel, insertBatchSize int) error {
+func (e *Engine) getOracleNormalTableTableFullMetaByRowID(schemaName, tableName, globalSCN string, parallel, insertBatchSize int) error {
 	querySQL := fmt.Sprintf(`select rownum,
        'select * from %s.%s where rowid between ' || chr(39) ||
        dbms_rowid.rowid_create(1, DOI, lo_fno, lo_block, 0) || chr(39) ||
@@ -247,6 +235,7 @@ func (e *Engine) getOracleNormalTableTableFullMetaByRowID(schemaName, tableName 
 		fullMetas = append(fullMetas, TableFullMeta{
 			SourceSchemaName: schemaName,
 			SourceTableName:  tableName,
+			GlobalSCN:        globalSCN,
 			RowidSQL:         r["DATA"],
 			IsPartition:      "N",
 		})

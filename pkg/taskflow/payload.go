@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/xxjwxc/gowp/workpool"
+
 	"github.com/WentaoJin/transferdb/db"
 	"github.com/WentaoJin/transferdb/pkg/config"
 	"github.com/WentaoJin/transferdb/zlog"
@@ -45,19 +47,19 @@ func LoaderOracleTableFullDataToMySQL(cfg *config.CfgFile, engine *db.Engine) er
 
 	// 关于全量断点恢复
 	//  - 若想断点恢复，设置 enable-checkpoint true,首次一旦运行则 batch 数不能调整，
-	//  - 若不想断点恢复或者重新调整 batch 数，设置 enable-checkpoint false,重新运行全量任务
+	//  - 若不想断点恢复或者重新调整 batch 数，设置 enable-checkpoint false,清理元数据表 [table_full_meta],重新运行全量任务
 	if !cfg.FullConfig.EnableCheckpoint {
-		if err := engine.TruncateMySQLTableFullAndIncrementMetaRecord(cfg.TargetConfig.MetaSchema); err != nil {
+		if err := engine.TruncateMySQLTableFullMetaRecord(cfg.TargetConfig.MetaSchema); err != nil {
 			return err
 		}
 	}
-	fullTblSlice, incrementTblSlice, err := engine.IsNotExistFullStageMySQLTableMetaRecord(cfg.SourceConfig.SchemaName, transferTableSlice)
+	fullTblSlice, _, err := engine.IsNotExistFullStageMySQLTableMetaRecord(cfg.SourceConfig.SchemaName, transferTableSlice)
 	if err != nil {
 		return err
 	}
 
-	//根据配置文件生成同步表元数据
-	if err := generateCheckpointMeta(cfg, engine, fullTblSlice, incrementTblSlice); err != nil {
+	//根据配置文件生成同步表元数据 [table_full_meta]
+	if err := generateTableFullTaskCheckpointMeta(cfg, engine, fullTblSlice); err != nil {
 		return err
 	}
 
@@ -67,41 +69,67 @@ func LoaderOracleTableFullDataToMySQL(cfg *config.CfgFile, engine *db.Engine) er
 		if err != nil {
 			return err
 		}
-		for _, sql := range oracleRowIDSQL {
-			// 抽取 Oracle 数据
-			columns, rowsResult, err := extractorTableFullRecord(engine, cfg.SourceConfig.SchemaName, table, sql)
-			if err != nil {
-				return err
-			}
 
-			if len(rowsResult) == 0 {
-				return fmt.Errorf("oracle schema [%v] table [%v] data return null rows", cfg.SourceConfig.SchemaName, table)
-			}
+		startTime := time.Now()
+		zlog.Logger.Info("single full table data loader start",
+			zap.String("schema", cfg.SourceConfig.SchemaName))
 
-			// 转换 Oracle 数据 -> MySQL
-			mysqlSQLSlice, err := translatorTableFullRecord(
-				cfg.TargetConfig.SchemaName,
-				table,
-				columns,
-				rowsResult,
-				cfg.FullConfig.WorkerThreads,
-				cfg.AppConfig.InsertBatchSize,
-				true,
-			)
-			if err != nil {
-				return err
-			}
+		wp := workpool.New(cfg.FullConfig.TableThreads)
+		for _, rowidSQL := range oracleRowIDSQL {
+			sql := rowidSQL
+			wp.Do(func() error {
+				// 抽取 Oracle 数据
+				columns, rowsResult, err := extractorTableFullRecord(engine, cfg.SourceConfig.SchemaName, table, sql)
+				if err != nil {
+					return err
+				}
 
-			// 应用 Oracle 数据 -> MySQL
-			if err := applierTableFullRecord(cfg.TargetConfig.SchemaName, table, cfg.FullConfig.WorkerThreads, mysqlSQLSlice,
-				engine); err != nil {
-				return err
-			}
+				if len(rowsResult) == 0 {
+					return fmt.Errorf("oracle schema [%v] table [%v] data return null rows", cfg.SourceConfig.SchemaName, table)
+				}
 
-			// 表数据同步成功，清理断点记录
-			if err := clearMySQLTableFullMetaRowIDSQL(cfg, engine, table, sql); err != nil {
-				return err
-			}
+				// 转换 Oracle 数据 -> MySQL
+				mysqlSQLSlice, err := translatorTableFullRecord(
+					cfg.TargetConfig.SchemaName,
+					table,
+					columns,
+					rowsResult,
+					cfg.FullConfig.WorkerThreads,
+					cfg.AppConfig.InsertBatchSize,
+					true,
+				)
+				if err != nil {
+					return err
+				}
+
+				// 应用 Oracle 数据 -> MySQL
+				if err := applierTableFullRecord(cfg.TargetConfig.SchemaName, table, cfg.FullConfig.WorkerThreads, mysqlSQLSlice,
+					engine); err != nil {
+					return err
+				}
+
+				// 表数据同步成功，清理断点记录
+				if err := clearMySQLTableFullMetaRowIDSQL(cfg, engine, table, sql); err != nil {
+					return err
+				}
+				return nil
+			})
+		}
+		if err := wp.Wait(); err != nil {
+			return err
+		}
+
+		endTime := time.Now()
+		if !wp.IsDone() {
+			zlog.Logger.Fatal("single full table data loader failed",
+				zap.String("schema", cfg.SourceConfig.SchemaName),
+				zap.String("table", table),
+				zap.String("cost", endTime.Sub(startTime).String()))
+		} else {
+			zlog.Logger.Info("single full table data loader finished",
+				zap.String("schema", cfg.SourceConfig.SchemaName),
+				zap.String("table", table),
+				zap.String("cost", endTime.Sub(startTime).String()))
 		}
 	}
 

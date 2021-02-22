@@ -45,6 +45,7 @@ type ReverseConfig struct {
 type FullConfig struct {
 	WorkerBatch      int  `toml:"worker-batch" json:"worker-batch"`
 	WorkerThreads    int  `toml:"worker-threads" json:"worker-threads"`
+	TableThreads     int  `toml:"table-threads" json:"table-threads"`
 	EnableCheckpoint bool `toml:"enable-checkpoint" json:"enable-checkpoint"`
 }
 
