@@ -16,46 +16,29 @@ limitations under the License.
 package zlog
 
 import (
+	"strings"
+
 	"github.com/WentaoJin/transferdb/pkg/config"
+	"github.com/pingcap/log"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 var Logger *zap.Logger
 
 // 初始化日志 logger
 func NewZapLogger(cfg *config.CfgFile) (err error) {
-	writeSyncer := getLogWriter(cfg.LogConfig.LogFile, cfg.LogConfig.MaxSize, cfg.LogConfig.MaxBackups, cfg.LogConfig.MaxAge,
-		cfg.LogConfig.Compress)
-	encoder := getEncoder()
-	var l = new(zapcore.Level)
-	err = l.UnmarshalText([]byte(cfg.LogConfig.LogLevel))
+	Logger, _, err = log.InitLogger(&log.Config{
+		Level: strings.ToLower(cfg.LogConfig.LogLevel),
+		File: log.FileLogConfig{
+			Filename:   cfg.LogConfig.LogFile,
+			MaxSize:    cfg.LogConfig.MaxSize,
+			MaxDays:    cfg.LogConfig.MaxDays,
+			MaxBackups: cfg.LogConfig.MaxBackups,
+		},
+	}, zap.AddStacktrace(zapcore.FatalLevel))
 	if err != nil {
-		return
+		return err
 	}
-	core := zapcore.NewCore(encoder, writeSyncer, l)
-	Logger = zap.New(core, zap.AddCaller())
 	return
-}
-
-func getEncoder() zapcore.Encoder {
-	encoderConfig := zap.NewProductionEncoderConfig()
-	encoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
-	encoderConfig.TimeKey = "time"
-	encoderConfig.EncodeLevel = zapcore.CapitalLevelEncoder
-	encoderConfig.EncodeDuration = zapcore.SecondsDurationEncoder
-	encoderConfig.EncodeCaller = zapcore.ShortCallerEncoder
-	return zapcore.NewConsoleEncoder(encoderConfig)
-}
-
-func getLogWriter(filename string, maxSize, maxBackup, maxAge int, compress bool) zapcore.WriteSyncer {
-	lumberJackLogger := &lumberjack.Logger{
-		Filename:   filename,
-		MaxSize:    maxSize,
-		MaxBackups: maxBackup,
-		MaxAge:     maxAge,
-		Compress:   compress,
-	}
-	return zapcore.AddSync(lumberJackLogger)
 }

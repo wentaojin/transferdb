@@ -7,6 +7,7 @@ require (
 	github.com/godror/godror v0.23.1
 	github.com/kr/text v0.2.0 // indirect
 	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
+	github.com/pingcap/log v0.0.0-20201112100606-8f1e84a3abc8
 	github.com/scylladb/go-set v1.0.2
 	github.com/stretchr/testify v1.7.0 // indirect
 	github.com/xxjwxc/gowp v0.0.0-20200603141413-57c3ba7108be

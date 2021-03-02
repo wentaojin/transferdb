@@ -55,3 +55,16 @@ func applierTableFullRecord(targetSchemaName, targetTableName string, workerThre
 		zap.String("cost", endTime.Sub(startTime).String()))
 	return nil
 }
+
+// 表数据应用 -> 增量任务
+func applierTableIncrementRecord(sqlSlice []string, engine *db.Engine) error {
+	for _, sql := range sqlSlice {
+		_, err := engine.MysqlDB.Exec(sql)
+		if err != nil {
+			return fmt.Errorf("single increment table data insert mysql [%s] falied:%v", sql, err)
+		}
+		return nil
+
+	}
+	return nil
+}

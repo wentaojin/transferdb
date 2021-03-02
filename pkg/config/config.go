@@ -34,8 +34,7 @@ type CfgFile struct {
 }
 
 type AppConfig struct {
-	SafeMode        bool `toml:"safe-mode" json:"safe-mode"`
-	InsertBatchSize int  `toml:"insert-batch-size" json:"insert-batch-size"`
+	InsertBatchSize int `toml:"insert-batch-size" json:"insert-batch-size"`
 }
 
 type ReverseConfig struct {
@@ -50,8 +49,9 @@ type FullConfig struct {
 }
 
 type IncrementConfig struct {
-	TranslatorThreads int `toml:"translator-threads" json:"translator-threads"`
-	ApplierThreads    int `toml:"Applier-threads" json:"Applier-threads"`
+	GlobalSCN     int `toml:"global-scn" json:"global-scn"`
+	WorkerThreads int `toml:"worker-threads" json:"worker-threads"`
+	WorkerQueue   int `toml:"worker-queue" json:"worker-queue"`
 }
 
 type SourceConfig struct {
@@ -75,9 +75,8 @@ type LogConfig struct {
 	LogLevel   string `toml:"log-level" json:"log-level"`
 	LogFile    string `toml:"log-file" json:"log-file"`
 	MaxSize    int    `toml:"max-size" json:"max-size"`
-	MaxAge     int    `toml:"max-age" json:"max-age"`
+	MaxDays    int    `toml:"max-days" json:"max-days"`
 	MaxBackups int    `toml:"max-backups" json:"max-backups"`
-	Compress   bool   `toml:"compress" json:"compress"`
 }
 
 // 读取配置文件

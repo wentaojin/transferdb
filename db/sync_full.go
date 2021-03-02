@@ -28,9 +28,6 @@ import (
 
 // 全量阶段判断是否存在元数据表存在记录，若不存在则初始化全量元数据表以及增量元数据表全量开始 SCN 号，若存在则表示运行过全量任务
 // 该函数只应用于全量同步模式或者 ALL 同步模式
-// ALL 模式：
-//		- 全量任务全 safe-mode 模式
-//		- 增量任务 safe-mode 默认十分钟，其他正常模式
 func (e *Engine) IsNotExistFullStageMySQLTableMetaRecord(schemaName string, tableSlice []string) ([]string, []string, error) {
 	var (
 		tblFullSlice      []string
@@ -60,21 +57,17 @@ func (e *Engine) IsNotExistFullStageMySQLTableMetaRecord(schemaName string, tabl
 	return tblFullSlice, tblIncrementSlice, nil
 }
 
-// 增量任务判断元数据表起始同步 SCN 点，该函数只用于增量同步模式 -> 全量非 transferdb 工具导入
-//func (e *Engine) IsExistMySQLTableIncrementMetaRecord(schemaName string, tableSlice []string) ([]string, error) {
-//	var tblSlice []string
-//	for _, table := range tableSlice {
-//		tim := &TableIncrementMeta{}
-//		timRecordCounts, err := tim.GetTableIncrementMetaRecordCounts(schemaName, table, e)
-//		if err != nil {
-//			return tblSlice, err
-//		}
-//		if timRecordCounts == 0 {
-//			tblSlice = append(tblSlice, table)
-//		}
-//	}
-//	return tblSlice, nil
-//}
+func (e *Engine) IsNotExistMySQLTableIncrementMetaRecord() (bool, error) {
+	tim := &TableIncrementMeta{}
+	count, err := tim.GetTableIncrementMetaRowCounts(e)
+	if err != nil {
+		return false, err
+	}
+	if count == 0 {
+		return true, nil
+	}
+	return false, nil
+}
 
 func (e *Engine) GetMySQLTableFullMetaRowIDSQLRecord(schemaName, tableName, queryCond string) ([]string, error) {
 	querySQL := fmt.Sprintf(`SELECT
@@ -126,15 +119,22 @@ func (e *Engine) TruncateMySQLTableFullMetaRecord(schemaName string) error {
 	return nil
 }
 
-func (e *Engine) GetOracleCurrentSnapshotSCN() (string, error) {
-	_, res, err := Query(e.OracleDB, `select dbms_flashback.get_system_change_number AS SCN from dual`)
+func (e *Engine) GetOracleCurrentSnapshotSCN() (int, error) {
+	// select dbms_flashback.get_system_change_number from dual 获取当前 SCN 号
+	// select dbms_flashback.get_system_change_number AS SCN,to_char(sysdate,'yyyy-mm-dd hh24:mi:ss') AS SCN_TIME from dual
+	_, res, err := Query(e.OracleDB, `select dbms_flashback.get_system_change_number AS SCN from dual `)
+	var globalSCN int
 	if err != nil {
-		return res[0]["SCN"], err
+		return globalSCN, err
 	}
-	return res[0]["SCN"], nil
+	globalSCN, err = strconv.Atoi(res[0]["SCN"])
+	if err != nil {
+		return globalSCN, err
+	}
+	return globalSCN, nil
 }
 
-func (e *Engine) InitMySQLTableFullMeta(schemaName, tableName, globalSCN string, extractorBatch, insertBatchSize int) error {
+func (e *Engine) InitMySQLTableFullMeta(schemaName, tableName string, globalSCN int, extractorBatch, insertBatchSize int) error {
 	tableRows, err := e.getOracleTableRowsByStatistics(schemaName, tableName)
 	if err != nil {
 		return err
@@ -163,13 +163,11 @@ func (e *Engine) InitMySQLTableFullMeta(schemaName, tableName, globalSCN string,
 	return nil
 }
 
-func (e *Engine) InitMySQLTableIncrementMeta(schemaName, tableName string, globalSCN string) error {
+func (e *Engine) InitMySQLTableIncrementMeta(schemaName, tableName string, globalSCN int) error {
 	if err := e.GormDB.Create(&TableIncrementMeta{
 		GlobalSCN:        globalSCN,
 		SourceSchemaName: schemaName,
 		SourceTableName:  tableName,
-		CreatedAt:        nil,
-		UpdatedAt:        nil,
 	}).Error; err != nil {
 		return err
 	}
@@ -186,7 +184,7 @@ func (e *Engine) GetOracleTableRecordByRowIDSQL(sql string) ([]string, []string,
 	return cols, res, nil
 }
 
-func (e *Engine) getOracleNormalTableTableFullMetaByRowID(schemaName, tableName, globalSCN string, parallel, insertBatchSize int) error {
+func (e *Engine) getOracleNormalTableTableFullMetaByRowID(schemaName, tableName string, globalSCN int, parallel, insertBatchSize int) error {
 	querySQL := fmt.Sprintf(`select rownum,
        'select * from %s.%s where rowid between ' || chr(39) ||
        dbms_rowid.rowid_create(1, DOI, lo_fno, lo_block, 0) || chr(39) ||
@@ -235,9 +233,9 @@ func (e *Engine) getOracleNormalTableTableFullMetaByRowID(schemaName, tableName,
 		fullMetas = append(fullMetas, TableFullMeta{
 			SourceSchemaName: schemaName,
 			SourceTableName:  tableName,
-			GlobalSCN:        globalSCN,
 			RowidSQL:         r["DATA"],
 			IsPartition:      "N",
+			GlobalSCN:        globalSCN,
 		})
 		fullMetaIdx = append(fullMetaIdx, idx)
 	}

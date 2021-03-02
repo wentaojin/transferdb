@@ -17,6 +17,7 @@ package db
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -25,7 +26,7 @@ type TableFullMeta struct {
 	ID               uint       `gorm:"primary_key;autoIncrement;comment:'自增编号'" json:"id"`
 	SourceSchemaName string     `gorm:"not null;index:idx_schema_table_rowid;comment:'源端 schema'" json:"source_schema_name"`
 	SourceTableName  string     `gorm:"not null;index:idx_schema_table_rowid;comment:'源端表名'" json:"source_table_name"`
-	GlobalSCN        string     `gorm:"comment:'全局 SCN'" json:"global_scn"`
+	GlobalSCN        int        `gorm:"comment:'全局 SCN'" json:"global_scn"`
 	RowidSQL         string     `gorm:"not null;index:idx_schema_table_rowid;comment:'表 rowid 切分SQL'" json:"rowid_sql"`
 	IsPartition      string     `gorm:"comment:'是否是分区表'" json:"is_partition"` // 同步转换统一转换成非分区表，此处只做标志
 	CreatedAt        *time.Time `gorm:"type:timestamp;not null;default:current_timestamp;comment:'创建时间'" json:"createdAt"`
@@ -35,10 +36,10 @@ type TableFullMeta struct {
 // 增量同步元数据表
 type TableIncrementMeta struct {
 	ID               uint       `gorm:"primary_key;autoIncrement;comment:'自增编号'" json:"id"`
-	GlobalSCN        string     `gorm:"comment:'全局 SCN'" json:"global_scn"`
+	GlobalSCN        int        `gorm:"comment:'全局 SCN'" json:"global_scn"`
 	SourceSchemaName string     `gorm:"not null;index:unique_schema_table,unique;comment:'源端 schema'" json:"source_schema_name"`
 	SourceTableName  string     `gorm:"not null;index:unique_schema_table,unique;comment:'源端表名'" json:"source_table_name"`
-	SourceTableSCN   string     `gorm:"comment:'表同步 SCN'" json:"source_table_scn"`
+	SourceTableSCN   int        `gorm:"comment:'表同步 SCN'" json:"source_table_scn"`
 	CreatedAt        *time.Time `gorm:"type:timestamp;not null;default:current_timestamp;comment:'创建时间'" json:"createdAt"`
 	UpdatedAt        *time.Time `gorm:"type:timestamp;not null on update current_timestamp;default:current_timestamp;comment:'更新时间'" json:"updatedAt"`
 }
@@ -48,7 +49,7 @@ func (f *TableFullMeta) GetTableFullMetaRecordCounts(schemaName, tableName strin
 	if err := engine.GormDB.Model(&TableFullMeta{}).
 		Where("source_schema_name = ? and source_table_name = ?", schemaName, tableName).
 		Count(&count).Error; err != nil {
-		return int(count), fmt.Errorf("meta schema table [table_full_meta] query count failed: %v", err)
+		return int(count), fmt.Errorf("meta schema table [table_full_meta] query record count failed: %v", err)
 	}
 	return int(count), nil
 }
@@ -56,9 +57,29 @@ func (f *TableFullMeta) GetTableFullMetaRecordCounts(schemaName, tableName strin
 func (i *TableIncrementMeta) GetTableIncrementMetaRecordCounts(schemaName, tableName string, engine *Engine) (int, error) {
 	var count int64
 	if err := engine.GormDB.Model(&TableIncrementMeta{}).
-		Where("source_schema_name = ? and source_table_name = ?", schemaName, tableName).
+		Where("upper(source_schema_name) = ? and upper(source_table_name) = ?", strings.ToUpper(schemaName),
+			strings.ToUpper(tableName)).
 		Count(&count).Error; err != nil {
-		return int(count), fmt.Errorf("meta schema table [table_increment_meta] query count failed: %v", err)
+		return int(count), fmt.Errorf("meta schema table [table_increment_meta] query record count failed: %v", err)
 	}
 	return int(count), nil
+}
+
+func (i *TableIncrementMeta) GetTableIncrementMetaRowCounts(engine *Engine) (int, error) {
+	var count int64
+	if err := engine.GormDB.Model(&TableIncrementMeta{}).
+		Count(&count).Error; err != nil {
+		return int(count), fmt.Errorf("meta schema table [table_increment_meta] query row count failed: %v", err)
+	}
+	return int(count), nil
+}
+
+func (e *Engine) UpdateTableIncrementMetaRecord(sourceSchemaName, sourceTableName string, globalSCN, sourceTableSCN int) error {
+	if err := e.GormDB.Model(TableIncrementMeta{}).Where("upper(source_schema_name) = ? and upper(source_table_name) = ?",
+		strings.ToUpper(sourceSchemaName),
+		strings.ToUpper(sourceTableName)).
+		Updates(TableIncrementMeta{GlobalSCN: globalSCN, SourceTableSCN: sourceTableSCN}).Error; err != nil {
+		return err
+	}
+	return nil
 }

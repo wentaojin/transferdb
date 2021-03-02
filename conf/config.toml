@@ -4,17 +4,14 @@
 #   - 优先级：表字段类型 > 库字段类型 两者都没配置默认采用内置转换规则
 # reverse（必须）:
 #   1、根据内置表结构转换规则或者手工配置表结构转换规则进行 schema 迁移
-# all: TODO
+# all: TODO: DONE -> 待测试完善
 #   1、全量数据迁移
 #   2、增量数据迁移
 # full: DONE
 #   2、全量数据迁移
-# increment: TODO
+# increment: TODO: Doing -> 待完善
 #   1、增量数据迁移
 [app]
-# 安全模式(默认前 10 分钟自动开启)
-# 只针对增量任务同步有效
-safe-mode = false
 # 事务 batch 数
 # 用于数据写入 batch 提交事务数
 insert-batch-size = 500
@@ -39,7 +36,13 @@ table-threads = 3
 enable-checkpoint = true
 
 [increment]
-# TODO：待完善
+# 指定增量模式下 increment 初始 SCN POS 位点
+# 仅首次运行且纯 increment 模式有效，all 模式无效
+global-scn = 20130167
+# 最大并发线程数
+worker-threads = 3
+# 最大任务队列
+worker-queue = 10
 
 [source]
 # 源端 oracle 连接串
@@ -76,8 +79,6 @@ log-file = "./transferdb.log"
 # 每个日志文件保存的最大尺寸 单位：M
 max-size = 128
 # 文件最多保存多少天
-max-age = 7
+max-days = 7
 # 日志文件最多保存多少个备份
 max-backups = 30
-# 是否压缩
-compress = true

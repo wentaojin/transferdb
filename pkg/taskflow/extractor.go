@@ -17,6 +17,7 @@ package taskflow
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/WentaoJin/transferdb/zlog"
@@ -27,6 +28,7 @@ import (
 	"github.com/xxjwxc/gowp/workpool"
 )
 
+// 捕获全量数据
 func extractorTableFullRecord(engine *db.Engine, sourceSchemaName, sourceTableName, oracleQuery string) ([]string, []string, error) {
 	startTime := time.Now()
 	zlog.Logger.Info("single full table data extractor start",
@@ -45,6 +47,43 @@ func extractorTableFullRecord(engine *db.Engine, sourceSchemaName, sourceTableNa
 		zap.String("cost", endTime.Sub(startTime).String()))
 
 	return columns, rowsResult, nil
+}
+
+// 捕获增量数据
+func extractorTableIncrementRecord(engine *db.Engine, sourceSchemaName string, sourceTableSlice []string) ([]map[string]string, error) {
+	rowsResult, err := engine.GetOracleLogminerContentToMySQL(sourceSchemaName, sourceTableSlice)
+	if err != nil {
+		return []map[string]string{}, err
+	}
+	rows := filterOracleSQLRedo(rowsResult)
+	return rows, nil
+}
+
+// DML 同步只同步 INSERT/DELETE/UPDATE 以及限定 DDL，只同步 truncate table/ drop table
+func filterOracleSQLRedo(rowsResult []map[string]string) []map[string]string {
+	var rows []map[string]string
+	for i, r := range rowsResult {
+		if r["OPERATION"] == "INSERT" {
+			rows = append(rows, rowsResult[i])
+		}
+		if r["OPERATION"] == "DELETE" {
+			rows = append(rows, rowsResult[i])
+		}
+		if r["OPERATION"] == "UPDATE" {
+			rows = append(rows, rowsResult[i])
+		}
+		if r["OPERATION"] == "DDL" {
+			splitDDL := strings.Split(r["SQL_REDO"], "")
+			ddl := fmt.Sprintf("%s %s", splitDDL[0], splitDDL[1])
+			if strings.ToUpper(ddl) == "DROP TABLE" {
+				rows = append(rows, rowsResult[i])
+			}
+			if strings.ToUpper(ddl) == "TRUNCATE TABLE" {
+				rows = append(rows, rowsResult[i])
+			}
+		}
+	}
+	return rows
 }
 
 // 从配置文件获取需要迁移同步的表列表
@@ -83,13 +122,7 @@ func getTransferTableSliceByCfg(cfg *config.CfgFile, engine *db.Engine) ([]strin
 }
 
 // 根据配置文件生成同步表元数据 [table_full_meta]
-func generateTableFullTaskCheckpointMeta(cfg *config.CfgFile, engine *db.Engine, fullTblSlice []string) error {
-	// 全量同步前，获取 SCN ，全量模式下增量同步起始点
-	globalSCN, err := engine.GetOracleCurrentSnapshotSCN()
-	if err != nil {
-		return err
-	}
-
+func generateTableFullTaskCheckpointMeta(cfg *config.CfgFile, engine *db.Engine, fullTblSlice []string, globalSCN int) error {
 	// 设置工作池
 	// 设置 goroutine 数
 	if len(fullTblSlice) > 0 {
@@ -102,6 +135,30 @@ func generateTableFullTaskCheckpointMeta(cfg *config.CfgFile, engine *db.Engine,
 			sourceSchemaName := cfg.SourceConfig.SchemaName
 			wp.DoWait(func() error {
 				if err := engine.InitMySQLTableFullMeta(sourceSchemaName, tbl, globalSCN, workerBatch, insertBatchSize); err != nil {
+					return err
+				}
+				return nil
+			})
+		}
+		if err := wp.Wait(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// 根据配置文件以及起始 SCN 生成同步表元数据 [table_increment_meta]
+func generateTableIncrementTaskCheckpointMeta(cfg *config.CfgFile, engine *db.Engine, incrementTblSlice []string, globalSCN int) error {
+	// 设置工作池
+	// 设置 goroutine 数
+	if len(incrementTblSlice) > 0 {
+		wp := workpool.New(cfg.FullConfig.WorkerThreads)
+		for _, table := range incrementTblSlice {
+			// 变量替换，直接使用原变量会导致并发输出有问题
+			tbl := table
+			sourceSchemaName := cfg.SourceConfig.SchemaName
+			wp.DoWait(func() error {
+				if err := engine.InitMySQLTableIncrementMeta(sourceSchemaName, tbl, globalSCN); err != nil {
 					return err
 				}
 				return nil

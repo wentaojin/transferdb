@@ -16,6 +16,8 @@ limitations under the License.
 package util
 
 import (
+	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -106,4 +108,22 @@ func TrimLastChar(s string) string {
 func IsNum(s string) bool {
 	_, err := strconv.ParseFloat(s, 64)
 	return err == nil
+}
+
+// 替换字符串引号字符
+func ReplaceQuotesString(s string) string {
+	return strings.Replace(s, "\"", "", -1)
+}
+
+// 替换指定字符
+func ReplaceSpecifiedString(s string, oldStr, newStr string) string {
+	return strings.Replace(s, oldStr, newStr, -1)
+}
+
+// 忽略大小写切分字符串
+func ReSplit(text string, cut string) []string {
+	pattern := fmt.Sprintf("(?i)%s", cut)
+	regex := regexp.MustCompile(pattern)
+	result := regex.Split(text, -1)
+	return result
 }

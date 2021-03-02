@@ -132,7 +132,7 @@ func (e *Engine) GetOracleTablePrimaryKey(schemaName string, tableName string) (
 	// enable the primary key: alter table tableName enable primary key;
 	// primary key status Disabled will not do primary key processing
 	querySQL := fmt.Sprintf(`select cu.constraint_name,
-       LISTAGG(cu.column_name, ',') WITHIN GROUP(ORDER BY cu.POSITION) AS column_list
+       LISTAGG(cu.column_name, ',') WITHIN GROUP(ORDER BY cu.POSITION) AS COLUMN_LIST
   from all_cons_columns cu, all_constraints au
  where cu.constraint_name = au.constraint_name
    and au.constraint_type = 'P'

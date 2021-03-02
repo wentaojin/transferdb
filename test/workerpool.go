@@ -26,13 +26,15 @@ import (
 
 func main() {
 	jobQueue := taskflow.InitWorkerPool(2, 3)
-	for i := 1; i <= 40; i++ {
-		// 注册任务到 Job 队列
-		jobQueue <- taskflow.Job{Task: &Test{Num: i}}
+	for {
+		for i := 1; i <= 40; i++ {
+			// 注册任务到 Job 队列
+			jobQueue <- taskflow.Job{Task: &Test{Num: i}}
+		}
 	}
-	time.Sleep(1 * time.Second)
+	//time.Sleep(1 * time.Second)
 	//执行结束,关闭管道
-	close(jobQueue)
+	//close(jobQueue)
 
 }
 

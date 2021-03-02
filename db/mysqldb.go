@@ -25,13 +25,18 @@ import (
 	"gorm.io/gorm"
 )
 
+const (
+	// gorm 元数据库慢日志阈值
+	slowQueryThreshold = 300
+)
+
 // 创建 mysql 数据库引擎
 func NewMySQLEnginePrepareDB(username string, password string, host string, port int, schema string) (*Engine, error) {
 	// 通用数据库链接池
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&parseTime=True&loc=Local", username, password, host, port)
 
 	// 初始化 gorm 日志记录器
-	gLogger := zlog.NewGormLogger(zlog.Logger, 100)
+	gLogger := zlog.NewGormLogger(zlog.Logger, slowQueryThreshold)
 	gLogger.SetAsDefault()
 	gormDB, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
 		Logger: gLogger,
@@ -58,7 +63,7 @@ func NewMySQLEnginePrepareDB(username string, password string, host string, port
 func NewMySQLEngineGeneralDB(username string, password string, host string, port int, schema string) (*Engine, error) {
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=True&loc=Local", username, password, host, port, schema)
 	// 初始化 gorm 日志记录器
-	gLogger := zlog.NewGormLogger(zlog.Logger, 100)
+	gLogger := zlog.NewGormLogger(zlog.Logger, slowQueryThreshold)
 	gLogger.SetAsDefault()
 	gormDB, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
 		// 禁用外键（指定外键时不会在 mysql 创建真实的外键约束）

@@ -66,6 +66,7 @@ func (e *Engine) IsExistOracleTable(schemaName string, includeTables []string) e
 }
 
 // 查询 Oracle 数据并按行返回对应字段以及行数据 -> 按字段类型返回行数据
+// 用于拼接 batch
 func (e *Engine) QueryFormatOracleRows(querySQL string) ([]string, []string, error) {
 	var (
 		cols       []string
