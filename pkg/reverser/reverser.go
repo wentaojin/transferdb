@@ -189,7 +189,7 @@ func generateOracleToMySQLTables(engine *db.Engine, cfg *config.CfgFile) ([]Tabl
 	)
 	columnTypesMap = make(map[string][]ColumnType)
 
-	// todo: 自定义表名适配删除 - 数据同步未处理表名不一致
+	// todo: 自定义表名适配删除 - 数据同步不支持表名不一致
 	//customTableNameSlice, err := engine.GetCustomTableNameMap(cfg.SourceConfig.SchemaName)
 	//if err != nil {
 	//	return []Table{}, err
@@ -202,7 +202,7 @@ func generateOracleToMySQLTables(engine *db.Engine, cfg *config.CfgFile) ([]Tabl
 				TargetTableName: tbl,
 			},
 		})
-		// todo: 自定义表名适配删除 - 数据同步未处理表名不一致
+		// todo: 自定义表名适配删除 - 数据同步不支持表名不一致
 		//if len(customTableNameSlice) != 0 {
 		//	for _, tblName := range customTableNameSlice {
 		//		if strings.ToUpper(tbl) == strings.ToUpper(tblName.SourceTableName) {

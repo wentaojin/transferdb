@@ -13,27 +13,16 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package main
+package util
 
-import (
-	"fmt"
-
-	"github.com/WentaoJin/transferdb/db"
+// 同步操作类型
+const (
+	UpdateOperation        = "UPDATE"
+	InsertOperation        = "INSERT"
+	DeleteOperation        = "DELETE"
+	TruncateOperation      = "TRUNCATE"
+	DropOperation          = "DROP"
+	DDLOperation           = "DDL"
+	TruncateTableOperation = "TRUNCATE TABLE"
+	DropTableOperation     = "DROP TABLE"
 )
-
-func main() {
-	dsn := "oracle://marvin:marvin@orcl11"
-	sqlDB, err := db.NewOracleDBEngine(dsn)
-	if err != nil {
-		fmt.Println(err)
-	}
-	engine := db.Engine{
-		OracleDB: sqlDB,
-	}
-	col, res, err := engine.QueryFormatOracleRows(`select * from marvin.marvin3 where id=11`)
-	if err != nil {
-		fmt.Println(err)
-	}
-	fmt.Println(col)
-	fmt.Println(res)
-}

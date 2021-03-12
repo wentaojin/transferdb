@@ -28,6 +28,7 @@ type CfgFile struct {
 	ReverseConfig   ReverseConfig   `toml:"reverse" json:"reverse"`
 	FullConfig      FullConfig      `toml:"full" json:"full"`
 	IncrementConfig IncrementConfig `toml:"increment" json:"increment"`
+	AllConfig       AllConfig       `toml:"all" json:"all"`
 	SourceConfig    SourceConfig    `toml:"source" json:"source"`
 	TargetConfig    TargetConfig    `toml:"target" json:"target"`
 	LogConfig       LogConfig       `toml:"log" json:"log"`
@@ -48,10 +49,16 @@ type FullConfig struct {
 	EnableCheckpoint bool `toml:"enable-checkpoint" json:"enable-checkpoint"`
 }
 
+// TODO: NOT SUPPORT
 type IncrementConfig struct {
 	GlobalSCN     int `toml:"global-scn" json:"global-scn"`
 	WorkerThreads int `toml:"worker-threads" json:"worker-threads"`
 	WorkerQueue   int `toml:"worker-queue" json:"worker-queue"`
+}
+
+type AllConfig struct {
+	TranslatorThreads int `toml:"translator-threads" json:"translator-threads"`
+	SyncThreads       int `toml:"sync-threads" json:"sync-threads"`
 }
 
 type SourceConfig struct {

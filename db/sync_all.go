@@ -89,9 +89,9 @@ func (e *Engine) GetOracleRedoLogFile(scn int) ([]map[string]string, error) {
 
 func (e *Engine) GetOracleArchivedLogFile(scn int) ([]map[string]string, error) {
 	querySQL := fmt.Sprintf(`SELECT NAME AS LOG_FILE,
-       FIRST_CHANGE# AS FIRST_CHANGE,
        --NEXT_CHANGE# AS NEXT_CHANGE,
-       --BLOCKS * BLOCK_SIZE / 1024 / 1024 AS LOG_SIZE
+       --BLOCKS * BLOCK_SIZE / 1024 / 1024 AS LOG_SIZE,
+       FIRST_CHANGE# AS FIRST_CHANGE
   FROM v$ARCHIVED_LOG
  WHERE STATUS = 'A'
    AND DELETED = 'NO'
@@ -104,7 +104,7 @@ func (e *Engine) GetOracleArchivedLogFile(scn int) ([]map[string]string, error) 
 	return res, nil
 }
 
-func (e *Engine) GetMySQLTableIncrementMetaMinSCNTime(metaSchemaName string) (int, error) {
+func (e *Engine) GetMySQLTableIncrementMetaMinGlobalSCNTime(metaSchemaName string) (int, error) {
 	querySQL := fmt.Sprintf(`SELECT DISTINCT MIN(global_scn) GLOBAL_SCN
   FROM %s.table_increment_meta`, metaSchemaName)
 
@@ -123,20 +123,46 @@ func (e *Engine) GetMySQLTableIncrementMetaMinSCNTime(metaSchemaName string) (in
 	return globalSCN, nil
 }
 
-func (e *Engine) GetMySQLTableIncrementMetaRecord(metaSchemaName, sourceSchemaName string) ([]string, error) {
-	querySQL := fmt.Sprintf(`SELECT source_table_name AS SOURCE_TABLE_NAME
-  FROM %s.table_increment_meta WHERE upper(source_schema_name) = upper('%s')`, metaSchemaName, sourceSchemaName)
+func (e *Engine) GetMySQLTableIncrementMetaMinSourceTableSCNTime(metaSchemaName string) (int, error) {
+	querySQL := fmt.Sprintf(`SELECT DISTINCT MIN(source_table_scn) SOURCE_TABLE_SCN
+  FROM %s.table_increment_meta`, metaSchemaName)
 
 	_, res, err := Query(e.MysqlDB, querySQL)
 	if err != nil {
-		return []string{}, err
+		return 0, err
+	}
+	var sourceTableSCN int
+	if len(res) > 0 {
+		sourceTableSCN, err = strconv.Atoi(res[0]["SOURCE_TABLE_SCN"])
+		if err != nil {
+			return sourceTableSCN, err
+		}
+		return sourceTableSCN, nil
+	}
+	return sourceTableSCN, nil
+}
+
+func (e *Engine) GetMySQLTableIncrementMetaRecord(sourceSchemaName string) ([]string, map[string]int, error) {
+	var (
+		incrementMeta      []TableIncrementMeta
+		tableMetas         map[string]int
+		transferTableSlice []string
+	)
+	if err := e.GormDB.Where("upper(source_schema_name) = ?", strings.ToUpper(sourceSchemaName)).
+		Find(&incrementMeta).Error; err != nil {
+		return transferTableSlice, tableMetas, err
 	}
 
-	var tableSlice []string
-	for _, r := range res {
-		tableSlice = append(tableSlice, r["SOURCE_TABLE_NAME"])
+	if len(incrementMeta) == 0 {
+		return transferTableSlice, tableMetas, fmt.Errorf("mysql increment mete table [table_increment_meta] can't null")
 	}
-	return tableSlice, nil
+
+	tableMetas = make(map[string]int)
+	for _, tbl := range incrementMeta {
+		tableMetas[strings.ToUpper(tbl.SourceTableName)] = tbl.SourceTableSCN
+		transferTableSlice = append(transferTableSlice, strings.ToUpper(tbl.SourceTableName))
+	}
+	return transferTableSlice, tableMetas, nil
 }
 
 func (e *Engine) AddOracleLogminerlogFile(logFile string) error {
@@ -158,7 +184,7 @@ func (e *Engine) StartOracleLogminerStoredProcedure(scn int) error {
                            options  => SYS.DBMS_LOGMNR.SKIP_CORRUPTION +       -- 日志遇到坏块，不报错退出，直接跳过
                                        SYS.DBMS_LOGMNR.NO_SQL_DELIMITER +
                                        SYS.DBMS_LOGMNR.NO_ROWID_IN_STMT +
-                                       --SYS.DBMS_LOGMNR.COMMITTED_DATA_ONLY +  -- UPDATE 语句只显示被提交且修改的字段数据，未修改的字段数据不显示
+                                       SYS.DBMS_LOGMNR.COMMITTED_DATA_ONLY +
                                        SYS.DBMS_LOGMNR.DICT_FROM_ONLINE_CATALOG +
                                        SYS.DBMS_LOGMNR.STRING_LITERALS_IN_STMT);
 END;`, scn)
@@ -187,18 +213,26 @@ END;`)
 // 考虑异构数据库 MySQL，只同步 INSERT/DELETE/UPDATE 事务语句以及 TRUNCATE TABLE/DROP TABLE DDL 语句，其他类型 SQL 不同步
 // V$LOGMNR_CONTENTS 字段解释参考链接
 // https://docs.oracle.com/en/database/oracle/oracle-database/21/refrn/V-LOGMNR_CONTENTS.html#GUID-B9196942-07BF-4935-B603-FA875064F5C3
-func (e *Engine) GetOracleLogminerContentToMySQL(schemaName string, tableSlice []string) ([]map[string]string, error) {
-	var tbls []string
-	for _, tbl := range tableSlice {
-		tbls = append(tbls, fmt.Sprintf(`'%s'`, tbl))
+func (e *Engine) GetOracleLogminerContentToMySQL(schemaName string, sourceTableSlice []string, lastCheckpoint int) ([]map[string]string, error) {
+	// 表名拼接转换
+	var tables []string
+	for _, tbl := range sourceTableSlice {
+		tables = append(tables, fmt.Sprintf(`'%s'`, tbl))
 	}
-	querySQL := fmt.Sprintf(`SELECT SCN, SEG_OWNER, SEG_NAME, SQL_REDO, OPERATION, --SQL_UNDO, 
+
+	querySQL := fmt.Sprintf(`SELECT SCN,
+       SEG_OWNER,
+       TABLE_NAME,
+       SQL_REDO,
+       SQL_UNDO,
+       OPERATION
   FROM V$LOGMNR_CONTENTS
  WHERE 1 = 1
    AND UPPER(SEG_OWNER) = UPPER('%s')
-   AND UPPER(SEG_NAME) IN (%s')
-   AND OPERATION IN ('INSERT', 'DELETE','UPDATE','DDL')
- ORDER BY SCN`, schemaName, strings.ToUpper(strings.Join(tbls, ",")))
+   AND UPPER(TABLE_NAME) IN (%s)
+   AND OPERATION IN ('INSERT', 'DELETE', 'UPDATE', 'DDL')
+   AND SCN >= %d 
+ ORDER BY SCN`, schemaName, strings.ToUpper(strings.Join(tables, ",")), lastCheckpoint)
 
 	_, rowsResult, err := Query(e.OracleDB, querySQL)
 	if err != nil {

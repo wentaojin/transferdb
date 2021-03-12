@@ -21,7 +21,6 @@ import (
 
 	"github.com/WentaoJin/transferdb/zlog"
 	"go.uber.org/zap"
-
 	"gorm.io/gorm"
 )
 

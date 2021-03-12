@@ -19,6 +19,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/WentaoJin/transferdb/util"
 )
 
 // 全量同步元数据表
@@ -47,7 +49,8 @@ type TableIncrementMeta struct {
 func (f *TableFullMeta) GetTableFullMetaRecordCounts(schemaName, tableName string, engine *Engine) (int, error) {
 	var count int64
 	if err := engine.GormDB.Model(&TableFullMeta{}).
-		Where("source_schema_name = ? and source_table_name = ?", schemaName, tableName).
+		Where("upper(source_schema_name) = ? and upper(source_table_name) = ?", strings.ToUpper(schemaName),
+			strings.ToUpper(tableName)).
 		Count(&count).Error; err != nil {
 		return int(count), fmt.Errorf("meta schema table [table_full_meta] query record count failed: %v", err)
 	}
@@ -74,11 +77,30 @@ func (i *TableIncrementMeta) GetTableIncrementMetaRowCounts(engine *Engine) (int
 	return int(count), nil
 }
 
-func (e *Engine) UpdateTableIncrementMetaRecord(sourceSchemaName, sourceTableName string, globalSCN, sourceTableSCN int) error {
+func (e *Engine) UpdateTableIncrementMetaALLSCNRecord(sourceSchemaName, sourceTableName, operationType string, globalSCN, sourceTableSCN int) error {
+	if operationType == util.DropTableOperation {
+		if err := e.GormDB.Where("upper(source_schema_name) = ? and upper(source_table_name) = ?",
+			strings.ToUpper(sourceSchemaName),
+			strings.ToUpper(sourceTableName)).
+			Delete(&TableIncrementMeta{}).Error; err != nil {
+			return err
+		}
+		return nil
+	}
 	if err := e.GormDB.Model(TableIncrementMeta{}).Where("upper(source_schema_name) = ? and upper(source_table_name) = ?",
 		strings.ToUpper(sourceSchemaName),
 		strings.ToUpper(sourceTableName)).
 		Updates(TableIncrementMeta{GlobalSCN: globalSCN, SourceTableSCN: sourceTableSCN}).Error; err != nil {
+		return err
+	}
+	return nil
+}
+
+func (e *Engine) UpdateTableIncrementMetaOnlyGlobalSCNRecord(sourceSchemaName, sourceTableName string, globalSCN int) error {
+	if err := e.GormDB.Model(TableIncrementMeta{}).Where("upper(source_schema_name) = ? and upper(source_table_name) = ?",
+		strings.ToUpper(sourceSchemaName),
+		strings.ToUpper(sourceTableName)).
+		Updates(TableIncrementMeta{GlobalSCN: globalSCN}).Error; err != nil {
 		return err
 	}
 	return nil

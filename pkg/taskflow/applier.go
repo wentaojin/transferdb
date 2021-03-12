@@ -17,6 +17,7 @@ package taskflow
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/xxjwxc/gowp/workpool"
@@ -58,13 +59,12 @@ func applierTableFullRecord(targetSchemaName, targetTableName string, workerThre
 
 // 表数据应用 -> 增量任务
 func applierTableIncrementRecord(sqlSlice []string, engine *db.Engine) error {
-	for _, sql := range sqlSlice {
-		_, err := engine.MysqlDB.Exec(sql)
-		if err != nil {
-			return fmt.Errorf("single increment table data insert mysql [%s] falied:%v", sql, err)
-		}
-		return nil
-
+	sql := strings.Join(sqlSlice, ";")
+	zlog.Logger.Info("increment applier sql", zap.String("sql", sql))
+	_, err := engine.MysqlDB.Exec(sql)
+	if err != nil {
+		return fmt.Errorf("single increment table data insert mysql [%s] falied:%v", sql, err)
 	}
+
 	return nil
 }

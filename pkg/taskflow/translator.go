@@ -101,195 +101,189 @@ func generateMySQLPrepareInsertSQLStatement(targetSchemaName, targetTableName st
 }
 
 // 替换 Oracle 事务 SQL
-// INSERT INTO -> REPLACE INTO
-// UPDATE -> DELETE/INSERT
-func translatorOracleIncrementRecordBySafeMode(
-	engine *db.Engine,
-	targetSchema string,
-	rowsResult []map[string]string, globalSCN int) ([]LogminerPayload, error) {
+// ORACLE 数据库同步需要开附加日志且表需要捕获字段列日志，Logminer 内容 UPDATE/DELETE/INSERT 语句会带所有字段信息
+func translatorOracleIncrementRecord(engine *db.Engine, targetSchema string, rowsResult []map[string]string, globalSCN int, workerThreads int) ([]*IncrementPayload, error) {
 	var (
-		lps []LogminerPayload
-		sql []string
+		lps  []*IncrementPayload
+		lock sync.Mutex
 	)
-
-	for _, r := range rowsResult {
-		sourceTableSCN, err := strconv.Atoi(r["SCN"])
-		if err != nil {
-			return []LogminerPayload{}, err
-		}
-		// 移除引号
-		sqlRedo := util.ReplaceQuotesString(r["SQL_REDO"])
-		// 移除分号
-		sqlRedo = util.ReplaceSpecifiedString(sqlRedo, ";", "")
-
-		var lp LogminerPayload
-		lp.Engine = engine
-		lp.GlobalSCN = globalSCN
-		lp.SourceTableSCN = sourceTableSCN
-		lp.Operation = r["OPERATION"]
-		lp.SourceSchema = r["SEG_OWNER"]
-		lp.SourceTable = r["SEG_NAME"]
-		lps = append(lps, lp)
-		if r["OPERATION"] == "INSERT" {
-			translatorIncrementInsertDML(sqlRedo, targetSchema, lp)
-		}
-		if r["OPERATION"] == "DELETE" {
-			translatorIncrementDeleteDML(sqlRedo, targetSchema, lp)
-		}
-		if r["OPERATION"] == "UPDATE" {
-			translatorIncrementUpdateDML(sqlRedo, targetSchema, lp)
-		}
-		if r["OPERATION"] == "DDL" {
-			splitDDL := strings.Split(r["SQL_REDO"], "")
-			ddl := fmt.Sprintf("%s %s", splitDDL[0], splitDDL[1])
-			targetTableName := strings.Split(splitDDL[2], ".")[1]
-			if strings.ToUpper(ddl) == "DROP TABLE" {
-				// 比如: drop table marvin.marvin7
-				targetSchemaTbl := fmt.Sprintf("%s.%s", targetSchema, targetTableName)
-				sql = append(sql, fmt.Sprintf("%s %s", ddl, targetSchemaTbl))
+	wp := workpool.New(workerThreads)
+	for _, rows := range rowsResult {
+		r := rows
+		wp.Do(func() error {
+			sourceTableSCN, err := strconv.Atoi(r["SCN"])
+			if err != nil {
+				return err
 			}
-			if strings.ToUpper(ddl) == "TRUNCATE TABLE" {
-				// 比如: truncate table marvin.marvin7
-				targetSchemaTbl := fmt.Sprintf("%s.%s", targetSchema, targetTableName)
-				sql = append(sql, fmt.Sprintf("%s %s", ddl, targetSchemaTbl))
-			}
-			lp.TargetSchema = targetSchema
-			lp.TargetTable = targetTableName
-			lp.SQLRedo = sql
-		}
 
+			// 如果 sqlRedo 存在记录则继续处理，不存在记录则继续下一个
+			if r["SQL_REDO"] == "" {
+				return fmt.Errorf("does not meet expectations [oracle sql redo is be null], please check")
+			}
+
+			// 移除引号
+			sqlRedo := util.ReplaceQuotesString(r["SQL_REDO"])
+			// 移除分号
+			sqlRedo = util.ReplaceSpecifiedString(sqlRedo, ";", "")
+
+			zlog.Logger.Info("oracle sql redo", zap.String("sql", sqlRedo))
+
+			var sqlUndo string
+			if r["SQL_UNDO"] != "" {
+				sqlUndo = util.ReplaceQuotesString(r["SQL_UNDO"])
+				sqlUndo = util.ReplaceSpecifiedString(sqlUndo, ";", "")
+				sqlUndo = util.ReplaceSpecifiedString(sqlUndo, fmt.Sprintf("%s.", r["SEG_OWNER"]), fmt.Sprintf("%s.", strings.ToUpper(targetSchema)))
+			}
+
+			// 比如：INSERT INTO MARVIN.MARVIN1 (ID,NAME) VALUES (1,'marvin')
+			// 比如：DELETE FROM MARVIN.MARVIN7 WHERE ID = 5 and NAME = 'pyt'
+			// 比如：UPDATE MARVIN.MARVIN1 SET ID = 2 , NAME = 'marvin' WHERE ID = 2 AND NAME = 'pty'
+			// 比如: drop table marvin.marvin7
+			// 比如: truncate table marvin.marvin7
+			mysqlRedo, operationType, err := translatorOracleToMySQLSQL(sqlRedo, sqlUndo, strings.ToUpper(targetSchema))
+			if err != nil {
+				return err
+			}
+
+			// 并发 slice 安全
+			lock.Lock()
+			defer lock.Unlock()
+			lps = append(lps, &IncrementPayload{
+				Engine:         engine,
+				GlobalSCN:      globalSCN,
+				SourceTableSCN: sourceTableSCN,
+				SourceSchema:   r["SEG_OWNER"],
+				SourceTable:    r["TABLE_NAME"],
+				TargetSchema:   strings.ToUpper(targetSchema),
+				TargetTable:    r["TABLE_NAME"],
+				OracleRedo:     sqlRedo,
+				MySQLRedo:      mysqlRedo,
+				Operation:      r["OPERATION"],
+				OperationType:  operationType,
+			})
+			return nil
+		})
+	}
+	if err := wp.Wait(); err != nil {
+		return lps, err
+	}
+
+	if !wp.IsDone() {
+		return lps, fmt.Errorf("oracle schema translator increment table data failed")
 	}
 	return lps, nil
 }
 
-func translatorIncrementInsertDML(sqlRedo, targetSchema string, lp LogminerPayload) {
+// SQL 转换
+// 1、INSERT INTO / REPLACE INTO
+// 2、UPDATE / DELETE、REPLACE INTO
+func translatorOracleToMySQLSQL(oracleSQLRedo, oracleSQLUndo, targetSchema string) ([]string, string, error) {
 	var (
-		data        map[string]interface{}
-		before      map[string]interface{}
-		sql         []string
-		targetTable string
+		sqls          []string
+		operationType string
 	)
-	data = make(map[string]interface{})
-	before = make(map[string]interface{})
-	splitInsert := strings.Split(sqlRedo, "")
-	insert := fmt.Sprintf("%s %s", splitInsert[0], splitInsert[1])
-	if strings.ToUpper(insert) == "INSERT INTO" {
-		// 比如：INSERT INTO MARVIN.MARVIN1 (ID,NAME) VALUES (1,'marvin')
-		replaceSQL := util.ReplaceSpecifiedString(sqlRedo, insert, "REPLACE INTO")
-		// 替换 schema以及表名
-		targetTable = strings.Split(splitInsert[2], ".")[1]
-		targetSchemaTbl := fmt.Sprintf("%s.%s", targetSchema, targetTable)
-		r := util.ReplaceSpecifiedString(replaceSQL, splitInsert[2], targetSchemaTbl)
-		sql = append(sql, r)
-		// 获取字段名
-		columnStr := strings.TrimLeft(splitInsert[3], "(")
-		columnStr = strings.TrimLeft(splitInsert[3], ")")
-		columns := strings.Split(columnStr, ",")
-
-		// 获取 value 值
-		valueStr := strings.TrimLeft(splitInsert[5], "(")
-		valueStr = strings.TrimLeft(splitInsert[5], ")")
-		values := strings.Split(valueStr, ",")
-
-		// 获取数据 data
-		for i, col := range columns {
-			data[col] = values[i]
-		}
+	astNode, err := parseSQL(oracleSQLRedo)
+	if err != nil {
+		return []string{}, operationType, fmt.Errorf("parse error: %v\n", err.Error())
 	}
-	lp.TargetSchema = targetSchema
-	lp.TargetTable = targetTable
-	lp.SQLRedo = sql
-	lp.Data = data
-	lp.Before = before
-}
 
-func translatorIncrementUpdateDML(sqlRedo, targetSchema string, lp LogminerPayload) {
-	var (
-		data        map[string]interface{}
-		before      map[string]interface{}
-		sql         []string
-		targetTable string
-	)
-	data = make(map[string]interface{})
-	before = make(map[string]interface{})
-	splitUP := strings.Split(sqlRedo, "")
-	if strings.ToUpper(splitUP[0]) == "UPDATE" {
-		// ORACLE 数据库同步需要开附加日志且表需要捕获字段列日志，Logminer 内容 UPDATE 语句会带所有字段信息
-		//比如：UPDATE MARVIN.MARVIN1 SET ID = 2 , NAME = 'marvin' WHERE ID = 2 AND NAME = 'pty'
-		targetTable = strings.Split(splitUP[1], ".")[1]
-		targetSchemaTbl := fmt.Sprintf("%s.%s", targetSchema, targetTable)
+	stmt := extractStmt(astNode)
+	switch {
+	case stmt.Operation == util.UpdateOperation:
+		operationType = util.UpdateOperation
+		astUndoNode, err := parseSQL(oracleSQLUndo)
+		if err != nil {
+			return []string{}, operationType, fmt.Errorf("parse error: %v\n", err.Error())
+		}
+		undoStmt := extractStmt(astUndoNode)
 
-		splitStr1 := util.ReSplit(sqlRedo, "WHERE")
+		stmt.Data = undoStmt.Before
+		for column, _ := range stmt.Before {
+			stmt.Columns = append(stmt.Columns, strings.ToUpper(column))
+		}
 
-		deleteSQL := fmt.Sprintf("DELETE FROM %s WHERE %s", targetSchemaTbl, splitStr1[1])
+		var deleteSQL string
+		stmt.Schema = targetSchema
 
-		// 获取修改前后字段名以及值
-		splitWhereStr := util.ReSplit(splitStr1[1], "AND")
-		splitSetStr := strings.Split(util.ReSplit(splitStr1[0], "SET")[1], ",")
+		if stmt.WhereExpr == "" {
+			deleteSQL = fmt.Sprintf("DELETE FROM %s.%s",
+				stmt.Schema,
+				stmt.Table)
+		} else {
+			deleteSQL = fmt.Sprintf("DELETE FROM %s.%s %s",
+				stmt.Schema,
+				stmt.Table,
+				stmt.WhereExpr)
+		}
 		var (
-			columns []string
-			values  []string
+			values []string
 		)
-		// data
-		for _, set := range splitSetStr {
-			s := strings.Split(set, "=")
-			data[s[0]] = s[1]
-			columns = append(columns, s[0])
-			values = append(values, s[1])
+		for _, col := range stmt.Columns {
+			values = append(values, stmt.Data[col].(string))
 		}
-		// before
-		for _, set := range splitWhereStr {
-			s := strings.Split(set, "=")
-			before[s[0]] = s[1]
+		insertSQL := fmt.Sprintf("REPLACE INTO %s.%s (%s) VALUES (%s)",
+			stmt.Schema,
+			stmt.Table,
+			strings.Join(stmt.Columns, ","),
+			strings.Join(values, ","))
+
+		sqls = append(sqls, deleteSQL)
+		sqls = append(sqls, insertSQL)
+
+	case stmt.Operation == util.InsertOperation:
+		operationType = util.InsertOperation
+		stmt.Schema = targetSchema
+
+		var values []string
+
+		for _, col := range stmt.Columns {
+			values = append(values, stmt.Data[col].(string))
+		}
+		replaceSQL := fmt.Sprintf("REPLACE INTO %s.%s (%s) VALUES (%s)",
+			stmt.Schema,
+			stmt.Table,
+			strings.Join(stmt.Columns, ","),
+			strings.Join(values, ","))
+
+		sqls = append(sqls, replaceSQL)
+
+	case stmt.Operation == util.DeleteOperation:
+		operationType = util.DeleteOperation
+		stmt.Schema = targetSchema
+		var deleteSQL string
+
+		if stmt.WhereExpr == "" {
+			deleteSQL = fmt.Sprintf("DELETE FROM %s.%s",
+				stmt.Schema,
+				stmt.Table)
+		} else {
+			deleteSQL = fmt.Sprintf("DELETE FROM %s.%s %s",
+				stmt.Schema,
+				stmt.Table,
+				stmt.WhereExpr)
 		}
 
-		insertSQL := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)", targetSchemaTbl, strings.Join(columns, ","), strings.Join(values, ","))
+		sqls = append(sqls, deleteSQL)
 
-		// 先 delete 后 insert
-		sql = append(sql, deleteSQL)
-		sql = append(sql, insertSQL)
+	case stmt.Operation == util.TruncateOperation:
+		operationType = util.TruncateTableOperation
+		stmt.Schema = targetSchema
+
+		truncateSQL := fmt.Sprintf("TRUNCATE TABLE %s.%s",
+			stmt.Schema,
+			stmt.Table)
+
+		sqls = append(sqls, truncateSQL)
+
+	case stmt.Operation == util.DropOperation:
+		operationType = util.DropTableOperation
+		stmt.Schema = targetSchema
+
+		dropSQL := fmt.Sprintf("DROP TABLE %s.%s",
+			stmt.Schema,
+			stmt.Table)
+
+		sqls = append(sqls, dropSQL)
 	}
-	lp.TargetSchema = targetSchema
-	lp.TargetTable = targetTable
-	lp.SQLRedo = sql
-	lp.Data = data
-	lp.Before = before
-}
-
-func translatorIncrementDeleteDML(sqlRedo, targetSchema string, lp LogminerPayload) {
-	var (
-		data        map[string]interface{}
-		before      map[string]interface{}
-		sql         []string
-		targetTable string
-	)
-	data = make(map[string]interface{})
-	before = make(map[string]interface{})
-
-	splitDels := strings.Split(sqlRedo, "")
-	del := fmt.Sprintf("%s %s", splitDels[0], splitDels[1])
-	if strings.ToUpper(del) == "DELETE FROM" {
-		// 比如：DELETE FROM MARVIN.MARVIN7 WHERE ID = 5 and NAME = 'pyt'
-		delSQL := util.ReplaceSpecifiedString(sqlRedo, del, "DELETE FROM")
-		// 替换 schema以及表名
-		targetTable = strings.Split(splitDels[2], ".")[1]
-		targetSchemeTbl := fmt.Sprintf("%s.%s", targetSchema, targetTable)
-		r := util.ReplaceSpecifiedString(delSQL, splitDels[2], targetSchemeTbl)
-		sql = append(sql, r)
-
-		// 获取字段名
-		splitStr1 := util.ReSplit(sqlRedo, "WHERE")
-		splitWhereStr := util.ReSplit(splitStr1[1], "AND")
-
-		// before
-		for _, set := range splitWhereStr {
-			s := strings.Split(set, "=")
-			before[s[0]] = s[1]
-		}
-	}
-	lp.TargetSchema = targetSchema
-	lp.TargetTable = targetTable
-	lp.SQLRedo = sql
-	lp.Data = data
-	lp.Before = before
+	return sqls, operationType, nil
 }

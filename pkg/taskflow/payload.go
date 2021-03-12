@@ -71,8 +71,8 @@ func LoaderOracleTableFullRecordToMySQLByFullMode(cfg *config.CfgFile, engine *d
 		return err
 	}
 
-	// 表同步任务开始
-	if err := loaderOracleTableTask(cfg, engine, transferTableSlice); err != nil {
+	// 表同步任务
+	if err = loaderOracleTableTask(cfg, engine); err != nil {
 		return err
 	}
 
@@ -83,9 +83,8 @@ func LoaderOracleTableFullRecordToMySQLByFullMode(cfg *config.CfgFile, engine *d
 	return nil
 }
 
-func LoaderOracleTableFullRecordToMySQLByAllMode(cfg *config.CfgFile, engine *db.Engine) error {
+func loaderOracleTableFullRecordToMySQLByAllMode(cfg *config.CfgFile, engine *db.Engine) error {
 	startTime := time.Now()
-	zlog.Logger.Info("Welcome to transferdb", zap.String("config", cfg.String()))
 	zlog.Logger.Info("all full table data loader start",
 		zap.String("schema", cfg.SourceConfig.SchemaName))
 
@@ -108,19 +107,19 @@ func LoaderOracleTableFullRecordToMySQLByAllMode(cfg *config.CfgFile, engine *db
 	}
 
 	// 全量同步前，获取 SCN
-	// 1、获取一致性 SCN 写入增量表元数据（用于增量同步起始点，可能存在重复执行，默认前 10 分钟 safe-mode）
+	// 1、获取一致性 SCN 写入增量表元数据
 	globalSCN, err := engine.GetOracleCurrentSnapshotSCN()
 	if err != nil {
 		return err
 	}
 
 	//根据配置文件生成同步表元数据 [table_full_meta]
-	if err := generateTableFullTaskCheckpointMeta(cfg, engine, fullTblSlice, globalSCN); err != nil {
+	if err = generateTableFullTaskCheckpointMeta(cfg, engine, fullTblSlice, globalSCN); err != nil {
 		return err
 	}
 
 	// 表同步任务
-	if err := loaderOracleTableTask(cfg, engine, transferTableSlice); err != nil {
+	if err = loaderOracleTableTask(cfg, engine); err != nil {
 		return err
 	}
 
@@ -137,19 +136,22 @@ func LoaderOracleTableFullRecordToMySQLByAllMode(cfg *config.CfgFile, engine *db
 	return nil
 }
 
-func loaderOracleTableTask(cfg *config.CfgFile, engine *db.Engine, transferTableSlice []string) error {
-	for _, table := range transferTableSlice {
-		oracleRowIDSQL, err := getMySQLTableFullMetaRowIDSQL(cfg, engine, table)
-		if err != nil {
-			return err
-		}
-
+func loaderOracleTableTask(cfg *config.CfgFile, engine *db.Engine) error {
+	transferTables, err := engine.GetMySQLTableFullMetaSchemaTableRecord(cfg.SourceConfig.SchemaName)
+	if err != nil {
+		return err
+	}
+	for _, table := range transferTables {
 		startTime := time.Now()
 		zlog.Logger.Info("single full table data loader start",
 			zap.String("schema", cfg.SourceConfig.SchemaName))
 
+		oraRowIDSQL, err := engine.GetMySQLTableFullMetaRowIDRecord(cfg.SourceConfig.SchemaName, table)
+		if err != nil {
+			return err
+		}
 		wp := workpool.New(cfg.FullConfig.TableThreads)
-		for _, rowidSQL := range oracleRowIDSQL {
+		for _, rowidSQL := range oraRowIDSQL {
 			sql := rowidSQL
 			wp.Do(func() error {
 				// 抽取 Oracle 数据
@@ -159,7 +161,15 @@ func loaderOracleTableTask(cfg *config.CfgFile, engine *db.Engine, transferTable
 				}
 
 				if len(rowsResult) == 0 {
-					return fmt.Errorf("oracle schema [%v] table [%v] data return null rows", cfg.SourceConfig.SchemaName, table)
+					zlog.Logger.Warn("oracle schema table rowid data return null rows, skip",
+						zap.String("schema", cfg.SourceConfig.SchemaName),
+						zap.String("table", table),
+						zap.String("sql", sql))
+					// 清理断点记录
+					if err := engine.ClearMySQLTableFullMetaRecord(cfg.SourceConfig.SchemaName, table, sql); err != nil {
+						return err
+					}
+					return nil
 				}
 
 				// 转换 Oracle 数据 -> MySQL
@@ -183,7 +193,7 @@ func loaderOracleTableTask(cfg *config.CfgFile, engine *db.Engine, transferTable
 				}
 
 				// 表数据同步成功，清理断点记录
-				if err := clearMySQLTableFullMetaRowIDSQL(cfg, engine, table, sql); err != nil {
+				if err := engine.ClearMySQLTableFullMetaRecord(cfg.SourceConfig.SchemaName, table, sql); err != nil {
 					return err
 				}
 				return nil
@@ -199,12 +209,14 @@ func loaderOracleTableTask(cfg *config.CfgFile, engine *db.Engine, transferTable
 				zap.String("schema", cfg.SourceConfig.SchemaName),
 				zap.String("table", table),
 				zap.String("cost", endTime.Sub(startTime).String()))
-		} else {
-			zlog.Logger.Info("single full table data loader finished",
-				zap.String("schema", cfg.SourceConfig.SchemaName),
-				zap.String("table", table),
-				zap.String("cost", endTime.Sub(startTime).String()))
+
+			return fmt.Errorf("oracle schema [%s] single full table [%v] data loader failed",
+				cfg.SourceConfig.SchemaName, table)
 		}
+		zlog.Logger.Info("single full table data loader finished",
+			zap.String("schema", cfg.SourceConfig.SchemaName),
+			zap.String("table", table),
+			zap.String("cost", endTime.Sub(startTime).String()))
 	}
 	return nil
 }
@@ -212,9 +224,33 @@ func loaderOracleTableTask(cfg *config.CfgFile, engine *db.Engine, transferTable
 /*
 	增量同步任务
 */
-func SyncOracleTableIncrementRecordToMySQLByAllMode(cfg *config.CfgFile, engine *db.Engine, jobQueue chan Job) error {
+
+func SyncOracleTableAllRecordToMySQLByAllMode(cfg *config.CfgFile, engine *db.Engine) error {
+	zlog.Logger.Info("Welcome to transferdb", zap.String("config", cfg.String()))
+
+	// 全量数据导出导入，初始化全量元数据表以及导入完成初始化增量元数据表
+	// 如果下游数据库增量元数据表 table_increment_meta 存在记录，说明进行过全量，则跳过全量步骤，直接增量数据同步
+	// 如果下游数据库增量元数据表 table_increment_meta 不存在记录，说明未进行过数据同步，则进行全量 + 增量数据同步
+	isNotExist, err := engine.IsNotExistMySQLTableIncrementMetaRecord()
+	if err != nil {
+		return err
+	}
+	if isNotExist {
+		if err := loaderOracleTableFullRecordToMySQLByAllMode(cfg, engine); err != nil {
+			return err
+		}
+	}
+	// 增量数据同步
+	for {
+		if err := syncOracleTableIncrementRecordToMySQLByAllMode(cfg, engine); err != nil {
+			return err
+		}
+	}
+}
+
+func syncOracleTableIncrementRecordToMySQLByAllMode(cfg *config.CfgFile, engine *db.Engine) error {
 	// 获取增量元数据表内所需同步表
-	transferTableSlice, err := engine.GetMySQLTableIncrementMetaRecord(cfg.TargetConfig.MetaSchema, cfg.SourceConfig.SchemaName)
+	transferTableMetaSlice, transferTableMetaMap, err := engine.GetMySQLTableIncrementMetaRecord(cfg.SourceConfig.SchemaName)
 	if err != nil {
 		return err
 	}
@@ -224,24 +260,43 @@ func SyncOracleTableIncrementRecordToMySQLByAllMode(cfg *config.CfgFile, engine 
 	if err != nil {
 		return err
 	}
+
+	zlog.Logger.Info("increment table log file get",
+		zap.String("logfile", fmt.Sprintf("%v", logFiles)))
+
+	// 遍历所有日志文件
 	for _, log := range logFiles {
+		zlog.Logger.Info("increment table log file logminer",
+			zap.String("logfile", log["LOG_FILE"]))
+
 		// 获取日志文件起始 SCN
-		startSCN, err := strconv.Atoi(log["FIRST_CHANGE"])
+		logfileStartSCN, err := strconv.Atoi(log["FIRST_CHANGE"])
 		if err != nil {
 			return err
 		}
 
-		// logminer 开启
+		// 获取 logminer query 起始 SCN
+		logminerStartSCN, err := engine.GetMySQLTableIncrementMetaMinSourceTableSCNTime(cfg.TargetConfig.MetaSchema)
+		if err != nil {
+			return err
+		}
+		// logminer 运行
 		if err = engine.AddOracleLogminerlogFile(log["LOG_FILE"]); err != nil {
 			return err
 		}
 
-		if err = engine.StartOracleLogminerStoredProcedure(startSCN); err != nil {
+		if err = engine.StartOracleLogminerStoredProcedure(logfileStartSCN); err != nil {
 			return err
 		}
 
 		// 捕获数据
-		rowsResult, err := extractorTableIncrementRecord(engine, cfg.SourceConfig.SchemaName, transferTableSlice)
+		rowsResult, err := extractorTableIncrementRecord(
+			engine,
+			cfg.SourceConfig.SchemaName,
+			transferTableMetaSlice,
+			transferTableMetaMap,
+			logfileStartSCN,
+			logminerStartSCN)
 		if err != nil {
 			return err
 		}
@@ -251,15 +306,32 @@ func SyncOracleTableIncrementRecordToMySQLByAllMode(cfg *config.CfgFile, engine 
 			return err
 		}
 
-		// 转换捕获内容
-		lps, err := translatorOracleIncrementRecordBySafeMode(engine, cfg.TargetConfig.SchemaName, rowsResult, startSCN)
-		if err != nil {
-			return err
-		}
-		// 任务注册到 job 对列
-		for _, lp := range lps {
-			// 注册任务到 Job 队列
-			jobQueue <- Job{Task: &lp}
+		if len(rowsResult) > 0 {
+			// 转换捕获内容
+			lps, err := translatorOracleIncrementRecord(engine, cfg.TargetConfig.SchemaName, rowsResult, logfileStartSCN, cfg.AllConfig.TranslatorThreads)
+			if err != nil {
+				return err
+			}
+
+			// 数据应用
+			wp := workpool.New(cfg.AllConfig.SyncThreads)
+			for _, lp := range lps {
+				lpStruct := lp
+				wp.Do(func() error {
+					if err := lpStruct.Do(); err != nil {
+						return err
+					}
+					return nil
+				})
+			}
+			if err := wp.Wait(); err != nil {
+				return err
+			}
+			if !wp.IsDone() {
+				return fmt.Errorf("mysql schema applier increment table data failed")
+			}
+		} else {
+			zlog.Logger.Info("increment table log file logminer null data, transferdb will continue to capture")
 		}
 	}
 	return nil
@@ -267,7 +339,7 @@ func SyncOracleTableIncrementRecordToMySQLByAllMode(cfg *config.CfgFile, engine 
 
 func getOracleTableIncrementRecordLogFile(cfg *config.CfgFile, engine *db.Engine) ([]map[string]string, error) {
 	// 获取增量表起始最小 SCN 号
-	globalSCN, err := engine.GetMySQLTableIncrementMetaMinSCNTime(cfg.TargetConfig.MetaSchema)
+	globalSCN, err := engine.GetMySQLTableIncrementMetaMinGlobalSCNTime(cfg.TargetConfig.MetaSchema)
 	if err != nil {
 		return []map[string]string{}, err
 	}
@@ -300,33 +372,33 @@ func getOracleTableIncrementRecordLogFile(cfg *config.CfgFile, engine *db.Engine
 	return logFiles, nil
 }
 
-type LogminerPayload struct {
-	Engine         *db.Engine
-	GlobalSCN      int                    `json:"global_scn"`
-	SourceTableSCN int                    `json:"source_table_scn"`
-	SourceSchema   string                 `json:"source_schema"`
-	SourceTable    string                 `json:"source_table"`
-	TargetSchema   string                 `json:"target_schema"`
-	TargetTable    string                 `json:"target_table"`
-	SQLRedo        []string               `json:"sql_redo"` // 经过转换幂等 SQL 语句
-	Operation      string                 `json:"operation"`
-	Data           map[string]interface{} `json:"data"`
-	Before         map[string]interface{} `json:"before"`
+type IncrementPayload struct {
+	Engine         *db.Engine `json:"-"`
+	GlobalSCN      int        `json:"global_scn"`
+	SourceTableSCN int        `json:"source_table_scn"`
+	SourceSchema   string     `json:"source_schema"`
+	SourceTable    string     `json:"source_table"`
+	TargetSchema   string     `json:"target_schema"`
+	TargetTable    string     `json:"target_table"`
+	Operation      string     `json:"operation"`
+	OracleRedo     string     `json:"oracle_redo"` // Oracle 已执行 SQL
+	MySQLRedo      []string   `json:"mysql_redo"`  // MySQL 待执行 SQL
+	OperationType  string     `json:"operation_type"`
 }
 
 // 任务同步
-func (p *LogminerPayload) Do() error {
+func (p *IncrementPayload) Do() error {
 	zlog.Logger.Info("oracle table increment applier start",
-		zap.String("config", p.Marshal()))
+		zap.String("config", p.marshal()))
 
 	// 数据写入
-	if err := applierTableIncrementRecord(p.SQLRedo, p.Engine); err != nil {
+	if err := applierTableIncrementRecord(p.MySQLRedo, p.Engine); err != nil {
 		return err
 	}
 
 	// 数据写入完毕，更新元数据 checkpoint 表
 	// 如果同步中断，数据同步使用会以 global_scn 为准，也就是会进行重复消费
-	if err := p.Engine.UpdateTableIncrementMetaRecord(p.SourceSchema, p.SourceTable, p.GlobalSCN, p.SourceTableSCN); err != nil {
+	if err := p.Engine.UpdateTableIncrementMetaALLSCNRecord(p.SourceSchema, p.SourceTable, p.OperationType, p.GlobalSCN, p.SourceTableSCN); err != nil {
 		return err
 	}
 
@@ -334,16 +406,16 @@ func (p *LogminerPayload) Do() error {
 		zap.String("source-schema", p.SourceSchema),
 		zap.String("source-table", p.SourceTable),
 		zap.String("target-schema", p.TargetSchema),
-		zap.String("target-schema", p.TargetTable),
+		zap.String("target-table", p.TargetTable),
 	)
 	return nil
 }
 
 // 序列化
-func (p *LogminerPayload) Marshal() string {
+func (p *IncrementPayload) marshal() string {
 	b, err := json.Marshal(&p)
 	if err != nil {
-		zlog.Logger.Error("MarshalTaskToString",
+		zlog.Logger.Error("marshal task to string",
 			zap.String("string", string(b)),
 			zap.String("error", fmt.Sprintf("json marshal task failed: %v", err)))
 	}

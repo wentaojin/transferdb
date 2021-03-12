@@ -4,13 +4,11 @@
 #   - 优先级：表字段类型 > 库字段类型 两者都没配置默认采用内置转换规则
 # reverse（必须）:
 #   1、根据内置表结构转换规则或者手工配置表结构转换规则进行 schema 迁移
-# all: TODO: DONE -> 待测试完善
+# all: DONE
 #   1、全量数据迁移
 #   2、增量数据迁移
 # full: DONE
-#   2、全量数据迁移
-# increment: TODO: Doing -> 待完善
-#   1、增量数据迁移
+#   1、全量数据迁移 -> REPLACE INTO
 [app]
 # 事务 batch 数
 # 用于数据写入 batch 提交事务数
@@ -31,18 +29,15 @@ worker-threads = 3
 # 单表并发数
 table-threads = 3
 # 关于全量断点恢复
-#   - 若想断点恢复，设置 enable-checkpoint true,首次一旦运行则 batch 数不能调整，
-#   - 若不想断点恢复或者重新调整 batch 数，设置 enable-checkpoint false,重新运行全量任务
+#   - 若想断点恢复，设置 enable-checkpoint true,首次一旦运行则 worker-batch 数不能调整，
+#   - 若不想断点恢复或者重新调整 worker-batch 数，设置 enable-checkpoint false,重新运行全量任务
 enable-checkpoint = true
 
-[increment]
-# 指定增量模式下 increment 初始 SCN POS 位点
-# 仅首次运行且纯 increment 模式有效，all 模式无效
-global-scn = 20130167
-# 最大并发线程数
-worker-threads = 3
-# 最大任务队列
-worker-queue = 10
+[all]
+# 最大并发转换线程数
+translator-threads = 3
+# 最大并发同步线程数
+sync-threads = 3
 
 [source]
 # 源端 oracle 连接串

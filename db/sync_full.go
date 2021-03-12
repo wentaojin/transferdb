@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+	"strings"
 
 	"github.com/WentaoJin/transferdb/zlog"
 	"go.uber.org/zap"
@@ -69,35 +70,23 @@ func (e *Engine) IsNotExistMySQLTableIncrementMetaRecord() (bool, error) {
 	return false, nil
 }
 
-func (e *Engine) GetMySQLTableFullMetaRowIDSQLRecord(schemaName, tableName, queryCond string) ([]string, error) {
-	querySQL := fmt.Sprintf(`SELECT
-		rowid_sql AS ROWIDSQL
-	FROM
-		%s %s`, fmt.Sprintf("%s.%s", schemaName, tableName), queryCond)
-	_, res, err := Query(e.MysqlDB, querySQL)
-	if err != nil {
-		return []string{}, err
-	}
-	var sli []string
-	for _, r := range res {
-		sli = append(sli, r["ROWIDSQL"])
-	}
-	return sli, nil
-}
-
 // 清理全量同步任务元数据表
-// 全量每成功同步一张表，再清理断点记录
-func (e *Engine) ClearMySQLTableFullMetaRecord(schemaName, tableName, deleteSQL string) error {
-	_, err := e.MysqlDB.Exec(deleteSQL)
-	if err != nil {
+// 全量每成功同步一张表记录，再清理断点记录
+func (e *Engine) ClearMySQLTableFullMetaRecord(schemaName, tableName, rowidSQL string) error {
+	if err := e.GormDB.
+		Where(`upper(source_schema_name) = ? AND upper(source_table_name)= ? AND upper(rowid_sql)= ?`,
+			strings.ToUpper(schemaName),
+			strings.ToUpper(tableName),
+			strings.ToUpper(rowidSQL)).Delete(&TableFullMeta{}).Error; err != nil {
 		return fmt.Errorf(
-			`running sql: [%v], clear mysql meta schema [%s] table [table_full_meta] reocrd with source table [%s] failed: %v`,
-			deleteSQL, schemaName, tableName, err.Error())
+			`clear mysql meta schema [%s] table [table_full_meta] reocrd with source table [%s] failed: %v`,
+			schemaName, tableName, err.Error())
 	}
+
 	zlog.Logger.Info("clear meta",
 		zap.String("schema", schemaName),
 		zap.String("table", tableName),
-		zap.String("sql", deleteSQL),
+		zap.String("sql", rowidSQL),
 		zap.String("status", "success"))
 
 	return nil
@@ -105,29 +94,26 @@ func (e *Engine) ClearMySQLTableFullMetaRecord(schemaName, tableName, deleteSQL 
 
 // 清理全量同步任务元数据表
 func (e *Engine) TruncateMySQLTableFullMetaRecord(schemaName string) error {
-	truncSQL := fmt.Sprintf(`TRUNCATE TABLE %s.table_full_meta`, schemaName)
-	_, err := e.MysqlDB.Query(truncSQL)
-	if err != nil {
-		return fmt.Errorf("truncate mysql meta schema table [table_full_meta] reocrd failed: %v, running sql: [%v]",
-			err.Error(), truncSQL)
+	if err := e.GormDB.Raw(fmt.Sprintf("TRUNCATE TABLE %s", e.GormDB.Statement.Parse(&TableFullMeta{}))).Error; err != nil {
+		return fmt.Errorf("truncate mysql meta schema table [table_full_meta] reocrd failed: %v", err.Error())
 	}
-	zlog.Logger.Info("exec sql",
+
+	zlog.Logger.Info("clear table full meta record",
 		zap.String("schema", schemaName),
 		zap.String("table", "table_full_meta"),
-		zap.String("sql", truncSQL),
+		zap.String("table", "table_scn_meta"),
 		zap.String("status", "success"))
 	return nil
 }
 
 func (e *Engine) GetOracleCurrentSnapshotSCN() (int, error) {
-	// select dbms_flashback.get_system_change_number from dual 获取当前 SCN 号
-	// select dbms_flashback.get_system_change_number AS SCN,to_char(sysdate,'yyyy-mm-dd hh24:mi:ss') AS SCN_TIME from dual
-	_, res, err := Query(e.OracleDB, `select dbms_flashback.get_system_change_number AS SCN from dual `)
+	// select current_scn from v$database 获取当前 SCN 号
+	_, res, err := Query(e.OracleDB, "select current_scn from v$database")
 	var globalSCN int
 	if err != nil {
 		return globalSCN, err
 	}
-	globalSCN, err = strconv.Atoi(res[0]["SCN"])
+	globalSCN, err = strconv.Atoi(res[0]["CURRENT_SCN"])
 	if err != nil {
 		return globalSCN, err
 	}
@@ -168,10 +154,49 @@ func (e *Engine) InitMySQLTableIncrementMeta(schemaName, tableName string, globa
 		GlobalSCN:        globalSCN,
 		SourceSchemaName: schemaName,
 		SourceTableName:  tableName,
+		SourceTableSCN:   globalSCN,
 	}).Error; err != nil {
 		return err
 	}
 	return nil
+}
+
+func (e *Engine) GetMySQLTableFullMetaSCN(schemaName, tableName string) (int, error) {
+	var tableFullMeta TableFullMeta
+	if err := e.GormDB.Where("upper(source_schema_name) = ? AND upper(source_table_name) = ?",
+		strings.ToUpper(schemaName),
+		strings.ToUpper(tableName)).Find(&tableFullMeta).Error; err != nil {
+		return 0, err
+	}
+	return tableFullMeta.GlobalSCN, nil
+}
+
+func (e *Engine) GetMySQLTableFullMetaSchemaTableRecord(schemaName string) ([]string, error) {
+	var schemaTables []string
+	if err := e.GormDB.Model(&TableFullMeta{}).
+		Distinct().
+		Pluck("source_table_name", &schemaTables).
+		Where("upper(source_schema_name) = ?",
+			strings.ToUpper(schemaName)).Error; err != nil {
+		return []string{}, err
+	}
+	return schemaTables, nil
+}
+
+func (e *Engine) GetMySQLTableFullMetaRowIDRecord(schemaName, tableName string) ([]string, error) {
+	var (
+		rowID          []string
+		tableFullMetas []TableFullMeta
+	)
+	if err := e.GormDB.
+		Where("upper(source_schema_name) = ? AND upper(source_table_name) = ?",
+			strings.ToUpper(schemaName), strings.ToUpper(tableName)).Find(&tableFullMetas).Error; err != nil {
+		return rowID, err
+	}
+	for _, rowSQL := range tableFullMetas {
+		rowID = append(rowID, rowSQL.RowidSQL)
+	}
+	return rowID, nil
 }
 
 func (e *Engine) GetOracleTableRecordByRowIDSQL(sql string) ([]string, []string, error) {

@@ -19,6 +19,8 @@ import (
 	"fmt"
 	"time"
 
+	gormLogger "gorm.io/gorm/logger"
+
 	"github.com/WentaoJin/transferdb/zlog"
 
 	"gorm.io/driver/mysql"
@@ -37,6 +39,7 @@ func NewMySQLEnginePrepareDB(username string, password string, host string, port
 
 	// 初始化 gorm 日志记录器
 	gLogger := zlog.NewGormLogger(zlog.Logger, slowQueryThreshold)
+	gLogger.LogMode(gormLogger.Warn)
 	gLogger.SetAsDefault()
 	gormDB, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
 		Logger: gLogger,
@@ -61,9 +64,10 @@ func NewMySQLEnginePrepareDB(username string, password string, host string, port
 }
 
 func NewMySQLEngineGeneralDB(username string, password string, host string, port int, schema string) (*Engine, error) {
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=True&loc=Local", username, password, host, port, schema)
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=True&loc=Local&multiStatements=true", username, password, host, port, schema)
 	// 初始化 gorm 日志记录器
 	gLogger := zlog.NewGormLogger(zlog.Logger, slowQueryThreshold)
+	gLogger.LogMode(gormLogger.Warn)
 	gLogger.SetAsDefault()
 	gormDB, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
 		// 禁用外键（指定外键时不会在 mysql 创建真实的外键约束）
@@ -93,7 +97,7 @@ func NewMySQLEngineGeneralDB(username string, password string, host string, port
 // 初始化同步表结构
 func (e *Engine) InitMysqlEngineDB() error {
 	if err := e.GormDB.AutoMigrate(
-		// todo: 自定义表名适配删除 - 数据同步未处理表名不一致
+		// todo: 自定义表名适配删除 - 数据同步不支持表名不一致
 		//&CustomTableNameMap{},
 		&CustomTableColumnTypeMap{},
 		&CustomSchemaColumnTypeMap{},

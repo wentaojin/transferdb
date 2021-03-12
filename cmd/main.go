@@ -32,7 +32,7 @@ import (
 
 var (
 	conf = flag.String("config", "config.toml", "specify the configuration file, default is config.toml")
-	mode = flag.String("mode", "prepare", "specify the program running mode: [prepare reverse run]")
+	mode = flag.String("mode", "", "specify the program running mode: [prepare reverse full all]")
 )
 
 func main() {

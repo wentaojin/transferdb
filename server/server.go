@@ -60,24 +60,8 @@ func Run(cfg *config.CfgFile, mode string) error {
 		if err != nil {
 			return err
 		}
-		// 全量数据导出导入，初始化全量元数据表以及导入完成初始化增量元数据表
-		// 如果下游数据库增量元数据表 table_increment_meta 存在记录，说明进行过全量，则跳过全量步骤，直接增量数据同步
-		// 如果下游数据库增量元数据表 table_increment_meta 不存在记录，说明未进行过数据同步，则进行全量 + 增量数据同步
-		isNotExist, err := engine.IsNotExistMySQLTableIncrementMetaRecord()
-		if err != nil {
+		if err := taskflow.SyncOracleTableAllRecordToMySQLByAllMode(cfg, engine); err != nil {
 			return err
-		}
-		if isNotExist {
-			if err := taskflow.LoaderOracleTableFullRecordToMySQLByAllMode(cfg, engine); err != nil {
-				return err
-			}
-		}
-		// 增量数据同步
-		jobQueue := taskflow.InitWorkerPool(cfg.IncrementConfig.WorkerThreads, cfg.IncrementConfig.WorkerQueue)
-		for {
-			if err := taskflow.SyncOracleTableIncrementRecordToMySQLByAllMode(cfg, engine, jobQueue); err != nil {
-				return err
-			}
 		}
 	default:
 		return fmt.Errorf("flag [mode] can not null or value configure error")
