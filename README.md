@@ -11,8 +11,8 @@ transferdb 用于异构数据库迁移（ Oracle 数据库 -> MySQL 数据库）
 4. 数据同步【数据同步需要存在主键或者唯一键】
    1. FULL 模式【全量数据导出导入】
       1. 数据同步导出导入要求表存在主键或者唯一键，否则因异常错误退出或者手工中断退出，断点续传【replace into】无法替换，数据可能会导致重复【除非手工清理下游重新导入】
-   2. ALL 模式【全量导出导入 + 基于 logminer 日志增量同步】
-      1. 增量数据同步基于 logminer ，存在 logminer 同等限制，只同步 INSERT/DELETE/UPDATE 以及 DROP TABLE/TRUNCATE TABLE DDL
+   2. ALL 模式【全量导出导入 + 增量数据同步】
+      1. 增量基于 logminer 日志数据同步，存在 logminer 同等限制，且只同步 INSERT/DELETE/UPDATE 以及 DROP TABLE/TRUNCATE TABLE DDL
       2. 具体 ALL 模式同步权限以及要求详情见下 【ALL 模式同步】
 
 使用事项
