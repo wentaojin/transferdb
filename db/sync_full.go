@@ -250,6 +250,11 @@ func (e *Engine) getOracleNormalTableTableFullMetaByRowID(schemaName, tableName 
 		return err
 	}
 
+	// 判断数据是否存在，不存在直接跳过
+	if len(res) == 0 {
+		return nil
+	}
+
 	var (
 		fullMetas   []TableFullMeta
 		fullMetaIdx []int

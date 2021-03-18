@@ -3,7 +3,7 @@
 transferdb 用于异构数据库迁移（ Oracle 数据库 -> MySQL 数据库），现阶段支持的功能（原 transferdb 版本被重构，新增自定义转换规则）：
 
 1. 支持表结构定义转换
-   1. 考虑 Oracle 分区表特殊且 MySQL 数据库复杂分区可能不支持，分区表统一视为普通表转换，但是 reverse 阶段日志中会打印警告【partition tables】，若有要求，需手工转换
+   1. 考虑 Oracle 分区表特殊且 MySQL 数据库复杂分区可能不支持，分区表统一视为普通表转换，但是 reverse 阶段日志中会打印警告【partition tables】，若有要求，建议 reverse 之后检查，需手工转换
    2. 支持自定义配置表字段类型规则转换(table -> schema -> 内置)
    3. 支持默认配置规则转换
 2. 支持表索引创建
@@ -12,8 +12,9 @@ transferdb 用于异构数据库迁移（ Oracle 数据库 -> MySQL 数据库）
    1. FULL 模式【全量数据导出导入】
       1. 数据同步导出导入要求表存在主键或者唯一键，否则因异常错误退出或者手工中断退出，断点续传【replace into】无法替换，数据可能会导致重复【除非手工清理下游重新导入】
    2. ALL 模式【全量导出导入 + 增量数据同步】
-      1. 增量基于 logminer 日志数据同步，存在 logminer 同等限制，且只同步 INSERT/DELETE/UPDATE 以及 DROP TABLE/TRUNCATE TABLE DDL
-      2. 具体 ALL 模式同步权限以及要求详情见下 【ALL 模式同步】
+      1. 增量基于 logminer 日志数据同步，存在 logminer 同等限制，且只同步 INSERT/DELETE/UPDATE 以及 DROP TABLE/TRUNCATE TABLE DDL，执行过 TRUNCATE TABLE/ DROP TABLE 可能需要重新增加表附加日志
+      2. 基于 logminer 日志数据同步，挖掘速率取决于重做日志磁盘+归档日志磁盘【若在归档日志中】以及 PGA 内存
+      3. 具体 ALL 模式同步权限以及要求详情见下 【ALL 模式同步】
 
 使用事项
 
@@ -89,14 +90,18 @@ alter database archivelog;
 ALTER DATABASE ADD supplemental LOG DATA ;
 
 -- 表级别或者库级别选其一，一般只针对同步表开启即可【必须选项】
-表级别
+--增加表级别附加日志
 ALTER TABLE marvin.marvin4 ADD supplemental LOG DATA (all) COLUMNS;
-ALTER TABLE marvin.marvin3 ADD supplemental LOG DATA (all) COLUMNS;
+ALTER TABLE marvin.marvin7 ADD supplemental LOG DATA (all) COLUMNS;
+ALTER TABLE marvin.marvin8 ADD supplemental LOG DATA (all) COLUMNS;
 
+--清理表级别附加日志
 ALTER TABLE marvin.marvin4 DROP supplemental LOG DATA (all) COLUMNS;
-ALTER TABLE marvin.marvin3 DROP supplemental LOG DATA (all) COLUMNS;
+ALTER TABLE marvin.marvin7 DROP supplemental LOG DATA (all) COLUMNS;
+ALTER TABLE marvin.marvin8 DROP supplemental LOG DATA (all) COLUMNS;
 
-库级别
+--增加或删除库级别附加日志
+ALTER DATABASE ADD supplemental LOG DATA (all) COLUMNS;
 ALTER DATABASE DROP supplemental LOG DATA (all) COLUMNS;
 
 /* 查看附加日志 */
@@ -109,5 +114,8 @@ supplemental_log_data_all allc
 FROM v$database;
 
 -- 表级别附加日志查看
-select * from dba_log_groups where upper(owner) = upper('marvin')
+select * from dba_log_groups where upper(owner) = upper('marvin');
+
+-- 查看不同用户的连接数
+select username,count(username) from v$session where username is not null group by username;
 ```

@@ -37,7 +37,7 @@ func parse(sql string) (*ast.StmtNode, error) {
 }
 
 func main() {
-	sql := "Drop TABLE MARVIN8"
+	sql := "insert into MARVIN.MARVIN6(ID,INC_DATETIME,RANDOM_ID,RANDOM_STRING) values (1,TIMESTAMP ' 2021-03-16 18:11:21',1,'pingcap')"
 	astNode, err := parse(sql)
 	if err != nil {
 		fmt.Printf("parse error: %v\n", err.Error())
@@ -105,6 +105,7 @@ func (v *Info) Enter(in ast.Node) (ast.Node, bool) {
 		v.operation = "INSERT"
 		v.data = make(map[string]interface{}, 1)
 		for i, col := range node.Columns {
+			v.columns = append(v.columns, fmt.Sprintf("`%v`", strings.ToUpper(col.String())))
 			for _, lists := range node.Lists {
 				var sb strings.Builder
 				flags := format.DefaultRestoreFlags

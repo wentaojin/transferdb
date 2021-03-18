@@ -63,14 +63,41 @@ func extractorTableIncrementRecord(engine *db.Engine,
 		return []map[string]string{}, err
 	}
 
-	rows, err := filterOracleSQLRedo(engine, rowsResult, transferTableMetaMap, logFileStartSCN)
-	if err != nil {
-		return []map[string]string{}, err
+	if len(rowsResult) > 0 {
+		if err := filterOracleTable(engine, sourceSchemaName, transferTableMetaSlice, rowsResult, logFileStartSCN); err != nil {
+			return []map[string]string{}, err
+		}
+		rows, err := filterOracleSQLRedo(engine, rowsResult, transferTableMetaMap, logFileStartSCN)
+		if err != nil {
+			return []map[string]string{}, err
+		}
+		return rows, nil
+	} else {
+		return []map[string]string{}, nil
 	}
-	return rows, nil
 }
 
-// 过滤筛选 Oracle Redo SQL
+// 筛选过滤 Oracle 表
+// 1、判断当前 oracle 日志中是否存在同步表得记录信息，筛选不存在表名，则更新元数据库表 global_scn 号至当前日志文件起始 SCN 号
+func filterOracleTable(engine *db.Engine, sourceSchema string, transferTableSlice []string, rowsResult []map[string]string, logFileStartSCN int) error {
+	var redoTableSlice []string
+	for _, r := range rowsResult {
+		redoTableSlice = append(redoTableSlice, strings.ToUpper(r["TABLE_NAME"]))
+	}
+
+	filterTables := util.FilterDifferenceStringItems(transferTableSlice, redoTableSlice)
+	if len(filterTables) > 0 {
+		for _, tbl := range filterTables {
+			if err := engine.UpdateTableIncrementMetaOnlyGlobalSCNRecord(sourceSchema, tbl, logFileStartSCN); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	return nil
+}
+
+// 筛选过滤 Oracle Redo SQL
 // 1、数据同步只同步 INSERT/DELETE/UPDATE DML以及只同步 truncate table/ drop table 限定 DDL
 // 2、根据元数据表 table_increment_meta 对应表已经同步写入得 SCN SQL 记录,过滤 Oracle 提交记录 SCN 号，过滤,防止重复写入
 func filterOracleSQLRedo(engine *db.Engine,

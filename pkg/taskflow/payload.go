@@ -266,14 +266,15 @@ func syncOracleTableIncrementRecordToMySQLByAllMode(cfg *config.CfgFile, engine 
 
 	// 遍历所有日志文件
 	for _, log := range logFiles {
-		zlog.Logger.Info("increment table log file logminer",
-			zap.String("logfile", log["LOG_FILE"]))
-
 		// 获取日志文件起始 SCN
 		logfileStartSCN, err := strconv.Atoi(log["FIRST_CHANGE"])
 		if err != nil {
 			return err
 		}
+
+		zlog.Logger.Info("increment table log file logminer",
+			zap.String("logfile", log["LOG_FILE"]),
+			zap.String("logfile start scn", log["FIRST_CHANGE"]))
 
 		// 获取 logminer query 起始 SCN
 		logminerStartSCN, err := engine.GetMySQLTableIncrementMetaMinSourceTableSCNTime(cfg.TargetConfig.MetaSchema)
@@ -318,7 +319,7 @@ func syncOracleTableIncrementRecordToMySQLByAllMode(cfg *config.CfgFile, engine 
 			for _, lp := range lps {
 				lpStruct := lp
 				wp.Do(func() error {
-					if err := lpStruct.Do(); err != nil {
+					if err := lpStruct.Run(); err != nil {
 						return err
 					}
 					return nil
@@ -387,7 +388,7 @@ type IncrementPayload struct {
 }
 
 // 任务同步
-func (p *IncrementPayload) Do() error {
+func (p *IncrementPayload) Run() error {
 	zlog.Logger.Info("oracle table increment applier start",
 		zap.String("config", p.marshal()))
 

@@ -99,6 +99,7 @@ func (v *Stmt) Enter(in ast.Node) (ast.Node, bool) {
 		}
 
 	}
+
 	if node, ok := in.(*ast.InsertStmt); ok {
 		v.Operation = "INSERT"
 		v.Data = make(map[string]interface{}, 1)
@@ -112,7 +113,7 @@ func (v *Stmt) Enter(in ast.Node) (ast.Node, bool) {
 					zlog.Logger.Error("sql parser failed",
 						zap.String("stmt", v.Marshal()))
 				}
-				v.Data[fmt.Sprintf("`%s`", col.String())] = sb.String()
+				v.Data[fmt.Sprintf("`%v`", strings.ToUpper(col.String()))] = sb.String()
 			}
 		}
 	}
