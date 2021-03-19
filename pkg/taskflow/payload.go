@@ -249,8 +249,8 @@ func SyncOracleTableAllRecordToMySQLByAllMode(cfg *config.CfgFile, engine *db.En
 }
 
 func syncOracleTableIncrementRecordToMySQLByAllMode(cfg *config.CfgFile, engine *db.Engine) error {
-	// 获取增量元数据表内所需同步表
-	transferTableMetaSlice, transferTableMetaMap, err := engine.GetMySQLTableIncrementMetaRecord(cfg.SourceConfig.SchemaName)
+	// 获取增量元数据表内所需同步表信息
+	transferTableSlice, transferTableMetaMap, err := engine.GetMySQLTableIncrementMetaRecord(cfg.SourceConfig.SchemaName)
 	if err != nil {
 		return err
 	}
@@ -267,73 +267,88 @@ func syncOracleTableIncrementRecordToMySQLByAllMode(cfg *config.CfgFile, engine 
 	// 遍历所有日志文件
 	for _, log := range logFiles {
 		// 获取日志文件起始 SCN
-		logfileStartSCN, err := strconv.Atoi(log["FIRST_CHANGE"])
+		logFileStartSCN, err := strconv.Atoi(log["FIRST_CHANGE"])
 		if err != nil {
 			return err
 		}
 
 		zlog.Logger.Info("increment table log file logminer",
 			zap.String("logfile", log["LOG_FILE"]),
-			zap.String("logfile start scn", log["FIRST_CHANGE"]))
+			zap.String("logfile start scn", log["FIRST_CHANGE"]),
+			zap.Int("logminer start scn", logFileStartSCN))
 
-		// 获取 logminer query 起始 SCN
-		logminerStartSCN, err := engine.GetMySQLTableIncrementMetaMinSourceTableSCNTime(cfg.TargetConfig.MetaSchema)
-		if err != nil {
-			return err
-		}
-		// logminer 运行
-		if err = engine.AddOracleLogminerlogFile(log["LOG_FILE"]); err != nil {
-			return err
-		}
-
-		if err = engine.StartOracleLogminerStoredProcedure(logfileStartSCN); err != nil {
-			return err
-		}
-
+		// 初始化工作队列
+		jobQueue := InitWorkerPool(cfg.AllConfig.WorkerThreads, cfg.AllConfig.WorkerQueue)
 		// 捕获数据
-		rowsResult, err := extractorTableIncrementRecord(
-			engine,
-			cfg.SourceConfig.SchemaName,
-			transferTableMetaSlice,
-			transferTableMetaMap,
-			logfileStartSCN,
-			logminerStartSCN)
-		if err != nil {
-			return err
-		}
+		wp := workpool.New(cfg.AllConfig.ExtractorThreads)
+		for _, sourceTable := range transferTableSlice {
+			sourceTableName := sourceTable
+			logFile := log["LOG_FILE"]
+			logFileSCN := logFileStartSCN
+			jobC := jobQueue
+			wp.Do(func() error {
+				// logminer 运行
+				if err = engine.AddOracleLogminerlogFile(logFile); err != nil {
+					return err
+				}
 
-		// logminer 关闭
-		if err = engine.EndOracleLogminerStoredProcedure(); err != nil {
-			return err
-		}
+				if err = engine.StartOracleLogminerStoredProcedure(logFileSCN); err != nil {
+					return err
+				}
 
-		if len(rowsResult) > 0 {
-			// 转换捕获内容
-			lps, err := translatorOracleIncrementRecord(engine, cfg.TargetConfig.SchemaName, rowsResult, logfileStartSCN, cfg.AllConfig.TranslatorThreads)
-			if err != nil {
-				return err
-			}
+				// 获取 logminer query 起始最小 SCN
+				incrMeta, err := engine.GetMySQLTableIncrementMetaSingleSourceTableSCNTime(
+					cfg.SourceConfig.SchemaName, sourceTableName)
+				if err != nil {
+					return err
+				}
+				rowsResult, err := extractorTableIncrementRecord(
+					engine,
+					cfg.SourceConfig.SchemaName,
+					sourceTableName,
+					logFile,
+					logFileSCN,
+					incrMeta.SourceTableSCN)
+				if err != nil {
+					return err
+				}
 
-			// 数据应用
-			wp := workpool.New(cfg.AllConfig.SyncThreads)
-			for _, lp := range lps {
-				lpStruct := lp
-				wp.Do(func() error {
-					if err := lpStruct.Run(); err != nil {
+				if len(rowsResult) > 0 {
+					// 转换捕获内容以及数据应用
+					err := translatorOracleIncrementRecord(engine,
+						cfg.TargetConfig.SchemaName,
+						transferTableMetaMap,
+						rowsResult,
+						logFileSCN, jobC)
+					if err != nil {
 						return err
 					}
-					return nil
-				})
-			}
-			if err := wp.Wait(); err != nil {
-				return err
-			}
-			if !wp.IsDone() {
-				return fmt.Errorf("mysql schema applier increment table data failed")
-			}
-		} else {
-			zlog.Logger.Info("increment table log file logminer null data, transferdb will continue to capture")
+				} else {
+					// 判断元数据表得 global_scn 是否与日志文件 scn 一致
+					// 如果不一致且当前日志文件不存在数据记录，说明当前日志文件不存在同步表得记录，需要更新至当前
+					if err := engine.UpdateTableIncrementMetaOnlyGlobalSCNRecord(
+						cfg.SourceConfig.SchemaName,
+						sourceTableName, logFileSCN); err != nil {
+						return err
+					}
+					zlog.Logger.Info("increment table log file logminer null data, transferdb will continue to capture")
+				}
+
+				// logminer 关闭
+				if err = engine.EndOracleLogminerStoredProcedure(); err != nil {
+					return err
+				}
+				return nil
+			})
 		}
+		if err := wp.Wait(); err != nil {
+			return err
+		}
+		if !wp.IsDone() {
+			zlog.Logger.Fatal("sync oracle table increment meta meet error")
+			return fmt.Errorf("sync oracle table increment meta meet error")
+		}
+
 	}
 	return nil
 }
@@ -390,7 +405,7 @@ type IncrementPayload struct {
 // 任务同步
 func (p *IncrementPayload) Run() error {
 	zlog.Logger.Info("oracle table increment applier start",
-		zap.String("config", p.marshal()))
+		zap.String("config", p.Marshal()))
 
 	// 数据写入
 	if err := applierTableIncrementRecord(p.MySQLRedo, p.Engine); err != nil {
@@ -413,7 +428,7 @@ func (p *IncrementPayload) Run() error {
 }
 
 // 序列化
-func (p *IncrementPayload) marshal() string {
+func (p *IncrementPayload) Marshal() string {
 	b, err := json.Marshal(&p)
 	if err != nil {
 		zlog.Logger.Error("marshal task to string",

@@ -17,11 +17,7 @@ package taskflow
 
 import (
 	"fmt"
-	"strconv"
-	"strings"
 	"time"
-
-	"github.com/WentaoJin/transferdb/util"
 
 	"github.com/WentaoJin/transferdb/zlog"
 	"go.uber.org/zap"
@@ -55,104 +51,19 @@ func extractorTableFullRecord(engine *db.Engine, sourceSchemaName, sourceTableNa
 // 捕获增量数据
 func extractorTableIncrementRecord(engine *db.Engine,
 	sourceSchemaName string,
-	transferTableMetaSlice []string,
-	transferTableMetaMap map[string]int,
-	logFileStartSCN, logminerStartSCN int) ([]map[string]string, error) {
-	rowsResult, err := engine.GetOracleLogminerContentToMySQL(sourceSchemaName, transferTableMetaSlice, logminerStartSCN)
+	sourceTableName string,
+	logFileName string,
+	logFileStartSCN, lastCheckpoint int) ([]db.LogminerContent, error) {
+	rowsResult, err := engine.GetOracleLogminerContentToMySQL(sourceSchemaName, sourceTableName, lastCheckpoint)
 	if err != nil {
-		return []map[string]string{}, err
+		return []db.LogminerContent{}, err
 	}
+	zlog.Logger.Info("increment table log extractor", zap.String("logfile", logFileName),
+		zap.Int("logfile start scn", logFileStartSCN),
+		zap.Int("source table last scn", lastCheckpoint),
+		zap.Int("row counts", len(rowsResult)))
 
-	if len(rowsResult) > 0 {
-		if err := filterOracleTable(engine, sourceSchemaName, transferTableMetaSlice, rowsResult, logFileStartSCN); err != nil {
-			return []map[string]string{}, err
-		}
-		rows, err := filterOracleSQLRedo(engine, rowsResult, transferTableMetaMap, logFileStartSCN)
-		if err != nil {
-			return []map[string]string{}, err
-		}
-		return rows, nil
-	} else {
-		return []map[string]string{}, nil
-	}
-}
-
-// 筛选过滤 Oracle 表
-// 1、判断当前 oracle 日志中是否存在同步表得记录信息，筛选不存在表名，则更新元数据库表 global_scn 号至当前日志文件起始 SCN 号
-func filterOracleTable(engine *db.Engine, sourceSchema string, transferTableSlice []string, rowsResult []map[string]string, logFileStartSCN int) error {
-	var redoTableSlice []string
-	for _, r := range rowsResult {
-		redoTableSlice = append(redoTableSlice, strings.ToUpper(r["TABLE_NAME"]))
-	}
-
-	filterTables := util.FilterDifferenceStringItems(transferTableSlice, redoTableSlice)
-	if len(filterTables) > 0 {
-		for _, tbl := range filterTables {
-			if err := engine.UpdateTableIncrementMetaOnlyGlobalSCNRecord(sourceSchema, tbl, logFileStartSCN); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-	return nil
-}
-
-// 筛选过滤 Oracle Redo SQL
-// 1、数据同步只同步 INSERT/DELETE/UPDATE DML以及只同步 truncate table/ drop table 限定 DDL
-// 2、根据元数据表 table_increment_meta 对应表已经同步写入得 SCN SQL 记录,过滤 Oracle 提交记录 SCN 号，过滤,防止重复写入
-func filterOracleSQLRedo(engine *db.Engine,
-	rowsResult []map[string]string,
-	transferTableMetaMap map[string]int,
-	logFileStartSCN int) ([]map[string]string, error) {
-	var rows []map[string]string
-	for i, r := range rowsResult {
-		sourceTableSCN, err := strconv.Atoi(r["SCN"])
-		if err != nil {
-			return rows, err
-		}
-
-		if sourceTableSCN > transferTableMetaMap[r["TABLE_NAME"]] {
-			if r["OPERATION"] == util.InsertOperation {
-				rows = append(rows, rowsResult[i])
-			}
-			if r["OPERATION"] == util.DeleteOperation {
-				rows = append(rows, rowsResult[i])
-			}
-			if r["OPERATION"] == util.UpdateOperation {
-				rows = append(rows, rowsResult[i])
-			}
-			if r["OPERATION"] == util.DDLOperation {
-				splitDDL := strings.Split(r["SQL_REDO"], ` `)
-				ddl := fmt.Sprintf("%s %s", splitDDL[0], splitDDL[1])
-				if strings.ToUpper(ddl) == util.DropTableOperation {
-					// 处理 drop table marvin8 AS "BIN$vVWfliIh6WfgU0EEEKzOvg==$0"
-					rowsResult[i]["SQL_REDO"] = strings.Split(strings.ToUpper(rowsResult[i]["SQL_REDO"]), "AS")[0]
-					rows = append(rows, rowsResult[i])
-				}
-				if strings.ToUpper(ddl) == util.TruncateTableOperation {
-					rows = append(rows, rowsResult[i])
-				}
-			}
-		} else {
-			// 如果 source_table_scn 小于 global_scn 说明，该表一直在当前日志文件内未发现 DML 事务变更
-			// global_scn 表示日志文件起始 SCN 号
-			// 更新增量元数据表 SCN 位点信息
-			if err := engine.UpdateTableIncrementMetaOnlyGlobalSCNRecord(
-				r["SEG_OWNER"],
-				r["TABLE_NAME"], logFileStartSCN); err != nil {
-				return rows, err
-			}
-			// 考虑日志可能输出太多，忽略输出
-			//zlog.Logger.Warn("filter oracle sql redo",
-			//	zap.Int("source table scn", sourceTableSCN),
-			//	zap.Int("target table scn", transferTableMetaMap[r["TABLE_NAME"]]),
-			//	zap.String("source_schema", r["SEG_OWNER"]),
-			//	zap.String("source_table", r["TABLE_NAME"]),
-			//	zap.String("sql redo", r["SQL_REDO"]),
-			//	zap.String("status", "update global scn and skip apply"))
-		}
-	}
-	return rows, nil
+	return rowsResult, nil
 }
 
 // 从配置文件获取需要迁移同步的表列表

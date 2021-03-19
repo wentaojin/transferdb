@@ -57,8 +57,9 @@ type IncrementConfig struct {
 }
 
 type AllConfig struct {
-	TranslatorThreads int `toml:"translator-threads" json:"translator-threads"`
-	SyncThreads       int `toml:"sync-threads" json:"sync-threads"`
+	ExtractorThreads int `toml:"extractor-threads" json:"extractor-threads"`
+	WorkerQueue      int `toml:"worker-queue" json:"worker-queue"`
+	WorkerThreads    int `toml:"worker-threads" json:"worker-threads"`
 }
 
 type SourceConfig struct {

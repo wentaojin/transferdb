@@ -96,7 +96,7 @@ func (e *Engine) UpdateTableIncrementMetaALLSCNRecord(sourceSchemaName, sourceTa
 	return nil
 }
 
-func (e *Engine) UpdateTableIncrementMetaOnlyGlobalSCNRecord(sourceSchemaName, sourceTableName string, globalSCN int) error {
+func (e *Engine) UpdateTableIncrementMetaOnlyGlobalSCNRecord(sourceSchemaName, sourceTableName string, logFileStartSCN int) error {
 	var tableIncr TableIncrementMeta
 	if err := e.GormDB.Where("upper(source_schema_name) = ? and upper(source_table_name) = ?",
 		strings.ToUpper(sourceSchemaName),
@@ -104,11 +104,11 @@ func (e *Engine) UpdateTableIncrementMetaOnlyGlobalSCNRecord(sourceSchemaName, s
 		return err
 	}
 	// 如果元数据库表 global_SCN 号小于 logfile global_scn ,则进行更新
-	if tableIncr.GlobalSCN < globalSCN {
+	if tableIncr.GlobalSCN < logFileStartSCN {
 		if err := e.GormDB.Model(TableIncrementMeta{}).Where("upper(source_schema_name) = ? and upper(source_table_name) = ?",
 			strings.ToUpper(sourceSchemaName),
 			strings.ToUpper(sourceTableName)).
-			Updates(TableIncrementMeta{GlobalSCN: globalSCN}).Error; err != nil {
+			Updates(TableIncrementMeta{GlobalSCN: logFileStartSCN}).Error; err != nil {
 			return err
 		}
 		return nil

@@ -15,6 +15,8 @@ limitations under the License.
 */
 package util
 
+import "time"
+
 // 同步操作类型
 const (
 	UpdateOperation        = "UPDATE"
@@ -25,4 +27,5 @@ const (
 	DDLOperation           = "DDL"
 	TruncateTableOperation = "TRUNCATE TABLE"
 	DropTableOperation     = "DROP TABLE"
+	LogminerQueryTimeout   = 300 * time.Second
 )

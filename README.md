@@ -1,6 +1,6 @@
 ### Transferdb
 
-transferdb 用于异构数据库迁移（ Oracle 数据库 -> MySQL 数据库），现阶段支持的功能（原 transferdb 版本被重构，新增自定义转换规则）：
+transferdb 用于异构数据库迁移（ Oracle 数据库 -> MySQL 数据库），现阶段支持的功能（原 transferdb 版本被重构）：
 
 1. 支持表结构定义转换
    1. 考虑 Oracle 分区表特殊且 MySQL 数据库复杂分区可能不支持，分区表统一视为普通表转换，但是 reverse 阶段日志中会打印警告【partition tables】，若有要求，建议 reverse 之后检查，需手工转换

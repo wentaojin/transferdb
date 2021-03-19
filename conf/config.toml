@@ -34,10 +34,12 @@ table-threads = 3
 enable-checkpoint = true
 
 [all]
-# 最大并发转换线程数
-translator-threads = 3
-# 最大并发同步线程数
-sync-threads = 3
+# 最大并发捕获表数，不建议太大，并发越大可能对上游压力会更大
+extractor-threads = 3
+# 最大工作对列
+worker-queue = 3
+# 最大并发数据库应用线程数
+worker-threads = 3
 
 [source]
 # 源端 oracle 连接串

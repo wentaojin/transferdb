@@ -18,7 +18,6 @@ package taskflow
 import (
 	"fmt"
 	"math"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -102,37 +101,42 @@ func generateMySQLPrepareInsertSQLStatement(targetSchemaName, targetTableName st
 
 // 替换 Oracle 事务 SQL
 // ORACLE 数据库同步需要开附加日志且表需要捕获字段列日志，Logminer 内容 UPDATE/DELETE/INSERT 语句会带所有字段信息
-func translatorOracleIncrementRecord(engine *db.Engine, targetSchema string, rowsResult []map[string]string, globalSCN int, workerThreads int) ([]*IncrementPayload, error) {
-	var (
-		lps  []*IncrementPayload
-		lock sync.Mutex
-	)
-	wp := workpool.New(workerThreads)
+func translatorOracleIncrementRecord(
+	engine *db.Engine,
+	targetSchema string,
+	transferTableMetaMap map[string]int, rowsResult []db.LogminerContent,
+	logfileStartSCN int, jobQueue chan Job) error {
+	startTime := time.Now()
 	for _, rows := range rowsResult {
 		r := rows
-		wp.Do(func() error {
-			sourceTableSCN, err := strconv.Atoi(r["SCN"])
-			if err != nil {
-				return err
-			}
+		// 如果 sqlRedo 存在记录则继续处理，不存在记录则报错
+		if r.SQLRedo == "" {
+			return fmt.Errorf("does not meet expectations [oracle sql redo is be null], please check")
+		}
 
-			// 如果 sqlRedo 存在记录则继续处理，不存在记录则继续下一个
-			if r["SQL_REDO"] == "" {
-				return fmt.Errorf("does not meet expectations [oracle sql redo is be null], please check")
+		// 筛选过滤 Oracle Redo SQL
+		// 1、数据同步只同步 INSERT/DELETE/UPDATE DML以及只同步 truncate table/ drop table 限定 DDL
+		// 2、根据元数据表 table_increment_meta 对应表已经同步写入得 SCN SQL 记录,过滤 Oracle 提交记录 SCN 号，过滤,防止重复写入
+		if r.SCN > transferTableMetaMap[strings.ToUpper(r.TableName)] {
+			if r.Operation == util.DDLOperation {
+				splitDDL := strings.Split(r.SQLRedo, ` `)
+				ddl := fmt.Sprintf("%s %s", splitDDL[0], splitDDL[1])
+				if strings.ToUpper(ddl) == util.DropTableOperation {
+					// 处理 drop table marvin8 AS "BIN$vVWfliIh6WfgU0EEEKzOvg==$0"
+					r.SQLRedo = strings.Split(strings.ToUpper(r.SQLRedo), "AS")[0]
+				}
 			}
 
 			// 移除引号
-			sqlRedo := util.ReplaceQuotesString(r["SQL_REDO"])
+			sqlRedo := util.ReplaceQuotesString(r.SQLRedo)
 			// 移除分号
 			sqlRedo = util.ReplaceSpecifiedString(sqlRedo, ";", "")
 
-			zlog.Logger.Info("oracle sql redo", zap.String("sql", sqlRedo))
-
 			var sqlUndo string
-			if r["SQL_UNDO"] != "" {
-				sqlUndo = util.ReplaceQuotesString(r["SQL_UNDO"])
+			if r.SQLUndo != "" {
+				sqlUndo = util.ReplaceQuotesString(r.SQLUndo)
 				sqlUndo = util.ReplaceSpecifiedString(sqlUndo, ";", "")
-				sqlUndo = util.ReplaceSpecifiedString(sqlUndo, fmt.Sprintf("%s.", r["SEG_OWNER"]), fmt.Sprintf("%s.", strings.ToUpper(targetSchema)))
+				sqlUndo = util.ReplaceSpecifiedString(sqlUndo, fmt.Sprintf("%s.", r.SegOwner), fmt.Sprintf("%s.", strings.ToUpper(targetSchema)))
 			}
 
 			// 比如：INSERT INTO MARVIN.MARVIN1 (ID,NAME) VALUES (1,'marvin')
@@ -145,38 +149,59 @@ func translatorOracleIncrementRecord(engine *db.Engine, targetSchema string, row
 				return err
 			}
 
-			// 并发 slice 安全
-			lock.Lock()
-			defer lock.Unlock()
-			lps = append(lps, &IncrementPayload{
+			// 注册任务到 Job 队列
+
+			lp := &IncrementPayload{
 				Engine:         engine,
-				GlobalSCN:      globalSCN,
-				SourceTableSCN: sourceTableSCN,
-				SourceSchema:   r["SEG_OWNER"],
-				SourceTable:    r["TABLE_NAME"],
+				GlobalSCN:      logfileStartSCN,
+				SourceTableSCN: r.SCN,
+				SourceSchema:   r.SegOwner,
+				SourceTable:    r.TableName,
 				TargetSchema:   strings.ToUpper(targetSchema),
-				TargetTable:    r["TABLE_NAME"],
+				TargetTable:    r.TableName,
 				OracleRedo:     sqlRedo,
 				MySQLRedo:      mysqlRedo,
-				Operation:      r["OPERATION"],
-				OperationType:  operationType,
-			})
-			return nil
-		})
-	}
-	if err := wp.Wait(); err != nil {
-		return lps, err
+				Operation:      r.Operation,
+				OperationType:  operationType}
+
+			zlog.Logger.Info("translator oracle payload", zap.String("payload", lp.Marshal()))
+
+			jobQueue <- Job{Task: lp}
+
+		} else {
+			// 如果 source_table_scn 小于 global_scn 说明，该表一直在当前日志文件内未发现 DML 事务变更
+			// global_scn 表示日志文件起始 SCN 号
+			// 更新增量元数据表 SCN 位点信息
+			if err := engine.UpdateTableIncrementMetaOnlyGlobalSCNRecord(
+				r.SegOwner,
+				r.TableName, logfileStartSCN); err != nil {
+				return err
+			}
+			// 考虑日志可能输出太多，忽略输出
+			//zlog.Logger.Warn("filter oracle sql redo",
+			//	zap.Int("source table scn", sourceTableSCN),
+			//	zap.Int("target table scn", transferTableMetaMap[r["TABLE_NAME"]]),
+			//	zap.String("source_schema", r["SEG_OWNER"]),
+			//	zap.String("source_table", r["TABLE_NAME"]),
+			//	zap.String("sql redo", r["SQL_REDO"]),
+			//	zap.String("status", "update global scn and skip apply"))
+		}
+
 	}
 
-	if !wp.IsDone() {
-		return lps, fmt.Errorf("oracle schema translator increment table data failed")
-	}
-	return lps, nil
+	endTime := time.Now()
+	zlog.Logger.Info("increment table log translator",
+		zap.String("status", "success"),
+		zap.Time("start time", startTime),
+		zap.Time("end time", endTime),
+		zap.String("cost time", time.Since(startTime).String()))
+
+	return nil
 }
 
 // SQL 转换
 // 1、INSERT INTO / REPLACE INTO
-// 2、UPDATE / DELETE、REPLACE INTO
+// 2、UPDATE / DELETE、INSERT INTO
 func translatorOracleToMySQLSQL(oracleSQLRedo, oracleSQLUndo, targetSchema string) ([]string, string, error) {
 	var (
 		sqls          []string
@@ -221,7 +246,7 @@ func translatorOracleToMySQLSQL(oracleSQLRedo, oracleSQLUndo, targetSchema strin
 		for _, col := range stmt.Columns {
 			values = append(values, stmt.Data[col].(string))
 		}
-		insertSQL := fmt.Sprintf("REPLACE INTO %s.%s (%s) VALUES (%s)",
+		insertSQL := fmt.Sprintf("INSERT INTO %s.%s (%s) VALUES (%s)",
 			stmt.Schema,
 			stmt.Table,
 			strings.Join(stmt.Columns, ","),

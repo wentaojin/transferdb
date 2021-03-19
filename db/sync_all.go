@@ -20,6 +20,13 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
+
+	"go.uber.org/zap"
+
+	"github.com/WentaoJin/transferdb/zlog"
+
+	"github.com/WentaoJin/transferdb/util"
 )
 
 func (e *Engine) GetOracleRedoLogSCN(scn int) (int, error) {
@@ -123,23 +130,17 @@ func (e *Engine) GetMySQLTableIncrementMetaMinGlobalSCNTime(metaSchemaName strin
 	return globalSCN, nil
 }
 
-func (e *Engine) GetMySQLTableIncrementMetaMinSourceTableSCNTime(metaSchemaName string) (int, error) {
-	querySQL := fmt.Sprintf(`SELECT DISTINCT MIN(source_table_scn) SOURCE_TABLE_SCN
-  FROM %s.table_increment_meta`, metaSchemaName)
-
-	_, res, err := Query(e.MysqlDB, querySQL)
-	if err != nil {
-		return 0, err
+func (e *Engine) GetMySQLTableIncrementMetaSingleSourceTableSCNTime(sourceSchemaName,
+	sourceTableName string) (TableIncrementMeta, error) {
+	var (
+		incrementMeta TableIncrementMeta
+	)
+	if err := e.GormDB.Where("upper(source_schema_name) = ? AND upper(source_table_name) = ?",
+		strings.ToUpper(sourceSchemaName), strings.ToUpper(sourceTableName)).
+		Find(&incrementMeta).Error; err != nil {
+		return incrementMeta, err
 	}
-	var sourceTableSCN int
-	if len(res) > 0 {
-		sourceTableSCN, err = strconv.Atoi(res[0]["SOURCE_TABLE_SCN"])
-		if err != nil {
-			return sourceTableSCN, err
-		}
-		return sourceTableSCN, nil
-	}
-	return sourceTableSCN, nil
+	return incrementMeta, nil
 }
 
 func (e *Engine) GetMySQLTableIncrementMetaRecord(sourceSchemaName string) ([]string, map[string]int, error) {
@@ -178,6 +179,7 @@ END;`, logFile)
 	}
 	return nil
 }
+
 func (e *Engine) StartOracleLogminerStoredProcedure(scn int) error {
 	startLogminer := fmt.Sprintf(`BEGIN
   dbms_logmnr.start_logmnr(startSCN => %d,
@@ -213,12 +215,20 @@ END;`)
 // 考虑异构数据库 MySQL，只同步 INSERT/DELETE/UPDATE 事务语句以及 TRUNCATE TABLE/DROP TABLE DDL 语句，其他类型 SQL 不同步
 // V$LOGMNR_CONTENTS 字段解释参考链接
 // https://docs.oracle.com/en/database/oracle/oracle-database/21/refrn/V-LOGMNR_CONTENTS.html#GUID-B9196942-07BF-4935-B603-FA875064F5C3
-func (e *Engine) GetOracleLogminerContentToMySQL(schemaName string, sourceTableSlice []string, lastCheckpoint int) ([]map[string]string, error) {
-	// 表名拼接转换
-	var tables []string
-	for _, tbl := range sourceTableSlice {
-		tables = append(tables, fmt.Sprintf(`'%s'`, tbl))
-	}
+type LogminerContent struct {
+	SCN       int
+	SegOwner  string
+	TableName string
+	SQLRedo   string
+	SQLUndo   string
+	Operation string
+}
+
+func (e *Engine) GetOracleLogminerContentToMySQL(schemaName string, sourceTableName string, lastCheckpoint int) ([]LogminerContent, error) {
+	var lcs []LogminerContent
+
+	ctx, cancel := context.WithTimeout(context.Background(), util.LogminerQueryTimeout)
+	defer cancel()
 
 	querySQL := fmt.Sprintf(`SELECT SCN,
        SEG_OWNER,
@@ -228,16 +238,34 @@ func (e *Engine) GetOracleLogminerContentToMySQL(schemaName string, sourceTableS
        OPERATION
   FROM V$LOGMNR_CONTENTS
  WHERE 1 = 1
-   AND UPPER(SEG_OWNER) = UPPER('%s')
-   AND UPPER(TABLE_NAME) IN (%s)
+   AND UPPER(SEG_OWNER) = '%s'
+   AND UPPER(TABLE_NAME) = '%s'
    AND OPERATION IN ('INSERT', 'DELETE', 'UPDATE', 'DDL')
    AND SCN >= %d 
- ORDER BY SCN`, schemaName, strings.ToUpper(strings.Join(tables, ",")), lastCheckpoint)
+ ORDER BY SCN`, strings.ToUpper(schemaName), strings.ToUpper(sourceTableName), lastCheckpoint)
 
-	_, rowsResult, err := Query(e.OracleDB, querySQL)
+	startTime := time.Now()
+	zlog.Logger.Info("logminer sql",
+		zap.String("sql", querySQL),
+		zap.Time("start time", startTime))
+
+	rows, err := e.OracleDB.QueryContext(ctx, querySQL)
 	if err != nil {
-		return rowsResult, err
+		return lcs, err
 	}
+	defer rows.Close()
 
-	return rowsResult, nil
+	for rows.Next() {
+		var lc LogminerContent
+		if err = rows.Scan(&lc.SCN, &lc.SegOwner, &lc.TableName, &lc.SQLRedo, &lc.SQLUndo, &lc.Operation); err != nil {
+			return lcs, err
+		}
+		lcs = append(lcs, lc)
+	}
+	endTime := time.Now()
+	zlog.Logger.Info("logminer sql",
+		zap.String("sql", querySQL),
+		zap.Time("end time", endTime),
+		zap.String("cost time", time.Since(startTime).String()))
+	return lcs, nil
 }

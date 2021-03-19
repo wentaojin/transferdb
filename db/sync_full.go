@@ -107,8 +107,8 @@ func (e *Engine) TruncateMySQLTableFullMetaRecord(schemaName string) error {
 }
 
 func (e *Engine) GetOracleCurrentSnapshotSCN() (int, error) {
-	// select current_scn from v$database 获取当前 SCN 号
-	_, res, err := Query(e.OracleDB, "select current_scn from v$database")
+	// 获取当前 SCN 号
+	_, res, err := Query(e.OracleDB, "select min(current_scn) CURRENT_SCN from gv$database")
 	var globalSCN int
 	if err != nil {
 		return globalSCN, err

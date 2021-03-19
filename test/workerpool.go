@@ -25,17 +25,22 @@ import (
 )
 
 func main() {
-	jobQueue := taskflow.InitWorkerPool(2, 3)
 	for {
-		for i := 1; i <= 40; i++ {
-			// 注册任务到 Job 队列
-			jobQueue <- taskflow.Job{Task: &Test{Num: i}}
-		}
+		testWorker()
+	}
+
+}
+
+func testWorker() {
+	for i := 1; i <= 4; i++ {
+		jobQueue := taskflow.InitWorkerPool(2, 3)
+
+		// 注册任务到 Job 队列
+		jobQueue <- taskflow.Job{Task: &Test{Num: i}}
 	}
 	//time.Sleep(1 * time.Second)
 	//执行结束,关闭管道
 	//close(jobQueue)
-
 }
 
 type Test struct {
@@ -43,7 +48,10 @@ type Test struct {
 }
 
 // 实现 worker 的 Task 任务接口
-func (t *Test) Do() error {
+func (t *Test) Run() error {
+	//if t.Num == 3 {
+	//	return fmt.Errorf("error")
+	//}
 	fmt.Printf("这是任务:%d号,执行时间为:%s \n", t.Num, fmt.Sprintf("%s", time.Now()))
 	return nil
 }
