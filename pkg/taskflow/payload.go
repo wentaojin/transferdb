@@ -286,7 +286,7 @@ func syncOracleTableIncrementRecordToMySQLByAllMode(cfg *config.CfgFile, engine 
 			logFile := log["LOG_FILE"]
 			logFileSCN := logFileStartSCN
 			jobC := jobQueue
-			wp.Do(func() error {
+			wp.DoWait(func() error {
 				// logminer 运行
 				if err = engine.AddOracleLogminerlogFile(logFile); err != nil {
 					return err
@@ -333,7 +333,6 @@ func syncOracleTableIncrementRecordToMySQLByAllMode(cfg *config.CfgFile, engine 
 					}
 					zlog.Logger.Info("increment table log file logminer null data, transferdb will continue to capture")
 				}
-
 				// logminer 关闭
 				if err = engine.EndOracleLogminerStoredProcedure(); err != nil {
 					return err
@@ -348,7 +347,6 @@ func syncOracleTableIncrementRecordToMySQLByAllMode(cfg *config.CfgFile, engine 
 			zlog.Logger.Fatal("sync oracle table increment meta meet error")
 			return fmt.Errorf("sync oracle table increment meta meet error")
 		}
-
 	}
 	return nil
 }
