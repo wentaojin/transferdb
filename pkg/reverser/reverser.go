@@ -76,7 +76,54 @@ func ReverseOracleToMySQLTable(engine *db.Engine, cfg *config.CfgFile) error {
 			zap.Error(fmt.Errorf("reverse table task failed, please clear and rerunning")))
 		return fmt.Errorf("reverse table task failed, please clear and rerunning")
 	}
+
+	// 获取配置文件待同步表列表
+	transferTableSlice, err := getTransferTableSliceByCfg(cfg, engine)
+	if err != nil {
+		return err
+	}
+
+	// 初始化同步表
+	if err := engine.InitMySQLTableMetaRecord(cfg.SourceConfig.SchemaName, transferTableSlice); err != nil {
+		return err
+	}
+
 	return nil
+}
+
+// 从配置文件获取需要迁移同步的表列表
+func getTransferTableSliceByCfg(cfg *config.CfgFile, engine *db.Engine) ([]string, error) {
+	err := engine.IsExistOracleSchema(cfg.SourceConfig.SchemaName)
+	if err != nil {
+		return []string{}, err
+	}
+	var exporterTableSlice []string
+
+	switch {
+	case len(cfg.SourceConfig.IncludeTable) != 0 && len(cfg.SourceConfig.ExcludeTable) == 0:
+		if err := engine.IsExistOracleTable(cfg.SourceConfig.SchemaName, cfg.SourceConfig.IncludeTable); err != nil {
+			return exporterTableSlice, err
+		}
+		exporterTableSlice = append(exporterTableSlice, cfg.SourceConfig.IncludeTable...)
+	case len(cfg.SourceConfig.IncludeTable) == 0 && len(cfg.SourceConfig.ExcludeTable) != 0:
+		exporterTableSlice, err = engine.FilterDifferenceOracleTable(cfg.SourceConfig.SchemaName, cfg.SourceConfig.ExcludeTable)
+		if err != nil {
+			return exporterTableSlice, err
+		}
+	case len(cfg.SourceConfig.IncludeTable) == 0 && len(cfg.SourceConfig.ExcludeTable) == 0:
+		exporterTableSlice, err = engine.GetOracleTable(cfg.SourceConfig.SchemaName)
+		if err != nil {
+			return exporterTableSlice, err
+		}
+	default:
+		return exporterTableSlice, fmt.Errorf("source config params include-table/exclude-table cannot exist at the same time")
+	}
+
+	if len(exporterTableSlice) == 0 {
+		return exporterTableSlice, fmt.Errorf("exporter table slice can not null by extractor task")
+	}
+
+	return exporterTableSlice, nil
 }
 
 // 表转换前检查

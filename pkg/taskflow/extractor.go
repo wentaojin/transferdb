@@ -17,7 +17,11 @@ package taskflow
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
+
+	"github.com/WentaoJin/transferdb/util"
 
 	"github.com/WentaoJin/transferdb/zlog"
 	"go.uber.org/zap"
@@ -51,10 +55,13 @@ func extractorTableFullRecord(engine *db.Engine, sourceSchemaName, sourceTableNa
 // 捕获增量数据
 func extractorTableIncrementRecord(engine *db.Engine,
 	sourceSchemaName string,
-	sourceTableName string,
+	sourceTableNameList []string,
 	logFileName string,
-	logFileStartSCN, lastCheckpoint int) ([]db.LogminerContent, error) {
-	rowsResult, err := engine.GetOracleLogminerContentToMySQL(sourceSchemaName, sourceTableName, lastCheckpoint)
+	logFileStartSCN int, lastCheckpoint int) ([]db.LogminerContent, error) {
+	rowsResult, err := engine.GetOracleLogminerContentToMySQL(
+		sourceSchemaName,
+		util.StringArrayToCapitalChar(sourceTableNameList),
+		strconv.Itoa(lastCheckpoint))
 	if err != nil {
 		return []db.LogminerContent{}, err
 	}
@@ -66,97 +73,211 @@ func extractorTableIncrementRecord(engine *db.Engine,
 	return rowsResult, nil
 }
 
-// 从配置文件获取需要迁移同步的表列表
-func getTransferTableSliceByCfg(cfg *config.CfgFile, engine *db.Engine) ([]string, error) {
-	err := engine.IsExistOracleSchema(cfg.SourceConfig.SchemaName)
-	if err != nil {
-		return []string{}, err
-	}
-	var exporterTableSlice []string
+// 按表级别筛选区别数据
+func filterOracleRedoRecordByTable(
+	rowsResult []db.LogminerContent,
+	transferTableList []string,
+	transferTableMetaMap map[string]int,
+	workerThreads int) (map[string][]db.LogminerContent, error) {
+	var (
+		lcMap map[string][]db.LogminerContent
+		lc    []db.LogminerContent
+	)
+	lcMap = make(map[string][]db.LogminerContent)
 
-	switch {
-	case len(cfg.SourceConfig.IncludeTable) != 0 && len(cfg.SourceConfig.ExcludeTable) == 0:
-		if err := engine.IsExistOracleTable(cfg.SourceConfig.SchemaName, cfg.SourceConfig.IncludeTable); err != nil {
-			return exporterTableSlice, err
-		}
-		exporterTableSlice = append(exporterTableSlice, cfg.SourceConfig.IncludeTable...)
-	case len(cfg.SourceConfig.IncludeTable) == 0 && len(cfg.SourceConfig.ExcludeTable) != 0:
-		exporterTableSlice, err = engine.FilterDifferenceOracleTable(cfg.SourceConfig.SchemaName, cfg.SourceConfig.ExcludeTable)
-		if err != nil {
-			return exporterTableSlice, err
-		}
-	case len(cfg.SourceConfig.IncludeTable) == 0 && len(cfg.SourceConfig.ExcludeTable) == 0:
-		exporterTableSlice, err = engine.GetOracleTable(cfg.SourceConfig.SchemaName)
-		if err != nil {
-			return exporterTableSlice, err
-		}
-	default:
-		return exporterTableSlice, fmt.Errorf("source config params include-table/exclude-table cannot exist at the same time")
+	for _, table := range transferTableList {
+		lcMap[strings.ToUpper(table)] = lc
 	}
 
-	if len(exporterTableSlice) == 0 {
-		return exporterTableSlice, fmt.Errorf("exporter table slice can not null by extractor task")
+	startTime := time.Now()
+	zlog.Logger.Info("oracle table redo filter start",
+		zap.Time("start time", startTime))
+
+	c := make(chan struct{})
+	// 开始准备从 channel 接收数据了
+	s := NewScheduleJob(workerThreads, lcMap, func() { c <- struct{}{} })
+
+	wp := workpool.New(workerThreads)
+	for _, rows := range rowsResult {
+		tfMap := transferTableMetaMap
+		r := rows
+		wp.DoWait(func() error {
+			// 筛选过滤 Oracle Redo SQL
+			// 1、数据同步只同步 INSERT/DELETE/UPDATE DML以及只同步 truncate table/ drop table 限定 DDL
+			// 2、根据元数据表 table_increment_meta 对应表已经同步写入得 SCN SQL 记录,过滤 Oracle 提交记录 SCN 号，过滤,防止重复写入
+			if r.SCN >= tfMap[strings.ToUpper(r.TableName)] {
+				s.AddData(r)
+			}
+			return nil
+		})
+	}
+	if err := wp.Wait(); err != nil {
+		return lcMap, err
+	}
+	if !wp.IsDone() {
+		return lcMap, fmt.Errorf("filter oracle redo record by table error")
 	}
 
-	return exporterTableSlice, nil
+	s.Close()
+	<-c
+
+	endTime := time.Now()
+	zlog.Logger.Info("oracle table filter finished",
+		zap.String("status", "success"),
+		zap.Time("start time", startTime),
+		zap.Time("end time", endTime),
+		zap.String("cost time", time.Since(startTime).String()))
+
+	return lcMap, nil
 }
 
-// 根据配置文件生成同步表元数据 [table_full_meta]
-func generateTableFullTaskCheckpointMeta(cfg *config.CfgFile, engine *db.Engine, fullTblSlice []string, globalSCN int) error {
-	// 设置工作池
-	// 设置 goroutine 数
-	if len(fullTblSlice) > 0 {
-		wp := workpool.New(cfg.FullConfig.WorkerThreads)
-		for _, table := range fullTblSlice {
-			// 变量替换，直接使用原变量会导致并发输出有问题
-			tbl := table
-			workerBatch := cfg.FullConfig.WorkerBatch
-			insertBatchSize := cfg.AppConfig.InsertBatchSize
-			sourceSchemaName := cfg.SourceConfig.SchemaName
-			wp.DoWait(func() error {
-				if err := engine.InitMySQLTableFullMeta(sourceSchemaName, tbl, globalSCN, workerBatch, insertBatchSize); err != nil {
-					return err
-				}
-				return nil
-			})
-		}
-		if err := wp.Wait(); err != nil {
-			return err
-		}
+// 1、根据当前表的 SCN 初始化元数据据表
+// 2、根据元数据表记录全量导出导入
+func loaderTableFullTaskBySCN(cfg *config.CfgFile, engine *db.Engine, fullTblSlice []string) error {
+	wp := workpool.New(cfg.FullConfig.WorkerThreads)
+	for _, table := range fullTblSlice {
+		// 变量替换，直接使用原变量会导致并发输出有问题
+		tbl := table
+		workerBatch := cfg.FullConfig.WorkerBatch
+		insertBatchSize := cfg.AppConfig.InsertBatchSize
+		sourceSchemaName := cfg.SourceConfig.SchemaName
+		wp.DoWait(func() error {
+			// 全量同步前，获取 SCN
+			globalSCN, err := engine.GetOracleCurrentSnapshotSCN()
+			if err != nil {
+				return err
+			}
+			if err := engine.InitMySQLTableFullMeta(sourceSchemaName, tbl, globalSCN, workerBatch, insertBatchSize); err != nil {
+				return err
+			}
+			if err := loaderOracleSingleTableTask(cfg, engine, tbl); err != nil {
+				return err
+			}
+			return nil
+		})
+	}
+	if err := wp.Wait(); err != nil {
+		return err
+	}
+	if !wp.IsDone() {
+		return fmt.Errorf("loaderTableFullTaskBySCN concurrency table meet error")
 	}
 	return nil
 }
 
-// 根据配置文件以及起始 SCN 生成同步表元数据 [table_increment_meta]
-func generateTableIncrementTaskCheckpointMeta(cfg *config.CfgFile, engine *db.Engine, incrementTblSlice []string, globalSCN int) error {
-	// 设置工作池
-	// 设置 goroutine 数
-	if len(incrementTblSlice) > 0 {
-		wp := workpool.New(cfg.FullConfig.WorkerThreads)
-		for _, table := range incrementTblSlice {
-			// 变量替换，直接使用原变量会导致并发输出有问题
-			tbl := table
-			sourceSchemaName := cfg.SourceConfig.SchemaName
-			wp.DoWait(func() error {
-				// 判断是否全量元数据表对应表是否存在 SCN 记录，如果存在则继承，如果不存在则取用新的 SCN
-				startSCN, err := engine.GetMySQLTableFullMetaSCN(sourceSchemaName, tbl)
-				if err != nil {
+// 1、根据元数据表记录全量导出导入
+func loaderTableFullTaskByCheckpoint(cfg *config.CfgFile, engine *db.Engine, transferTables []string) error {
+	wp := workpool.New(cfg.FullConfig.WorkerThreads)
+	for _, table := range transferTables {
+		// 变量替换，直接使用原变量会导致并发输出有问题
+		tbl := table
+		wp.DoWait(func() error {
+			if err := loaderOracleSingleTableTask(cfg, engine, tbl); err != nil {
+				return err
+			}
+			return nil
+		})
+	}
+	if err := wp.Wait(); err != nil {
+		return err
+	}
+	if !wp.IsDone() {
+		return fmt.Errorf("loaderTableFullTaskByCheckpoint concurrency table meet error")
+	}
+	return nil
+}
+
+func loaderOracleSingleTableTask(cfg *config.CfgFile, engine *db.Engine, table string) error {
+	startTime := time.Now()
+	zlog.Logger.Info("single full table data loader start",
+		zap.String("schema", cfg.SourceConfig.SchemaName))
+
+	oraRowIDSQL, err := engine.GetMySQLTableFullMetaRowIDRecord(cfg.SourceConfig.SchemaName, table)
+	if err != nil {
+		return err
+	}
+	wp := workpool.New(cfg.FullConfig.TableThreads)
+	for _, rowidSQL := range oraRowIDSQL {
+		sql := rowidSQL
+		wp.Do(func() error {
+			// 抽取 Oracle 数据
+			columns, rowsResult, err := extractorTableFullRecord(engine, cfg.SourceConfig.SchemaName, table, sql)
+			if err != nil {
+				return err
+			}
+
+			if len(rowsResult) == 0 {
+				zlog.Logger.Warn("oracle schema table rowid data return null rows, skip",
+					zap.String("schema", cfg.SourceConfig.SchemaName),
+					zap.String("table", table),
+					zap.String("sql", sql))
+				// 清理断点记录以及更新记录
+				if err := engine.ModifyMySQLTableMetaRecord(
+					cfg.TargetConfig.MetaSchema,
+					cfg.SourceConfig.SchemaName, table, sql); err != nil {
 					return err
 				}
-
-				if startSCN == 0 {
-					if err := engine.InitMySQLTableIncrementMeta(sourceSchemaName, tbl, globalSCN); err != nil {
-						return err
-					}
-				} else {
-					if err := engine.InitMySQLTableIncrementMeta(sourceSchemaName, tbl, startSCN); err != nil {
-						return err
-					}
-				}
 				return nil
-			})
-		}
-		if err := wp.Wait(); err != nil {
+			}
+
+			// 转换 Oracle 数据 -> MySQL
+			mysqlSQLSlice, err := translatorTableFullRecord(
+				cfg.TargetConfig.SchemaName,
+				table,
+				columns,
+				rowsResult,
+				cfg.FullConfig.WorkerThreads,
+				cfg.AppConfig.InsertBatchSize,
+				true,
+			)
+			if err != nil {
+				return err
+			}
+
+			// 应用 Oracle 数据 -> MySQL
+			if err := applierTableFullRecord(cfg.TargetConfig.SchemaName, table, cfg.FullConfig.WorkerThreads, mysqlSQLSlice,
+				engine); err != nil {
+				return err
+			}
+
+			// 清理断点记录以及更新记录
+			if err := engine.ModifyMySQLTableMetaRecord(
+				cfg.TargetConfig.MetaSchema,
+				cfg.SourceConfig.SchemaName, table, sql); err != nil {
+				return err
+			}
+			return nil
+		})
+	}
+	if err := wp.Wait(); err != nil {
+		return err
+	}
+
+	endTime := time.Now()
+	if !wp.IsDone() {
+		zlog.Logger.Fatal("single full table data loader failed",
+			zap.String("schema", cfg.SourceConfig.SchemaName),
+			zap.String("table", table),
+			zap.String("cost", endTime.Sub(startTime).String()))
+		return fmt.Errorf("oracle schema [%s] single full table [%v] data loader failed",
+			cfg.SourceConfig.SchemaName, table)
+	}
+	zlog.Logger.Info("single full table data loader finished",
+		zap.String("schema", cfg.SourceConfig.SchemaName),
+		zap.String("table", table),
+		zap.String("cost", endTime.Sub(startTime).String()))
+	return nil
+}
+
+// 根据配置文件以及起始 SCN 生成同步表元数据 [table_increment_meta]
+func generateTableIncrementTaskCheckpointMeta(sourceSchemaName string, engine *db.Engine) error {
+	tableMeta, _, err := engine.GetMySQLTableMetaRecord(sourceSchemaName)
+	if err != nil {
+		return err
+	}
+
+	for _, tm := range tableMeta {
+		if err := engine.InitMySQLTableIncrementMeta(tm.SourceSchemaName, tm.SourceTableName, tm.FullGlobalSCN); err != nil {
 			return err
 		}
 	}

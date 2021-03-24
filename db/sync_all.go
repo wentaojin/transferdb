@@ -29,17 +29,15 @@ import (
 	"github.com/WentaoJin/transferdb/util"
 )
 
-func (e *Engine) GetOracleRedoLogSCN(scn int) (int, error) {
-	querySQL := fmt.Sprintf(`select  FIRST_CHANGE# AS SCN
+func (e *Engine) GetOracleRedoLogSCN(scn string) (int, error) {
+	_, res, err := Query(e.OracleDB, util.StringsBuilder(`select  FIRST_CHANGE# AS SCN
   from (SELECT  GROUP#,
                first_change#,
                MEMBERS,
                FIRST_TIME
           FROM v$LOG
-         WHERE FIRST_CHANGE# <= %d
-         order by FIRST_CHANGE# desc)
- where rownum = 1`, scn)
-	_, res, err := Query(e.OracleDB, querySQL)
+         WHERE FIRST_CHANGE# <= `, scn, ` order by FIRST_CHANGE# desc)
+ where rownum = 1`))
 	var globalSCN int
 	if err != nil {
 		return globalSCN, err
@@ -53,17 +51,15 @@ func (e *Engine) GetOracleRedoLogSCN(scn int) (int, error) {
 	return globalSCN, nil
 }
 
-func (e *Engine) GetOracleArchivedLogSCN(scn int) (int, error) {
-	querySQL := fmt.Sprintf(`select FIRST_CHANGE# AS SCN
+func (e *Engine) GetOracleArchivedLogSCN(scn string) (int, error) {
+	var globalSCN int
+	_, res, err := Query(e.OracleDB, util.StringsBuilder(`select FIRST_CHANGE# AS SCN
   from (select FIRST_CHANGE#,FIRST_TIME
           from v$archived_log
          where STATUS = 'A'
            and DELETED='NO'
-           and FIRST_CHANGE# <= %d
-         order by FIRST_CHANGE# desc)
- where rownum = 1`, scn)
-	var globalSCN int
-	_, res, err := Query(e.OracleDB, querySQL)
+           and FIRST_CHANGE# <= `, scn, ` order by FIRST_CHANGE# desc)
+ where rownum = 1`))
 	if err != nil {
 		return globalSCN, err
 	}
@@ -76,71 +72,72 @@ func (e *Engine) GetOracleArchivedLogSCN(scn int) (int, error) {
 	return globalSCN, nil
 }
 
-func (e *Engine) GetOracleRedoLogFile(scn int) ([]map[string]string, error) {
-	querySQL := fmt.Sprintf(`SELECT 
+func (e *Engine) GetOracleRedoLogFile(scn string) ([]map[string]string, error) {
+	_, res, err := Query(e.OracleDB, util.StringsBuilder(`SELECT 
        --l.GROUP# GROUP_NUMBER,
        l.FIRST_CHANGE# AS FIRST_CHANGE,
        --l.BYTES / 1024 / 1024 AS LOG_SIZE,
-       --L.NEXT_CHANGE# AS NEXT_CHANGE,
+       L.NEXT_CHANGE# AS NEXT_CHANGE,
        lf.MEMBER LOG_FILE
   FROM v$LOGFILE lf, v$LOG l
  WHERE l.GROUP# = lf.GROUP#
-   AND l.FIRST_CHANGE# >= %d
- ORDER BY l.FIRST_CHANGE# ASC`, scn)
-	_, res, err := Query(e.OracleDB, querySQL)
+   AND l.FIRST_CHANGE# >= `, scn, ` ORDER BY l.FIRST_CHANGE# ASC`))
 	if err != nil {
 		return []map[string]string{}, err
 	}
 	return res, nil
 }
 
-func (e *Engine) GetOracleArchivedLogFile(scn int) ([]map[string]string, error) {
-	querySQL := fmt.Sprintf(`SELECT NAME AS LOG_FILE,
-       --NEXT_CHANGE# AS NEXT_CHANGE,
+func (e *Engine) GetOracleArchivedLogFile(scn string) ([]map[string]string, error) {
+	_, res, err := Query(e.OracleDB, util.StringsBuilder(`SELECT NAME AS LOG_FILE,
+       NEXT_CHANGE# AS NEXT_CHANGE,
        --BLOCKS * BLOCK_SIZE / 1024 / 1024 AS LOG_SIZE,
        FIRST_CHANGE# AS FIRST_CHANGE
   FROM v$ARCHIVED_LOG
  WHERE STATUS = 'A'
    AND DELETED = 'NO'
-   AND FIRST_CHANGE# >= %d
- ORDER BY FIRST_CHANGE# ASC`, scn)
-	_, res, err := Query(e.OracleDB, querySQL)
+   AND FIRST_CHANGE# >= `, scn, ` ORDER BY FIRST_CHANGE# ASC`))
 	if err != nil {
 		return []map[string]string{}, err
 	}
 	return res, nil
 }
 
-func (e *Engine) GetMySQLTableIncrementMetaMinGlobalSCNTime(metaSchemaName string) (int, error) {
-	querySQL := fmt.Sprintf(`SELECT DISTINCT MIN(global_scn) GLOBAL_SCN
-  FROM %s.table_increment_meta`, metaSchemaName)
-
-	_, res, err := Query(e.MysqlDB, querySQL)
+func (e *Engine) GetOracleCurrentRedoMaxSCN() (int, error) {
+	_, res, err := Query(e.OracleDB, util.StringsBuilder(`SELECT NEXT_CHANGE# MAX_SCN FROM V$LOG WHERE STATUS='CURRENT'`))
 	if err != nil {
 		return 0, err
 	}
+	maxSCN, err := strconv.Atoi(res[0]["MAX_SCN"])
+	if err != nil {
+		return maxSCN, fmt.Errorf("GetOracleCurrentRedoMaxSCN strconv.Atoi falied: %v", err)
+	}
+	if maxSCN == 0 {
+		return maxSCN, fmt.Errorf("GetOracleCurrentRedoMaxSCN value is euqal to 0, does't meet expectations")
+	}
+	return maxSCN, nil
+}
+
+func (e *Engine) GetMySQLTableIncrementMetaMinGlobalSCNTime(sourceSchemaName string) (int, error) {
 	var globalSCN int
-	if len(res) > 0 {
-		globalSCN, err = strconv.Atoi(res[0]["GLOBAL_SCN"])
-		if err != nil {
-			return globalSCN, err
-		}
-		return globalSCN, nil
+	if err := e.GormDB.Model(&TableIncrementMeta{}).Where("upper(source_schema_name) = ?",
+		strings.ToUpper(sourceSchemaName)).
+		Distinct().
+		Order("global_scn ASC").Limit(1).Pluck("global_scn", &globalSCN).Error; err != nil {
+		return globalSCN, err
 	}
 	return globalSCN, nil
 }
 
-func (e *Engine) GetMySQLTableIncrementMetaSingleSourceTableSCNTime(sourceSchemaName,
-	sourceTableName string) (TableIncrementMeta, error) {
-	var (
-		incrementMeta TableIncrementMeta
-	)
-	if err := e.GormDB.Where("upper(source_schema_name) = ? AND upper(source_table_name) = ?",
-		strings.ToUpper(sourceSchemaName), strings.ToUpper(sourceTableName)).
-		Find(&incrementMeta).Error; err != nil {
-		return incrementMeta, err
+func (e *Engine) GetMySQLTableIncrementMetaMinSourceTableSCNTime(sourceSchemaName string) (int, error) {
+	var sourceTableSCN int
+	if err := e.GormDB.Model(&TableIncrementMeta{}).Where("upper(source_schema_name) = ?",
+		strings.ToUpper(sourceSchemaName)).
+		Distinct().
+		Order("source_table_scn ASC").Limit(1).Pluck("source_table_scn", &sourceTableSCN).Error; err != nil {
+		return sourceTableSCN, err
 	}
-	return incrementMeta, nil
+	return sourceTableSCN, nil
 }
 
 func (e *Engine) GetMySQLTableIncrementMetaRecord(sourceSchemaName string) ([]string, map[string]int, error) {
@@ -167,32 +164,28 @@ func (e *Engine) GetMySQLTableIncrementMetaRecord(sourceSchemaName string) ([]st
 }
 
 func (e *Engine) AddOracleLogminerlogFile(logFile string) error {
-	addLogFile := fmt.Sprintf(`BEGIN
-  dbms_logmnr.add_logfile(logfilename => '%s',
-                          options     => dbms_logmnr.NEW);
-END;`, logFile)
-
 	ctx, _ := context.WithCancel(context.Background())
-	_, err := e.OracleDB.ExecContext(ctx, addLogFile)
+	_, err := e.OracleDB.ExecContext(ctx, util.StringsBuilder(`BEGIN
+  dbms_logmnr.add_logfile(logfilename => '`, logFile, `',
+                          options     => dbms_logmnr.NEW);
+END;`))
 	if err != nil {
 		return fmt.Errorf("oracle logminer add log file failed: %v", err)
 	}
 	return nil
 }
 
-func (e *Engine) StartOracleLogminerStoredProcedure(scn int) error {
-	startLogminer := fmt.Sprintf(`BEGIN
-  dbms_logmnr.start_logmnr(startSCN => %d,
+func (e *Engine) StartOracleLogminerStoredProcedure(scn string) error {
+	ctx, _ := context.WithCancel(context.Background())
+	_, err := e.OracleDB.ExecContext(ctx, util.StringsBuilder(`BEGIN
+  dbms_logmnr.start_logmnr(startSCN => `, scn, `,
                            options  => SYS.DBMS_LOGMNR.SKIP_CORRUPTION +       -- 日志遇到坏块，不报错退出，直接跳过
                                        SYS.DBMS_LOGMNR.NO_SQL_DELIMITER +
                                        SYS.DBMS_LOGMNR.NO_ROWID_IN_STMT +
                                        SYS.DBMS_LOGMNR.COMMITTED_DATA_ONLY +
                                        SYS.DBMS_LOGMNR.DICT_FROM_ONLINE_CATALOG +
                                        SYS.DBMS_LOGMNR.STRING_LITERALS_IN_STMT);
-END;`, scn)
-
-	ctx, _ := context.WithCancel(context.Background())
-	_, err := e.OracleDB.ExecContext(ctx, startLogminer)
+END;`))
 	if err != nil {
 		return fmt.Errorf("oracle logminer stored procedure start failed: %v", err)
 	}
@@ -200,11 +193,10 @@ END;`, scn)
 }
 
 func (e *Engine) EndOracleLogminerStoredProcedure() error {
-	endLogminer := fmt.Sprintf(`BEGIN
-  dbms_logmnr.end_logmnr();
-END;`)
 	ctx, _ := context.WithCancel(context.Background())
-	_, err := e.OracleDB.ExecContext(ctx, endLogminer)
+	_, err := e.OracleDB.ExecContext(ctx, util.StringsBuilder(`BEGIN
+  dbms_logmnr.end_logmnr();
+END;`))
 	if err != nil {
 		return fmt.Errorf("oracle logminer stored procedure end failed: %v", err)
 	}
@@ -224,13 +216,13 @@ type LogminerContent struct {
 	Operation string
 }
 
-func (e *Engine) GetOracleLogminerContentToMySQL(schemaName string, sourceTableName string, lastCheckpoint int) ([]LogminerContent, error) {
+func (e *Engine) GetOracleLogminerContentToMySQL(schemaName string, sourceTableNameList string, lastCheckpoint string) ([]LogminerContent, error) {
 	var lcs []LogminerContent
 
 	ctx, cancel := context.WithTimeout(context.Background(), util.LogminerQueryTimeout)
 	defer cancel()
 
-	querySQL := fmt.Sprintf(`SELECT SCN,
+	querySQL := util.StringsBuilder(`SELECT SCN,
        SEG_OWNER,
        TABLE_NAME,
        SQL_REDO,
@@ -238,11 +230,10 @@ func (e *Engine) GetOracleLogminerContentToMySQL(schemaName string, sourceTableN
        OPERATION
   FROM V$LOGMNR_CONTENTS
  WHERE 1 = 1
-   AND UPPER(SEG_OWNER) = '%s'
-   AND UPPER(TABLE_NAME) = '%s'
+   AND UPPER(SEG_OWNER) = '`, strings.ToUpper(schemaName), `'
+   AND UPPER(TABLE_NAME) IN (`, sourceTableNameList, `)
    AND OPERATION IN ('INSERT', 'DELETE', 'UPDATE', 'DDL')
-   AND SCN >= %d 
- ORDER BY SCN`, strings.ToUpper(schemaName), strings.ToUpper(sourceTableName), lastCheckpoint)
+   AND SCN >= `, lastCheckpoint, ` ORDER BY SCN`)
 
 	startTime := time.Now()
 	zlog.Logger.Info("logminer sql",

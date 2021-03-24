@@ -16,7 +16,6 @@ limitations under the License.
 package util
 
 import (
-	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
@@ -24,6 +23,7 @@ import (
 
 	"github.com/scylladb/go-set"
 	"github.com/scylladb/go-set/strset"
+	"github.com/thinkeridea/go-extend/exbytes"
 )
 
 // 是否空字符串
@@ -112,18 +112,36 @@ func IsNum(s string) bool {
 
 // 替换字符串引号字符
 func ReplaceQuotesString(s string) string {
-	return strings.Replace(s, "\"", "", -1)
+	return string(exbytes.Replace([]byte(s), []byte("\""), []byte(""), -1))
 }
 
 // 替换指定字符
 func ReplaceSpecifiedString(s string, oldStr, newStr string) string {
-	return strings.Replace(s, oldStr, newStr, -1)
+	return string(exbytes.Replace([]byte(s), []byte(oldStr), []byte(newStr), -1))
 }
 
 // 忽略大小写切分字符串
 func ReSplit(text string, cut string) []string {
-	pattern := fmt.Sprintf("(?i)%s", cut)
+	pattern := StringsBuilder("(?i)", cut)
 	regex := regexp.MustCompile(pattern)
 	result := regex.Split(text, -1)
 	return result
+}
+
+// 字符数组转字符
+func StringArrayToCapitalChar(strs []string) string {
+	var newStrs []string
+	for _, s := range strs {
+		newStrs = append(newStrs, StringsBuilder("'", strings.ToUpper(s), "'"))
+	}
+	return strings.Join(newStrs, ",")
+}
+
+// 字符串拼接
+func StringsBuilder(str ...string) string {
+	var b strings.Builder
+	for _, p := range str {
+		b.WriteString(p)
+	}
+	return b.String() // no copying
 }

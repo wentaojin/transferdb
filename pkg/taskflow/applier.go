@@ -38,7 +38,7 @@ func applierTableFullRecord(targetSchemaName, targetTableName string, workerThre
 	wp := workpool.New(workerThreads)
 	for _, sql := range sqlSlice {
 		s := sql
-		wp.Do(func() error {
+		wp.DoWait(func() error {
 			_, err := engine.MysqlDB.Exec(s)
 			if err != nil {
 				return fmt.Errorf("single full table data bulk insert mysql [%s] falied:%v", sql, err)
@@ -48,6 +48,9 @@ func applierTableFullRecord(targetSchemaName, targetTableName string, workerThre
 	}
 	if err := wp.Wait(); err != nil {
 		return err
+	}
+	if !wp.IsDone() {
+		return fmt.Errorf("single full table data applier meet error")
 	}
 	endTime := time.Now()
 	zlog.Logger.Info("single full table data applier finished",
@@ -60,7 +63,7 @@ func applierTableFullRecord(targetSchemaName, targetTableName string, workerThre
 // 表数据应用 -> 增量任务
 func applierTableIncrementRecord(sqlSlice []string, engine *db.Engine) error {
 	sql := strings.Join(sqlSlice, ";")
-	zlog.Logger.Info("increment applier sql", zap.String("sql", sql))
+	//zlog.Logger.Info("increment applier sql", zap.String("sql", sql))
 	_, err := engine.MysqlDB.Exec(sql)
 	if err != nil {
 		return fmt.Errorf("single increment table data insert mysql [%s] falied:%v", sql, err)

@@ -18,48 +18,104 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"math/rand"
+	"sync"
 	"time"
 
-	"github.com/WentaoJin/transferdb/pkg/taskflow"
+	"github.com/pingcap/log"
+	"go.uber.org/zap"
 )
 
 func main() {
-	for {
-		testWorker()
-	}
+	startTime := time.Now()
+	numOfWorkers := 3
 
+	var (
+		done    = make(chan bool)
+		tasks   = make(chan Task, 2)
+		results = make(chan Result, 2)
+	)
+	go GetResult(done, results)
+	go allocate(tasks)
+	go CreateWorkerPool(numOfWorkers, tasks, results)
+	// 必须在allocate()和getResult()之后创建工作池
+	<-done
+	endTime := time.Now()
+	diff := endTime.Sub(startTime)
+	fmt.Println("total time taken ", diff.Seconds(), "seconds")
 }
 
-func testWorker() {
-	for i := 1; i <= 4; i++ {
-		jobQueue := taskflow.InitWorkerPool(2, 3)
-
-		// 注册任务到 Job 队列
-		jobQueue <- taskflow.Job{Task: &Test{Num: i}}
+func allocate(jobQueue chan Task) {
+	for i := 0; i < 10; i++ {
+		randnum := rand.Intn(999)
+		task := Task{i, randnum}
+		jobQueue <- task
 	}
-	//time.Sleep(1 * time.Second)
-	//执行结束,关闭管道
 	//close(jobQueue)
 }
 
-type Test struct {
-	Num int
+type Task struct {
+	id      int
+	randnum int
 }
 
-// 实现 worker 的 Task 任务接口
-func (t *Test) Run() error {
-	//if t.Num == 3 {
-	//	return fmt.Errorf("error")
-	//}
-	fmt.Printf("这是任务:%d号,执行时间为:%s \n", t.Num, fmt.Sprintf("%s", time.Now()))
+type Result struct {
+	task   Task
+	status bool
+}
+
+func (p *Task) Run() error {
+	if p.id == 2 {
+		return fmt.Errorf("meet error")
+	} else {
+		fmt.Println(p.id)
+	}
 	return nil
 }
 
-func (t *Test) Marshal() string {
-	b, err := json.Marshal(&t)
+// 序列化
+func (p *Task) Marshal() string {
+	b, err := json.Marshal(&p)
 	if err != nil {
-		log.Fatalf("err: %v\n", err)
+		log.Error("error", zap.Error(err))
 	}
 	return string(b)
+}
+
+func CreateWorkerPool(numOfWorkers int, jobQueue chan Task, resultQueue chan Result) {
+	var wg sync.WaitGroup
+	for i := 0; i < numOfWorkers; i++ {
+		wg.Add(1)
+		go worker(&wg, jobQueue, resultQueue)
+	}
+	wg.Wait()
+	close(resultQueue)
+}
+
+func GetResult(done chan bool, resultQueue chan Result) {
+	for result := range resultQueue {
+		if !result.status {
+			log.Fatal("task record",
+				zap.String("payload", result.task.Marshal()))
+		}
+	}
+	done <- true
+}
+
+func worker(wg *sync.WaitGroup, jobQueue chan Task, resultQueue chan Result) {
+	defer wg.Done()
+	for job := range jobQueue {
+		if err := job.Run(); err != nil {
+			result := Result{
+				task:   job,
+				status: false,
+			}
+			resultQueue <- result
+		}
+		result := Result{
+			task:   job,
+			status: true,
+		}
+		resultQueue <- result
+	}
 }

@@ -85,7 +85,8 @@ func NewEngineDB(cfg *config.CfgFile) (*db.Engine, error) {
 		cfg.TargetConfig.Password,
 		cfg.TargetConfig.Host,
 		cfg.TargetConfig.Port,
-		cfg.TargetConfig.MetaSchema)
+		cfg.TargetConfig.MetaSchema,
+		cfg.AppConfig.SlowlogThreshold)
 	if err != nil {
 		return engine, err
 	}

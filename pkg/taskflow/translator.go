@@ -48,7 +48,7 @@ func translatorTableFullRecord(
 	rowCounts := len(rowsResult)
 
 	if rowCounts <= insertBatchSize {
-		sqlSlice = append(sqlSlice, fmt.Sprintf("%s %s", sqlPrefix, strings.Join(rowsResult, ",")))
+		sqlSlice = append(sqlSlice, util.StringsBuilder(sqlPrefix, " ", strings.Join(rowsResult, ",")))
 	} else {
 		// 数据行按照 batch 拼接拆分
 		// 向上取整，多切 batch，防止数据丢失
@@ -60,9 +60,9 @@ func translatorTableFullRecord(
 		wp := workpool.New(workerThreads)
 		for _, batchRows := range multiBatchRows {
 			rows := batchRows
-			wp.Do(func() error {
+			wp.DoWait(func() error {
 				lock.Lock()
-				sqlSlice = append(sqlSlice, fmt.Sprintf("%s %s", sqlPrefix, strings.Join(rows, ",")))
+				sqlSlice = append(sqlSlice, util.StringsBuilder(sqlPrefix, " ", strings.Join(rows, ",")))
 				lock.Unlock()
 				return nil
 			})
@@ -70,7 +70,11 @@ func translatorTableFullRecord(
 		if err := wp.Wait(); err != nil {
 			return sqlSlice, err
 		}
+		if !wp.IsDone() {
+			return sqlSlice, fmt.Errorf("translatorTableFullRecord concurrency meet error")
+		}
 	}
+
 	endTime := time.Now()
 	zlog.Logger.Info("single full table data translator finished",
 		zap.String("schema", targetSchemaName),
@@ -82,115 +86,92 @@ func translatorTableFullRecord(
 // 拼接 SQL 语句
 func generateMySQLPrepareInsertSQLStatement(targetSchemaName, targetTableName string, columns []string, safeMode bool) string {
 	var prepareSQL string
-	column := fmt.Sprintf("(%s)", strings.Join(columns, ","))
+	column := util.StringsBuilder("(", strings.Join(columns, ","), ")")
 	if safeMode {
-		prepareSQL = fmt.Sprintf("REPLACE INTO %s.%s %s VALUES ",
-			targetSchemaName,
-			targetTableName,
-			column,
-		)
+		prepareSQL = util.StringsBuilder(`REPLACE INTO `, targetSchemaName, ".", targetTableName, column, ` VALUES `)
+
 	} else {
-		prepareSQL = fmt.Sprintf("INSERT INTO %s.%s %s VALUES ",
-			targetSchemaName,
-			targetTableName,
-			column,
-		)
+		prepareSQL = util.StringsBuilder(`INSERT INTO `, targetSchemaName, ".", targetTableName, column, ` VALUES `)
 	}
 	return prepareSQL
 }
 
 // 替换 Oracle 事务 SQL
 // ORACLE 数据库同步需要开附加日志且表需要捕获字段列日志，Logminer 内容 UPDATE/DELETE/INSERT 语句会带所有字段信息
-func translatorOracleIncrementRecord(
+func translatorAndApplyOracleIncrementRecord(
 	engine *db.Engine,
+	sourceTableName string,
 	targetSchema string,
-	transferTableMetaMap map[string]int, rowsResult []db.LogminerContent,
-	logfileStartSCN int, jobQueue chan Job) error {
+	rowsResult []db.LogminerContent, taskQueue chan IncrementPayload) error {
+
 	startTime := time.Now()
+	zlog.Logger.Info("oracle table increment log apply start",
+		zap.String("table", sourceTableName),
+		zap.Time("start time", startTime))
+
 	for _, rows := range rowsResult {
-		r := rows
 		// 如果 sqlRedo 存在记录则继续处理，不存在记录则报错
-		if r.SQLRedo == "" {
+		if rows.SQLRedo == "" {
 			return fmt.Errorf("does not meet expectations [oracle sql redo is be null], please check")
 		}
 
-		// 筛选过滤 Oracle Redo SQL
-		// 1、数据同步只同步 INSERT/DELETE/UPDATE DML以及只同步 truncate table/ drop table 限定 DDL
-		// 2、根据元数据表 table_increment_meta 对应表已经同步写入得 SCN SQL 记录,过滤 Oracle 提交记录 SCN 号，过滤,防止重复写入
-		if r.SCN > transferTableMetaMap[strings.ToUpper(r.TableName)] {
-			if r.Operation == util.DDLOperation {
-				splitDDL := strings.Split(r.SQLRedo, ` `)
-				ddl := fmt.Sprintf("%s %s", splitDDL[0], splitDDL[1])
-				if strings.ToUpper(ddl) == util.DropTableOperation {
-					// 处理 drop table marvin8 AS "BIN$vVWfliIh6WfgU0EEEKzOvg==$0"
-					r.SQLRedo = strings.Split(strings.ToUpper(r.SQLRedo), "AS")[0]
-				}
+		if rows.Operation == util.DDLOperation {
+			splitDDL := strings.Split(rows.SQLRedo, ` `)
+			ddl := util.StringsBuilder(splitDDL[0], ` `, splitDDL[1])
+			if strings.ToUpper(ddl) == util.DropTableOperation {
+				// 处理 drop table marvin8 AS "BIN$vVWfliIh6WfgU0EEEKzOvg==$0"
+				rows.SQLRedo = strings.Split(strings.ToUpper(rows.SQLRedo), "AS")[0]
 			}
-
-			// 移除引号
-			sqlRedo := util.ReplaceQuotesString(r.SQLRedo)
-			// 移除分号
-			sqlRedo = util.ReplaceSpecifiedString(sqlRedo, ";", "")
-
-			var sqlUndo string
-			if r.SQLUndo != "" {
-				sqlUndo = util.ReplaceQuotesString(r.SQLUndo)
-				sqlUndo = util.ReplaceSpecifiedString(sqlUndo, ";", "")
-				sqlUndo = util.ReplaceSpecifiedString(sqlUndo, fmt.Sprintf("%s.", r.SegOwner), fmt.Sprintf("%s.", strings.ToUpper(targetSchema)))
-			}
-
-			// 比如：INSERT INTO MARVIN.MARVIN1 (ID,NAME) VALUES (1,'marvin')
-			// 比如：DELETE FROM MARVIN.MARVIN7 WHERE ID = 5 and NAME = 'pyt'
-			// 比如：UPDATE MARVIN.MARVIN1 SET ID = 2 , NAME = 'marvin' WHERE ID = 2 AND NAME = 'pty'
-			// 比如: drop table marvin.marvin7
-			// 比如: truncate table marvin.marvin7
-			mysqlRedo, operationType, err := translatorOracleToMySQLSQL(sqlRedo, sqlUndo, strings.ToUpper(targetSchema))
-			if err != nil {
-				return err
-			}
-
-			// 注册任务到 Job 队列
-
-			lp := &IncrementPayload{
-				Engine:         engine,
-				GlobalSCN:      logfileStartSCN,
-				SourceTableSCN: r.SCN,
-				SourceSchema:   r.SegOwner,
-				SourceTable:    r.TableName,
-				TargetSchema:   strings.ToUpper(targetSchema),
-				TargetTable:    r.TableName,
-				OracleRedo:     sqlRedo,
-				MySQLRedo:      mysqlRedo,
-				Operation:      r.Operation,
-				OperationType:  operationType}
-
-			zlog.Logger.Info("translator oracle payload", zap.String("payload", lp.Marshal()))
-
-			jobQueue <- Job{Task: lp}
-
-		} else {
-			// 如果 source_table_scn 小于 global_scn 说明，该表一直在当前日志文件内未发现 DML 事务变更
-			// global_scn 表示日志文件起始 SCN 号
-			// 更新增量元数据表 SCN 位点信息
-			if err := engine.UpdateTableIncrementMetaOnlyGlobalSCNRecord(
-				r.SegOwner,
-				r.TableName, logfileStartSCN); err != nil {
-				return err
-			}
-			// 考虑日志可能输出太多，忽略输出
-			//zlog.Logger.Warn("filter oracle sql redo",
-			//	zap.Int("source table scn", sourceTableSCN),
-			//	zap.Int("target table scn", transferTableMetaMap[r["TABLE_NAME"]]),
-			//	zap.String("source_schema", r["SEG_OWNER"]),
-			//	zap.String("source_table", r["TABLE_NAME"]),
-			//	zap.String("sql redo", r["SQL_REDO"]),
-			//	zap.String("status", "update global scn and skip apply"))
 		}
 
+		// 移除引号
+		rows.SQLRedo = util.ReplaceQuotesString(rows.SQLRedo)
+		// 移除分号
+		rows.SQLRedo = util.ReplaceSpecifiedString(rows.SQLRedo, ";", "")
+
+		if rows.SQLUndo != "" {
+			rows.SQLUndo = util.ReplaceQuotesString(rows.SQLUndo)
+			rows.SQLUndo = util.ReplaceSpecifiedString(rows.SQLUndo, ";", "")
+			rows.SQLUndo = util.ReplaceSpecifiedString(rows.SQLUndo,
+				util.StringsBuilder(rows.SegOwner, "."),
+				util.StringsBuilder(strings.ToUpper(targetSchema), "."))
+		}
+
+		// 比如：INSERT INTO MARVIN.MARVIN1 (ID,NAME) VALUES (1,'marvin')
+		// 比如：DELETE FROM MARVIN.MARVIN7 WHERE ID = 5 and NAME = 'pyt'
+		// 比如：UPDATE MARVIN.MARVIN1 SET ID = 2 , NAME = 'marvin' WHERE ID = 2 AND NAME = 'pty'
+		// 比如: drop table marvin.marvin7
+		// 比如: truncate table marvin.marvin7
+		mysqlRedo, operationType, err := translatorOracleToMySQLSQL(rows.SQLRedo, rows.SQLUndo, strings.ToUpper(targetSchema))
+		if err != nil {
+			return err
+		}
+
+		// 注册任务到 Job 队列
+		lp := IncrementPayload{
+			Engine:         engine,
+			GlobalSCN:      rows.SCN, // 更新元数据 GLOBAL_SCN 至当前消费的 SCN 号
+			SourceTableSCN: rows.SCN,
+			SourceSchema:   rows.SegOwner,
+			SourceTable:    rows.TableName,
+			TargetSchema:   strings.ToUpper(targetSchema),
+			TargetTable:    rows.TableName,
+			OracleRedo:     rows.SQLRedo,
+			MySQLRedo:      mysqlRedo,
+			Operation:      rows.Operation,
+			OperationType:  operationType}
+
+		// 避免太多日志输出
+		//zlog.Logger.Info("translator oracle payload", zap.String("payload", lp.Marshal()))
+		taskQueue <- lp
 	}
 
+	// 任务结束，关闭通道
+	close(taskQueue)
+
 	endTime := time.Now()
-	zlog.Logger.Info("increment table log translator",
+	zlog.Logger.Info("oracle table increment log apply finished",
+		zap.String("table", sourceTableName),
 		zap.String("status", "success"),
 		zap.Time("start time", startTime),
 		zap.Time("end time", endTime),
@@ -231,26 +212,25 @@ func translatorOracleToMySQLSQL(oracleSQLRedo, oracleSQLUndo, targetSchema strin
 		stmt.Schema = targetSchema
 
 		if stmt.WhereExpr == "" {
-			deleteSQL = fmt.Sprintf("DELETE FROM %s.%s",
-				stmt.Schema,
-				stmt.Table)
+			deleteSQL = util.StringsBuilder(`DELETE FROM `, stmt.Schema, ".", stmt.Table)
 		} else {
-			deleteSQL = fmt.Sprintf("DELETE FROM %s.%s %s",
-				stmt.Schema,
-				stmt.Table,
-				stmt.WhereExpr)
+			deleteSQL = util.StringsBuilder(`DELETE FROM `, stmt.Schema, ".", stmt.Table, ` `, stmt.WhereExpr)
 		}
+
 		var (
 			values []string
 		)
 		for _, col := range stmt.Columns {
 			values = append(values, stmt.Data[col].(string))
 		}
-		insertSQL := fmt.Sprintf("INSERT INTO %s.%s (%s) VALUES (%s)",
-			stmt.Schema,
-			stmt.Table,
+		insertSQL := util.StringsBuilder(`INSERT INTO `, stmt.Schema, ".", stmt.Table,
+			"(",
 			strings.Join(stmt.Columns, ","),
-			strings.Join(values, ","))
+			")",
+			` VALUES `,
+			"(",
+			strings.Join(values, ","),
+			")")
 
 		sqls = append(sqls, deleteSQL)
 		sqls = append(sqls, insertSQL)
@@ -264,11 +244,14 @@ func translatorOracleToMySQLSQL(oracleSQLRedo, oracleSQLUndo, targetSchema strin
 		for _, col := range stmt.Columns {
 			values = append(values, stmt.Data[col].(string))
 		}
-		replaceSQL := fmt.Sprintf("REPLACE INTO %s.%s (%s) VALUES (%s)",
-			stmt.Schema,
-			stmt.Table,
+		replaceSQL := util.StringsBuilder(`REPLACE INTO `, stmt.Schema, ".", stmt.Table,
+			"(",
 			strings.Join(stmt.Columns, ","),
-			strings.Join(values, ","))
+			")",
+			` VALUES `,
+			"(",
+			strings.Join(values, ","),
+			")")
 
 		sqls = append(sqls, replaceSQL)
 
@@ -278,14 +261,9 @@ func translatorOracleToMySQLSQL(oracleSQLRedo, oracleSQLUndo, targetSchema strin
 		var deleteSQL string
 
 		if stmt.WhereExpr == "" {
-			deleteSQL = fmt.Sprintf("DELETE FROM %s.%s",
-				stmt.Schema,
-				stmt.Table)
+			deleteSQL = util.StringsBuilder(`DELETE FROM `, stmt.Schema, ".", stmt.Table)
 		} else {
-			deleteSQL = fmt.Sprintf("DELETE FROM %s.%s %s",
-				stmt.Schema,
-				stmt.Table,
-				stmt.WhereExpr)
+			deleteSQL = util.StringsBuilder(`DELETE FROM `, stmt.Schema, ".", stmt.Table, ` `, stmt.WhereExpr)
 		}
 
 		sqls = append(sqls, deleteSQL)
@@ -294,19 +272,14 @@ func translatorOracleToMySQLSQL(oracleSQLRedo, oracleSQLUndo, targetSchema strin
 		operationType = util.TruncateTableOperation
 		stmt.Schema = targetSchema
 
-		truncateSQL := fmt.Sprintf("TRUNCATE TABLE %s.%s",
-			stmt.Schema,
-			stmt.Table)
-
+		truncateSQL := util.StringsBuilder(`TRUNCATE TABLE `, stmt.Schema, ".", stmt.Table)
 		sqls = append(sqls, truncateSQL)
 
 	case stmt.Operation == util.DropOperation:
 		operationType = util.DropTableOperation
 		stmt.Schema = targetSchema
 
-		dropSQL := fmt.Sprintf("DROP TABLE %s.%s",
-			stmt.Schema,
-			stmt.Table)
+		dropSQL := util.StringsBuilder(`DROP TABLE `, stmt.Schema, ".", stmt.Table)
 
 		sqls = append(sqls, dropSQL)
 	}

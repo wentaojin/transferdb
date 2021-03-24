@@ -19,6 +19,7 @@ import (
 	"flag"
 	"log"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 
 	"github.com/WentaoJin/transferdb/pkg/signal"

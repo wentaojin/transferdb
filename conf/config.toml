@@ -13,6 +13,8 @@
 # 事务 batch 数
 # 用于数据写入 batch 提交事务数
 insert-batch-size = 500
+# 是否开启更新元数据库表慢日志,单位毫秒，默认 300ms
+slowlog-threshold = 300
 
 [reverse]
 # 任务并发
@@ -24,9 +26,9 @@ reverse-threads = 8
 # 1、用于判断每张表切分多少份
 # 2、代表并发处理多少行数
 worker-batch = 5
-# 切分 SQL 任务并发数
+# 表导出导入并发数
 worker-threads = 3
-# 单表并发数
+# 单表 SQL 执行并发数
 table-threads = 3
 # 关于全量断点恢复
 #   - 若想断点恢复，设置 enable-checkpoint true,首次一旦运行则 worker-batch 数不能调整，
@@ -34,11 +36,13 @@ table-threads = 3
 enable-checkpoint = true
 
 [all]
-# 最大并发捕获表数，不建议太大，并发越大可能对上游压力会更大
-extractor-threads = 3
-# 最大工作对列
+# 并发筛选 oracle 日志数
+filter-threads = 16
+# 并发表应用数，同时处理多少张表
+apply-threads = 3
+# apply-threads 每个表并发处理最大工作对列
 worker-queue = 3
-# 最大并发数据库应用线程数
+# apply-threads 每个表并发处理最大任务分发数
 worker-threads = 3
 
 [source]

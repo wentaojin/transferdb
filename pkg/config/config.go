@@ -35,7 +35,8 @@ type CfgFile struct {
 }
 
 type AppConfig struct {
-	InsertBatchSize int `toml:"insert-batch-size" json:"insert-batch-size"`
+	InsertBatchSize  int `toml:"insert-batch-size" json:"insert-batch-size"`
+	SlowlogThreshold int `toml:"slowlog-threshold" json:"slowlog-threshold"`
 }
 
 type ReverseConfig struct {
@@ -57,9 +58,10 @@ type IncrementConfig struct {
 }
 
 type AllConfig struct {
-	ExtractorThreads int `toml:"extractor-threads" json:"extractor-threads"`
-	WorkerQueue      int `toml:"worker-queue" json:"worker-queue"`
-	WorkerThreads    int `toml:"worker-threads" json:"worker-threads"`
+	FilterThreads int `toml:"filter-threads" json:"filter-threads"`
+	ApplyThreads  int `toml:"apply-threads" json:"apply-threads"`
+	WorkerQueue   int `toml:"worker-queue" json:"worker-queue"`
+	WorkerThreads int `toml:"worker-threads" json:"worker-threads"`
 }
 
 type SourceConfig struct {

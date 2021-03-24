@@ -16,142 +16,99 @@ limitations under the License.
 package taskflow
 
 import (
-	"os"
+	"encoding/json"
+	"sync"
 
+	"github.com/WentaoJin/transferdb/db"
 	"github.com/WentaoJin/transferdb/zlog"
 	"go.uber.org/zap"
 )
 
-// 定义任务接口
-// 所有实现接口即实现工作池
-type Task interface {
-	Run() error      // 任务处理
-	Marshal() string // 任务序列化
+type IncrementPayload struct {
+	GlobalSCN      int        `json:"global_scn"`
+	SourceTableSCN int        `json:"source_table_scn"`
+	SourceSchema   string     `json:"source_schema"`
+	SourceTable    string     `json:"source_table"`
+	TargetSchema   string     `json:"target_schema"`
+	TargetTable    string     `json:"target_table"`
+	Operation      string     `json:"operation"`
+	OracleRedo     string     `json:"oracle_redo"` // Oracle 已执行 SQL
+	MySQLRedo      []string   `json:"mysql_redo"`  // MySQL 待执行 SQL
+	OperationType  string     `json:"operation_type"`
+	Engine         *db.Engine `json:"-"`
 }
 
-// 定义工作结构体
-type Job struct {
-	Task Task
+type IncrementResult struct {
+	Payload IncrementPayload
+	Status  bool
 }
 
-// 定义工作者
-// 执行任务 job
-type Worker struct {
-	WorkerID   int           // 工作者 ID -> 线程 ID
-	WorkerPool chan chan Job // 工人对象池
-	JobQueue   chan Job      // 工作任务队列 ->管道取 Job
-	Quit       chan bool
-}
-
-// 新建工作者
-func NewWorker(workerID int, workerPool chan chan Job) *Worker {
-	return &Worker{
-		WorkerID:   workerID,
-		WorkerPool: workerPool,
-		JobQueue:   make(chan Job),
-		Quit:       make(chan bool),
+// 任务同步
+func (p *IncrementPayload) Run() error {
+	// 数据写入
+	if err := applierTableIncrementRecord(p.MySQLRedo, p.Engine); err != nil {
+		zlog.Logger.Error("apply table increment record failed",
+			zap.String("payload", p.Marshal()),
+			zap.Error(err))
+		return err
 	}
+
+	// 数据写入完毕，更新元数据 checkpoint 表
+	// 如果同步中断，数据同步使用会以 global_scn 为准，也就是会进行重复消费
+	if err := p.Engine.UpdateTableIncrementMetaALLSCNRecord(p.SourceSchema, p.SourceTable, p.OperationType, p.GlobalSCN, p.SourceTableSCN); err != nil {
+		zlog.Logger.Error("update table increment scn record failed",
+			zap.String("payload", p.Marshal()),
+			zap.Error(err))
+		return err
+	}
+	return nil
 }
 
-// Start 方法启动工作程序的运行循环，侦听退出通道
-func (w *Worker) Start() {
-	go func() {
-		for {
-			// 注册任务队列到工作池
-			w.WorkerPool <- w.JobQueue
-			select {
-			case job := <-w.JobQueue:
-				// 从工作队列中取任务并处理
-				if err := job.Task.Run(); err != nil {
-					zlog.Logger.Error("Worker",
-						zap.Int("threadID", w.WorkerID),
-						zap.String("task", job.Task.Marshal()),
-						zap.String("error", err.Error()))
+// 序列化
+func (p *IncrementPayload) Marshal() string {
+	b, err := json.Marshal(&p)
+	if err != nil {
+		zlog.Logger.Error("marshal task to string",
+			zap.String("string", string(b)),
+			zap.Error(err))
+	}
+	return string(b)
+}
 
-					w.Stop()
-				}
+func CreateWorkerPool(numOfWorkers int, jobQueue chan IncrementPayload, resultQueue chan IncrementResult) {
+	var wg sync.WaitGroup
+	for i := 0; i < numOfWorkers; i++ {
+		wg.Add(1)
+		go worker(&wg, jobQueue, resultQueue)
+	}
+	wg.Wait()
+	close(resultQueue)
+}
 
-			case <-w.Quit:
-				// 接受退出信号量，停止任务
-				// 监听信号量并退出处理
-				zlog.Logger.Panic("Stopped", zap.Int("threadID", w.WorkerID))
-				os.Exit(1)
-				return
+func GetIncrementResult(done chan bool, resultQueue chan IncrementResult) {
+	for result := range resultQueue {
+		if !result.Status {
+			zlog.Logger.Fatal("task increment table record",
+				zap.String("payload", result.Payload.Marshal()))
+		}
+	}
+	done <- true
+}
+
+func worker(wg *sync.WaitGroup, jobQueue chan IncrementPayload, resultQueue chan IncrementResult) {
+	defer wg.Done()
+	for job := range jobQueue {
+		if err := job.Run(); err != nil {
+			result := IncrementResult{
+				Payload: job,
+				Status:  false,
 			}
+			resultQueue <- result
 		}
-	}()
-}
-
-// Stop 退出执行工作
-func (w *Worker) Stop() {
-	go func() {
-		w.Quit <- true
-	}()
-}
-
-// 工作分发者结构体
-type Dispatcher struct {
-	MaxWorker  int           // 最大并发数
-	WorkerPool chan chan Job // 向工作分发者注册工作通道
-	JobQueue   chan Job      // 任务队列
-	Quit       chan bool     //退出信号
-}
-
-// 新建工作分发者,返回一个新调度分发对象
-func NewDispatcher(maxWorker int, jobQueue chan Job) *Dispatcher {
-	return &Dispatcher{
-		JobQueue:   jobQueue,                       // 工作任务队列
-		MaxWorker:  maxWorker,                      // 最大并发数 -> 工作者数
-		WorkerPool: make(chan chan Job, maxWorker), // 将工作者放到工作池
-		Quit:       make(chan bool),
-	}
-}
-
-// 工作分发器 -> 运行
-func (d *Dispatcher) Run() {
-	// 初始化一定数量的工作者
-	for i := 1; i <= d.MaxWorker; i++ {
-		worker := NewWorker(i, d.WorkerPool)
-		worker.Start()
-	}
-	// 监控任务调度发送给工作者
-	go d.Dispatch()
-}
-
-// 退出任务调度发送工作
-func (d *Dispatcher) Stop() {
-	go func() {
-		d.Quit <- true
-	}()
-}
-
-// 任务调度分发
-func (d *Dispatcher) Dispatch() {
-	for {
-		select {
-		// 接收到任务
-		case job := <-d.JobQueue:
-			go func(job Job) {
-				// 尝试获取可用的工作机会渠道
-				// 这将阻塞直到工人空闲
-				jobChan := <-d.WorkerPool
-				// 分发任务 job 到工作 job 队列 channel
-				jobChan <- job
-			}(job)
-		// 退出任务分发
-		case <-d.Quit:
-			return
+		result := IncrementResult{
+			Payload: job,
+			Status:  true,
 		}
+		resultQueue <- result
 	}
-}
-
-// 初始化对象池
-func InitWorkerPool(maxWorker, maxQueue int) chan Job {
-	// 创建任务缓冲队列
-	jobQueue := make(chan Job, maxQueue)
-	// 初始化一个任务发送者,指定工作者数量
-	dispatcher := NewDispatcher(maxWorker, jobQueue)
-	// 一直运行任务调度
-	dispatcher.Run()
-	return jobQueue
 }

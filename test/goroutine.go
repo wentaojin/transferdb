@@ -17,33 +17,74 @@ package main
 
 import (
 	"fmt"
+	"strings"
+
+	"github.com/WentaoJin/transferdb/pkg/taskflow"
+
+	"github.com/WentaoJin/transferdb/db"
 
 	"github.com/xxjwxc/gowp/workpool"
 )
 
 func main() {
-	var data [][]int
-	data1 := []int{10, 11}
-	data2 := []int{12, 13}
-	data3 := []int{14, 15}
-	data = append(data, data1)
-	data = append(data, data2)
-	data = append(data, data3)
-	fmt.Println(data)
+	tableList := []string{"a", "b", "c"}
 
-	for i := 0; i < 3; i++ {
-		var gather []int
-		wp := workpool.New(2)
-		for _, dt := range data {
-			ft := dt
-			wp.Do(func() error {
-				gather = append(gather, ft...)
-				return nil
-			})
-		}
-		if err := wp.Wait(); err != nil {
-			fmt.Println(err)
-		}
-		fmt.Println(gather)
+	var (
+		lcMap map[string][]db.LogminerContent
+		lc    []db.LogminerContent
+	)
+	lcMap = make(map[string][]db.LogminerContent)
+
+	for _, table := range tableList {
+		lcMap[strings.ToUpper(table)] = lc
 	}
+	fmt.Println(lcMap)
+
+	c := make(chan struct{})
+	// new 了这个 job 后，该 job 就开始准备从 channel 接收数据了
+	s := taskflow.NewScheduleJob(1, lcMap, func() { c <- struct{}{} })
+
+	data := []db.LogminerContent{
+		{
+			SCN:       0,
+			SegOwner:  "c",
+			TableName: "a",
+			SQLRedo:   "",
+			SQLUndo:   "",
+			Operation: "",
+		},
+		{
+			SCN:       1,
+			SegOwner:  "c",
+			TableName: "b",
+			SQLRedo:   "",
+			SQLUndo:   "",
+			Operation: "",
+		},
+		{
+			SCN:       3,
+			SegOwner:  "c",
+			TableName: "a",
+			SQLRedo:   "",
+			SQLUndo:   "",
+			Operation: "",
+		},
+	}
+
+	wp := workpool.New(3)
+	for _, dt := range data {
+		r := dt
+		wp.DoWait(func() error {
+			if r.SCN >= 1 {
+				s.AddData(r)
+			}
+			return nil
+		})
+	}
+	if err := wp.Wait(); err != nil {
+		fmt.Println(err)
+	}
+	s.Close()
+	<-c
+	fmt.Println(lcMap)
 }

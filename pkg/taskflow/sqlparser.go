@@ -17,8 +17,9 @@ package taskflow
 
 import (
 	"encoding/json"
-	"fmt"
 	"strings"
+
+	"github.com/WentaoJin/transferdb/util"
 
 	"go.uber.org/zap"
 
@@ -61,8 +62,8 @@ type Stmt struct {
 // WARNING: sql parser Format() has be discrepancy ,be is instead of Restore()
 func (v *Stmt) Enter(in ast.Node) (ast.Node, bool) {
 	if node, ok := in.(*ast.TableName); ok {
-		v.Schema = fmt.Sprintf("`%s`", strings.ToUpper(node.Schema.String()))
-		v.Table = fmt.Sprintf("`%s`", strings.ToUpper(node.Name.String()))
+		v.Schema = util.StringsBuilder("`", strings.ToUpper(node.Schema.String()), "`")
+		v.Table = util.StringsBuilder("`", strings.ToUpper(node.Name.String()), "`")
 	}
 
 	if node, ok := in.(*ast.UpdateStmt); ok {
@@ -86,13 +87,14 @@ func (v *Stmt) Enter(in ast.Node) (ast.Node, bool) {
 			if node, ok := node.Where.Accept(v); ok {
 				if exprNode, ok := node.(ast.ExprNode); ok {
 					var sb strings.Builder
+					sb.WriteString("WHERE ")
 					flags := format.DefaultRestoreFlags
 					err := exprNode.Restore(format.NewRestoreCtx(flags, &sb))
 					if err != nil {
 						zlog.Logger.Error("sql parser failed",
 							zap.String("stmt", v.Marshal()))
 					}
-					v.WhereExpr = fmt.Sprintf("WHERE %v", sb.String())
+					v.WhereExpr = sb.String()
 				}
 			}
 			beforeData(node.Where, v.Before)
@@ -104,7 +106,7 @@ func (v *Stmt) Enter(in ast.Node) (ast.Node, bool) {
 		v.Operation = "INSERT"
 		v.Data = make(map[string]interface{}, 1)
 		for i, col := range node.Columns {
-			v.Columns = append(v.Columns, fmt.Sprintf("`%v`", strings.ToUpper(col.String())))
+			v.Columns = append(v.Columns, util.StringsBuilder("`", strings.ToUpper(col.String()), "`"))
 			for _, lists := range node.Lists {
 				var sb strings.Builder
 				flags := format.DefaultRestoreFlags
@@ -113,7 +115,7 @@ func (v *Stmt) Enter(in ast.Node) (ast.Node, bool) {
 					zlog.Logger.Error("sql parser failed",
 						zap.String("stmt", v.Marshal()))
 				}
-				v.Data[fmt.Sprintf("`%v`", strings.ToUpper(col.String()))] = sb.String()
+				v.Data[util.StringsBuilder("`", strings.ToUpper(col.String()), "`")] = sb.String()
 			}
 		}
 	}
@@ -126,13 +128,14 @@ func (v *Stmt) Enter(in ast.Node) (ast.Node, bool) {
 			if node, ok := node.Where.Accept(v); ok {
 				if exprNode, ok := node.(ast.ExprNode); ok {
 					var sb strings.Builder
+					sb.WriteString("WHERE ")
 					flags := format.DefaultRestoreFlags
 					err := exprNode.Restore(format.NewRestoreCtx(flags, &sb))
 					if err != nil {
 						zlog.Logger.Error("sql parser failed",
 							zap.String("stmt", v.Marshal()))
 					}
-					v.WhereExpr = fmt.Sprintf("WHERE %v", sb.String())
+					v.WhereExpr = sb.String()
 				}
 			}
 			beforeData(node.Where, v.Before)
@@ -157,7 +160,7 @@ func (v *Stmt) Marshal() string {
 	if err != nil {
 		zlog.Logger.Error("marshal stmt to string",
 			zap.String("string", string(b)),
-			zap.String("error", fmt.Sprintf("json marshal task failed: %v", err)))
+			zap.Error(err))
 	}
 	return string(b)
 }

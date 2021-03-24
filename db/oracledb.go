@@ -74,12 +74,10 @@ func (e *Engine) QueryFormatOracleRows(querySQL string) ([]string, []string, err
 		rowsResult []string
 	)
 	rows, err := e.OracleDB.Query(querySQL)
-	if err == nil {
-		defer rows.Close()
-	}
 	if err != nil {
 		return cols, rowsResult, err
 	}
+	defer rows.Close()
 
 	cols, err = rows.Columns()
 	if err != nil {
@@ -129,7 +127,7 @@ func (e *Engine) QueryFormatOracleRows(querySQL string) ([]string, []string, err
 				case ok && columnTypes[i] != "string":
 					result[i] = string(raw)
 				default:
-					result[i] = fmt.Sprintf("'%s'", string(raw))
+					result[i] = util.StringsBuilder("'", string(raw), "'")
 				}
 
 			}
@@ -143,7 +141,7 @@ func (e *Engine) QueryFormatOracleRows(querySQL string) ([]string, []string, err
 
 	for _, row := range actualRows {
 		//数据按行返回，格式如下：(1,2) (2,3) ,用于数据拼接 batch
-		rowsResult = append(rowsResult, fmt.Sprintf("(%s)", strings.Join(row, ",")))
+		rowsResult = append(rowsResult, util.StringsBuilder("(", strings.Join(row, ","), ")"))
 	}
 
 	return cols, rowsResult, nil

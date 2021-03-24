@@ -37,6 +37,7 @@ func TransferDBEnvPrepare(cfg *config.CfgFile) error {
 		cfg.TargetConfig.Host,
 		cfg.TargetConfig.Port,
 		cfg.TargetConfig.MetaSchema,
+		cfg.AppConfig.SlowlogThreshold,
 	)
 	if err != nil {
 		return err
