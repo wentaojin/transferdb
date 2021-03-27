@@ -187,22 +187,38 @@ func (e *Engine) GetOracleTableCheckKey(schemaName string, tableName string) ([]
 }
 
 func (e *Engine) GetOracleTableForeignKey(schemaName string, tableName string) ([]map[string]string, error) {
-	querySQL := fmt.Sprintf(`select t1.table_name,
-       t2.table_name        as RTABLE_NAME,
-       t1.constraint_name,
-       -- t1.r_constraint_name as RCONSTRAINT_NAME,
-       a1.column_name,
-       a2.column_name       as RCOLUMN_NAME
-  from all_constraints  t1,
-       all_constraints  t2,
-       all_cons_columns a1,
-       all_cons_columns a2
- where t1.r_constraint_name = t2.constraint_name
-   and t1.constraint_name = a1.constraint_name
-   and t1.r_constraint_name = a2.constraint_name
-  and upper(t1.table_name) = upper('%s')
-   and upper(t1.owner) = upper('%s')`,
+	querySQL := fmt.Sprintf(`with temp1 as
+ (select t1.r_owner,
+         t1.constraint_name,
+         t1.r_constraint_name,
+         LISTAGG(a1.column_name, ',') WITHIN GROUP(ORDER BY a1.POSITION) AS COLUMN_LIST
+    from all_constraints t1, all_cons_columns a1
+   where t1.constraint_name = a1.constraint_name
+     AND upper(t1.table_name) = upper('%s')
+     AND upper(t1.owner) = upper('%s')
+     AND t1.STATUS = 'ENABLED'
+     AND t1.Constraint_Type = 'R'
+   group by t1.r_owner, t1.constraint_name, t1.r_constraint_name),
+temp2 as
+ (select t1.owner,
+         t1.constraint_name,
+         LISTAGG(a1.column_name, ',') WITHIN GROUP(ORDER BY a1.POSITION) AS COLUMN_LIST
+    from all_constraints t1, all_cons_columns a1
+   where t1.constraint_name = a1.constraint_name
+     AND upper(t1.owner) = upper('%s')
+     AND t1.STATUS = 'ENABLED'
+     AND t1.Constraint_Type = 'P'
+   group by t1.owner, t1.r_owner, t1.constraint_name)
+select x.constraint_name,
+       x.COLUMN_LIST,
+       x.r_owner,
+       x.r_constraint_name as RCONSTRAINT_NAME,
+       y.COLUMN_LIST as RCOLUMN_LIST
+  from temp1 x, temp2 y
+ where x.r_owner = y.owner
+   and x.r_constraint_name = y.constraint_name`,
 		strings.ToUpper(tableName),
+		strings.ToUpper(schemaName),
 		strings.ToUpper(schemaName))
 	_, res, err := Query(e.OracleDB, querySQL)
 	if err != nil {

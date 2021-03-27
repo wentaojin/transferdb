@@ -30,7 +30,7 @@ import (
 )
 
 // 处理退出信号量
-func SetupSignalHandler(shutdownFunc func(bool)) {
+func SetupSignalHandler(shutdownFunc func()) {
 	usrDefSignalChan := make(chan os.Signal, 1)
 
 	signal.Notify(usrDefSignalChan, syscall.SIGUSR1)
@@ -56,6 +56,6 @@ func SetupSignalHandler(shutdownFunc func(bool)) {
 	go func() {
 		sig := <-closeSignalChan
 		zlog.Logger.Info("got signal to exit", zap.Stringer("signal", sig))
-		shutdownFunc(sig == syscall.SIGQUIT)
+		shutdownFunc()
 	}()
 }

@@ -453,11 +453,12 @@ func (t Table) reverserOracleTableKeyToMySQL() ([]string, error) {
 	}
 	if len(foreignKeyMap) > 0 {
 		for _, rowFKCol := range foreignKeyMap {
-			fk := fmt.Sprintf("CONSTRAINT `%s` FOREIGN KEY(`%s`) REFERENCES `%s`(`%s`)",
+			fk := fmt.Sprintf("CONSTRAINT `%s` FOREIGN KEY(%s) REFERENCES `%s`.`%s`(%s)",
 				strings.ToLower(rowFKCol["CONSTRAINT_NAME"]),
-				strings.ToLower(rowFKCol["COLUMN_NAME"]),
-				strings.ToLower(rowFKCol["RTABLE_NAME"]),
-				strings.ToLower(rowFKCol["RCOLUMN_NAME"]))
+				strings.ToLower(rowFKCol["COLUMN_LIST"]),
+				strings.ToLower(rowFKCol["R_OWNER"]),
+				strings.ToLower(rowFKCol["RCONSTRAINT_NAME"]),
+				strings.ToLower(rowFKCol["RCOLUMN_LIST"]))
 			keysMeta = append(keysMeta, fk)
 		}
 	}

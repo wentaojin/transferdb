@@ -78,7 +78,7 @@ func (e *Engine) IsNotExistMySQLTableIncrementMetaRecord() (bool, error) {
 // 2、更新同步数据表元信息
 func (e *Engine) ModifyMySQLTableMetaRecord(metaSchemaName, sourceSchemaName, sourceTableName, rowidSQL string) error {
 	if err := e.GormDB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.
+		if err := tx.Model(TableFullMeta{}).
 			Where(`upper(source_schema_name) = ? AND upper(source_table_name)= ? AND upper(rowid_sql)= ?`,
 				strings.ToUpper(sourceSchemaName),
 				strings.ToUpper(sourceTableName),

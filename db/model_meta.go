@@ -20,14 +20,16 @@ import (
 	"strings"
 	"time"
 
+	"gorm.io/gorm"
+
 	"github.com/WentaoJin/transferdb/util"
 )
 
 // 同步元数据表
 type TableMeta struct {
 	ID               uint       `gorm:"primary_key;autoIncrement;comment:'自增编号'" json:"id"`
-	SourceSchemaName string     `gorm:"not null;index:idx_schema_table;comment:'源端 schema'" json:"source_schema_name"`
-	SourceTableName  string     `gorm:"not null;index:idx_schema_table;comment:'源端表名'" json:"source_table_name"`
+	SourceSchemaName string     `gorm:"not null;index:idx_schema_table,unique;comment:'源端 schema'" json:"source_schema_name"`
+	SourceTableName  string     `gorm:"not null;index:idx_schema_table,unique;comment:'源端表名'" json:"source_table_name"`
 	FullGlobalSCN    int        `gorm:"comment:'全量全局 SCN'" json:"full_global_scn"`
 	FullSplitTimes   int        `gorm:"comment:'全量任务切分 SQL 次数'" json:"full_split_times"`
 	CreatedAt        *time.Time `gorm:"type:timestamp;not null;default:current_timestamp;comment:'创建时间'" json:"createdAt"`
@@ -80,10 +82,22 @@ func (i *TableIncrementMeta) GetTableIncrementMetaRowCounts(engine *Engine) (int
 
 func (e *Engine) UpdateTableIncrementMetaALLSCNRecord(sourceSchemaName, sourceTableName, operationType string, globalSCN, sourceTableSCN int) error {
 	if operationType == util.DropTableOperation {
-		if err := e.GormDB.Where("upper(source_schema_name) = ? and upper(source_table_name) = ?",
-			strings.ToUpper(sourceSchemaName),
-			strings.ToUpper(sourceTableName)).
-			Delete(&TableIncrementMeta{}).Error; err != nil {
+		if err := e.GormDB.Transaction(func(tx *gorm.DB) error {
+			if err := tx.Where("upper(source_schema_name) = ? and upper(source_table_name) = ?",
+				strings.ToUpper(sourceSchemaName),
+				strings.ToUpper(sourceTableName)).
+				Delete(&TableIncrementMeta{}).Error; err != nil {
+				return err
+			}
+
+			if err := tx.Where("upper(source_schema_name) = ? and upper(source_table_name) = ?",
+				strings.ToUpper(sourceSchemaName),
+				strings.ToUpper(sourceTableName)).
+				Delete(&TableMeta{}).Error; err != nil {
+				return err
+			}
+			return nil
+		}); err != nil {
 			return err
 		}
 		return nil

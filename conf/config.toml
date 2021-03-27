@@ -33,6 +33,7 @@ table-threads = 3
 # 关于全量断点恢复
 #   - 若想断点恢复，设置 enable-checkpoint true,首次一旦运行则 worker-batch 数不能调整，
 #   - 若不想断点恢复或者重新调整 worker-batch 数，设置 enable-checkpoint false,重新运行全量任务
+#   - 有可能无法断点续传，则需要设置  enable-checkpoint false 重新导入导出
 enable-checkpoint = true
 
 [all]
