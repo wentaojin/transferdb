@@ -103,19 +103,27 @@ func (e *Engine) GetOracleArchivedLogFile(scn string) ([]map[string]string, erro
 	return res, nil
 }
 
-func (e *Engine) GetOracleCurrentRedoMaxSCN() (int, error) {
-	_, res, err := Query(e.OracleDB, util.StringsBuilder(`SELECT NEXT_CHANGE# MAX_SCN FROM V$LOG WHERE STATUS='CURRENT'`))
+func (e *Engine) GetOracleCurrentRedoMaxSCN() (int, string, error) {
+	_, res, err := Query(e.OracleDB, util.StringsBuilder(`SELECT 
+       L.NEXT_CHANGE# AS NEXT_CHANGE,
+       lf.MEMBER LOG_FILE
+  FROM v$LOGFILE lf, v$LOG l
+ WHERE l.GROUP# = lf.GROUP#
+ AND l.STATUS='CURRENT'`))
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
-	maxSCN, err := strconv.Atoi(res[0]["MAX_SCN"])
+	if len(res) == 0 {
+		return 0, "", fmt.Errorf("oracle current redo log can't null")
+	}
+	maxSCN, err := strconv.Atoi(res[0]["NEXT_CHANGE"])
 	if err != nil {
-		return maxSCN, fmt.Errorf("GetOracleCurrentRedoMaxSCN strconv.Atoi falied: %v", err)
+		return maxSCN, res[0]["LOG_FILE"], fmt.Errorf("GetOracleCurrentRedoMaxSCN strconv.Atoi falied: %v", err)
 	}
 	if maxSCN == 0 {
-		return maxSCN, fmt.Errorf("GetOracleCurrentRedoMaxSCN value is euqal to 0, does't meet expectations")
+		return maxSCN, res[0]["LOG_FILE"], fmt.Errorf("GetOracleCurrentRedoMaxSCN value is euqal to 0, does't meet expectations")
 	}
-	return maxSCN, nil
+	return maxSCN, res[0]["LOG_FILE"], nil
 }
 
 func (e *Engine) GetMySQLTableIncrementMetaMinGlobalSCNTime(sourceSchemaName string) (int, error) {

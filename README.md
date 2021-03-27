@@ -11,6 +11,7 @@ transferdb 用于异构数据库迁移（ Oracle 数据库 -> MySQL 数据库）
 4. 数据同步【数据同步需要存在主键或者唯一键】
    1. FULL 模式【全量数据导出导入】
       1. 数据同步导出导入要求表存在主键或者唯一键，否则因异常错误退出或者手工中断退出，断点续传【replace into】无法替换，数据可能会导致重复【除非手工清理下游重新导入】
+      2. 断点续传稳定待验证测试【TODO】
    2. ALL 模式【全量导出导入 + 增量数据同步】
       1. 增量基于 logminer 日志数据同步，存在 logminer 同等限制，且只同步 INSERT/DELETE/UPDATE 以及 DROP TABLE/TRUNCATE TABLE DDL，执行过 TRUNCATE TABLE/ DROP TABLE 可能需要重新增加表附加日志
       2. 基于 logminer 日志数据同步，挖掘速率取决于重做日志磁盘+归档日志磁盘【若在归档日志中】以及 PGA 内存
@@ -89,7 +90,7 @@ alter database archivelog;
 -- 最小附加日志【必须选项】
 ALTER DATABASE ADD supplemental LOG DATA ;
 
--- 表级别或者库级别选其一，一般只针对同步表开启即可【必须选项】
+-- 表级别或者库级别选其一，一般只针对同步表开启即可【必须选项】，未开启会导致同步存在问题
 --增加表级别附加日志
 ALTER TABLE marvin.marvin4 ADD supplemental LOG DATA (all) COLUMNS;
 ALTER TABLE marvin.marvin7 ADD supplemental LOG DATA (all) COLUMNS;
@@ -100,7 +101,7 @@ ALTER TABLE marvin.marvin4 DROP supplemental LOG DATA (all) COLUMNS;
 ALTER TABLE marvin.marvin7 DROP supplemental LOG DATA (all) COLUMNS;
 ALTER TABLE marvin.marvin8 DROP supplemental LOG DATA (all) COLUMNS;
 
---增加或删除库级别附加日志
+--增加或删除库级别附加日志【库级别、表级别二选一】
 ALTER DATABASE ADD supplemental LOG DATA (all) COLUMNS;
 ALTER DATABASE DROP supplemental LOG DATA (all) COLUMNS;
 
@@ -118,4 +119,11 @@ select * from dba_log_groups where upper(owner) = upper('marvin');
 
 -- 查看不同用户的连接数
 select username,count(username) from v$session where username is not null group by username;
+```
+
+若直接在命令行中用 `nohup` 启动程序，可能会因为 SIGHUP 信号而退出，建议把 `nohup` 放到脚本里面且不建议用 kill -9，如：
+
+```shell
+#!/bin/bash
+nohup ./transferdb -config config.toml --mode all > nohup.out &
 ```

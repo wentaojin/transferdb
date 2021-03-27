@@ -4,10 +4,10 @@
 #   - 优先级：表字段类型 > 库字段类型 两者都没配置默认采用内置转换规则
 # reverse（必须）:
 #   1、根据内置表结构转换规则或者手工配置表结构转换规则进行 schema 迁移
-# all: DONE
+# all: TODO: 待测试
 #   1、全量数据迁移
 #   2、增量数据迁移
-# full: DONE
+# full: TODO: 待测试断点续传
 #   1、全量数据迁移 -> REPLACE INTO
 [app]
 # 事务 batch 数
@@ -26,7 +26,7 @@ reverse-threads = 8
 # 1、用于判断每张表切分多少份
 # 2、代表并发处理多少行数
 worker-batch = 5
-# 表导出导入并发数
+# 表导出导入并发数，同时处理多少张表
 worker-threads = 3
 # 单表 SQL 执行并发数
 table-threads = 3

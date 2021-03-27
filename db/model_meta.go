@@ -20,18 +20,18 @@ import (
 	"strings"
 	"time"
 
-	"gorm.io/gorm"
-
 	"github.com/WentaoJin/transferdb/util"
 )
 
 // 同步元数据表
 type TableMeta struct {
-	ID               uint   `gorm:"primary_key;autoIncrement;comment:'自增编号'" json:"id"`
-	SourceSchemaName string `gorm:"not null;index:idx_schema_table;comment:'源端 schema'" json:"source_schema_name"`
-	SourceTableName  string `gorm:"not null;index:idx_schema_table;comment:'源端表名'" json:"source_table_name"`
-	FullGlobalSCN    int    `gorm:"comment:'全量全局 SCN'" json:"full_global_scn"`
-	FullSplitTimes   int    `gorm:"comment:'全量任务切分 SQL 次数'" json:"full_split_times"`
+	ID               uint       `gorm:"primary_key;autoIncrement;comment:'自增编号'" json:"id"`
+	SourceSchemaName string     `gorm:"not null;index:idx_schema_table;comment:'源端 schema'" json:"source_schema_name"`
+	SourceTableName  string     `gorm:"not null;index:idx_schema_table;comment:'源端表名'" json:"source_table_name"`
+	FullGlobalSCN    int        `gorm:"comment:'全量全局 SCN'" json:"full_global_scn"`
+	FullSplitTimes   int        `gorm:"comment:'全量任务切分 SQL 次数'" json:"full_split_times"`
+	CreatedAt        *time.Time `gorm:"type:timestamp;not null;default:current_timestamp;comment:'创建时间'" json:"createdAt"`
+	UpdatedAt        *time.Time `gorm:"type:timestamp;not null on update current_timestamp;default:current_timestamp;comment:'更新时间'" json:"updatedAt"`
 }
 
 // 全量同步元数据表
@@ -97,11 +97,8 @@ func (e *Engine) UpdateTableIncrementMetaALLSCNRecord(sourceSchemaName, sourceTa
 	return nil
 }
 
-func (e *Engine) UpdateSingleTableIncrementMetaSCNByLogFileEndSCN(sourceSchemaName, sourceTableName string, logFileStartSCN, logFileEndSCN int) error {
-	maxLogFileSCN, err := e.GetOracleCurrentRedoMaxSCN()
-	if err != nil {
-		return err
-	}
+func (e *Engine) UpdateSingleTableIncrementMetaSCNByCurrentRedo(
+	sourceSchemaName string, maxLogFileSCN, logFileStartSCN, logFileEndSCN int) error {
 	var logFileSCN int
 	if logFileEndSCN >= maxLogFileSCN {
 		logFileSCN = logFileStartSCN
@@ -109,130 +106,43 @@ func (e *Engine) UpdateSingleTableIncrementMetaSCNByLogFileEndSCN(sourceSchemaNa
 		logFileSCN = logFileEndSCN
 	}
 
-	if err := e.GormDB.Transaction(func(tx *gorm.DB) error {
-		var tableIncrMetas TableIncrementMeta
-		if err := tx.Model(TableIncrementMeta{}).
-			Where("upper(source_schema_name) = ? AND upper(source_table_name) = ?",
-				strings.ToUpper(sourceSchemaName),
-				strings.ToUpper(sourceTableName)).Find(&tableIncrMetas).Error; err != nil {
-			return err
-		}
+	var tableIncrMeta []TableIncrementMeta
+	if err := e.GormDB.Model(TableIncrementMeta{}).Where(
+		"upper(source_schema_name) = ?",
+		strings.ToUpper(sourceSchemaName)).Find(&tableIncrMeta).Error; err != nil {
+		return err
+	}
 
-		switch {
-		case tableIncrMetas.GlobalSCN < logFileSCN && tableIncrMetas.SourceTableSCN < logFileSCN:
-			if err := tx.Model(TableIncrementMeta{}).Where(
+	for _, table := range tableIncrMeta {
+		if table.GlobalSCN < logFileSCN || table.GlobalSCN > logFileSCN {
+			if err := e.GormDB.Model(TableIncrementMeta{}).Where(
 				"upper(source_schema_name) = ? and upper(source_table_name) = ?",
 				strings.ToUpper(sourceSchemaName),
-				strings.ToUpper(sourceTableName)).
-				Updates(TableIncrementMeta{
-					GlobalSCN:      logFileSCN,
-					SourceTableSCN: logFileSCN,
-				}).Error; err != nil {
-				return err
-			}
-		case tableIncrMetas.GlobalSCN < logFileSCN && tableIncrMetas.SourceTableSCN > logFileSCN:
-			if err := tx.Model(TableIncrementMeta{}).Where(
-				"upper(source_schema_name) = ? and upper(source_table_name) = ?",
-				strings.ToUpper(sourceSchemaName),
-				strings.ToUpper(sourceTableName)).
+				strings.ToUpper(table.SourceTableName)).
 				Updates(TableIncrementMeta{
 					GlobalSCN: logFileSCN,
 				}).Error; err != nil {
 				return err
 			}
-		case tableIncrMetas.GlobalSCN == logFileSCN && tableIncrMetas.SourceTableSCN == logFileSCN:
-			return nil
-		case tableIncrMetas.GlobalSCN > logFileSCN && tableIncrMetas.SourceTableSCN > logFileSCN:
-			return nil
-		case tableIncrMetas.GlobalSCN > logFileSCN && tableIncrMetas.SourceTableSCN < logFileSCN:
-			if err := tx.Model(TableIncrementMeta{}).Where(
-				"upper(source_schema_name) = ? and upper(source_table_name) = ?",
-				strings.ToUpper(sourceSchemaName),
-				strings.ToUpper(sourceTableName)).
-				Updates(TableIncrementMeta{
-					SourceTableSCN: logFileSCN,
-				}).Error; err != nil {
-				return err
-			}
 		}
-		return nil
-	}); err != nil {
-		return err
 	}
 	return nil
 }
 
-// 如果当前日志文件不存在对应表的数据记录，则需要判断元数据对应表 GLOBAL_SCN 号是否需要更新至日志文件 SCN
-// 1、元数据对应表 GLOBAL_SCN 以及 SOURCE_TABLE_SCN 都小于日志文件，则都更新至日志文件 SCN
-// 2、元数据对应表 GLOBAL_SCN 以及 SOURCE_TABLE_SCN 都大于日志文件，则不更新至日志文件 SCN
-// 3、元数据对应表 GLOBAL_SCN 大于日志文件，SOURCE_TABLE_SCN 小于日志文件。则更新 SOURCE_TABLE_SCN至日志文件 SCN
-// 4、元数据对应表 GLOBAL_SCN 小于日志文件，SOURCE_TABLE_SCN 大于日志文件。则更新 GLOBAL_SCN至日志文件 SCN
-// 5、如果 source_table_scn 与 global_scn 相差很大，说明对应表上游变动不频繁
-func (e *Engine) UpdateALLTableIncrementMetaSCNRecordByLogFileEndSCN(sourceSchemaName string, logFileStartSCN, logFileEndSCN int) error {
-	maxLogFileSCN, err := e.GetOracleCurrentRedoMaxSCN()
-	if err != nil {
-		return err
-	}
-	var logFileSCN int
-	if logFileEndSCN >= maxLogFileSCN {
-		logFileSCN = logFileStartSCN
-	} else {
-		logFileSCN = logFileEndSCN
-	}
-
-	if err := e.GormDB.Transaction(func(tx *gorm.DB) error {
-		var tableIncrMetas []TableIncrementMeta
-		if err := tx.Model(TableIncrementMeta{}).
-			Where("upper(source_schema_name) = ?",
-				strings.ToUpper(sourceSchemaName)).Find(&tableIncrMetas).Error; err != nil {
+func (e *Engine) UpdateSingleTableIncrementMetaSCNByNonCurrentRedo(
+	sourceSchemaName string, logFileEndSCN int,
+	transferTableSlice []string) error {
+	for _, table := range transferTableSlice {
+		if err := e.GormDB.Model(TableIncrementMeta{}).Where(
+			"upper(source_schema_name) = ? and upper(source_table_name) = ?",
+			strings.ToUpper(sourceSchemaName),
+			strings.ToUpper(table)).
+			Updates(TableIncrementMeta{
+				GlobalSCN:      logFileEndSCN,
+				SourceTableSCN: logFileEndSCN,
+			}).Error; err != nil {
 			return err
 		}
-
-		for _, tableMeta := range tableIncrMetas {
-			switch {
-			case tableMeta.GlobalSCN > logFileSCN && tableMeta.SourceTableSCN > logFileSCN:
-				continue
-			case tableMeta.GlobalSCN == logFileSCN && tableMeta.SourceTableSCN == logFileSCN:
-				continue
-			case tableMeta.GlobalSCN < logFileSCN && tableMeta.SourceTableSCN < logFileSCN:
-				if err := tx.Model(TableIncrementMeta{}).Where(
-					"upper(source_schema_name) = ? and upper(source_table_name) = ?",
-					strings.ToUpper(sourceSchemaName),
-					strings.ToUpper(tableMeta.SourceTableName)).
-					Updates(TableIncrementMeta{
-						GlobalSCN:      logFileSCN,
-						SourceTableSCN: logFileSCN,
-					}).Error; err != nil {
-					return err
-				}
-			case tableMeta.GlobalSCN < logFileSCN && tableMeta.SourceTableSCN > logFileSCN:
-				if err := tx.Model(TableIncrementMeta{}).Where(
-					"upper(source_schema_name) = ? and upper(source_table_name) = ?",
-					strings.ToUpper(sourceSchemaName),
-					strings.ToUpper(tableMeta.SourceTableName)).
-					Updates(TableIncrementMeta{
-						GlobalSCN: logFileSCN,
-					}).Error; err != nil {
-					return err
-				}
-			case tableMeta.GlobalSCN > logFileSCN && tableMeta.SourceTableSCN < logFileSCN:
-				if err := tx.Model(TableIncrementMeta{}).Where(
-					"upper(source_schema_name) = ? and upper(source_table_name) = ?",
-					strings.ToUpper(sourceSchemaName),
-					strings.ToUpper(tableMeta.SourceTableName)).
-					Updates(TableIncrementMeta{
-						SourceTableSCN: logFileSCN,
-					}).Error; err != nil {
-					return err
-				}
-			default:
-				return fmt.Errorf("panic case,table meta: [%v]", tableMeta)
-			}
-		}
-		return nil
-	}); err != nil {
-		return err
 	}
-
 	return nil
 }

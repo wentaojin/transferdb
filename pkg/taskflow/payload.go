@@ -21,8 +21,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/xxjwxc/gowp/workpool"
-
 	"github.com/WentaoJin/transferdb/util"
 
 	"github.com/WentaoJin/transferdb/db"
@@ -151,14 +149,14 @@ func loaderOracleTableTask(cfg *config.CfgFile, engine *db.Engine, transferTable
 			}
 			return nil
 		}
-		if err := loaderTableFullTaskBySCN(cfg, engine, waitInitTableList); err != nil {
-			return err
-		}
 		diffTableSlice := util.FilterDifferenceStringItems(transferTableList, waitInitTableList)
 		if len(diffTableSlice) > 0 {
 			if err := loaderTableFullTaskByCheckpoint(cfg, engine, diffTableSlice); err != nil {
 				return err
 			}
+		}
+		if err := loaderTableFullTaskBySCN(cfg, engine, waitInitTableList); err != nil {
+			return err
 		}
 		return nil
 	} else {
@@ -203,12 +201,6 @@ func SyncOracleTableAllRecordToMySQLByAllMode(cfg *config.CfgFile, engine *db.En
 }
 
 func syncOracleTableIncrementRecordToMySQLByAllMode(cfg *config.CfgFile, engine *db.Engine) error {
-	// 获取增量元数据表内所需同步表信息
-	transferTableSlice, transferTableMetaMap, err := engine.GetMySQLTableIncrementMetaRecord(cfg.SourceConfig.SchemaName)
-	if err != nil {
-		return err
-	}
-
 	// 获取增量所需得日志文件
 	logFiles, err := getOracleTableIncrementRecordLogFile(engine, cfg.SourceConfig.SchemaName)
 	if err != nil {
@@ -238,12 +230,9 @@ func syncOracleTableIncrementRecordToMySQLByAllMode(cfg *config.CfgFile, engine 
 			zap.Int("logminer start scn", logFileStartSCN),
 			zap.Int("logfile end scn", logFileEndSCN))
 
-		// logminer 运行
-		if err = engine.AddOracleLogminerlogFile(log["LOG_FILE"]); err != nil {
-			return err
-		}
-
-		if err = engine.StartOracleLogminerStoredProcedure(log["FIRST_CHANGE"]); err != nil {
+		// 获取增量元数据表内所需同步表信息
+		transferTableSlice, transferTableMetaMap, err := engine.GetMySQLTableIncrementMetaRecord(cfg.SourceConfig.SchemaName)
+		if err != nil {
 			return err
 		}
 
@@ -251,6 +240,15 @@ func syncOracleTableIncrementRecordToMySQLByAllMode(cfg *config.CfgFile, engine 
 		minSourceTableSCN, err := engine.GetMySQLTableIncrementMetaMinSourceTableSCNTime(
 			cfg.SourceConfig.SchemaName)
 		if err != nil {
+			return err
+		}
+
+		// logminer 运行
+		if err = engine.AddOracleLogminerlogFile(log["LOG_FILE"]); err != nil {
+			return err
+		}
+
+		if err = engine.StartOracleLogminerStoredProcedure(log["FIRST_CHANGE"]); err != nil {
 			return err
 		}
 
@@ -271,80 +269,103 @@ func syncOracleTableIncrementRecordToMySQLByAllMode(cfg *config.CfgFile, engine 
 			return err
 		}
 
+		// 获取当前 CURRENT REDO LOG 信息
+		maxLogFileSCN, currentRedoLogFileName, err := engine.GetOracleCurrentRedoMaxSCN()
+		if err != nil {
+			return err
+		}
+
+		// 按表级别筛选数据
+		var (
+			logminerContentMap map[string][]db.LogminerContent
+		)
 		if len(rowsResult) > 0 {
-			// 按表级别筛选数据
-			logminerContentMap, err := filterOracleRedoRecordByTable(
-				rowsResult,
-				transferTableSlice,
-				transferTableMetaMap,
-				cfg.AllConfig.FilterThreads)
-			if err != nil {
-				return err
-			}
+			// 如果当前日志文件是当前重做日志文件则 filterOracleRedoGreaterOrEqualRecordByTable 只运行一次大于或等于，也就是只重放一次已消费得 SCN
+			if log["LOG_FILE"] == currentRedoLogFileName {
+				logminerContentMap, err = filterOracleRedoGreaterOrEqualRecordByTable(
+					rowsResult,
+					transferTableSlice,
+					transferTableMetaMap,
+					cfg.AllConfig.FilterThreads,
+					util.CurrentResetFlag,
+				)
+				if err != nil {
+					return err
+				}
+				zlog.Logger.Warn("oracle current redo log reset flag", zap.Int("CurrentResetFlag", util.CurrentResetFlag))
+				util.CurrentResetFlag = 1
 
-			wp := workpool.New(cfg.AllConfig.ApplyThreads)
-			for tableName, lcs := range logminerContentMap {
-				rowsResult := lcs
-				tbl := tableName
-				logStartSCN := logFileStartSCN
-				logEndSCN := logFileEndSCN
-				wp.DoWait(func() error {
-					var (
-						done        = make(chan bool)
-						taskQueue   = make(chan IncrementPayload, cfg.AllConfig.WorkerQueue)
-						resultQueue = make(chan IncrementResult, cfg.AllConfig.WorkerQueue)
-					)
-					// 获取增量执行结果
-					go GetIncrementResult(done, resultQueue)
-
-					// 转换捕获内容以及数据应用
-					go func(engine *db.Engine, tbl, targetSchemaName string, rowsResult []db.LogminerContent, taskQueue chan IncrementPayload) {
-						defer func() {
-							if err := recover(); err != nil {
-								zlog.Logger.Panic("panic", zap.Error(fmt.Errorf("%v", err)))
-							}
-						}()
-						if err := translatorAndApplyOracleIncrementRecord(
-							engine,
-							tbl,
-							targetSchemaName,
-							rowsResult, taskQueue); err != nil {
-							return
-						}
-					}(engine, tbl, cfg.TargetConfig.SchemaName, rowsResult, taskQueue)
-
-					// 必须在任务分配和获取结果后创建工作池
-					go CreateWorkerPool(cfg.AllConfig.WorkerThreads, taskQueue, resultQueue)
-					// 等待执行完成
-					<-done
-
-					// 数据转换并应用完毕，判断当前元数据 checkpoint 是否需要更新
-					if err := engine.UpdateSingleTableIncrementMetaSCNByLogFileEndSCN(
+				if len(logminerContentMap) > 0 {
+					// 数据应用
+					if err := applyOracleRedoIncrementRecord(cfg, engine, logminerContentMap); err != nil {
+						return err
+					}
+					// 当前所有日志文件内容应用完毕，直接更新 GLOBAL_SCN 至当前重做日志文件起始 SCN
+					if err := engine.UpdateSingleTableIncrementMetaSCNByCurrentRedo(
 						cfg.SourceConfig.SchemaName,
-						tbl,
-						logStartSCN,
-						logEndSCN,
+						maxLogFileSCN,
+						logFileStartSCN,
+						logFileEndSCN,
 					); err != nil {
 						return err
 					}
-					return nil
-				})
+					continue
+				}
+				zlog.Logger.Warn("increment table log file logminer null data, transferdb will continue to capture")
+				continue
+			} else {
+				logminerContentMap, err = filterOracleRedoGreaterOrEqualRecordByTable(
+					rowsResult,
+					transferTableSlice,
+					transferTableMetaMap,
+					cfg.AllConfig.FilterThreads,
+					0,
+				)
+				if err != nil {
+					return err
+				}
+				if len(logminerContentMap) > 0 {
+					// 数据应用
+					if err := applyOracleRedoIncrementRecord(cfg, engine, logminerContentMap); err != nil {
+						return err
+					}
+					// 当前所有日志文件内容应用完毕，直接更新 GLOBAL_SCN 至日志文件结束 SCN
+					if err := engine.UpdateSingleTableIncrementMetaSCNByNonCurrentRedo(
+						cfg.SourceConfig.SchemaName,
+						logFileEndSCN,
+						transferTableSlice,
+					); err != nil {
+						return err
+					}
+					continue
+				}
+				zlog.Logger.Warn("increment table log file logminer null data, transferdb will continue to capture")
+				continue
 			}
-			if err := wp.Wait(); err != nil {
+		}
+
+		if log["LOG_FILE"] == currentRedoLogFileName {
+			// 当前所有日志文件内容应用完毕，直接更新 GLOBAL_SCN 至当前重做日志文件起始 SCN
+			if err := engine.UpdateSingleTableIncrementMetaSCNByCurrentRedo(
+				cfg.SourceConfig.SchemaName,
+				maxLogFileSCN,
+				logFileStartSCN,
+				logFileEndSCN,
+			); err != nil {
 				return err
-			}
-			if !wp.IsDone() {
-				return fmt.Errorf("logminerContentMap concurrency meet error")
 			}
 		} else {
-			if err := engine.UpdateALLTableIncrementMetaSCNRecordByLogFileEndSCN(
+			// 当前所有日志文件内容应用完毕，直接更新 GLOBAL_SCN 至日志文件结束 SCN
+			if err := engine.UpdateSingleTableIncrementMetaSCNByNonCurrentRedo(
 				cfg.SourceConfig.SchemaName,
-				logFileStartSCN,
-				logFileEndSCN); err != nil {
+				logFileEndSCN,
+				transferTableSlice,
+			); err != nil {
 				return err
 			}
-			zlog.Logger.Info("increment table log file logminer null data, transferdb will continue to capture")
 		}
+		zlog.Logger.Warn("increment table log file logminer null data, transferdb will continue to capture")
+		continue
 	}
 	return nil
 }

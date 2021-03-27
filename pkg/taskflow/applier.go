@@ -20,6 +20,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/WentaoJin/transferdb/pkg/config"
+
 	"github.com/xxjwxc/gowp/workpool"
 
 	"github.com/WentaoJin/transferdb/zlog"
@@ -61,13 +63,71 @@ func applierTableFullRecord(targetSchemaName, targetTableName string, workerThre
 }
 
 // 表数据应用 -> 增量任务
-func applierTableIncrementRecord(sqlSlice []string, engine *db.Engine) error {
-	sql := strings.Join(sqlSlice, ";")
+func applierTableIncrementRecord(p *IncrementPayload) error {
+	sql := strings.Join(p.MySQLRedo, ";")
 	//zlog.Logger.Info("increment applier sql", zap.String("sql", sql))
-	_, err := engine.MysqlDB.Exec(sql)
+	_, err := p.Engine.MysqlDB.Exec(sql)
 	if err != nil {
 		return fmt.Errorf("single increment table data insert mysql [%s] falied:%v", sql, err)
 	}
+	// 数据写入完毕，更新元数据 checkpoint 表
+	// 如果同步中断，数据同步使用会以 global_scn 为准，也就是会进行重复消费
+	if err := p.Engine.UpdateTableIncrementMetaALLSCNRecord(p.SourceSchema, p.SourceTable, p.OperationType, p.GlobalSCN, p.SourceTableSCN); err != nil {
+		zlog.Logger.Error("update table increment scn record failed",
+			zap.String("payload", p.Marshal()),
+			zap.Error(err))
+		return err
+	}
+	return nil
+}
 
+func applyOracleRedoIncrementRecord(cfg *config.CfgFile, engine *db.Engine, logminerContentMap map[string][]db.LogminerContent) error {
+	// 应用当前日志文件中所有记录
+	wp := workpool.New(cfg.AllConfig.ApplyThreads)
+	for tableName, lcs := range logminerContentMap {
+		rowsResult := lcs
+		tbl := tableName
+		wp.DoWait(func() error {
+			var (
+				done        = make(chan bool)
+				taskQueue   = make(chan IncrementPayload, cfg.AllConfig.WorkerQueue)
+				resultQueue = make(chan IncrementResult, cfg.AllConfig.WorkerQueue)
+			)
+			// 获取增量执行结果
+			go GetIncrementResult(done, resultQueue)
+
+			// 转换捕获内容以及数据应用
+			go func(engine *db.Engine, tbl, targetSchemaName string, rowsResult []db.LogminerContent, taskQueue chan IncrementPayload) {
+				defer func() {
+					if err := recover(); err != nil {
+						zlog.Logger.Fatal("translatorAndApplyOracleIncrementRecord",
+							zap.String("schema", cfg.TargetConfig.SchemaName),
+							zap.String("table", tbl),
+							zap.Error(fmt.Errorf("%v", err)))
+					}
+				}()
+				if err := translatorAndApplyOracleIncrementRecord(
+					engine,
+					tbl,
+					targetSchemaName,
+					rowsResult, taskQueue); err != nil {
+					return
+				}
+			}(engine, tbl, cfg.TargetConfig.SchemaName, rowsResult, taskQueue)
+
+			// 必须在任务分配和获取结果后创建工作池
+			go CreateWorkerPool(cfg.AllConfig.WorkerThreads, taskQueue, resultQueue)
+			// 等待执行完成
+			<-done
+
+			return nil
+		})
+	}
+	if err := wp.Wait(); err != nil {
+		return err
+	}
+	if !wp.IsDone() {
+		return fmt.Errorf("logminerContentMap concurrency meet error")
+	}
 	return nil
 }

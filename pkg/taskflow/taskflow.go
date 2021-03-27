@@ -45,18 +45,9 @@ type IncrementResult struct {
 
 // 任务同步
 func (p *IncrementPayload) Run() error {
-	// 数据写入
-	if err := applierTableIncrementRecord(p.MySQLRedo, p.Engine); err != nil {
+	// 数据写入并更新元数据表
+	if err := applierTableIncrementRecord(p); err != nil {
 		zlog.Logger.Error("apply table increment record failed",
-			zap.String("payload", p.Marshal()),
-			zap.Error(err))
-		return err
-	}
-
-	// 数据写入完毕，更新元数据 checkpoint 表
-	// 如果同步中断，数据同步使用会以 global_scn 为准，也就是会进行重复消费
-	if err := p.Engine.UpdateTableIncrementMetaALLSCNRecord(p.SourceSchema, p.SourceTable, p.OperationType, p.GlobalSCN, p.SourceTableSCN); err != nil {
-		zlog.Logger.Error("update table increment scn record failed",
 			zap.String("payload", p.Marshal()),
 			zap.Error(err))
 		return err

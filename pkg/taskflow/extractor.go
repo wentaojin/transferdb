@@ -74,11 +74,11 @@ func extractorTableIncrementRecord(engine *db.Engine,
 }
 
 // 按表级别筛选区别数据
-func filterOracleRedoRecordByTable(
+func filterOracleRedoGreaterOrEqualRecordByTable(
 	rowsResult []db.LogminerContent,
 	transferTableList []string,
 	transferTableMetaMap map[string]int,
-	workerThreads int) (map[string][]db.LogminerContent, error) {
+	workerThreads, currentResetFlag int) (map[string][]db.LogminerContent, error) {
 	var (
 		lcMap map[string][]db.LogminerContent
 		lc    []db.LogminerContent
@@ -98,17 +98,56 @@ func filterOracleRedoRecordByTable(
 	s := NewScheduleJob(workerThreads, lcMap, func() { c <- struct{}{} })
 
 	wp := workpool.New(workerThreads)
-	for _, rows := range rowsResult {
+	for _, rs := range rowsResult {
 		tfMap := transferTableMetaMap
-		r := rows
+		rows := rs
+		isFirstR := currentResetFlag
 		wp.DoWait(func() error {
 			// 筛选过滤 Oracle Redo SQL
 			// 1、数据同步只同步 INSERT/DELETE/UPDATE DML以及只同步 truncate table/ drop table 限定 DDL
 			// 2、根据元数据表 table_increment_meta 对应表已经同步写入得 SCN SQL 记录,过滤 Oracle 提交记录 SCN 号，过滤,防止重复写入
-			if r.SCN >= tfMap[strings.ToUpper(r.TableName)] {
-				s.AddData(r)
+			if isFirstR == 0 {
+				if rows.SCN >= tfMap[strings.ToUpper(rows.TableName)] {
+					if rows.Operation == util.DDLOperation {
+						splitDDL := strings.Split(rows.SQLRedo, ` `)
+						ddl := util.StringsBuilder(splitDDL[0], ` `, splitDDL[1])
+						if strings.ToUpper(ddl) == util.DropTableOperation {
+							// 处理 drop table marvin8 AS "BIN$vVWfliIh6WfgU0EEEKzOvg==$0"
+							rows.SQLRedo = strings.Split(strings.ToUpper(rows.SQLRedo), "AS")[0]
+							s.AddData(rows)
+						}
+						if strings.ToUpper(ddl) == util.TruncateTableOperation {
+							// 处理 truncate table marvin8
+							s.AddData(rows)
+						}
+					} else {
+						s.AddData(rows)
+					}
+				}
+				return nil
+
+			} else if isFirstR == 1 {
+				if rows.SCN > tfMap[strings.ToUpper(rows.TableName)] {
+					if rows.Operation == util.DDLOperation {
+						splitDDL := strings.Split(rows.SQLRedo, ` `)
+						ddl := util.StringsBuilder(splitDDL[0], ` `, splitDDL[1])
+						if strings.ToUpper(ddl) == util.DropTableOperation {
+							// 处理 drop table marvin8 AS "BIN$vVWfliIh6WfgU0EEEKzOvg==$0"
+							rows.SQLRedo = strings.Split(strings.ToUpper(rows.SQLRedo), "AS")[0]
+							s.AddData(rows)
+						}
+						if strings.ToUpper(ddl) == util.TruncateTableOperation {
+							// 处理 truncate table marvin8
+							s.AddData(rows)
+						}
+					} else {
+						s.AddData(rows)
+					}
+				}
+				return nil
+			} else {
+				return fmt.Errorf("filterOracleRedoGreaterOrEqualRecordByTable meet error, isFirstRun value error")
 			}
-			return nil
 		})
 	}
 	if err := wp.Wait(); err != nil {
@@ -211,7 +250,7 @@ func loaderOracleSingleTableTask(cfg *config.CfgFile, engine *db.Engine, table s
 					zap.String("schema", cfg.SourceConfig.SchemaName),
 					zap.String("table", table),
 					zap.String("sql", sql))
-				// 清理断点记录以及更新记录
+				// 清理记录以及更新记录
 				if err := engine.ModifyMySQLTableMetaRecord(
 					cfg.TargetConfig.MetaSchema,
 					cfg.SourceConfig.SchemaName, table, sql); err != nil {
@@ -240,7 +279,7 @@ func loaderOracleSingleTableTask(cfg *config.CfgFile, engine *db.Engine, table s
 				return err
 			}
 
-			// 清理断点记录以及更新记录
+			// 清理记录以及更新记录
 			if err := engine.ModifyMySQLTableMetaRecord(
 				cfg.TargetConfig.MetaSchema,
 				cfg.SourceConfig.SchemaName, table, sql); err != nil {

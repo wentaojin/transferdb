@@ -29,3 +29,8 @@ const (
 	DropTableOperation     = "DROP TABLE"
 	LogminerQueryTimeout   = 300 * time.Second
 )
+
+// 用于控制当程序消费追平到当前 CURRENT 重做日志，
+// 当值 == 0 启用 filterOracleRedoGreaterOrEqualRecordByTable 大于或者等于
+// 当值 == 1 启用 filterOracleRedoGreaterOrEqualRecordByTable 大于，避免已被消费得日志一直被重复消费
+var CurrentResetFlag = 0

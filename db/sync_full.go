@@ -74,7 +74,7 @@ func (e *Engine) IsNotExistMySQLTableIncrementMetaRecord() (bool, error) {
 }
 
 // 清理并更新同步任务元数据表
-// 1、全量每成功同步一张表记录，再清理断点记录
+// 1、全量每成功同步一张表记录，再清理记录
 // 2、更新同步数据表元信息
 func (e *Engine) ModifyMySQLTableMetaRecord(metaSchemaName, sourceSchemaName, sourceTableName, rowidSQL string) error {
 	if err := e.GormDB.Transaction(func(tx *gorm.DB) error {
@@ -85,9 +85,9 @@ func (e *Engine) ModifyMySQLTableMetaRecord(metaSchemaName, sourceSchemaName, so
 				strings.ToUpper(rowidSQL)).Delete(&TableFullMeta{}).Error; err != nil {
 			return fmt.Errorf(
 				`clear mysql meta schema [%s] table [table_full_meta] reocrd with source table [%s] failed: %v`,
-				sourceSchemaName, sourceTableName, err.Error())
+				metaSchemaName, sourceTableName, err.Error())
 		}
-		zlog.Logger.Info("clear meta",
+		zlog.Logger.Info("clear mysql meta",
 			zap.String("schema", sourceSchemaName),
 			zap.String("table", sourceTableName),
 			zap.String("sql", rowidSQL),
@@ -127,8 +127,7 @@ func (e *Engine) ClearMySQLTableMetaRecord(metaSchemaName, sourceSchemaName stri
 		Where("upper(source_schema_name) = ?",
 			strings.ToUpper(sourceSchemaName)).
 		Updates(TableMeta{
-			FullGlobalSCN:  -1,
-			FullSplitTimes: -1,
+			FullGlobalSCN: -1,
 		}).Error; err != nil {
 		return err
 	}
@@ -139,13 +138,13 @@ func (e *Engine) ClearMySQLTableMetaRecord(metaSchemaName, sourceSchemaName stri
 	return nil
 }
 
-func (e *Engine) TruncateMySQLTableRecord(sourceSchemaName string, tableMetas []TableMeta) error {
+func (e *Engine) TruncateMySQLTableRecord(targetSchemaName string, tableMetas []TableMeta) error {
 	for _, table := range tableMetas {
-		if err := e.GormDB.Exec(fmt.Sprintf("TRUNCATE TABLE %s.%s", sourceSchemaName, table.SourceTableName)).Error; err != nil {
+		if err := e.GormDB.Exec(fmt.Sprintf("TRUNCATE TABLE %s.%s", targetSchemaName, table.SourceTableName)).Error; err != nil {
 			return fmt.Errorf("truncate mysql meta schema table [%v] reocrd failed: %v", table.SourceTableName, err.Error())
 		}
 		zlog.Logger.Info("truncate table record",
-			zap.String("schema", sourceSchemaName),
+			zap.String("schema", targetSchemaName),
 			zap.String("table", table.SourceTableName),
 			zap.String("status", "success"))
 	}
@@ -220,14 +219,14 @@ func (e *Engine) InitMySQLTableMetaRecord(schemaName string, tableName []string)
 	return nil
 }
 
-func (e *Engine) UpdateMySQLTableMetaRecord(schemaName, tableName string, parallel, globalSCN int) error {
+func (e *Engine) UpdateMySQLTableMetaRecord(schemaName, tableName string, rowCounts, globalSCN int) error {
 	if err := e.GormDB.Model(&TableMeta{}).
 		Where("upper(source_schema_name) = ? AND upper(source_table_name) = ?",
 			strings.ToUpper(schemaName),
 			strings.ToUpper(tableName)).
 		Updates(TableMeta{
 			FullGlobalSCN:  globalSCN,
-			FullSplitTimes: parallel,
+			FullSplitTimes: rowCounts,
 		}).Error; err != nil {
 		return err
 	}

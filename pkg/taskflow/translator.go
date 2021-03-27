@@ -104,85 +104,92 @@ func translatorAndApplyOracleIncrementRecord(
 	targetSchema string,
 	rowsResult []db.LogminerContent, taskQueue chan IncrementPayload) error {
 
-	startTime := time.Now()
-	zlog.Logger.Info("oracle table increment log apply start",
-		zap.String("table", sourceTableName),
-		zap.Time("start time", startTime))
+	if len(rowsResult) > 0 {
+		startTime := time.Now()
+		zlog.Logger.Info("oracle table increment log apply start",
+			zap.String("mysql schema", targetSchema),
+			zap.String("table", sourceTableName),
+			zap.Time("start time", startTime))
 
-	for _, rows := range rowsResult {
-		// 如果 sqlRedo 存在记录则继续处理，不存在记录则报错
-		if rows.SQLRedo == "" {
-			return fmt.Errorf("does not meet expectations [oracle sql redo is be null], please check")
-		}
-
-		if rows.Operation == util.DDLOperation {
-			splitDDL := strings.Split(rows.SQLRedo, ` `)
-			ddl := util.StringsBuilder(splitDDL[0], ` `, splitDDL[1])
-			if strings.ToUpper(ddl) == util.DropTableOperation {
-				// 处理 drop table marvin8 AS "BIN$vVWfliIh6WfgU0EEEKzOvg==$0"
-				rows.SQLRedo = strings.Split(strings.ToUpper(rows.SQLRedo), "AS")[0]
+		for _, rows := range rowsResult {
+			// 如果 sqlRedo 存在记录则继续处理，不存在记录则报错
+			if rows.SQLRedo == "" {
+				return fmt.Errorf("does not meet expectations [oracle sql redo is be null], please check")
 			}
+
+			if rows.Operation == util.DDLOperation {
+				zlog.Logger.Info("translator oracle payload", zap.String("ORACLE DDL", rows.SQLRedo))
+			}
+
+			// 移除引号
+			rows.SQLRedo = util.ReplaceQuotesString(rows.SQLRedo)
+			// 移除分号
+			rows.SQLRedo = util.ReplaceSpecifiedString(rows.SQLRedo, ";", "")
+
+			if rows.SQLUndo != "" {
+				rows.SQLUndo = util.ReplaceQuotesString(rows.SQLUndo)
+				rows.SQLUndo = util.ReplaceSpecifiedString(rows.SQLUndo, ";", "")
+				rows.SQLUndo = util.ReplaceSpecifiedString(rows.SQLUndo,
+					util.StringsBuilder(rows.SegOwner, "."),
+					util.StringsBuilder(strings.ToUpper(targetSchema), "."))
+			}
+
+			// 比如：INSERT INTO MARVIN.MARVIN1 (ID,NAME) VALUES (1,'marvin')
+			// 比如：DELETE FROM MARVIN.MARVIN7 WHERE ID = 5 and NAME = 'pyt'
+			// 比如：UPDATE MARVIN.MARVIN1 SET ID = 2 , NAME = 'marvin' WHERE ID = 2 AND NAME = 'pty'
+			// 比如: drop table marvin.marvin7
+			// 比如: truncate table marvin.marvin7
+			mysqlRedo, operationType, err := translatorOracleToMySQLSQL(rows.SQLRedo, rows.SQLUndo, strings.ToUpper(targetSchema))
+			if err != nil {
+				return err
+			}
+
+			// 注册任务到 Job 队列
+			lp := IncrementPayload{
+				Engine:         engine,
+				GlobalSCN:      rows.SCN, // 更新元数据 GLOBAL_SCN 至当前消费的 SCN 号
+				SourceTableSCN: rows.SCN,
+				SourceSchema:   rows.SegOwner,
+				SourceTable:    rows.TableName,
+				TargetSchema:   strings.ToUpper(targetSchema),
+				TargetTable:    rows.TableName,
+				OracleRedo:     rows.SQLRedo,
+				MySQLRedo:      mysqlRedo,
+				Operation:      rows.Operation,
+				OperationType:  operationType}
+
+			// 避免太多日志输出
+			// zlog.Logger.Info("translator oracle payload", zap.String("payload", lp.Marshal()))
+			taskQueue <- lp
 		}
 
-		// 移除引号
-		rows.SQLRedo = util.ReplaceQuotesString(rows.SQLRedo)
-		// 移除分号
-		rows.SQLRedo = util.ReplaceSpecifiedString(rows.SQLRedo, ";", "")
+		endTime := time.Now()
+		zlog.Logger.Info("oracle table increment log apply finished",
+			zap.String("mysql schema", targetSchema),
+			zap.String("table", sourceTableName),
+			zap.String("status", "success"),
+			zap.Time("start time", startTime),
+			zap.Time("end time", endTime),
+			zap.String("cost time", time.Since(startTime).String()))
 
-		if rows.SQLUndo != "" {
-			rows.SQLUndo = util.ReplaceQuotesString(rows.SQLUndo)
-			rows.SQLUndo = util.ReplaceSpecifiedString(rows.SQLUndo, ";", "")
-			rows.SQLUndo = util.ReplaceSpecifiedString(rows.SQLUndo,
-				util.StringsBuilder(rows.SegOwner, "."),
-				util.StringsBuilder(strings.ToUpper(targetSchema), "."))
-		}
+		// 任务结束，关闭通道
+		close(taskQueue)
 
-		// 比如：INSERT INTO MARVIN.MARVIN1 (ID,NAME) VALUES (1,'marvin')
-		// 比如：DELETE FROM MARVIN.MARVIN7 WHERE ID = 5 and NAME = 'pyt'
-		// 比如：UPDATE MARVIN.MARVIN1 SET ID = 2 , NAME = 'marvin' WHERE ID = 2 AND NAME = 'pty'
-		// 比如: drop table marvin.marvin7
-		// 比如: truncate table marvin.marvin7
-		mysqlRedo, operationType, err := translatorOracleToMySQLSQL(rows.SQLRedo, rows.SQLUndo, strings.ToUpper(targetSchema))
-		if err != nil {
-			return err
-		}
-
-		// 注册任务到 Job 队列
-		lp := IncrementPayload{
-			Engine:         engine,
-			GlobalSCN:      rows.SCN, // 更新元数据 GLOBAL_SCN 至当前消费的 SCN 号
-			SourceTableSCN: rows.SCN,
-			SourceSchema:   rows.SegOwner,
-			SourceTable:    rows.TableName,
-			TargetSchema:   strings.ToUpper(targetSchema),
-			TargetTable:    rows.TableName,
-			OracleRedo:     rows.SQLRedo,
-			MySQLRedo:      mysqlRedo,
-			Operation:      rows.Operation,
-			OperationType:  operationType}
-
-		// 避免太多日志输出
-		//zlog.Logger.Info("translator oracle payload", zap.String("payload", lp.Marshal()))
-		taskQueue <- lp
+		return nil
+	} else {
+		zlog.Logger.Warn("increment table log file logminer null data, transferdb will continue to capture",
+			zap.String("mysql schema", targetSchema),
+			zap.String("table", sourceTableName),
+			zap.String("status", "success"))
+		// 任务结束，关闭通道
+		close(taskQueue)
+		return nil
 	}
-
-	// 任务结束，关闭通道
-	close(taskQueue)
-
-	endTime := time.Now()
-	zlog.Logger.Info("oracle table increment log apply finished",
-		zap.String("table", sourceTableName),
-		zap.String("status", "success"),
-		zap.Time("start time", startTime),
-		zap.Time("end time", endTime),
-		zap.String("cost time", time.Since(startTime).String()))
-
-	return nil
 }
 
 // SQL 转换
 // 1、INSERT INTO / REPLACE INTO
-// 2、UPDATE / DELETE、INSERT INTO
+// 2、UPDATE / DELETE、REPLACE INTO
 func translatorOracleToMySQLSQL(oracleSQLRedo, oracleSQLUndo, targetSchema string) ([]string, string, error) {
 	var (
 		sqls          []string
@@ -223,7 +230,7 @@ func translatorOracleToMySQLSQL(oracleSQLRedo, oracleSQLUndo, targetSchema strin
 		for _, col := range stmt.Columns {
 			values = append(values, stmt.Data[col].(string))
 		}
-		insertSQL := util.StringsBuilder(`INSERT INTO `, stmt.Schema, ".", stmt.Table,
+		insertSQL := util.StringsBuilder(`REPLACE INTO `, stmt.Schema, ".", stmt.Table,
 			"(",
 			strings.Join(stmt.Columns, ","),
 			")",
