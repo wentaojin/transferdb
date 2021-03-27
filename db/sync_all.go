@@ -224,10 +224,10 @@ type LogminerContent struct {
 	Operation string
 }
 
-func (e *Engine) GetOracleLogminerContentToMySQL(schemaName string, sourceTableNameList string, lastCheckpoint string) ([]LogminerContent, error) {
+func (e *Engine) GetOracleLogminerContentToMySQL(schemaName string, sourceTableNameList string, lastCheckpoint string, logminerQueryTimeout int) ([]LogminerContent, error) {
 	var lcs []LogminerContent
 
-	ctx, cancel := context.WithTimeout(context.Background(), util.LogminerQueryTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(logminerQueryTimeout)*time.Second)
 	defer cancel()
 
 	querySQL := util.StringsBuilder(`SELECT SCN,

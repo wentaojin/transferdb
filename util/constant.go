@@ -15,8 +15,6 @@ limitations under the License.
 */
 package util
 
-import "time"
-
 // 同步操作类型
 const (
 	UpdateOperation        = "UPDATE"
@@ -27,7 +25,6 @@ const (
 	DDLOperation           = "DDL"
 	TruncateTableOperation = "TRUNCATE TABLE"
 	DropTableOperation     = "DROP TABLE"
-	LogminerQueryTimeout   = 300 * time.Second
 )
 
 // 用于控制当程序消费追平到当前 CURRENT 重做日志，

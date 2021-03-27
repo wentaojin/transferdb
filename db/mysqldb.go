@@ -33,7 +33,7 @@ func NewMySQLEnginePrepareDB(username string, password string, host string, port
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&parseTime=True&loc=Local", username, password, host, port)
 
 	// 初始化 gorm 日志记录器
-	gLogger := zlog.NewGormLogger(zlog.Logger, time.Duration(slowQueryThreshold))
+	gLogger := zlog.NewGormLogger(zlog.Logger, time.Duration(slowQueryThreshold)*time.Millisecond)
 	gLogger.LogMode(gormLogger.Warn)
 	gLogger.SetAsDefault()
 	gormDB, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
@@ -65,7 +65,7 @@ func NewMySQLEngineGeneralDB(username string, password string, host string, port
 		gormDB *gorm.DB
 		err    error
 	)
-	gLogger := zlog.NewGormLogger(zlog.Logger, time.Duration(slowQueryThreshold))
+	gLogger := zlog.NewGormLogger(zlog.Logger, time.Duration(slowQueryThreshold)*time.Millisecond)
 	gLogger.LogMode(gormLogger.Warn)
 	gLogger.SetAsDefault()
 	gormDB, err = gorm.Open(mysql.Open(dsn), &gorm.Config{

@@ -21,7 +21,6 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
-	"time"
 
 	"github.com/WentaoJin/transferdb/pkg/signal"
 
@@ -57,8 +56,7 @@ func main() {
 
 	// 信号量监听处理
 	signal.SetupSignalHandler(func() {
-		time.Sleep(15 * time.Second)
-		os.Exit(0)
+		os.Exit(1)
 	})
 
 	// 程序运行

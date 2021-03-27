@@ -76,7 +76,7 @@ func NewEngineDB(cfg *config.CfgFile) (*db.Engine, error) {
 		oraDB  *sql.DB
 		err    error
 	)
-	oraDB, err = db.NewOracleDBEngine(cfg.SourceConfig.DSN)
+	oraDB, err = db.NewOracleDBEngine(cfg.SourceConfig)
 	if err != nil {
 		return engine, err
 	}

@@ -58,17 +58,22 @@ type IncrementConfig struct {
 }
 
 type AllConfig struct {
-	FilterThreads int `toml:"filter-threads" json:"filter-threads"`
-	ApplyThreads  int `toml:"apply-threads" json:"apply-threads"`
-	WorkerQueue   int `toml:"worker-queue" json:"worker-queue"`
-	WorkerThreads int `toml:"worker-threads" json:"worker-threads"`
+	LogminerQueryTimeout int `toml:"logminer-query-timeout" json:"logminer-query-timeout"`
+	FilterThreads        int `toml:"filter-threads" json:"filter-threads"`
+	ApplyThreads         int `toml:"apply-threads" json:"apply-threads"`
+	WorkerQueue          int `toml:"worker-queue" json:"worker-queue"`
+	WorkerThreads        int `toml:"worker-threads" json:"worker-threads"`
 }
 
 type SourceConfig struct {
-	DSN          string   `toml:"dsn" json:"dsn"`
-	SchemaName   string   `toml:"schema-name",json:"schema-name"`
-	IncludeTable []string `toml:"include-table",json:"include-table"`
-	ExcludeTable []string `toml:"exclude-table",json:"exclude-table"`
+	Username      string   `toml:"username" json:"username"`
+	Password      string   `toml:"password" json:"password"`
+	ConnectString string   `toml:"connect-string",json:"connect-string"`
+	SessionParams []string `toml:"session-params" json:"session-params"`
+	Timezone      string   `toml:"timezone" json:"timezone"`
+	SchemaName    string   `toml:"schema-name",json:"schema-name"`
+	IncludeTable  []string `toml:"include-table",json:"include-table"`
+	ExcludeTable  []string `toml:"exclude-table",json:"exclude-table"`
 }
 
 type TargetConfig struct {

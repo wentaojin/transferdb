@@ -19,18 +19,29 @@ import (
 	"fmt"
 
 	"github.com/WentaoJin/transferdb/db"
+	"github.com/WentaoJin/transferdb/pkg/config"
 )
 
 func main() {
-	dsn := "oracle://marvin:marvin@orcl11"
-	sqlDB, err := db.NewOracleDBEngine(dsn)
+	oraCfg := config.SourceConfig{
+		Username:      "marvin",
+		Password:      "marvin",
+		ConnectString: "192.168.2.90:1521/orcl?connect_timeout=2",
+		SessionParams: []string{"alter session set nls_date_format = 'yyyy-mm-dd hh24:mi:ss'"},
+		SchemaName:    "marvin",
+		Timezone:      "UTC",
+		IncludeTable:  nil,
+		ExcludeTable:  nil,
+	}
+	sqlDB, err := db.NewOracleDBEngine(oraCfg)
 	if err != nil {
 		fmt.Println(err)
 	}
+
 	engine := db.Engine{
 		OracleDB: sqlDB,
 	}
-	col, res, err := engine.QueryFormatOracleRows(`select * from marvin.marvin3 where id=11`)
+	col, res, err := engine.QueryFormatOracleRows(`select sysdate from dual`)
 	if err != nil {
 		fmt.Println(err)
 	}

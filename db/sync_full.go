@@ -38,8 +38,8 @@ func (e *Engine) AdjustFullStageMySQLTableMetaRecord(schemaName string, tableMet
 		tblFullSlice      []string
 	)
 
+	tfm := &TableFullMeta{}
 	for _, table := range tableMetas {
-		tfm := &TableFullMeta{}
 		tfmRecordCounts, err := tfm.GetTableFullMetaRecordCounts(schemaName, table.SourceTableName, e)
 		if err != nil {
 			return false, tblFullSlice, panicTblFullSlice, err
@@ -127,7 +127,8 @@ func (e *Engine) ClearMySQLTableMetaRecord(metaSchemaName, sourceSchemaName stri
 		Where("upper(source_schema_name) = ?",
 			strings.ToUpper(sourceSchemaName)).
 		Updates(TableMeta{
-			FullGlobalSCN: -1,
+			FullGlobalSCN:  -1,
+			FullSplitTimes: -1,
 		}).Error; err != nil {
 		return err
 	}
@@ -254,8 +255,10 @@ func (e *Engine) GetMySQLTableMetaRecord(schemaName string) ([]TableMeta, []stri
 		strings.ToUpper(schemaName)).Find(&tableMetas).Error; err != nil {
 		return tableMetas, tables, err
 	}
-	for _, table := range tableMetas {
-		tables = append(tables, table.SourceTableName)
+	if len(tableMetas) > 0 {
+		for _, table := range tableMetas {
+			tables = append(tables, table.SourceTableName)
+		}
 	}
 	return tableMetas, tables, nil
 }

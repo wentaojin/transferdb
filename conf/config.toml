@@ -13,7 +13,7 @@
 # 事务 batch 数
 # 用于数据写入 batch 提交事务数
 insert-batch-size = 500
-# 是否开启更新元数据库表慢日志,单位毫秒，默认 300ms
+# 是否开启更新元数据库表慢日志，单位毫秒
 slowlog-threshold = 300
 
 [reverse]
@@ -37,6 +37,8 @@ table-threads = 3
 enable-checkpoint = true
 
 [all]
+# logminer 挖掘最长耗时，单位: 秒
+logminer-query-timeout   = 300
 # 并发筛选 oracle 日志数
 filter-threads = 16
 # 并发表应用数，同时处理多少张表
@@ -48,8 +50,16 @@ worker-threads = 3
 
 [source]
 # 源端 oracle 连接串
-# 样例：用户名/密码@主机地址:数据库端口/实例名
-dsn = "marvin/marvin@192.168.10.2:1521/orcl"
+# 若需要增量数据同步，则需要 logminer 权限
+username = "marvin"
+password = "marvin"
+# 配置 oracle 连接字符串，样例：主机地址:数据库端口/实例名?参数
+connect-string = "192.168.10.2:1521/orcl?connect_timeout=2"
+# 配置 oracle 连接会话 session 变量,
+session-params = ["alter session set nls_date_format = 'yyyy-mm-dd hh24:mi:ss'"]
+# 配置 oracle 连接时区
+timezone = "Local"
+# 配置 oracle 迁移 schema
 schema-name = "system"
 # 源端迁移任务表
 # include-table 和 exclude-table 不能同时配置，两者只能配置一个,如果两个都没配置则 Schema 内表全迁移

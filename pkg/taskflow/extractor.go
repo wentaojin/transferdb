@@ -57,11 +57,12 @@ func extractorTableIncrementRecord(engine *db.Engine,
 	sourceSchemaName string,
 	sourceTableNameList []string,
 	logFileName string,
-	logFileStartSCN int, lastCheckpoint int) ([]db.LogminerContent, error) {
+	logFileStartSCN int, lastCheckpoint, logminerQueryTimeout int) ([]db.LogminerContent, error) {
 	rowsResult, err := engine.GetOracleLogminerContentToMySQL(
 		sourceSchemaName,
 		util.StringArrayToCapitalChar(sourceTableNameList),
-		strconv.Itoa(lastCheckpoint))
+		strconv.Itoa(lastCheckpoint),
+		logminerQueryTimeout)
 	if err != nil {
 		return []db.LogminerContent{}, err
 	}

@@ -39,14 +39,21 @@ func LoaderOracleTableFullRecordToMySQLByFullMode(cfg *config.CfgFile, engine *d
 	zlog.Logger.Info("all full table data loader start",
 		zap.String("schema", cfg.SourceConfig.SchemaName))
 
-	tableMetas, transferTableList, err := engine.GetMySQLTableMetaRecord(cfg.SourceConfig.SchemaName)
+	// 获取配置文件待同步表列表
+	transferTableSlice, err := getTransferTableSliceByCfg(cfg, engine)
 	if err != nil {
 		return err
 	}
-	if len(tableMetas) == 0 {
-		return fmt.Errorf("mysql meta schema [%v] table [%v] can't null, please run reverse mode",
-			cfg.TargetConfig.MetaSchema,
-			"table_meta")
+
+	_, tableMetaList, err := engine.GetMySQLTableMetaRecord(cfg.SourceConfig.SchemaName)
+	if err != nil {
+		return err
+	}
+	if len(tableMetaList) == 0 {
+		// 初始化同步表
+		if err := engine.InitMySQLTableMetaRecord(cfg.SourceConfig.SchemaName, transferTableSlice); err != nil {
+			return err
+		}
 	}
 
 	// 关于全量断点恢复
@@ -59,9 +66,28 @@ func LoaderOracleTableFullRecordToMySQLByFullMode(cfg *config.CfgFile, engine *d
 		if err := engine.ClearMySQLTableMetaRecord(cfg.TargetConfig.MetaSchema, cfg.SourceConfig.SchemaName); err != nil {
 			return err
 		}
+		tableMetas, _, err := engine.GetMySQLTableMetaRecord(cfg.SourceConfig.SchemaName)
+		if err != nil {
+			return err
+		}
+		if len(tableMetas) == 0 {
+			return fmt.Errorf("mysql meta schema [%v] table [%v] can't null, meet panic",
+				cfg.TargetConfig.MetaSchema,
+				"table_meta")
+		}
 		if err := engine.TruncateMySQLTableRecord(cfg.TargetConfig.SchemaName, tableMetas); err != nil {
 			return err
 		}
+	}
+
+	tableMetas, transferTableList, err := engine.GetMySQLTableMetaRecord(cfg.SourceConfig.SchemaName)
+	if err != nil {
+		return err
+	}
+	if len(tableMetas) == 0 {
+		return fmt.Errorf("mysql meta schema [%v] table [%v] can't null, meet panic",
+			cfg.TargetConfig.MetaSchema,
+			"table_meta")
 	}
 
 	isOK, waitInitTableList, panicTableList, err := engine.AdjustFullStageMySQLTableMetaRecord(cfg.SourceConfig.SchemaName, tableMetas)
@@ -95,19 +121,15 @@ func loaderOracleTableFullRecordToMySQLByAllMode(cfg *config.CfgFile, engine *db
 		return err
 	}
 
-	// 初始化同步表
-	if err := engine.InitMySQLTableMetaRecord(cfg.SourceConfig.SchemaName, transferTableSlice); err != nil {
-		return err
-	}
-
-	tableMetas, transferTableList, err := engine.GetMySQLTableMetaRecord(cfg.SourceConfig.SchemaName)
+	_, tableMetaList, err := engine.GetMySQLTableMetaRecord(cfg.SourceConfig.SchemaName)
 	if err != nil {
 		return err
 	}
-	if len(tableMetas) == 0 {
-		return fmt.Errorf("mysql meta schema [%v] table [%v] can't null, please run reverse mode",
-			cfg.TargetConfig.MetaSchema,
-			"table_meta")
+	if len(tableMetaList) == 0 {
+		// 初始化同步表
+		if err := engine.InitMySQLTableMetaRecord(cfg.SourceConfig.SchemaName, transferTableSlice); err != nil {
+			return err
+		}
 	}
 
 	// 关于全量断点恢复
@@ -120,9 +142,28 @@ func loaderOracleTableFullRecordToMySQLByAllMode(cfg *config.CfgFile, engine *db
 		if err := engine.ClearMySQLTableMetaRecord(cfg.TargetConfig.MetaSchema, cfg.SourceConfig.SchemaName); err != nil {
 			return err
 		}
+		tableMetas, _, err := engine.GetMySQLTableMetaRecord(cfg.SourceConfig.SchemaName)
+		if err != nil {
+			return err
+		}
+		if len(tableMetas) == 0 {
+			return fmt.Errorf("mysql meta schema [%v] table [%v] can't null, meet panic",
+				cfg.TargetConfig.MetaSchema,
+				"table_meta")
+		}
 		if err := engine.TruncateMySQLTableRecord(cfg.TargetConfig.SchemaName, tableMetas); err != nil {
 			return err
 		}
+	}
+
+	tableMetas, transferTableList, err := engine.GetMySQLTableMetaRecord(cfg.SourceConfig.SchemaName)
+	if err != nil {
+		return err
+	}
+	if len(tableMetas) == 0 {
+		return fmt.Errorf("mysql meta schema [%v] table [%v] can't null, meet panic",
+			cfg.TargetConfig.MetaSchema,
+			"table_meta")
 	}
 
 	isOK, waitInitTableList, panicTableList, err := engine.AdjustFullStageMySQLTableMetaRecord(cfg.SourceConfig.SchemaName, tableMetas)
@@ -219,7 +260,6 @@ func getTransferTableSliceByCfg(cfg *config.CfgFile, engine *db.Engine) ([]strin
 /*
 	增量同步任务
 */
-
 func SyncOracleTableAllRecordToMySQLByAllMode(cfg *config.CfgFile, engine *db.Engine) error {
 	zlog.Logger.Info("Welcome to transferdb", zap.String("config", cfg.String()))
 
@@ -304,7 +344,8 @@ func syncOracleTableIncrementRecordToMySQLByAllMode(cfg *config.CfgFile, engine 
 			transferTableSlice,
 			log["LOG_FILE"],
 			logFileStartSCN,
-			minSourceTableSCN)
+			minSourceTableSCN,
+			cfg.AllConfig.LogminerQueryTimeout)
 		if err != nil {
 			return err
 		}
