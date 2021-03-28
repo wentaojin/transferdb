@@ -18,11 +18,21 @@ package main
 import (
 	"fmt"
 
+	"github.com/WentaoJin/transferdb/pkg/config"
+
 	"github.com/WentaoJin/transferdb/db"
 )
 
 func main() {
-	engine, err := db.NewMySQLEngineGeneralDB("marvin", "marvin", "192.168.2.30", 5000, "steven", 300)
+	mysqlCfg := config.TargetConfig{
+		Username:      "marvin",
+		Password:      "marvin",
+		Host:          "192.168.2.30",
+		Port:          5000,
+		ConnectParams: "charset=utf8mb4&parseTime=True&loc=Local&multiStatements=true&tidb_txn_mode='optimistic'",
+		MetaSchema:    "steven",
+	}
+	engine, err := db.NewMySQLEngineGeneralDB(mysqlCfg, 300)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -32,5 +42,4 @@ func main() {
 	}
 	fmt.Println(cols)
 	fmt.Println(res)
-
 }

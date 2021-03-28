@@ -62,7 +62,7 @@ type TableIncrementMeta struct {
 func (f *TableFullMeta) GetTableFullMetaRecordCounts(schemaName, tableName string, engine *Engine) (int, error) {
 	var count int64
 	if err := engine.GormDB.Model(&TableFullMeta{}).
-		Where("upper(source_schema_name) = ? and upper(source_table_name) = ?",
+		Where("source_schema_name = ? and source_table_name = ?",
 			strings.ToUpper(schemaName),
 			strings.ToUpper(tableName)).
 		Count(&count).Error; err != nil {
@@ -83,14 +83,14 @@ func (i *TableIncrementMeta) GetTableIncrementMetaRowCounts(engine *Engine) (int
 func (e *Engine) UpdateTableIncrementMetaALLSCNRecord(sourceSchemaName, sourceTableName, operationType string, globalSCN, sourceTableSCN int) error {
 	if operationType == util.DropTableOperation {
 		if err := e.GormDB.Transaction(func(tx *gorm.DB) error {
-			if err := tx.Where("upper(source_schema_name) = ? and upper(source_table_name) = ?",
+			if err := tx.Where("source_schema_name = ? and source_table_name = ?",
 				strings.ToUpper(sourceSchemaName),
 				strings.ToUpper(sourceTableName)).
 				Delete(&TableIncrementMeta{}).Error; err != nil {
 				return err
 			}
 
-			if err := tx.Where("upper(source_schema_name) = ? and upper(source_table_name) = ?",
+			if err := tx.Where("source_schema_name = ? and source_table_name = ?",
 				strings.ToUpper(sourceSchemaName),
 				strings.ToUpper(sourceTableName)).
 				Delete(&TableMeta{}).Error; err != nil {
@@ -102,7 +102,7 @@ func (e *Engine) UpdateTableIncrementMetaALLSCNRecord(sourceSchemaName, sourceTa
 		}
 		return nil
 	}
-	if err := e.GormDB.Model(TableIncrementMeta{}).Where("upper(source_schema_name) = ? and upper(source_table_name) = ?",
+	if err := e.GormDB.Model(TableIncrementMeta{}).Where("source_schema_name = ? and source_table_name = ?",
 		strings.ToUpper(sourceSchemaName),
 		strings.ToUpper(sourceTableName)).
 		Updates(TableIncrementMeta{GlobalSCN: globalSCN, SourceTableSCN: sourceTableSCN}).Error; err != nil {
@@ -122,15 +122,15 @@ func (e *Engine) UpdateSingleTableIncrementMetaSCNByCurrentRedo(
 
 	var tableIncrMeta []TableIncrementMeta
 	if err := e.GormDB.Model(TableIncrementMeta{}).Where(
-		"upper(source_schema_name) = ?",
+		"source_schema_name = ?",
 		strings.ToUpper(sourceSchemaName)).Find(&tableIncrMeta).Error; err != nil {
 		return err
 	}
 
 	for _, table := range tableIncrMeta {
-		if table.GlobalSCN < logFileSCN || table.GlobalSCN > logFileSCN {
+		if table.GlobalSCN < logFileSCN {
 			if err := e.GormDB.Model(TableIncrementMeta{}).Where(
-				"upper(source_schema_name) = ? and upper(source_table_name) = ?",
+				"source_schema_name = ? and source_table_name = ?",
 				strings.ToUpper(sourceSchemaName),
 				strings.ToUpper(table.SourceTableName)).
 				Updates(TableIncrementMeta{
@@ -148,7 +148,7 @@ func (e *Engine) UpdateSingleTableIncrementMetaSCNByNonCurrentRedo(
 	transferTableSlice []string) error {
 	for _, table := range transferTableSlice {
 		if err := e.GormDB.Model(TableIncrementMeta{}).Where(
-			"upper(source_schema_name) = ? and upper(source_table_name) = ?",
+			"source_schema_name = ? and source_table_name = ?",
 			strings.ToUpper(sourceSchemaName),
 			strings.ToUpper(table)).
 			Updates(TableIncrementMeta{

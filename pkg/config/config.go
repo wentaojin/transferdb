@@ -77,13 +77,14 @@ type SourceConfig struct {
 }
 
 type TargetConfig struct {
-	Username   string `toml:"username" json:"username"`
-	Password   string `toml:"password" json:"password"`
-	Host       string `toml:"host" json:"host"`
-	Port       int    `toml:"port" json:"port"`
-	MetaSchema string `toml:"meta-schema" json:"meta-schema"`
-	SchemaName string `toml:"schema-name",json:"schema-name"`
-	Overwrite  bool   `toml:"overwrite" json:"overwrite"`
+	Username      string `toml:"username" json:"username"`
+	Password      string `toml:"password" json:"password"`
+	Host          string `toml:"host" json:"host"`
+	Port          int    `toml:"port" json:"port"`
+	ConnectParams string `toml:"connect-params" json:"connect-params"`
+	MetaSchema    string `toml:"meta-schema" json:"meta-schema"`
+	SchemaName    string `toml:"schema-name",json:"schema-name"`
+	Overwrite     bool   `toml:"overwrite" json:"overwrite"`
 }
 
 type LogConfig struct {

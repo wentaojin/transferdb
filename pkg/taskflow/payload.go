@@ -386,7 +386,7 @@ func syncOracleTableIncrementRecordToMySQLByAllMode(cfg *config.CfgFile, engine 
 					if err := applyOracleRedoIncrementRecord(cfg, engine, logminerContentMap); err != nil {
 						return err
 					}
-					// 当前所有日志文件内容应用完毕，直接更新 GLOBAL_SCN 至当前重做日志文件起始 SCN
+					// 当前所有日志文件内容应用完毕，判断是否直接更新 GLOBAL_SCN 至当前重做日志文件起始 SCN
 					if err := engine.UpdateSingleTableIncrementMetaSCNByCurrentRedo(
 						cfg.SourceConfig.SchemaName,
 						maxLogFileSCN,
@@ -397,7 +397,7 @@ func syncOracleTableIncrementRecordToMySQLByAllMode(cfg *config.CfgFile, engine 
 					}
 					continue
 				}
-				zlog.Logger.Warn("increment table log file logminer null data, transferdb will continue to capture")
+				zlog.Logger.Warn("increment table log file logminer data that needn't to be consumed by current redo, transferdb will continue to capture")
 				continue
 			} else {
 				logminerContentMap, err = filterOracleRedoGreaterOrEqualRecordByTable(
@@ -425,13 +425,13 @@ func syncOracleTableIncrementRecordToMySQLByAllMode(cfg *config.CfgFile, engine 
 					}
 					continue
 				}
-				zlog.Logger.Warn("increment table log file logminer null data, transferdb will continue to capture")
+				zlog.Logger.Warn("increment table log file logminer data that needn't to be consumed by logfile, transferdb will continue to capture")
 				continue
 			}
 		}
 
 		if log["LOG_FILE"] == currentRedoLogFileName {
-			// 当前所有日志文件内容应用完毕，直接更新 GLOBAL_SCN 至当前重做日志文件起始 SCN
+			// 当前所有日志文件内容应用完毕，判断是否直接更新 GLOBAL_SCN 至当前重做日志文件起始 SCN
 			if err := engine.UpdateSingleTableIncrementMetaSCNByCurrentRedo(
 				cfg.SourceConfig.SchemaName,
 				maxLogFileSCN,

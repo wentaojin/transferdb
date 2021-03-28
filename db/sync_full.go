@@ -79,7 +79,7 @@ func (e *Engine) IsNotExistMySQLTableIncrementMetaRecord() (bool, error) {
 func (e *Engine) ModifyMySQLTableMetaRecord(metaSchemaName, sourceSchemaName, sourceTableName, rowidSQL string) error {
 	if err := e.GormDB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Model(TableFullMeta{}).
-			Where(`upper(source_schema_name) = ? AND upper(source_table_name)= ? AND upper(rowid_sql)= ?`,
+			Where(`source_schema_name = ? AND source_table_name= ? AND upper(rowid_sql)= ?`,
 				strings.ToUpper(sourceSchemaName),
 				strings.ToUpper(sourceTableName),
 				strings.ToUpper(rowidSQL)).Delete(&TableFullMeta{}).Error; err != nil {
@@ -94,7 +94,7 @@ func (e *Engine) ModifyMySQLTableMetaRecord(metaSchemaName, sourceSchemaName, so
 			zap.String("status", "success"))
 
 		if err := tx.Model(&TableMeta{}).
-			Where(`upper(source_schema_name) = ? AND upper(source_table_name)= ?`,
+			Where(`source_schema_name = ? AND source_table_name= ?`,
 				strings.ToUpper(sourceSchemaName),
 				strings.ToUpper(sourceTableName)).
 			Update("full_split_times", gorm.Expr("full_split_times - 1")).Error; err != nil {
@@ -124,7 +124,7 @@ func (e *Engine) TruncateMySQLTableFullMetaRecord(metaSchemaName string) error {
 
 func (e *Engine) ClearMySQLTableMetaRecord(metaSchemaName, sourceSchemaName string) error {
 	if err := e.GormDB.Model(&TableMeta{}).
-		Where("upper(source_schema_name) = ?",
+		Where("source_schema_name = ?",
 			strings.ToUpper(sourceSchemaName)).
 		Updates(TableMeta{
 			FullGlobalSCN:  -1,
@@ -209,8 +209,8 @@ func (e *Engine) InitMySQLTableMetaRecord(schemaName string, tableName []string)
 	// 全量同步完成，增量阶段，值预期都是 0
 	for _, table := range tableName {
 		if err := e.GormDB.Create(&TableMeta{
-			SourceSchemaName: schemaName,
-			SourceTableName:  table,
+			SourceSchemaName: strings.ToUpper(schemaName),
+			SourceTableName:  strings.ToUpper(table),
 			FullGlobalSCN:    -1,
 			FullSplitTimes:   -1,
 		}).Error; err != nil {
@@ -222,7 +222,7 @@ func (e *Engine) InitMySQLTableMetaRecord(schemaName string, tableName []string)
 
 func (e *Engine) UpdateMySQLTableMetaRecord(schemaName, tableName string, rowCounts, globalSCN int) error {
 	if err := e.GormDB.Model(&TableMeta{}).
-		Where("upper(source_schema_name) = ? AND upper(source_table_name) = ?",
+		Where("source_schema_name = ? AND source_table_name = ?",
 			strings.ToUpper(schemaName),
 			strings.ToUpper(tableName)).
 		Updates(TableMeta{
@@ -237,8 +237,8 @@ func (e *Engine) UpdateMySQLTableMetaRecord(schemaName, tableName string, rowCou
 func (e *Engine) InitMySQLTableIncrementMeta(schemaName, tableName string, globalSCN int) error {
 	if err := e.GormDB.Create(&TableIncrementMeta{
 		GlobalSCN:        globalSCN,
-		SourceSchemaName: schemaName,
-		SourceTableName:  tableName,
+		SourceSchemaName: strings.ToUpper(schemaName),
+		SourceTableName:  strings.ToUpper(tableName),
 		SourceTableSCN:   globalSCN,
 	}).Error; err != nil {
 		return err
@@ -251,13 +251,13 @@ func (e *Engine) GetMySQLTableMetaRecord(schemaName string) ([]TableMeta, []stri
 		tableMetas []TableMeta
 		tables     []string
 	)
-	if err := e.GormDB.Where("upper(source_schema_name) = ?",
+	if err := e.GormDB.Where("source_schema_name = ?",
 		strings.ToUpper(schemaName)).Find(&tableMetas).Error; err != nil {
 		return tableMetas, tables, err
 	}
 	if len(tableMetas) > 0 {
 		for _, table := range tableMetas {
-			tables = append(tables, table.SourceTableName)
+			tables = append(tables, strings.ToUpper(table.SourceTableName))
 		}
 	}
 	return tableMetas, tables, nil
@@ -281,7 +281,7 @@ func (e *Engine) GetMySQLTableFullMetaRowIDRecord(schemaName, tableName string) 
 		tableFullMetas []TableFullMeta
 	)
 	if err := e.GormDB.
-		Where("upper(source_schema_name) = ? AND upper(source_table_name) = ?",
+		Where("source_schema_name = ? AND source_table_name = ?",
 			strings.ToUpper(schemaName), strings.ToUpper(tableName)).Find(&tableFullMetas).Error; err != nil {
 		return rowID, err
 	}
@@ -359,8 +359,8 @@ func (e *Engine) getAndInitOracleNormalTableTableFullMetaByRowID(
 	)
 	for idx, r := range res {
 		fullMetas = append(fullMetas, TableFullMeta{
-			SourceSchemaName: schemaName,
-			SourceTableName:  tableName,
+			SourceSchemaName: strings.ToUpper(schemaName),
+			SourceTableName:  strings.ToUpper(tableName),
 			RowidSQL:         r["DATA"],
 			IsPartition:      "N",
 			GlobalSCN:        globalSCN,

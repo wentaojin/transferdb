@@ -81,11 +81,7 @@ func NewEngineDB(cfg *config.CfgFile) (*db.Engine, error) {
 		return engine, err
 	}
 	engine, err = db.NewMySQLEngineGeneralDB(
-		cfg.TargetConfig.Username,
-		cfg.TargetConfig.Password,
-		cfg.TargetConfig.Host,
-		cfg.TargetConfig.Port,
-		cfg.TargetConfig.MetaSchema,
+		cfg.TargetConfig,
 		cfg.AppConfig.SlowlogThreshold)
 	if err != nil {
 		return engine, err

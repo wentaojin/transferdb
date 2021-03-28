@@ -72,6 +72,8 @@ username = "marvin"
 password = "marvin"
 host = "192.168.2.90"
 port = 5000
+# mysql 链接参数
+connect-params = "charset=utf8mb4&parseTime=True&loc=Local&multiStatements=true"
 # 目标端元数据库
 # CREATE DATABASE IF NOT EXIST dbsyncer_meta
 meta-schema = "db_meta"

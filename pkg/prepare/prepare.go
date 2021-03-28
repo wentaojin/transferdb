@@ -32,11 +32,7 @@ func TransferDBEnvPrepare(cfg *config.CfgFile) error {
 	zlog.Logger.Info("Welcome to transferdb", zap.String("config", cfg.String()))
 	zlog.Logger.Info("prepare tansferdb env start")
 	mysqlEngine, err := db.NewMySQLEnginePrepareDB(
-		cfg.TargetConfig.Username,
-		cfg.TargetConfig.Password,
-		cfg.TargetConfig.Host,
-		cfg.TargetConfig.Port,
-		cfg.TargetConfig.MetaSchema,
+		cfg.TargetConfig,
 		cfg.AppConfig.SlowlogThreshold,
 	)
 	if err != nil {
