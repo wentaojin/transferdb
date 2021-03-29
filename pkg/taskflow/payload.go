@@ -355,8 +355,14 @@ func syncOracleTableIncrementRecordToMySQLByAllMode(cfg *config.CfgFile, engine 
 			return err
 		}
 
-		// 获取当前 CURRENT REDO LOG 信息
-		maxLogFileSCN, currentRedoLogFileName, err := engine.GetOracleCurrentRedoMaxSCN()
+		// 获取 Oracle 所有 REDO 列表
+		redoLogList, err := engine.GetOracleALLRedoLogFile()
+		if err != nil {
+			return err
+		}
+
+		//获取当前 CURRENT REDO LOG 信息
+		currentRedoLogFirstChange, currentRedoLogMaxSCN, currentRedoLogFileName, err := engine.GetOracleCurrentRedoMaxSCN()
 		if err != nil {
 			return err
 		}
@@ -366,83 +372,126 @@ func syncOracleTableIncrementRecordToMySQLByAllMode(cfg *config.CfgFile, engine 
 			logminerContentMap map[string][]db.LogminerContent
 		)
 		if len(rowsResult) > 0 {
-			// 如果当前日志文件是当前重做日志文件则 filterOracleRedoGreaterOrEqualRecordByTable 只运行一次大于或等于，也就是只重放一次已消费得 SCN
-			if log["LOG_FILE"] == currentRedoLogFileName {
-				logminerContentMap, err = filterOracleRedoGreaterOrEqualRecordByTable(
-					rowsResult,
-					transferTableSlice,
-					transferTableMetaMap,
-					cfg.AllConfig.FilterThreads,
-					util.CurrentResetFlag,
-				)
-				if err != nil {
-					return err
+			// 判断当前日志文件是否是重做日志文件
+			if util.IsContainString(redoLogList, log["LOG_FILE"]) {
+				// 判断是否是当前重做日志文件
+				// 如果当前日志文件是当前重做日志文件则 filterOracleRedoGreaterOrEqualRecordByTable 只运行一次大于或等于，也就是只重放一次已消费得 SCN
+				if logFileStartSCN == currentRedoLogFirstChange && log["LOG_FILE"] == currentRedoLogFileName {
+					logminerContentMap, err = filterOracleRedoGreaterOrEqualRecordByTable(
+						rowsResult,
+						transferTableSlice,
+						transferTableMetaMap,
+						cfg.AllConfig.FilterThreads,
+						util.CurrentResetFlag,
+					)
+					if err != nil {
+						return err
+					}
+					zlog.Logger.Warn("oracle current redo log reset flag", zap.Int("CurrentResetFlag", util.CurrentResetFlag))
+					util.CurrentResetFlag = 1
+				} else {
+					logminerContentMap, err = filterOracleRedoGreaterOrEqualRecordByTable(
+						rowsResult,
+						transferTableSlice,
+						transferTableMetaMap,
+						cfg.AllConfig.FilterThreads,
+						0,
+					)
+					if err != nil {
+						return err
+					}
 				}
-				zlog.Logger.Warn("oracle current redo log reset flag", zap.Int("CurrentResetFlag", util.CurrentResetFlag))
-				util.CurrentResetFlag = 1
 
 				if len(logminerContentMap) > 0 {
 					// 数据应用
 					if err := applyOracleRedoIncrementRecord(cfg, engine, logminerContentMap); err != nil {
 						return err
 					}
-					// 当前所有日志文件内容应用完毕，判断是否直接更新 GLOBAL_SCN 至当前重做日志文件起始 SCN
-					if err := engine.UpdateSingleTableIncrementMetaSCNByCurrentRedo(
-						cfg.SourceConfig.SchemaName,
-						maxLogFileSCN,
-						logFileStartSCN,
-						logFileEndSCN,
-					); err != nil {
-						return err
+
+					if logFileStartSCN == currentRedoLogFirstChange && log["LOG_FILE"] == currentRedoLogFileName {
+						// 当前所有日志文件内容应用完毕，判断是否直接更新 GLOBAL_SCN 至当前重做日志文件起始 SCN
+						if err := engine.UpdateSingleTableIncrementMetaSCNByCurrentRedo(
+							cfg.SourceConfig.SchemaName,
+							currentRedoLogMaxSCN,
+							logFileStartSCN,
+							logFileEndSCN,
+						); err != nil {
+							return err
+						}
+					} else {
+						// 当前所有日志文件内容应用完毕，直接更新 GLOBAL_SCN 至日志文件结束 SCN
+						if err := engine.UpdateSingleTableIncrementMetaSCNByNonCurrentRedo(
+							cfg.SourceConfig.SchemaName,
+							currentRedoLogMaxSCN,
+							logFileStartSCN,
+							logFileEndSCN,
+							transferTableSlice,
+						); err != nil {
+							return err
+						}
 					}
+
 					continue
 				}
 				zlog.Logger.Warn("increment table log file logminer data that needn't to be consumed by current redo, transferdb will continue to capture")
 				continue
-			} else {
-				logminerContentMap, err = filterOracleRedoGreaterOrEqualRecordByTable(
-					rowsResult,
-					transferTableSlice,
-					transferTableMetaMap,
-					cfg.AllConfig.FilterThreads,
-					0,
-				)
-				if err != nil {
+			}
+			logminerContentMap, err = filterOracleRedoGreaterOrEqualRecordByTable(
+				rowsResult,
+				transferTableSlice,
+				transferTableMetaMap,
+				cfg.AllConfig.FilterThreads,
+				0,
+			)
+			if err != nil {
+				return err
+			}
+			if len(logminerContentMap) > 0 {
+				// 数据应用
+				if err := applyOracleRedoIncrementRecord(cfg, engine, logminerContentMap); err != nil {
 					return err
 				}
-				if len(logminerContentMap) > 0 {
-					// 数据应用
-					if err := applyOracleRedoIncrementRecord(cfg, engine, logminerContentMap); err != nil {
-						return err
-					}
-					// 当前所有日志文件内容应用完毕，直接更新 GLOBAL_SCN 至日志文件结束 SCN
-					if err := engine.UpdateSingleTableIncrementMetaSCNByNonCurrentRedo(
-						cfg.SourceConfig.SchemaName,
-						logFileEndSCN,
-						transferTableSlice,
-					); err != nil {
-						return err
-					}
-					continue
+				// 当前所有日志文件内容应用完毕，直接更新 GLOBAL_SCN 至日志文件结束 SCN
+				if err := engine.UpdateSingleTableIncrementMetaSCNByArchivedLog(
+					cfg.SourceConfig.SchemaName,
+					logFileEndSCN,
+					transferTableSlice,
+				); err != nil {
+					return err
 				}
-				zlog.Logger.Warn("increment table log file logminer data that needn't to be consumed by logfile, transferdb will continue to capture")
 				continue
 			}
+			zlog.Logger.Warn("increment table log file logminer data that needn't to be consumed by logfile, transferdb will continue to capture")
+			continue
 		}
 
-		if log["LOG_FILE"] == currentRedoLogFileName {
-			// 当前所有日志文件内容应用完毕，判断是否直接更新 GLOBAL_SCN 至当前重做日志文件起始 SCN
-			if err := engine.UpdateSingleTableIncrementMetaSCNByCurrentRedo(
-				cfg.SourceConfig.SchemaName,
-				maxLogFileSCN,
-				logFileStartSCN,
-				logFileEndSCN,
-			); err != nil {
-				return err
+		// 当前日志文件不存在数据记录
+		if util.IsContainString(redoLogList, log["LOG_FILE"]) {
+			if logFileStartSCN == currentRedoLogFirstChange && log["LOG_FILE"] == currentRedoLogFileName {
+				// 当前所有日志文件内容应用完毕，判断是否直接更新 GLOBAL_SCN 至当前重做日志文件起始 SCN
+				if err := engine.UpdateSingleTableIncrementMetaSCNByCurrentRedo(
+					cfg.SourceConfig.SchemaName,
+					currentRedoLogMaxSCN,
+					logFileStartSCN,
+					logFileEndSCN,
+				); err != nil {
+					return err
+				}
+			} else {
+				// 当前所有日志文件内容应用完毕，判断是否更新 GLOBAL_SCN 至日志文件结束 SCN
+				if err := engine.UpdateSingleTableIncrementMetaSCNByNonCurrentRedo(
+					cfg.SourceConfig.SchemaName,
+					currentRedoLogMaxSCN,
+					logFileStartSCN,
+					logFileEndSCN,
+					transferTableSlice,
+				); err != nil {
+					return err
+				}
 			}
 		} else {
 			// 当前所有日志文件内容应用完毕，直接更新 GLOBAL_SCN 至日志文件结束 SCN
-			if err := engine.UpdateSingleTableIncrementMetaSCNByNonCurrentRedo(
+			if err := engine.UpdateSingleTableIncrementMetaSCNByArchivedLog(
 				cfg.SourceConfig.SchemaName,
 				logFileEndSCN,
 				transferTableSlice,

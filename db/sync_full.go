@@ -339,7 +339,7 @@ func (e *Engine) getAndInitOracleNormalTableTableFullMetaByRowID(
                    AND obj.object_name = ext.segment_name
                    AND obj.DATA_OBJECT_ID IS NOT NULL
                  ORDER BY DATA_OBJECT_ID, relative_fno, block_id)
-         order by DOI, grp)`, schemaName, tableName, parallel, tableName, schemaName)
+         order by DOI, grp)`, strings.ToUpper(schemaName), strings.ToUpper(tableName), parallel, strings.ToUpper(tableName), strings.ToUpper(schemaName))
 
 	var rowCount int
 

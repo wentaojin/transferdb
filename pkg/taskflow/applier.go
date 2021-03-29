@@ -88,38 +88,45 @@ func applyOracleRedoIncrementRecord(cfg *config.CfgFile, engine *db.Engine, logm
 		rowsResult := lcs
 		tbl := tableName
 		wp.DoWait(func() error {
-			var (
-				done        = make(chan bool)
-				taskQueue   = make(chan IncrementPayload, cfg.AllConfig.WorkerQueue)
-				resultQueue = make(chan IncrementResult, cfg.AllConfig.WorkerQueue)
-			)
-			// 获取增量执行结果
-			go GetIncrementResult(done, resultQueue)
+			if len(rowsResult) > 0 {
+				var (
+					done        = make(chan bool)
+					taskQueue   = make(chan IncrementPayload, cfg.AllConfig.WorkerQueue)
+					resultQueue = make(chan IncrementResult, cfg.AllConfig.WorkerQueue)
+				)
+				// 获取增量执行结果
+				go GetIncrementResult(done, resultQueue)
 
-			// 转换捕获内容以及数据应用
-			go func(engine *db.Engine, tbl, targetSchemaName string, rowsResult []db.LogminerContent, taskQueue chan IncrementPayload) {
-				defer func() {
-					if err := recover(); err != nil {
-						zlog.Logger.Fatal("translatorAndApplyOracleIncrementRecord",
-							zap.String("schema", cfg.TargetConfig.SchemaName),
-							zap.String("table", tbl),
-							zap.Error(fmt.Errorf("%v", err)))
+				// 转换捕获内容以及数据应用
+				go func(engine *db.Engine, tbl, targetSchemaName string, rowsResult []db.LogminerContent, taskQueue chan IncrementPayload) {
+					defer func() {
+						if err := recover(); err != nil {
+							zlog.Logger.Fatal("translatorAndApplyOracleIncrementRecord",
+								zap.String("schema", cfg.TargetConfig.SchemaName),
+								zap.String("table", tbl),
+								zap.Error(fmt.Errorf("%v", err)))
+						}
+					}()
+					if err := translatorAndApplyOracleIncrementRecord(
+						engine,
+						tbl,
+						targetSchemaName,
+						rowsResult, taskQueue); err != nil {
+						return
 					}
-				}()
-				if err := translatorAndApplyOracleIncrementRecord(
-					engine,
-					tbl,
-					targetSchemaName,
-					rowsResult, taskQueue); err != nil {
-					return
-				}
-			}(engine, tbl, cfg.TargetConfig.SchemaName, rowsResult, taskQueue)
+				}(engine, tbl, cfg.TargetConfig.SchemaName, rowsResult, taskQueue)
 
-			// 必须在任务分配和获取结果后创建工作池
-			go CreateWorkerPool(cfg.AllConfig.WorkerThreads, taskQueue, resultQueue)
-			// 等待执行完成
-			<-done
+				// 必须在任务分配和获取结果后创建工作池
+				go CreateWorkerPool(cfg.AllConfig.WorkerThreads, taskQueue, resultQueue)
+				// 等待执行完成
+				<-done
 
+				return nil
+			}
+			zlog.Logger.Warn("increment table log file logminer null data, transferdb will continue to capture",
+				zap.String("mysql schema", cfg.TargetConfig.SchemaName),
+				zap.String("table", tbl),
+				zap.String("status", "success"))
 			return nil
 		})
 	}

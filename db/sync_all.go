@@ -103,27 +103,50 @@ func (e *Engine) GetOracleArchivedLogFile(scn string) ([]map[string]string, erro
 	return res, nil
 }
 
-func (e *Engine) GetOracleCurrentRedoMaxSCN() (int, string, error) {
-	_, res, err := Query(e.OracleDB, util.StringsBuilder(`SELECT 
-       L.NEXT_CHANGE# AS NEXT_CHANGE,
+func (e *Engine) GetOracleCurrentRedoMaxSCN() (int, int, string, error) {
+	_, res, err := Query(e.OracleDB, util.StringsBuilder(`SELECT
+       l.FIRST_CHANGE# AS FIRST_CHANGE,
+       l.NEXT_CHANGE# AS NEXT_CHANGE,
        lf.MEMBER LOG_FILE
   FROM v$LOGFILE lf, v$LOG l
  WHERE l.GROUP# = lf.GROUP#
  AND l.STATUS='CURRENT'`))
 	if err != nil {
-		return 0, "", err
+		return 0, 0, "", err
 	}
 	if len(res) == 0 {
-		return 0, "", fmt.Errorf("oracle current redo log can't null")
+		return 0, 0, "", fmt.Errorf("oracle current redo log can't null")
+	}
+	firstSCN, err := strconv.Atoi(res[0]["FIRST_CHANGE"])
+	if err != nil {
+		return firstSCN, 0, res[0]["LOG_FILE"], fmt.Errorf("GetOracleCurrentRedoMaxSCN strconv.Atoi falied: %v", err)
 	}
 	maxSCN, err := strconv.Atoi(res[0]["NEXT_CHANGE"])
 	if err != nil {
-		return maxSCN, res[0]["LOG_FILE"], fmt.Errorf("GetOracleCurrentRedoMaxSCN strconv.Atoi falied: %v", err)
+		return firstSCN, maxSCN, res[0]["LOG_FILE"], fmt.Errorf("GetOracleCurrentRedoMaxSCN strconv.Atoi falied: %v", err)
 	}
-	if maxSCN == 0 {
-		return maxSCN, res[0]["LOG_FILE"], fmt.Errorf("GetOracleCurrentRedoMaxSCN value is euqal to 0, does't meet expectations")
+	if maxSCN == 0 || firstSCN == 0 {
+		return firstSCN, maxSCN, res[0]["LOG_FILE"], fmt.Errorf("GetOracleCurrentRedoMaxSCN value is euqal to 0, does't meet expectations")
 	}
-	return maxSCN, res[0]["LOG_FILE"], nil
+	return firstSCN, maxSCN, res[0]["LOG_FILE"], nil
+}
+
+func (e *Engine) GetOracleALLRedoLogFile() ([]string, error) {
+	_, res, err := Query(e.OracleDB, util.StringsBuilder(`SELECT
+       lf.MEMBER LOG_FILE
+  FROM v$LOGFILE lf`))
+	if err != nil {
+		return []string{}, err
+	}
+	if len(res) == 0 {
+		return []string{}, fmt.Errorf("oracle all redo log can't null")
+	}
+
+	var logs []string
+	for _, r := range res {
+		logs = append(logs, r["LOG_FILE"])
+	}
+	return logs, nil
 }
 
 func (e *Engine) GetMySQLTableIncrementMetaMinGlobalSCNTime(sourceSchemaName string) (int, error) {

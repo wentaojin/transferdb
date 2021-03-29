@@ -112,9 +112,9 @@ func (e *Engine) UpdateTableIncrementMetaALLSCNRecord(sourceSchemaName, sourceTa
 }
 
 func (e *Engine) UpdateSingleTableIncrementMetaSCNByCurrentRedo(
-	sourceSchemaName string, maxLogFileSCN, logFileStartSCN, logFileEndSCN int) error {
+	sourceSchemaName string, lastRedoLogMaxSCN, logFileStartSCN, logFileEndSCN int) error {
 	var logFileSCN int
-	if logFileEndSCN >= maxLogFileSCN {
+	if logFileEndSCN >= lastRedoLogMaxSCN {
 		logFileSCN = logFileStartSCN
 	} else {
 		logFileSCN = logFileEndSCN
@@ -144,8 +144,30 @@ func (e *Engine) UpdateSingleTableIncrementMetaSCNByCurrentRedo(
 }
 
 func (e *Engine) UpdateSingleTableIncrementMetaSCNByNonCurrentRedo(
-	sourceSchemaName string, logFileEndSCN int,
-	transferTableSlice []string) error {
+	sourceSchemaName string, lastRedoLogMaxSCN, logFileStartSCN, logFileEndSCN int, transferTableSlice []string) error {
+	var logFileSCN int
+	if logFileEndSCN >= lastRedoLogMaxSCN {
+		logFileSCN = logFileStartSCN
+	} else {
+		logFileSCN = logFileEndSCN
+	}
+
+	for _, table := range transferTableSlice {
+		if err := e.GormDB.Model(TableIncrementMeta{}).Where(
+			"source_schema_name = ? and source_table_name = ?",
+			strings.ToUpper(sourceSchemaName),
+			strings.ToUpper(table)).
+			Updates(TableIncrementMeta{
+				GlobalSCN: logFileSCN,
+			}).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (e *Engine) UpdateSingleTableIncrementMetaSCNByArchivedLog(
+	sourceSchemaName string, logFileEndSCN int, transferTableSlice []string) error {
 	for _, table := range transferTableSlice {
 		if err := e.GormDB.Model(TableIncrementMeta{}).Where(
 			"source_schema_name = ? and source_table_name = ?",

@@ -104,87 +104,77 @@ func translatorAndApplyOracleIncrementRecord(
 	targetSchema string,
 	rowsResult []db.LogminerContent, taskQueue chan IncrementPayload) error {
 
-	if len(rowsResult) > 0 {
-		startTime := time.Now()
-		zlog.Logger.Info("oracle table increment log apply start",
-			zap.String("mysql schema", targetSchema),
-			zap.String("table", sourceTableName),
-			zap.Time("start time", startTime))
+	startTime := time.Now()
+	zlog.Logger.Info("oracle table increment log apply start",
+		zap.String("mysql schema", targetSchema),
+		zap.String("table", sourceTableName),
+		zap.Time("start time", startTime))
 
-		for _, rows := range rowsResult {
-			// 如果 sqlRedo 存在记录则继续处理，不存在记录则报错
-			if rows.SQLRedo == "" {
-				return fmt.Errorf("does not meet expectations [oracle sql redo is be null], please check")
-			}
-
-			if rows.Operation == util.DDLOperation {
-				zlog.Logger.Info("translator oracle payload", zap.String("ORACLE DDL", rows.SQLRedo))
-			}
-
-			// 移除引号
-			rows.SQLRedo = util.ReplaceQuotesString(rows.SQLRedo)
-			// 移除分号
-			rows.SQLRedo = util.ReplaceSpecifiedString(rows.SQLRedo, ";", "")
-
-			if rows.SQLUndo != "" {
-				rows.SQLUndo = util.ReplaceQuotesString(rows.SQLUndo)
-				rows.SQLUndo = util.ReplaceSpecifiedString(rows.SQLUndo, ";", "")
-				rows.SQLUndo = util.ReplaceSpecifiedString(rows.SQLUndo,
-					util.StringsBuilder(rows.SegOwner, "."),
-					util.StringsBuilder(strings.ToUpper(targetSchema), "."))
-			}
-
-			// 比如：INSERT INTO MARVIN.MARVIN1 (ID,NAME) VALUES (1,'marvin')
-			// 比如：DELETE FROM MARVIN.MARVIN7 WHERE ID = 5 and NAME = 'pyt'
-			// 比如：UPDATE MARVIN.MARVIN1 SET ID = 2 , NAME = 'marvin' WHERE ID = 2 AND NAME = 'pty'
-			// 比如: drop table marvin.marvin7
-			// 比如: truncate table marvin.marvin7
-			mysqlRedo, operationType, err := translatorOracleToMySQLSQL(rows.SQLRedo, rows.SQLUndo, strings.ToUpper(targetSchema))
-			if err != nil {
-				return err
-			}
-
-			// 注册任务到 Job 队列
-			lp := IncrementPayload{
-				Engine:         engine,
-				GlobalSCN:      rows.SCN, // 更新元数据 GLOBAL_SCN 至当前消费的 SCN 号
-				SourceTableSCN: rows.SCN,
-				SourceSchema:   rows.SegOwner,
-				SourceTable:    rows.TableName,
-				TargetSchema:   strings.ToUpper(targetSchema),
-				TargetTable:    rows.TableName,
-				OracleRedo:     rows.SQLRedo,
-				MySQLRedo:      mysqlRedo,
-				Operation:      rows.Operation,
-				OperationType:  operationType}
-
-			// 避免太多日志输出
-			// zlog.Logger.Info("translator oracle payload", zap.String("payload", lp.Marshal()))
-			taskQueue <- lp
+	for _, rows := range rowsResult {
+		// 如果 sqlRedo 存在记录则继续处理，不存在记录则报错
+		if rows.SQLRedo == "" {
+			return fmt.Errorf("does not meet expectations [oracle sql redo is be null], please check")
 		}
 
-		endTime := time.Now()
-		zlog.Logger.Info("oracle table increment log apply finished",
-			zap.String("mysql schema", targetSchema),
-			zap.String("table", sourceTableName),
-			zap.String("status", "success"),
-			zap.Time("start time", startTime),
-			zap.Time("end time", endTime),
-			zap.String("cost time", time.Since(startTime).String()))
+		if rows.Operation == util.DDLOperation {
+			zlog.Logger.Info("translator oracle payload", zap.String("ORACLE DDL", rows.SQLRedo))
+		}
 
-		// 任务结束，关闭通道
-		close(taskQueue)
+		// 移除引号
+		rows.SQLRedo = util.ReplaceQuotesString(rows.SQLRedo)
+		// 移除分号
+		rows.SQLRedo = util.ReplaceSpecifiedString(rows.SQLRedo, ";", "")
 
-		return nil
-	} else {
-		zlog.Logger.Warn("increment table log file logminer null data, transferdb will continue to capture",
-			zap.String("mysql schema", targetSchema),
-			zap.String("table", sourceTableName),
-			zap.String("status", "success"))
-		// 任务结束，关闭通道
-		close(taskQueue)
-		return nil
+		if rows.SQLUndo != "" {
+			rows.SQLUndo = util.ReplaceQuotesString(rows.SQLUndo)
+			rows.SQLUndo = util.ReplaceSpecifiedString(rows.SQLUndo, ";", "")
+			rows.SQLUndo = util.ReplaceSpecifiedString(rows.SQLUndo,
+				util.StringsBuilder(rows.SegOwner, "."),
+				util.StringsBuilder(strings.ToUpper(targetSchema), "."))
+		}
+
+		// 比如：INSERT INTO MARVIN.MARVIN1 (ID,NAME) VALUES (1,'marvin')
+		// 比如：DELETE FROM MARVIN.MARVIN7 WHERE ID = 5 and NAME = 'pyt'
+		// 比如：UPDATE MARVIN.MARVIN1 SET ID = 2 , NAME = 'marvin' WHERE ID = 2 AND NAME = 'pty'
+		// 比如: drop table marvin.marvin7
+		// 比如: truncate table marvin.marvin7
+		mysqlRedo, operationType, err := translatorOracleToMySQLSQL(rows.SQLRedo, rows.SQLUndo, strings.ToUpper(targetSchema))
+		if err != nil {
+			return err
+		}
+
+		// 注册任务到 Job 队列
+		lp := IncrementPayload{
+			Engine:         engine,
+			GlobalSCN:      rows.SCN, // 更新元数据 GLOBAL_SCN 至当前消费的 SCN 号
+			SourceTableSCN: rows.SCN,
+			SourceSchema:   rows.SegOwner,
+			SourceTable:    rows.TableName,
+			TargetSchema:   strings.ToUpper(targetSchema),
+			TargetTable:    rows.TableName,
+			OracleRedo:     rows.SQLRedo,
+			MySQLRedo:      mysqlRedo,
+			Operation:      rows.Operation,
+			OperationType:  operationType}
+
+		// 避免太多日志输出
+		// zlog.Logger.Info("translator oracle payload", zap.String("payload", lp.Marshal()))
+		taskQueue <- lp
 	}
+
+	endTime := time.Now()
+	zlog.Logger.Info("oracle table increment log apply finished",
+		zap.String("mysql schema", targetSchema),
+		zap.String("table", sourceTableName),
+		zap.String("status", "success"),
+		zap.Time("start time", startTime),
+		zap.Time("end time", endTime),
+		zap.String("cost time", time.Since(startTime).String()))
+
+	// 任务结束，关闭通道
+	close(taskQueue)
+
+	return nil
 }
 
 // SQL 转换
