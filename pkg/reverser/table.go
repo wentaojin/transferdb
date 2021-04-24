@@ -21,10 +21,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/WentaoJin/transferdb/zlog"
+	"github.com/wentaojin/transferdb/zlog"
 	"go.uber.org/zap"
 
-	"github.com/WentaoJin/transferdb/db"
+	"github.com/wentaojin/transferdb/db"
 )
 
 // 任务

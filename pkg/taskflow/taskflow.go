@@ -19,8 +19,8 @@ import (
 	"encoding/json"
 	"sync"
 
-	"github.com/WentaoJin/transferdb/db"
-	"github.com/WentaoJin/transferdb/zlog"
+	"github.com/wentaojin/transferdb/db"
+	"github.com/wentaojin/transferdb/zlog"
 	"go.uber.org/zap"
 )
 

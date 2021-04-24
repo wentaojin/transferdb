@@ -20,14 +20,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/WentaoJin/transferdb/pkg/config"
+	"github.com/wentaojin/transferdb/pkg/config"
 
 	"github.com/xxjwxc/gowp/workpool"
 
-	"github.com/WentaoJin/transferdb/zlog"
+	"github.com/wentaojin/transferdb/zlog"
 	"go.uber.org/zap"
 
-	"github.com/WentaoJin/transferdb/db"
+	"github.com/wentaojin/transferdb/db"
 )
 
 // 表数据应用 -> 全量任务

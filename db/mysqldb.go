@@ -19,11 +19,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/WentaoJin/transferdb/pkg/config"
+	"github.com/wentaojin/transferdb/pkg/config"
 
 	gormLogger "gorm.io/gorm/logger"
 
-	"github.com/WentaoJin/transferdb/zlog"
+	"github.com/wentaojin/transferdb/zlog"
 
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"

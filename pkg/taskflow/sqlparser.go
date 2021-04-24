@@ -19,11 +19,11 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/WentaoJin/transferdb/util"
+	"github.com/wentaojin/transferdb/util"
 
 	"go.uber.org/zap"
 
-	"github.com/WentaoJin/transferdb/zlog"
+	"github.com/wentaojin/transferdb/zlog"
 
 	"github.com/pingcap/parser/format"
 

@@ -22,7 +22,7 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/WentaoJin/transferdb/util"
+	"github.com/wentaojin/transferdb/util"
 )
 
 // 同步元数据表

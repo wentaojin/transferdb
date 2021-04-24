@@ -22,14 +22,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/WentaoJin/transferdb/db"
+	"github.com/wentaojin/transferdb/db"
 
 	"github.com/xxjwxc/gowp/workpool"
 
-	"github.com/WentaoJin/transferdb/zlog"
+	"github.com/wentaojin/transferdb/zlog"
 	"go.uber.org/zap"
 
-	"github.com/WentaoJin/transferdb/util"
+	"github.com/wentaojin/transferdb/util"
 )
 
 // 全量数据导出导入期间，运行安全模式

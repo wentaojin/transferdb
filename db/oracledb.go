@@ -23,11 +23,11 @@ import (
 
 	"github.com/godror/godror"
 
-	"github.com/WentaoJin/transferdb/pkg/config"
+	"github.com/wentaojin/transferdb/pkg/config"
 
 	"github.com/godror/godror/dsn"
 
-	"github.com/WentaoJin/transferdb/util"
+	"github.com/wentaojin/transferdb/util"
 
 	_ "github.com/godror/godror"
 )

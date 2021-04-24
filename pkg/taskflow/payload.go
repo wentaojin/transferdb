@@ -20,11 +20,11 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/WentaoJin/transferdb/util"
+	"github.com/wentaojin/transferdb/util"
 
-	"github.com/WentaoJin/transferdb/db"
-	"github.com/WentaoJin/transferdb/pkg/config"
-	"github.com/WentaoJin/transferdb/zlog"
+	"github.com/wentaojin/transferdb/db"
+	"github.com/wentaojin/transferdb/pkg/config"
+	"github.com/wentaojin/transferdb/zlog"
 
 	"go.uber.org/zap"
 )

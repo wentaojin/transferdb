@@ -1,4 +1,4 @@
-module github.com/WentaoJin/transferdb
+module github.com/wentaojin/transferdb
 
 go 1.15
 

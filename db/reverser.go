@@ -19,10 +19,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/WentaoJin/transferdb/zlog"
+	"github.com/wentaojin/transferdb/zlog"
 	"go.uber.org/zap"
 
-	"github.com/WentaoJin/transferdb/util"
+	"github.com/wentaojin/transferdb/util"
 )
 
 func (e *Engine) IsExistMySQLSchema(schemaName string) (bool, error) {

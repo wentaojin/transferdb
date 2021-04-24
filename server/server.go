@@ -20,15 +20,15 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/WentaoJin/transferdb/pkg/prepare"
+	"github.com/wentaojin/transferdb/pkg/prepare"
 
-	"github.com/WentaoJin/transferdb/pkg/taskflow"
+	"github.com/wentaojin/transferdb/pkg/taskflow"
 
-	"github.com/WentaoJin/transferdb/pkg/config"
+	"github.com/wentaojin/transferdb/pkg/config"
 
-	"github.com/WentaoJin/transferdb/pkg/reverser"
+	"github.com/wentaojin/transferdb/pkg/reverser"
 
-	"github.com/WentaoJin/transferdb/db"
+	"github.com/wentaojin/transferdb/db"
 )
 
 // 程序运行

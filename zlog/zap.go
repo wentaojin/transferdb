@@ -18,8 +18,8 @@ package zlog
 import (
 	"strings"
 
-	"github.com/WentaoJin/transferdb/pkg/config"
 	"github.com/pingcap/log"
+	"github.com/wentaojin/transferdb/pkg/config"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )

@@ -18,7 +18,7 @@ package taskflow
 import (
 	"strings"
 
-	"github.com/WentaoJin/transferdb/db"
+	"github.com/wentaojin/transferdb/db"
 )
 
 type LogminerData struct {

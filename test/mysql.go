@@ -18,9 +18,9 @@ package main
 import (
 	"fmt"
 
-	"github.com/WentaoJin/transferdb/pkg/config"
+	"github.com/wentaojin/transferdb/pkg/config"
 
-	"github.com/WentaoJin/transferdb/db"
+	"github.com/wentaojin/transferdb/db"
 )
 
 func main() {

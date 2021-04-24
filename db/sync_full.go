@@ -23,10 +23,10 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/WentaoJin/transferdb/zlog"
+	"github.com/wentaojin/transferdb/zlog"
 	"go.uber.org/zap"
 
-	"github.com/WentaoJin/transferdb/util"
+	"github.com/wentaojin/transferdb/util"
 )
 
 // 该函数只应用于全量同步模式或者 ALL 同步模式

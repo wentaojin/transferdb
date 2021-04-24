@@ -22,11 +22,11 @@ import (
 	_ "net/http/pprof"
 	"os"
 
-	"github.com/WentaoJin/transferdb/pkg/signal"
+	"github.com/wentaojin/transferdb/pkg/signal"
 
-	"github.com/WentaoJin/transferdb/pkg/config"
-	"github.com/WentaoJin/transferdb/server"
-	"github.com/WentaoJin/transferdb/zlog"
+	"github.com/wentaojin/transferdb/pkg/config"
+	"github.com/wentaojin/transferdb/server"
+	"github.com/wentaojin/transferdb/zlog"
 
 	"go.uber.org/zap"
 )
