@@ -19,8 +19,6 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/wentaojin/transferdb/zlog"
-	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
@@ -43,8 +41,6 @@ type Engine struct {
 
 // 查询返回表字段列和对应的字段行数据
 func Query(db *sql.DB, querySQL string) ([]string, []map[string]string, error) {
-	zlog.Logger.Info("exec sql",
-		zap.String("sql", querySQL))
 	var (
 		cols []string
 		res  []map[string]string

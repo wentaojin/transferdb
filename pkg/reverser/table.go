@@ -53,6 +53,9 @@ type ColumnType struct {
 }
 
 func (t Table) GenerateAndExecMySQLCreateTableSQL() error {
+	zlog.Logger.Info("get oracle table comment",
+		zap.String("schema", t.SourceSchemaName),
+		zap.String("table", t.SourceTableName))
 	tablesMap, err := t.Engine.GetOracleTableComment(t.SourceSchemaName, t.SourceTableName)
 	if err != nil {
 		return err
@@ -64,10 +67,20 @@ func (t Table) GenerateAndExecMySQLCreateTableSQL() error {
 	if err != nil {
 		return err
 	}
+	zlog.Logger.Info("reverse oracle table column",
+		zap.String("schema", t.SourceSchemaName),
+		zap.String("table", t.SourceTableName),
+		zap.Strings("columns", columnMetaSlice))
+
 	keyMetaSlice, err := t.reverserOracleTableKeyToMySQL()
 	if err != nil {
 		return err
 	}
+	zlog.Logger.Info("reverse oracle table column",
+		zap.String("schema", t.SourceSchemaName),
+		zap.String("table", t.SourceTableName),
+		zap.Strings("keys", keyMetaSlice))
+
 	var (
 		tableMetas     []string
 		createTableSQL string
@@ -87,10 +100,10 @@ func (t Table) GenerateAndExecMySQLCreateTableSQL() error {
 			t.TargetSchemaName, modifyTableName, tableMeta)
 	}
 
-	zlog.Logger.Info("exec sql",
+	zlog.Logger.Info("reverse",
 		zap.String("schema", t.TargetSchemaName),
 		zap.String("table", modifyTableName),
-		zap.String("sql", fmt.Sprintf("%v", createTableSQL)))
+		zap.String("sql", createTableSQL))
 
 	_, _, err = db.Query(t.Engine.MysqlDB, createTableSQL)
 	if err != nil {
@@ -119,10 +132,10 @@ func (t Table) GenerateAndExecMySQLCreateIndexSQL() error {
 					createIndexSQL = fmt.Sprintf("CREATE UNIQUE INDEX `%s` ON `%s`.`%s`(%s)",
 						strings.ToLower(idxMeta["INDEX_NAME"]), t.TargetSchemaName, t.TargetTableName, strings.ToLower(idxMeta["COLUMN_LIST"]))
 				}
-				zlog.Logger.Info("Exec SQL",
+				zlog.Logger.Info("reverse",
 					zap.String("schema", t.TargetTableName),
 					zap.String("table", t.TargetTableName),
-					zap.String("sql", fmt.Sprintf("%v", createIndexSQL)))
+					zap.String("sql", createIndexSQL))
 				_, _, err = db.Query(t.Engine.MysqlDB, createIndexSQL)
 				if err != nil {
 					return err
@@ -146,6 +159,10 @@ func (t Table) GenerateAndExecMySQLCreateIndexSQL() error {
 				if err != nil {
 					return err
 				}
+				zlog.Logger.Warn("reverse",
+					zap.String("schema", t.TargetTableName),
+					zap.String("table", t.TargetTableName),
+					zap.String("sql", createIndexSQL))
 			}
 		}
 	}

@@ -39,6 +39,7 @@ func ReverseOracleToMySQLTable(engine *db.Engine, cfg *config.CfgFile) error {
 	}
 
 	// 获取待转换表
+	zlog.Logger.Info("get oracle to mysql all tables")
 	tables, err := generateOracleToMySQLTables(engine, cfg)
 	if err != nil {
 		return err
