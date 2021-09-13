@@ -8,7 +8,7 @@ REPO    := github.com/wentaojin/transferdb
 
 GOOS    := $(if $(GOOS),$(GOOS),$(shell go env GOOS))
 GOARCH  := $(if $(GOARCH),$(GOARCH),$(shell go env GOARCH))
-GOENV   := GO111MODULE=on CGO_ENABLED=1 GOOS=linux GOARCH=amd64 CC=x86_64-linux-musl-gcc CGO_LDFLAGS="-static"
+GOENV   := GO111MODULE=on CGO_ENABLED=1 GOOS=$(GOOS) GOARCH=$(GOARCH) 
 GO      := $(GOENV) go
 GOBUILD := $(GO) build
 GORUN   := $(GO) run
