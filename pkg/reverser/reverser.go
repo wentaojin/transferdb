@@ -31,7 +31,6 @@ import (
 
 func ReverseOracleToMySQLTable(engine *db.Engine, cfg *config.CfgFile) error {
 	startTime := time.Now()
-	zlog.Logger.Info("Welcome to transferdb", zap.String("config", cfg.String()))
 	zlog.Logger.Info("reverse table oracle to mysql start",
 		zap.String("schema", cfg.SourceConfig.SchemaName))
 

@@ -29,7 +29,6 @@ import (
 // 同步环境准备
 func TransferDBEnvPrepare(cfg *config.CfgFile) error {
 	startTime := time.Now()
-	zlog.Logger.Info("Welcome to transferdb", zap.String("config", cfg.String()))
 	zlog.Logger.Info("prepare tansferdb env start")
 	mysqlEngine, err := db.NewMySQLEnginePrepareDB(
 		cfg.TargetConfig,

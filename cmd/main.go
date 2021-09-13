@@ -32,8 +32,9 @@ import (
 )
 
 var (
-	conf = flag.String("config", "config.toml", "specify the configuration file, default is config.toml")
-	mode = flag.String("mode", "", "specify the program running mode: [prepare reverse full all]")
+	conf    = flag.String("config", "config.toml", "specify the configuration file, default is config.toml")
+	mode    = flag.String("mode", "", "specify the program running mode: [prepare reverse full all]")
+	version = flag.Bool("version", false, "view transferdb version info")
 )
 
 func main() {
@@ -44,6 +45,10 @@ func main() {
 		}
 		os.Exit(0)
 	}()
+
+	// 获取程序版本
+	config.GetAppVersion(*version)
+
 	// 读取配置文件
 	cfg, err := config.ReadConfigFile(*conf)
 	if err != nil {
@@ -53,6 +58,7 @@ func main() {
 	if err := zlog.NewZapLogger(cfg); err != nil {
 		log.Fatalf("create global zap logger failed: %v", err)
 	}
+	config.RecordAppVersion("transferdb", zlog.Logger, cfg)
 
 	// 信号量监听处理
 	signal.SetupSignalHandler(func() {

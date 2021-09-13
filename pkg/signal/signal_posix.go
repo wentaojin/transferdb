@@ -1,4 +1,4 @@
-// +build linux
+// +build linux darwin
 
 /*
 Copyright © 2020 Marvin

@@ -35,7 +35,6 @@ import (
 // 全量数据导出导入
 func LoaderOracleTableFullRecordToMySQLByFullMode(cfg *config.CfgFile, engine *db.Engine) error {
 	startTime := time.Now()
-	zlog.Logger.Info("Welcome to transferdb", zap.String("config", cfg.String()))
 	zlog.Logger.Info("all full table data loader start",
 		zap.String("schema", cfg.SourceConfig.SchemaName))
 
@@ -261,7 +260,7 @@ func getTransferTableSliceByCfg(cfg *config.CfgFile, engine *db.Engine) ([]strin
 	增量同步任务
 */
 func SyncOracleTableAllRecordToMySQLByAllMode(cfg *config.CfgFile, engine *db.Engine) error {
-	zlog.Logger.Info("Welcome to transferdb", zap.String("config", cfg.String()))
+	zlog.Logger.Info("oracle to mysql increment sync table data start", zap.String("schema", cfg.SourceConfig.SchemaName))
 
 	// 全量数据导出导入，初始化全量元数据表以及导入完成初始化增量元数据表
 	// 如果下游数据库增量元数据表 table_increment_meta 存在记录，说明进行过全量，则跳过全量步骤，直接增量数据同步

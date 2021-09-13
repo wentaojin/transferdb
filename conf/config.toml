@@ -4,10 +4,10 @@
 #   - 优先级：表字段类型 > 库字段类型 两者都没配置默认采用内置转换规则
 # reverse（必须）:
 #   1、根据内置表结构转换规则或者手工配置表结构转换规则进行 schema 迁移
-# all: TODO: 待测试
+# all:（全量 + 增量模式）
 #   1、全量数据迁移
 #   2、增量数据迁移
-# full: TODO: 待测试断点续传
+# full: (全量模式)
 #   1、全量数据迁移 -> REPLACE INTO
 [app]
 # 事务 batch 数
@@ -54,28 +54,28 @@ worker-threads = 3
 username = "marvin"
 password = "marvin"
 # 配置 oracle 连接字符串，样例：主机地址:数据库端口/实例名?参数
-connect-string = "192.168.10.2:1521/orcl?connect_timeout=2"
+connect-string = "172.16.4.184:1521/xe?connect_timeout=2"
 # 配置 oracle 连接会话 session 变量,
 session-params = ["alter session set nls_date_format = 'yyyy-mm-dd hh24:mi:ss'"]
 # 配置 oracle 连接时区
 timezone = "Local"
 # 配置 oracle 迁移 schema
-schema-name = "system"
+schema-name = "marvin"
 # 源端迁移任务表
 # include-table 和 exclude-table 不能同时配置，两者只能配置一个,如果两个都没配置则 Schema 内表全迁移
-include-table = ["marvin1","marvin2","marvin3","test31"]
+include-table = []
 exclude-table = []
 
 [target]
 # 目标端 mysql 连接串
 username = "marvin"
 password = "marvin"
-host = "192.168.2.90"
-port = 5000
+host = "172.16.4.207"
+port = 4000
 # mysql 链接参数
 connect-params = "charset=utf8mb4&parseTime=True&loc=Local&multiStatements=true"
 # 目标端元数据库
-# CREATE DATABASE IF NOT EXIST dbsyncer_meta
+# CREATE DATABASE IF NOT EXIST db_meta
 meta-schema = "db_meta"
 # 目标端导入 schema
 schema-name = "steven"
@@ -89,7 +89,7 @@ overwrite = true
 # 日志 level
 log-level = "info"
 # 日志文件路径
-log-file = "./transferdb.log"
+log-file = "./conf/transferdb.log"
 # 每个日志文件保存的最大尺寸 单位：M
 max-size = 128
 # 文件最多保存多少天
