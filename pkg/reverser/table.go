@@ -53,9 +53,6 @@ type ColumnType struct {
 }
 
 func (t Table) GenerateAndExecMySQLCreateTableSQL() error {
-	zlog.Logger.Info("get oracle table comment",
-		zap.String("schema", t.SourceSchemaName),
-		zap.String("table", t.SourceTableName))
 	tablesMap, err := t.Engine.GetOracleTableComment(t.SourceSchemaName, t.SourceTableName)
 	if err != nil {
 		return err
@@ -63,6 +60,11 @@ func (t Table) GenerateAndExecMySQLCreateTableSQL() error {
 	if len(tablesMap) > 1 {
 		return fmt.Errorf("oracle schema [%s] table [%s] comments exist multiple values: [%v]", t.SourceSchemaName, t.SourceTableName, tablesMap)
 	}
+	zlog.Logger.Info("get oracle table comment",
+		zap.String("schema", t.SourceSchemaName),
+		zap.String("table", t.SourceTableName),
+		zap.String("comments", fmt.Sprintf("%v", tablesMap)))
+
 	columnMetaSlice, err := t.reverserOracleTableColumnToMySQL()
 	if err != nil {
 		return err
