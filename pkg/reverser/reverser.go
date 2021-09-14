@@ -52,7 +52,7 @@ func ReverseOracleToMySQLTable(engine *db.Engine, cfg *config.CfgFile) error {
 	for _, table := range tables {
 		// 变量替换，直接使用原变量会导致并发输出有问题
 		tbl := table
-		wp.DoWait(func() error {
+		wp.Do(func() error {
 			if err := tbl.GenerateAndExecMySQLCreateTableSQL(); err != nil {
 				return err
 			}
