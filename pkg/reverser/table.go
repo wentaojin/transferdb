@@ -128,19 +128,49 @@ func (t Table) GenerateAndExecMySQLCreateIndexSQL() error {
 			if !ok {
 				// 索引创建
 				if idxMeta["UNIQUENESS"] == "NONUNIQUE" {
-					createIndexSQL = fmt.Sprintf("CREATE INDEX `%s` ON `%s`.`%s`(%s)",
-						strings.ToLower(idxMeta["INDEX_NAME"]), t.TargetSchemaName, t.TargetTableName, strings.ToLower(idxMeta["COLUMN_LIST"]))
+					switch idxMeta["INDEX_TYPE"] {
+					case "NORMAL":
+						createIndexSQL = fmt.Sprintf("CREATE INDEX `%s` ON `%s`.`%s`(%s)",
+							strings.ToLower(idxMeta["INDEX_NAME"]), t.TargetSchemaName, t.TargetTableName, strings.ToLower(idxMeta["COLUMN_LIST"]))
+						_, _, err = db.Query(t.Engine.MysqlDB, createIndexSQL)
+						if err != nil {
+							return err
+						}
+						return nil
+					case "FUNCTION-BASED NORMAL":
+						zlog.Logger.Warn("reverse",
+							zap.String("schema", t.TargetTableName),
+							zap.String("table", t.TargetTableName),
+							zap.String("indexName", idxMeta["INDEX_NAME"]),
+							zap.String("indexType", "FUNCTION-BASED NORMAL"),
+							zap.String("indexExpression", idxMeta["COLUMN_EXPRESSION"]),
+							zap.String("error", "MySQL Not Support"))
+						return nil
+					case "BITMAP":
+						zlog.Logger.Warn("reverse",
+							zap.String("schema", t.TargetTableName),
+							zap.String("table", t.TargetTableName),
+							zap.String("indexName", idxMeta["INDEX_NAME"]),
+							zap.String("indexType", "BITMAP"),
+							zap.String("indexColumn", idxMeta["COLUMN_LIST"]),
+							zap.String("error", "MySQL Not Support"))
+						return nil
+					default:
+						return fmt.Errorf("oracle schema [%s] table [%s] index [%s] isn't mysql support index type [%v]",
+							t.SourceSchemaName, t.SourceTableName, idxMeta["INDEX_NAME"], idxMeta["INDEX_TYPE"])
+					}
 				} else {
-					createIndexSQL = fmt.Sprintf("CREATE UNIQUE INDEX `%s` ON `%s`.`%s`(%s)",
-						strings.ToLower(idxMeta["INDEX_NAME"]), t.TargetSchemaName, t.TargetTableName, strings.ToLower(idxMeta["COLUMN_LIST"]))
-				}
-				zlog.Logger.Info("reverse",
-					zap.String("schema", t.TargetTableName),
-					zap.String("table", t.TargetTableName),
-					zap.String("sql", createIndexSQL))
-				_, _, err = db.Query(t.Engine.MysqlDB, createIndexSQL)
-				if err != nil {
-					return err
+					if idxMeta["INDEX_TYPE"] == "NORMAL" {
+						createIndexSQL = fmt.Sprintf("CREATE UNIQUE INDEX `%s` ON `%s`.`%s`(%s)",
+							strings.ToLower(idxMeta["INDEX_NAME"]), t.TargetSchemaName, t.TargetTableName, strings.ToLower(idxMeta["COLUMN_LIST"]))
+						_, _, err = db.Query(t.Engine.MysqlDB, createIndexSQL)
+						if err != nil {
+							return err
+						}
+						return nil
+					}
+					return fmt.Errorf("oracle schema [%s] table [%s] index [%s] isn't mysql support index type [%v]",
+						t.SourceSchemaName, t.SourceTableName, idxMeta["INDEX_NAME"], idxMeta["INDEX_TYPE"])
 				}
 			} else {
 				// 跳过原索引名，重命名索引添加后缀 _ping 创建
@@ -151,20 +181,58 @@ func (t Table) GenerateAndExecMySQLCreateIndexSQL() error {
 					zap.String("warn", fmt.Sprintf("table index is exist, skip created and rename index created")))
 
 				if idxMeta["UNIQUENESS"] == "NONUNIQUE" {
-					createIndexSQL = fmt.Sprintf("CREATE INDEX `%s_ping` ON `%s`.`%s`(%s)",
-						strings.ToLower(idxMeta["INDEX_NAME"]), t.TargetSchemaName, t.TargetTableName, strings.ToLower(idxMeta["COLUMN_LIST"]))
+					switch idxMeta["INDEX_TYPE"] {
+					case "NORMAL":
+						createIndexSQL = fmt.Sprintf("CREATE INDEX `%s_ping` ON `%s`.`%s`(%s)",
+							strings.ToLower(idxMeta["INDEX_NAME"]), t.TargetSchemaName, t.TargetTableName, strings.ToLower(idxMeta["COLUMN_LIST"]))
+						_, _, err = db.Query(t.Engine.MysqlDB, createIndexSQL)
+						if err != nil {
+							return err
+						}
+						zlog.Logger.Warn("reverse",
+							zap.String("schema", t.TargetTableName),
+							zap.String("table", t.TargetTableName),
+							zap.String("sql", createIndexSQL))
+						return nil
+					case "FUNCTION-BASED NORMAL":
+						zlog.Logger.Warn("reverse",
+							zap.String("schema", t.TargetTableName),
+							zap.String("table", t.TargetTableName),
+							zap.String("indexName", idxMeta["INDEX_NAME"]),
+							zap.String("indexType", "FUNCTION-BASED NORMAL"),
+							zap.String("indexExpression", idxMeta["COLUMN_EXPRESSION"]),
+							zap.String("error", "MySQL Not Support"))
+						return nil
+					case "BITMAP":
+						zlog.Logger.Warn("reverse",
+							zap.String("schema", t.TargetTableName),
+							zap.String("table", t.TargetTableName),
+							zap.String("indexName", idxMeta["INDEX_NAME"]),
+							zap.String("indexType", "BITMAP"),
+							zap.String("indexColumn", idxMeta["COLUMN_LIST"]),
+							zap.String("error", "MySQL Not Support"))
+						return nil
+					default:
+						return fmt.Errorf("oracle schema [%s] table [%s] index [%s] isn't mysql support index type [%v]",
+							t.SourceSchemaName, t.SourceTableName, idxMeta["INDEX_NAME"], idxMeta["INDEX_TYPE"])
+					}
 				} else {
-					createIndexSQL = fmt.Sprintf("CREATE UNIQUE INDEX `%s_ping` ON `%s`.`%s`(%s)",
-						strings.ToLower(idxMeta["INDEX_NAME"]), t.TargetSchemaName, t.TargetTableName, strings.ToLower(idxMeta["COLUMN_LIST"]))
+					if idxMeta["INDEX_TYPE"] == "NORMAL" {
+						createIndexSQL = fmt.Sprintf("CREATE UNIQUE INDEX `%s_ping` ON `%s`.`%s`(%s)",
+							strings.ToLower(idxMeta["INDEX_NAME"]), t.TargetSchemaName, t.TargetTableName, strings.ToLower(idxMeta["COLUMN_LIST"]))
+						_, _, err = db.Query(t.Engine.MysqlDB, createIndexSQL)
+						if err != nil {
+							return err
+						}
+						zlog.Logger.Warn("reverse",
+							zap.String("schema", t.TargetTableName),
+							zap.String("table", t.TargetTableName),
+							zap.String("sql", createIndexSQL))
+						return nil
+					}
+					return fmt.Errorf("oracle schema [%s] table [%s] index [%s] isn't mysql support index type [%v]",
+						t.SourceSchemaName, t.SourceTableName, idxMeta["INDEX_NAME"], idxMeta["INDEX_TYPE"])
 				}
-				_, _, err = db.Query(t.Engine.MysqlDB, createIndexSQL)
-				if err != nil {
-					return err
-				}
-				zlog.Logger.Warn("reverse",
-					zap.String("schema", t.TargetTableName),
-					zap.String("table", t.TargetTableName),
-					zap.String("sql", createIndexSQL))
 			}
 		}
 	}
@@ -210,7 +278,7 @@ func (t Table) reverserOracleTableColumnToMySQL() ([]string, error) {
 		if err != nil {
 			return columnMetas, fmt.Errorf("oracle schema [%s] table [%s] reverser column data_scale string to int failed: %v", t.SourceTableName, t.SourceTableName, err)
 		}
-		switch rowCol["DATA_TYPE"] {
+		switch strings.ToUpper(rowCol["DATA_TYPE"]) {
 		case "NUMBER":
 			switch {
 			case scaleValue > 0:
@@ -382,7 +450,7 @@ func (t Table) reverserOracleTableColumnToMySQL() ([]string, error) {
 			buildInColumnType = fmt.Sprintf("VARBINARY(%s)", rowCol["DATA_LENGTH"])
 			modifyColumnType = changeOracleTableColumnType(originColumnType, t.ColumnTypes, buildInColumnType)
 			columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, rowCol)
-		case "real":
+		case "REAL":
 			originColumnType = "real"
 			buildInColumnType = "DOUBLE"
 			modifyColumnType = changeOracleTableColumnType(originColumnType, t.ColumnTypes, buildInColumnType)
@@ -472,13 +540,33 @@ func (t Table) reverserOracleTableKeyToMySQL() ([]string, error) {
 	}
 	if len(foreignKeyMap) > 0 {
 		for _, rowFKCol := range foreignKeyMap {
-			fk := fmt.Sprintf("CONSTRAINT `%s` FOREIGN KEY(%s) REFERENCES `%s`.`%s`(%s)",
-				strings.ToLower(rowFKCol["CONSTRAINT_NAME"]),
-				strings.ToLower(rowFKCol["COLUMN_LIST"]),
-				strings.ToLower(rowFKCol["R_OWNER"]),
-				strings.ToLower(rowFKCol["RCONSTRAINT_NAME"]),
-				strings.ToLower(rowFKCol["RCOLUMN_LIST"]))
-			keysMeta = append(keysMeta, fk)
+			if rowFKCol["DELETE_RULE"] == "" || rowFKCol["DELETE_RULE"] == "NO ACTION" {
+				fk := fmt.Sprintf("CONSTRAINT `%s` FOREIGN KEY(%s) REFERENCES `%s`.`%s`(%s)",
+					strings.ToLower(rowFKCol["CONSTRAINT_NAME"]),
+					strings.ToLower(rowFKCol["COLUMN_LIST"]),
+					strings.ToLower(rowFKCol["R_OWNER"]),
+					strings.ToLower(rowFKCol["RTABLE_NAME"]),
+					strings.ToLower(rowFKCol["RCOLUMN_LIST"]))
+				keysMeta = append(keysMeta, fk)
+			}
+			if rowFKCol["DELETE_RULE"] == "CASCADE" {
+				fk := fmt.Sprintf("CONSTRAINT `%s` FOREIGN KEY(%s) REFERENCES `%s`.`%s`(%s) ON DELETE CASCADE",
+					strings.ToLower(rowFKCol["CONSTRAINT_NAME"]),
+					strings.ToLower(rowFKCol["COLUMN_LIST"]),
+					strings.ToLower(rowFKCol["R_OWNER"]),
+					strings.ToLower(rowFKCol["RTABLE_NAME"]),
+					strings.ToLower(rowFKCol["RCOLUMN_LIST"]))
+				keysMeta = append(keysMeta, fk)
+			}
+			if rowFKCol["DELETE_RULE"] == "SET NULL" {
+				fk := fmt.Sprintf("CONSTRAINT `%s` FOREIGN KEY(%s) REFERENCES `%s`.`%s`(%s) ON DELETE SET NULL",
+					strings.ToLower(rowFKCol["CONSTRAINT_NAME"]),
+					strings.ToLower(rowFKCol["COLUMN_LIST"]),
+					strings.ToLower(rowFKCol["R_OWNER"]),
+					strings.ToLower(rowFKCol["RTABLE_NAME"]),
+					strings.ToLower(rowFKCol["RCOLUMN_LIST"]))
+				keysMeta = append(keysMeta, fk)
+			}
 		}
 	}
 	if len(checkKeyMap) > 0 {

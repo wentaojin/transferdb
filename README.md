@@ -6,7 +6,10 @@ transferdb 用于异构数据库迁移（ Oracle 数据库 -> MySQL 数据库）
    1. 考虑 Oracle 分区表特殊且 MySQL 数据库复杂分区可能不支持，分区表统一视为普通表转换，但是 reverse 阶段日志中会打印警告【partition tables】，若有要求，建议 reverse 之后检查，需手工转换
    2. 支持自定义配置表字段类型规则转换(table -> schema -> 内置)
    3. 支持默认配置规则转换
+   4. 下游若遇到同名表，则进行 rename 原表 _bak 为结尾，然后创建表
 2. 支持表索引创建
+   1. 排除基于函数的索引或者位图索引创建(日志输出打印，可以搜索 WARN 日志以及 FUNCTION-BASED NORMAL、BITMAP 关键筛选过滤)
+   2. 下游若遇到同名索引，则进行索引名_ping 以 _ping 为后缀重创建
 3. 支持非空约束、外键约束、检查约束等
 4. 数据同步【数据同步需要存在主键或者唯一键】
    1. 数据同步无论 FULL / ALL 模式需要注意时间格式，ORACLE date 格式复杂，同步前可先简单验证下迁移时间格式是否存在问题，transferdb timezone PICK 数据库操作系统的时区

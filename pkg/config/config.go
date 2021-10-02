@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/BurntSushi/toml"
+	"github.com/wentaojin/transferdb/db"
 )
 
 // 程序配置文件
@@ -110,6 +111,38 @@ func (c *CfgFile) configFromFile(file string) error {
 		return fmt.Errorf("failed decode toml config file %s: %v", file, err)
 	}
 	return nil
+}
+
+// 根据配置文件获取表列表
+func (c *CfgFile) GenerateTables(engine *db.Engine) ([]string, error) {
+	var (
+		exporterTableSlice []string
+		err                error
+	)
+	switch {
+	case len(c.SourceConfig.IncludeTable) != 0 && len(c.SourceConfig.ExcludeTable) == 0:
+		if err := engine.IsExistOracleTable(c.SourceConfig.SchemaName, c.SourceConfig.IncludeTable); err != nil {
+			return exporterTableSlice, err
+		}
+		exporterTableSlice = append(exporterTableSlice, c.SourceConfig.IncludeTable...)
+	case len(c.SourceConfig.IncludeTable) == 0 && len(c.SourceConfig.ExcludeTable) != 0:
+		exporterTableSlice, err = engine.FilterDifferenceOracleTable(c.SourceConfig.SchemaName, c.SourceConfig.ExcludeTable)
+		if err != nil {
+			return exporterTableSlice, err
+		}
+	case len(c.SourceConfig.IncludeTable) == 0 && len(c.SourceConfig.ExcludeTable) == 0:
+		exporterTableSlice, err = engine.GetOracleTable(c.SourceConfig.SchemaName)
+		if err != nil {
+			return exporterTableSlice, err
+		}
+	default:
+		return exporterTableSlice, fmt.Errorf("source config params include-table/exclude-table cannot exist at the same time")
+	}
+
+	if len(exporterTableSlice) == 0 {
+		return exporterTableSlice, fmt.Errorf("exporter table slice can not null from reverse task")
+	}
+	return exporterTableSlice, nil
 }
 
 func (c *CfgFile) String() string {

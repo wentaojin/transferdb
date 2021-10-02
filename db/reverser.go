@@ -188,9 +188,12 @@ func (e *Engine) GetOracleTableCheckKey(schemaName string, tableName string) ([]
 
 func (e *Engine) GetOracleTableForeignKey(schemaName string, tableName string) ([]map[string]string, error) {
 	querySQL := fmt.Sprintf(`with temp1 as
- (select t1.r_owner,
+ (select
+         t1.OWNER,
+         t1.r_owner,
          t1.constraint_name,
          t1.r_constraint_name,
+         t1.DELETE_RULE,
          LISTAGG(a1.column_name, ',') WITHIN GROUP(ORDER BY a1.POSITION) AS COLUMN_LIST
     from all_constraints t1, all_cons_columns a1
    where t1.constraint_name = a1.constraint_name
@@ -198,9 +201,10 @@ func (e *Engine) GetOracleTableForeignKey(schemaName string, tableName string) (
      AND upper(t1.owner) = upper('%s')
      AND t1.STATUS = 'ENABLED'
      AND t1.Constraint_Type = 'R'
-   group by t1.r_owner, t1.constraint_name, t1.r_constraint_name),
+   group by t1.OWNER, t1.r_owner, t1.constraint_name, t1.r_constraint_name,t1.DELETE_RULE),
 temp2 as
  (select t1.owner,
+         t1.TABLE_NAME,
          t1.constraint_name,
          LISTAGG(a1.column_name, ',') WITHIN GROUP(ORDER BY a1.POSITION) AS COLUMN_LIST
     from all_constraints t1, all_cons_columns a1
@@ -208,12 +212,13 @@ temp2 as
      AND upper(t1.owner) = upper('%s')
      AND t1.STATUS = 'ENABLED'
      AND t1.Constraint_Type = 'P'
-   group by t1.owner, t1.r_owner, t1.constraint_name)
+   group by t1.owner,t1.TABLE_NAME, t1.r_owner, t1.constraint_name)
 select x.constraint_name,
        x.COLUMN_LIST,
        x.r_owner,
-       x.r_constraint_name as RCONSTRAINT_NAME,
-       y.COLUMN_LIST as RCOLUMN_LIST
+       y.TABLE_NAME as RTABLE_NAME,
+       y.COLUMN_LIST as RCOLUMN_LIST,
+       x.DELETE_RULE
   from temp1 x, temp2 y
  where x.r_owner = y.owner
    and x.r_constraint_name = y.constraint_name`,
@@ -228,22 +233,45 @@ select x.constraint_name,
 }
 
 func (e *Engine) GetOracleTableIndex(schemaName string, tableName string) ([]map[string]string, error) {
-	querySQL := fmt.Sprintf(`select T.TABLE_NAME,
-       I.UNIQUENESS, --是否唯一索引
-       T.INDEX_NAME,
-       --T.COLUMN_POSITION,
-       LISTAGG(T.COLUMN_NAME, ',') WITHIN GROUP(ORDER BY T.COLUMN_POSITION) AS column_list
-  FROM ALL_IND_COLUMNS T, ALL_INDEXES I, ALL_CONSTRAINTS C
- WHERE T.INDEX_NAME = I.INDEX_NAME
-   AND T.INDEX_NAME = C.CONSTRAINT_NAME(+)
-   AND I.INDEX_TYPE != 'FUNCTION-BASED NORMAL' --排除基于函数的索引
-   AND I.INDEX_TYPE != 'BITMAP' --排除位图索引
-   AND C.CONSTRAINT_TYPE is Null --排除主键、唯一约束索引
-   AND T.TABLE_NAME = upper('%s')
-   AND T.TABLE_OWNER = upper('%s')
- group by T.TABLE_NAME,
-          I.UNIQUENESS, --是否唯一索引
-          T.INDEX_NAME`,
+	querySQL := fmt.Sprintf(`SELECT
+	temp.TABLE_NAME,
+	temp.UNIQUENESS,--是否唯一索引
+	temp.INDEX_NAME,
+	temp.INDEX_TYPE,
+	temp.column_list,
+	E.COLUMN_EXPRESSION 
+FROM
+	(
+	SELECT
+		T.TABLE_OWNER,
+		T.TABLE_NAME,
+		I.UNIQUENESS,--是否唯一索引
+		T.INDEX_NAME,
+		I.INDEX_TYPE,
+--T.COLUMN_POSITION,
+		LISTAGG ( T.COLUMN_NAME, ',' ) WITHIN GROUP ( ORDER BY T.COLUMN_POSITION ) AS column_list 
+	FROM
+		ALL_IND_COLUMNS T,
+		ALL_INDEXES I,
+		ALL_CONSTRAINTS C 
+	WHERE
+		T.INDEX_NAME = I.INDEX_NAME 
+		AND T.INDEX_NAME = C.CONSTRAINT_NAME ( + ) 
+		-- AND I.INDEX_TYPE != 'FUNCTION-BASED NORMAL' --排除基于函数的索引
+		-- AND I.INDEX_TYPE != 'BITMAP' --排除位图索引
+		AND C.CONSTRAINT_TYPE IS NULL --排除主键、唯一约束索引
+		AND T.TABLE_NAME = upper( '%s' ) 
+		AND T.TABLE_OWNER = upper( '%s' ) 
+	GROUP BY
+		T.TABLE_OWNER,
+		T.TABLE_NAME,
+		I.UNIQUENESS,--是否唯一索引
+		T.INDEX_NAME,
+		I.INDEX_TYPE 
+	) temp
+	LEFT JOIN ALL_IND_EXPRESSIONS E ON temp.TABLE_NAME = E.TABLE_NAME 
+AND temp.TABLE_OWNER = E.TABLE_OWNER 
+	AND temp.INDEX_NAME = E.INDEX_NAME`,
 		strings.ToUpper(tableName),
 		strings.ToUpper(schemaName))
 	_, res, err := Query(e.OracleDB, querySQL)
@@ -289,7 +317,7 @@ func (e *Engine) GetOracleTable(schemaName string) ([]string, error) {
 
 func (e *Engine) FilterOraclePartitionTable(schemaName string, tableSlice []string) ([]string, error) {
 	_, res, err := Query(e.OracleDB, fmt.Sprintf(`select table_name AS TABLE_NAME
-  from dba_tables
+  from all_tables
  where partitioned = 'YES'
    and upper(owner) = upper('%s')`, schemaName))
 	if err != nil {
@@ -301,36 +329,6 @@ func (e *Engine) FilterOraclePartitionTable(schemaName string, tableSlice []stri
 		tables = append(tables, r["TABLE_NAME"])
 	}
 	return util.FilterIntersectionStringItems(tableSlice, tables), nil
-}
-
-func (e *Engine) isOraclePartitionTable(schemaName, tableName string) (bool, error) {
-	_, res, err := Query(e.OracleDB, fmt.Sprintf(`select count(1) AS COUNT
-  from dba_tables
- where partitioned = 'YES'
-   and upper(owner) = upper('%s')
-   and upper(table_name) = upper('%s')`, schemaName, tableName))
-	if err != nil {
-		return false, err
-	}
-	if res[0]["COUNT"] == "0" {
-		return false, nil
-	}
-	return true, nil
-}
-
-func (e *Engine) getOracleSubPartitionTable(schemaName, tableName string) ([]string, error) {
-	_, res, err := Query(e.OracleDB, fmt.Sprintf(`select PARTITION_NAME
-  from ALL_TAB_PARTITIONS
- where upper(TABLE_OWNER) = upper('%s')
-   AND upper(table_name) = upper('%s')`, schemaName, tableName))
-	if err != nil {
-		return []string{}, err
-	}
-	var partsName []string
-	for _, r := range res {
-		partsName = append(partsName, r["PARTITION_NAME"])
-	}
-	return partsName, nil
 }
 
 func (e *Engine) getMySQLSchema() ([]string, error) {

@@ -34,6 +34,8 @@ import (
 // 程序运行
 func Run(cfg *config.CfgFile, mode string) error {
 	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "cost":
+		// todo: 收集评估改造成本
 	case "prepare":
 		// 初始化程序表结构 - only prepare 阶段
 		if err := prepare.TransferDBEnvPrepare(cfg); err != nil {
@@ -47,6 +49,8 @@ func Run(cfg *config.CfgFile, mode string) error {
 		if err := reverser.ReverseOracleToMySQLTable(engine, cfg); err != nil {
 			return err
 		}
+	case "check":
+		// todo: 校验上下游数据库表结构
 	case "full":
 		engine, err := NewEngineDB(cfg)
 		if err != nil {

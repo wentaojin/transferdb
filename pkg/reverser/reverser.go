@@ -137,32 +137,9 @@ func reverseOracleToMySQLTableInspect(engine *db.Engine, cfg *config.CfgFile) er
 
 // 转换表生成
 func generateOracleToMySQLTables(engine *db.Engine, cfg *config.CfgFile) ([]Table, error) {
-	var (
-		exporterTableSlice []string
-		err                error
-	)
-	switch {
-	case len(cfg.SourceConfig.IncludeTable) != 0 && len(cfg.SourceConfig.ExcludeTable) == 0:
-		if err := engine.IsExistOracleTable(cfg.SourceConfig.SchemaName, cfg.SourceConfig.IncludeTable); err != nil {
-			return []Table{}, err
-		}
-		exporterTableSlice = append(exporterTableSlice, cfg.SourceConfig.IncludeTable...)
-	case len(cfg.SourceConfig.IncludeTable) == 0 && len(cfg.SourceConfig.ExcludeTable) != 0:
-		exporterTableSlice, err = engine.FilterDifferenceOracleTable(cfg.SourceConfig.SchemaName, cfg.SourceConfig.ExcludeTable)
-		if err != nil {
-			return []Table{}, err
-		}
-	case len(cfg.SourceConfig.IncludeTable) == 0 && len(cfg.SourceConfig.ExcludeTable) == 0:
-		exporterTableSlice, err = engine.GetOracleTable(cfg.SourceConfig.SchemaName)
-		if err != nil {
-			return []Table{}, err
-		}
-	default:
-		return []Table{}, fmt.Errorf("source config params include-table/exclude-table cannot exist at the same time")
-	}
-
-	if len(exporterTableSlice) == 0 {
-		return []Table{}, fmt.Errorf("exporter table slice can not null from reverse task")
+	exporterTableSlice, err := cfg.GenerateTables(engine)
+	if err != nil {
+		return []Table{}, err
 	}
 
 	// 筛选过滤分区表并打印警告

@@ -12,6 +12,7 @@ require (
 	github.com/pingcap/tidb v1.1.0-beta.0.20200630082100-328b6d0a955c
 	github.com/scylladb/go-set v1.0.2
 	github.com/stretchr/testify v1.7.0 // indirect
+	github.com/syohex/go-texttable v0.0.0-20200919024338-eae5d131ba28
 	github.com/thinkeridea/go-extend v1.3.2
 	github.com/xxjwxc/gowp v0.0.0-20200603141413-57c3ba7108be
 	go.uber.org/multierr v1.6.0 // indirect
