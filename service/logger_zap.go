@@ -13,13 +13,12 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package zlog
+package service
 
 import (
 	"strings"
 
 	"github.com/pingcap/log"
-	"github.com/wentaojin/transferdb/pkg/config"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -27,7 +26,7 @@ import (
 var Logger *zap.Logger
 
 // 初始化日志 logger
-func NewZapLogger(cfg *config.CfgFile) (err error) {
+func NewZapLogger(cfg *CfgFile) (err error) {
 	Logger, _, err = log.InitLogger(&log.Config{
 		Level: strings.ToLower(cfg.LogConfig.LogLevel),
 		File: log.FileLogConfig{

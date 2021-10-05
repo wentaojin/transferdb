@@ -22,14 +22,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/wentaojin/transferdb/db"
+	"github.com/wentaojin/transferdb/utils"
+
+	"github.com/wentaojin/transferdb/service"
 
 	"github.com/xxjwxc/gowp/workpool"
 
-	"github.com/wentaojin/transferdb/zlog"
 	"go.uber.org/zap"
-
-	"github.com/wentaojin/transferdb/util"
 )
 
 // 全量数据导出导入期间，运行安全模式
@@ -39,7 +38,7 @@ func translatorTableFullRecord(
 	targetSchemaName, targetTableName string,
 	columns []string, rowsResult []string, workerThreads, insertBatchSize int, safeMode bool) ([]string, error) {
 	startTime := time.Now()
-	zlog.Logger.Info("single full table data translator start",
+	service.Logger.Info("single full table data translator start",
 		zap.String("schema", targetSchemaName),
 		zap.String("table", targetTableName))
 
@@ -48,12 +47,12 @@ func translatorTableFullRecord(
 	rowCounts := len(rowsResult)
 
 	if rowCounts <= insertBatchSize {
-		sqlSlice = append(sqlSlice, util.StringsBuilder(sqlPrefix, " ", strings.Join(rowsResult, ",")))
+		sqlSlice = append(sqlSlice, utils.StringsBuilder(sqlPrefix, " ", strings.Join(rowsResult, ",")))
 	} else {
 		// 数据行按照 batch 拼接拆分
 		// 向上取整，多切 batch，防止数据丢失
 		splitsNums := math.Ceil(float64(rowCounts) / float64(insertBatchSize))
-		multiBatchRows := util.SplitMultipleStringSlice(rowsResult, int64(splitsNums))
+		multiBatchRows := utils.SplitMultipleStringSlice(rowsResult, int64(splitsNums))
 
 		// 保证并发 Slice Append 安全
 		var lock sync.Mutex
@@ -62,7 +61,7 @@ func translatorTableFullRecord(
 			rows := batchRows
 			wp.DoWait(func() error {
 				lock.Lock()
-				sqlSlice = append(sqlSlice, util.StringsBuilder(sqlPrefix, " ", strings.Join(rows, ",")))
+				sqlSlice = append(sqlSlice, utils.StringsBuilder(sqlPrefix, " ", strings.Join(rows, ",")))
 				lock.Unlock()
 				return nil
 			})
@@ -76,7 +75,7 @@ func translatorTableFullRecord(
 	}
 
 	endTime := time.Now()
-	zlog.Logger.Info("single full table data translator finished",
+	service.Logger.Info("single full table data translator finished",
 		zap.String("schema", targetSchemaName),
 		zap.String("table", targetTableName),
 		zap.String("cost", endTime.Sub(startTime).String()))
@@ -86,12 +85,12 @@ func translatorTableFullRecord(
 // 拼接 SQL 语句
 func generateMySQLPrepareInsertSQLStatement(targetSchemaName, targetTableName string, columns []string, safeMode bool) string {
 	var prepareSQL string
-	column := util.StringsBuilder("(", strings.Join(columns, ","), ")")
+	column := utils.StringsBuilder("(", strings.Join(columns, ","), ")")
 	if safeMode {
-		prepareSQL = util.StringsBuilder(`REPLACE INTO `, targetSchemaName, ".", targetTableName, column, ` VALUES `)
+		prepareSQL = utils.StringsBuilder(`REPLACE INTO `, targetSchemaName, ".", targetTableName, column, ` VALUES `)
 
 	} else {
-		prepareSQL = util.StringsBuilder(`INSERT INTO `, targetSchemaName, ".", targetTableName, column, ` VALUES `)
+		prepareSQL = utils.StringsBuilder(`INSERT INTO `, targetSchemaName, ".", targetTableName, column, ` VALUES `)
 	}
 	return prepareSQL
 }
@@ -99,13 +98,13 @@ func generateMySQLPrepareInsertSQLStatement(targetSchemaName, targetTableName st
 // 替换 Oracle 事务 SQL
 // ORACLE 数据库同步需要开附加日志且表需要捕获字段列日志，Logminer 内容 UPDATE/DELETE/INSERT 语句会带所有字段信息
 func translatorAndApplyOracleIncrementRecord(
-	engine *db.Engine,
+	engine *service.Engine,
 	sourceTableName string,
 	targetSchema string,
-	rowsResult []db.LogminerContent, taskQueue chan IncrementPayload) error {
+	rowsResult []service.LogminerContent, taskQueue chan IncrementPayload) error {
 
 	startTime := time.Now()
-	zlog.Logger.Info("oracle table increment log apply start",
+	service.Logger.Info("oracle table increment log apply start",
 		zap.String("mysql schema", targetSchema),
 		zap.String("table", sourceTableName),
 		zap.Time("start time", startTime))
@@ -116,21 +115,21 @@ func translatorAndApplyOracleIncrementRecord(
 			return fmt.Errorf("does not meet expectations [oracle sql redo is be null], please check")
 		}
 
-		if rows.Operation == util.DDLOperation {
-			zlog.Logger.Info("translator oracle payload", zap.String("ORACLE DDL", rows.SQLRedo))
+		if rows.Operation == utils.DDLOperation {
+			service.Logger.Info("translator oracle payload", zap.String("ORACLE DDL", rows.SQLRedo))
 		}
 
 		// 移除引号
-		rows.SQLRedo = util.ReplaceQuotesString(rows.SQLRedo)
+		rows.SQLRedo = utils.ReplaceQuotesString(rows.SQLRedo)
 		// 移除分号
-		rows.SQLRedo = util.ReplaceSpecifiedString(rows.SQLRedo, ";", "")
+		rows.SQLRedo = utils.ReplaceSpecifiedString(rows.SQLRedo, ";", "")
 
 		if rows.SQLUndo != "" {
-			rows.SQLUndo = util.ReplaceQuotesString(rows.SQLUndo)
-			rows.SQLUndo = util.ReplaceSpecifiedString(rows.SQLUndo, ";", "")
-			rows.SQLUndo = util.ReplaceSpecifiedString(rows.SQLUndo,
-				util.StringsBuilder(rows.SegOwner, "."),
-				util.StringsBuilder(strings.ToUpper(targetSchema), "."))
+			rows.SQLUndo = utils.ReplaceQuotesString(rows.SQLUndo)
+			rows.SQLUndo = utils.ReplaceSpecifiedString(rows.SQLUndo, ";", "")
+			rows.SQLUndo = utils.ReplaceSpecifiedString(rows.SQLUndo,
+				utils.StringsBuilder(rows.SegOwner, "."),
+				utils.StringsBuilder(strings.ToUpper(targetSchema), "."))
 		}
 
 		// 比如：INSERT INTO MARVIN.MARVIN1 (ID,NAME) VALUES (1,'marvin')
@@ -163,7 +162,7 @@ func translatorAndApplyOracleIncrementRecord(
 	}
 
 	endTime := time.Now()
-	zlog.Logger.Info("oracle table increment log apply finished",
+	service.Logger.Info("oracle table increment log apply finished",
 		zap.String("mysql schema", targetSchema),
 		zap.String("table", sourceTableName),
 		zap.String("status", "success"),
@@ -192,8 +191,8 @@ func translatorOracleToMySQLSQL(oracleSQLRedo, oracleSQLUndo, targetSchema strin
 
 	stmt := extractStmt(astNode)
 	switch {
-	case stmt.Operation == util.UpdateOperation:
-		operationType = util.UpdateOperation
+	case stmt.Operation == utils.UpdateOperation:
+		operationType = utils.UpdateOperation
 		astUndoNode, err := parseSQL(oracleSQLUndo)
 		if err != nil {
 			return []string{}, operationType, fmt.Errorf("parse error: %v\n", err.Error())
@@ -209,9 +208,9 @@ func translatorOracleToMySQLSQL(oracleSQLRedo, oracleSQLUndo, targetSchema strin
 		stmt.Schema = targetSchema
 
 		if stmt.WhereExpr == "" {
-			deleteSQL = util.StringsBuilder(`DELETE FROM `, stmt.Schema, ".", stmt.Table)
+			deleteSQL = utils.StringsBuilder(`DELETE FROM `, stmt.Schema, ".", stmt.Table)
 		} else {
-			deleteSQL = util.StringsBuilder(`DELETE FROM `, stmt.Schema, ".", stmt.Table, ` `, stmt.WhereExpr)
+			deleteSQL = utils.StringsBuilder(`DELETE FROM `, stmt.Schema, ".", stmt.Table, ` `, stmt.WhereExpr)
 		}
 
 		var (
@@ -220,7 +219,7 @@ func translatorOracleToMySQLSQL(oracleSQLRedo, oracleSQLUndo, targetSchema strin
 		for _, col := range stmt.Columns {
 			values = append(values, stmt.Data[col].(string))
 		}
-		insertSQL := util.StringsBuilder(`REPLACE INTO `, stmt.Schema, ".", stmt.Table,
+		insertSQL := utils.StringsBuilder(`REPLACE INTO `, stmt.Schema, ".", stmt.Table,
 			"(",
 			strings.Join(stmt.Columns, ","),
 			")",
@@ -232,8 +231,8 @@ func translatorOracleToMySQLSQL(oracleSQLRedo, oracleSQLUndo, targetSchema strin
 		sqls = append(sqls, deleteSQL)
 		sqls = append(sqls, insertSQL)
 
-	case stmt.Operation == util.InsertOperation:
-		operationType = util.InsertOperation
+	case stmt.Operation == utils.InsertOperation:
+		operationType = utils.InsertOperation
 		stmt.Schema = targetSchema
 
 		var values []string
@@ -241,7 +240,7 @@ func translatorOracleToMySQLSQL(oracleSQLRedo, oracleSQLUndo, targetSchema strin
 		for _, col := range stmt.Columns {
 			values = append(values, stmt.Data[col].(string))
 		}
-		replaceSQL := util.StringsBuilder(`REPLACE INTO `, stmt.Schema, ".", stmt.Table,
+		replaceSQL := utils.StringsBuilder(`REPLACE INTO `, stmt.Schema, ".", stmt.Table,
 			"(",
 			strings.Join(stmt.Columns, ","),
 			")",
@@ -252,31 +251,31 @@ func translatorOracleToMySQLSQL(oracleSQLRedo, oracleSQLUndo, targetSchema strin
 
 		sqls = append(sqls, replaceSQL)
 
-	case stmt.Operation == util.DeleteOperation:
-		operationType = util.DeleteOperation
+	case stmt.Operation == utils.DeleteOperation:
+		operationType = utils.DeleteOperation
 		stmt.Schema = targetSchema
 		var deleteSQL string
 
 		if stmt.WhereExpr == "" {
-			deleteSQL = util.StringsBuilder(`DELETE FROM `, stmt.Schema, ".", stmt.Table)
+			deleteSQL = utils.StringsBuilder(`DELETE FROM `, stmt.Schema, ".", stmt.Table)
 		} else {
-			deleteSQL = util.StringsBuilder(`DELETE FROM `, stmt.Schema, ".", stmt.Table, ` `, stmt.WhereExpr)
+			deleteSQL = utils.StringsBuilder(`DELETE FROM `, stmt.Schema, ".", stmt.Table, ` `, stmt.WhereExpr)
 		}
 
 		sqls = append(sqls, deleteSQL)
 
-	case stmt.Operation == util.TruncateOperation:
-		operationType = util.TruncateTableOperation
+	case stmt.Operation == utils.TruncateOperation:
+		operationType = utils.TruncateTableOperation
 		stmt.Schema = targetSchema
 
-		truncateSQL := util.StringsBuilder(`TRUNCATE TABLE `, stmt.Schema, ".", stmt.Table)
+		truncateSQL := utils.StringsBuilder(`TRUNCATE TABLE `, stmt.Schema, ".", stmt.Table)
 		sqls = append(sqls, truncateSQL)
 
-	case stmt.Operation == util.DropOperation:
-		operationType = util.DropTableOperation
+	case stmt.Operation == utils.DropOperation:
+		operationType = utils.DropTableOperation
 		stmt.Schema = targetSchema
 
-		dropSQL := util.StringsBuilder(`DROP TABLE `, stmt.Schema, ".", stmt.Table)
+		dropSQL := utils.StringsBuilder(`DROP TABLE `, stmt.Schema, ".", stmt.Table)
 
 		sqls = append(sqls, dropSQL)
 	}

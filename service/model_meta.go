@@ -13,16 +13,16 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package db
+package service
 
 import (
 	"fmt"
 	"strings"
 	"time"
 
-	"gorm.io/gorm"
+	"github.com/wentaojin/transferdb/utils"
 
-	"github.com/wentaojin/transferdb/util"
+	"gorm.io/gorm"
 )
 
 // 同步元数据表
@@ -81,7 +81,7 @@ func (i *TableIncrementMeta) GetTableIncrementMetaRowCounts(engine *Engine) (int
 }
 
 func (e *Engine) UpdateTableIncrementMetaALLSCNRecord(sourceSchemaName, sourceTableName, operationType string, globalSCN, sourceTableSCN int) error {
-	if operationType == util.DropTableOperation {
+	if operationType == utils.DropTableOperation {
 		if err := e.GormDB.Transaction(func(tx *gorm.DB) error {
 			if err := tx.Where("source_schema_name = ? and source_table_name = ?",
 				strings.ToUpper(sourceSchemaName),

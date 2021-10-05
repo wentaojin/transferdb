@@ -18,20 +18,21 @@ package check
 import (
 	"strings"
 
-	"github.com/wentaojin/transferdb/util"
-
-	"github.com/wentaojin/transferdb/db"
+	"github.com/wentaojin/transferdb/service"
 )
 
 const (
-	OracleGBKCharacterSet  = "GBK"
-	OracleUTF8CharacterSet = "UTF8"
+	OracleGBKCharacterSet  = "gbk"
+	OracleUTF8CharacterSet = "utf8"
 	// oracle collation 默认大小写敏感，a != A
 	OracleCollationBin = "bin"
 	// MySQL 支持 check 约束版本 > 8.0.15
 	MySQLCheckConsVersion = "8.0.15"
 	// MySQL 版本分隔符号
 	MySQLVersionDelimiter = "-"
+	// MySQL 字符集/排序规则
+	MySQLCharacterSet = "utf8mb4"
+	MySQLCollation    = "utf8mb4_bin"
 )
 
 type Table struct {
@@ -48,15 +49,21 @@ type Table struct {
 }
 
 type Column struct {
-	DataType      string
+	DataType     string
+	CharLength   string
+	CharUsed     string
+	CharacterSet string
+	Collation    string
+	ColumnInfo
+}
+
+type ColumnInfo struct {
 	DataLength    string
 	DataPrecision string
 	DataScale     string
 	NULLABLE      string
 	DataDefault   string
 	Comment       string
-	CharacterSet  string
-	Collation     string
 }
 
 type Index struct {
@@ -89,7 +96,7 @@ type Partition struct {
 	SubPartitionType string
 }
 
-func NewOracleTableINFO(schemaName, tableName string, engine *db.Engine) (*Table, error) {
+func NewOracleTableINFO(schemaName, tableName string, engine *service.Engine) (*Table, error) {
 	oraTable := &Table{
 		SchemaName: schemaName,
 		TableName:  tableName,
@@ -100,7 +107,7 @@ func NewOracleTableINFO(schemaName, tableName string, engine *db.Engine) (*Table
 	if err != nil {
 		return oraTable, err
 	}
-	if strings.Contains(characterSet, ".ZHS16GBK") {
+	if strings.Contains(strings.ToUpper(characterSet), ".ZHS16GBK") {
 		isGBKCharacterSet = true
 	}
 	commentInfo, err := engine.GetOracleTableComment(schemaName, tableName)
@@ -123,15 +130,19 @@ func NewOracleTableINFO(schemaName, tableName string, engine *db.Engine) (*Table
 			OracleCharacterSet = OracleGBKCharacterSet
 		}
 		columns[rowCol["COLUMN_NAME"]] = Column{
-			DataType:      rowCol["DATA_TYPE"],
-			DataLength:    rowCol["DATA_LENGTH"],
-			DataPrecision: rowCol["DATA_PRECISION"],
-			DataScale:     rowCol["DATA_SCALE"],
-			NULLABLE:      rowCol["NULLABLE"],
-			DataDefault:   rowCol["DATA_DEFAULT"],
-			Comment:       rowCol["COMMENTS"],
-			CharacterSet:  OracleCharacterSet,
-			Collation:     OracleCollationBin,
+			DataType:   rowCol["DATA_TYPE"],
+			CharLength: rowCol["CHAR_LENGTH"],
+			CharUsed:   rowCol["CHAR_USED"],
+			ColumnInfo: ColumnInfo{
+				DataLength:    rowCol["DATA_LENGTH"],
+				DataPrecision: rowCol["DATA_PRECISION"],
+				DataScale:     rowCol["DATA_SCALE"],
+				NULLABLE:      rowCol["NULLABLE"],
+				DataDefault:   rowCol["DATA_DEFAULT"],
+				Comment:       rowCol["COMMENTS"],
+			},
+			CharacterSet: OracleCharacterSet,
+			Collation:    OracleCollationBin,
 		}
 	}
 
@@ -224,7 +235,7 @@ func NewOracleTableINFO(schemaName, tableName string, engine *db.Engine) (*Table
 	return oraTable, nil
 }
 
-func NewMySQLTableINFO(schemaName, tableName string, engine *db.Engine) (*Table, error) {
+func NewMySQLTableINFO(schemaName, tableName string, engine *service.Engine) (*Table, error) {
 	mysqlTable := &Table{
 		SchemaName: schemaName,
 		TableName:  tableName,
@@ -271,15 +282,17 @@ func NewMySQLTableINFO(schemaName, tableName string, engine *db.Engine) (*Table,
 			ca = collation
 		}
 		columns[rowCol["COLUMN_NAME"]] = Column{
-			DataType:      rowCol["DATA_TYPE"],
-			DataLength:    rowCol["DATA_LENGTH"],
-			DataPrecision: rowCol["DATA_PRECISION"],
-			DataScale:     rowCol["DATA_SCALE"],
-			NULLABLE:      rowCol["NULLABLE"],
-			DataDefault:   rowCol["DATA_DEFAULT"],
-			Comment:       rowCol["COMMENTS"],
-			CharacterSet:  cs,
-			Collation:     ca,
+			DataType: rowCol["DATA_TYPE"],
+			ColumnInfo: ColumnInfo{
+				DataLength:    rowCol["DATA_LENGTH"],
+				DataPrecision: rowCol["DATA_PRECISION"],
+				DataScale:     rowCol["DATA_SCALE"],
+				NULLABLE:      rowCol["NULLABLE"],
+				DataDefault:   rowCol["DATA_DEFAULT"],
+				Comment:       rowCol["COMMENTS"],
+			},
+			CharacterSet: cs,
+			Collation:    ca,
 		}
 	}
 
@@ -353,7 +366,7 @@ func NewMySQLTableINFO(schemaName, tableName string, engine *db.Engine) (*Table,
 		} else {
 			dbVersion = version
 		}
-		if util.VersionOrdinal(dbVersion) > util.VersionOrdinal(MySQLCheckConsVersion) {
+		if utils.VersionOrdinal(dbVersion) > utils.VersionOrdinal(MySQLCheckConsVersion) {
 			ckInfo, err := engine.GetMySQLTableCheckKey(schemaName, tableName)
 			if err != nil {
 				return mysqlTable, err

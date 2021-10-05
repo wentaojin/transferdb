@@ -24,7 +24,7 @@ import (
 	"runtime"
 	"syscall"
 
-	"github.com/wentaojin/transferdb/zlog"
+	"github.com/wentaojin/transferdb/service"
 
 	"go.uber.org/zap"
 )
@@ -40,7 +40,7 @@ func SetupSignalHandler(shutdownFunc func()) {
 			sig := <-usrDefSignalChan
 			if sig == syscall.SIGUSR1 {
 				stackLen := runtime.Stack(buf, true)
-				zlog.Logger.Info(" dump goroutine stack", zap.String("stack", fmt.Sprintf("=== Got signal [%s] to dump goroutine stack. ===\n%s\n=== Finished dumping goroutine stack. ===", sig, buf[:stackLen])))
+				service.Logger.Info(" dump goroutine stack", zap.String("stack", fmt.Sprintf("=== Got signal [%s] to dump goroutine stack. ===\n%s\n=== Finished dumping goroutine stack. ===", sig, buf[:stackLen])))
 			}
 		}
 	}()
@@ -55,7 +55,7 @@ func SetupSignalHandler(shutdownFunc func()) {
 
 	go func() {
 		sig := <-closeSignalChan
-		zlog.Logger.Info("got signal to exit", zap.Stringer("signal", sig))
+		service.Logger.Info("got signal to exit", zap.Stringer("signal", sig))
 		shutdownFunc()
 	}()
 }

@@ -18,30 +18,21 @@ package prepare
 import (
 	"time"
 
-	"go.uber.org/zap"
+	"github.com/wentaojin/transferdb/service"
 
-	"github.com/wentaojin/transferdb/db"
-	"github.com/wentaojin/transferdb/pkg/config"
-	"github.com/wentaojin/transferdb/zlog"
+	"go.uber.org/zap"
 )
 
 // 初始化程序表结构 - only prepare 阶段
 // 同步环境准备
-func TransferDBEnvPrepare(cfg *config.CfgFile) error {
+func TransferDBEnvPrepare(engine *service.Engine) error {
 	startTime := time.Now()
-	zlog.Logger.Info("prepare tansferdb env start")
-	mysqlEngine, err := db.NewMySQLEnginePrepareDB(
-		cfg.TargetConfig,
-		cfg.AppConfig.SlowlogThreshold,
-	)
-	if err != nil {
-		return err
-	}
-	if err := mysqlEngine.InitMysqlEngineDB(); err != nil {
+	service.Logger.Info("prepare tansferdb env start")
+	if err := engine.InitMysqlEngineDB(); err != nil {
 		return err
 	}
 	endTime := time.Now()
-	zlog.Logger.Info("prepare tansferdb env finished",
+	service.Logger.Info("prepare tansferdb env finished",
 		zap.String("cost", endTime.Sub(startTime).String()))
 	return nil
 }

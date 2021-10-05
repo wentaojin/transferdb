@@ -19,23 +19,23 @@ import (
 	"encoding/json"
 	"sync"
 
-	"github.com/wentaojin/transferdb/db"
-	"github.com/wentaojin/transferdb/zlog"
+	"github.com/wentaojin/transferdb/service"
+
 	"go.uber.org/zap"
 )
 
 type IncrementPayload struct {
-	GlobalSCN      int        `json:"global_scn"`
-	SourceTableSCN int        `json:"source_table_scn"`
-	SourceSchema   string     `json:"source_schema"`
-	SourceTable    string     `json:"source_table"`
-	TargetSchema   string     `json:"target_schema"`
-	TargetTable    string     `json:"target_table"`
-	Operation      string     `json:"operation"`
-	OracleRedo     string     `json:"oracle_redo"` // Oracle 已执行 SQL
-	MySQLRedo      []string   `json:"mysql_redo"`  // MySQL 待执行 SQL
-	OperationType  string     `json:"operation_type"`
-	Engine         *db.Engine `json:"-"`
+	GlobalSCN      int             `json:"global_scn"`
+	SourceTableSCN int             `json:"source_table_scn"`
+	SourceSchema   string          `json:"source_schema"`
+	SourceTable    string          `json:"source_table"`
+	TargetSchema   string          `json:"target_schema"`
+	TargetTable    string          `json:"target_table"`
+	Operation      string          `json:"operation"`
+	OracleRedo     string          `json:"oracle_redo"` // Oracle 已执行 SQL
+	MySQLRedo      []string        `json:"mysql_redo"`  // MySQL 待执行 SQL
+	OperationType  string          `json:"operation_type"`
+	Engine         *service.Engine `json:"-"`
 }
 
 type IncrementResult struct {
@@ -47,7 +47,7 @@ type IncrementResult struct {
 func (p *IncrementPayload) Run() error {
 	// 数据写入并更新元数据表
 	if err := applierTableIncrementRecord(p); err != nil {
-		zlog.Logger.Error("apply table increment record failed",
+		service.Logger.Error("apply table increment record failed",
 			zap.String("payload", p.Marshal()),
 			zap.Error(err))
 		return err
@@ -59,7 +59,7 @@ func (p *IncrementPayload) Run() error {
 func (p *IncrementPayload) Marshal() string {
 	b, err := json.Marshal(&p)
 	if err != nil {
-		zlog.Logger.Error("marshal task to string",
+		service.Logger.Error("marshal task to string",
 			zap.String("string", string(b)),
 			zap.Error(err))
 	}
@@ -79,7 +79,7 @@ func CreateWorkerPool(numOfWorkers int, jobQueue chan IncrementPayload, resultQu
 func GetIncrementResult(done chan bool, resultQueue chan IncrementResult) {
 	for result := range resultQueue {
 		if !result.Status {
-			zlog.Logger.Fatal("task increment table record",
+			service.Logger.Fatal("task increment table record",
 				zap.String("payload", result.Payload.Marshal()))
 		}
 	}

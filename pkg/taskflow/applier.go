@@ -20,20 +20,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wentaojin/transferdb/pkg/config"
+	"github.com/wentaojin/transferdb/service"
 
 	"github.com/xxjwxc/gowp/workpool"
 
-	"github.com/wentaojin/transferdb/zlog"
 	"go.uber.org/zap"
-
-	"github.com/wentaojin/transferdb/db"
 )
 
 // 表数据应用 -> 全量任务
-func applierTableFullRecord(targetSchemaName, targetTableName string, workerThreads int, sqlSlice []string, engine *db.Engine) error {
+func applierTableFullRecord(targetSchemaName, targetTableName string, workerThreads int, sqlSlice []string, engine *service.Engine) error {
 	startTime := time.Now()
-	zlog.Logger.Info("single full table data applier start",
+	service.Logger.Info("single full table data applier start",
 		zap.String("schema", targetSchemaName),
 		zap.String("table", targetTableName))
 
@@ -55,7 +52,7 @@ func applierTableFullRecord(targetSchemaName, targetTableName string, workerThre
 		return fmt.Errorf("single full table data applier meet error")
 	}
 	endTime := time.Now()
-	zlog.Logger.Info("single full table data applier finished",
+	service.Logger.Info("single full table data applier finished",
 		zap.String("schema", targetSchemaName),
 		zap.String("table", targetTableName),
 		zap.String("cost", endTime.Sub(startTime).String()))
@@ -73,7 +70,7 @@ func applierTableIncrementRecord(p *IncrementPayload) error {
 	// 数据写入完毕，更新元数据 checkpoint 表
 	// 如果同步中断，数据同步使用会以 global_scn 为准，也就是会进行重复消费
 	if err := p.Engine.UpdateTableIncrementMetaALLSCNRecord(p.SourceSchema, p.SourceTable, p.OperationType, p.GlobalSCN, p.SourceTableSCN); err != nil {
-		zlog.Logger.Error("update table increment scn record failed",
+		service.Logger.Error("update table increment scn record failed",
 			zap.String("payload", p.Marshal()),
 			zap.Error(err))
 		return err
@@ -81,7 +78,7 @@ func applierTableIncrementRecord(p *IncrementPayload) error {
 	return nil
 }
 
-func applyOracleRedoIncrementRecord(cfg *config.CfgFile, engine *db.Engine, logminerContentMap map[string][]db.LogminerContent) error {
+func applyOracleRedoIncrementRecord(cfg *service.CfgFile, engine *service.Engine, logminerContentMap map[string][]service.LogminerContent) error {
 	// 应用当前日志文件中所有记录
 	wp := workpool.New(cfg.AllConfig.ApplyThreads)
 	for tableName, lcs := range logminerContentMap {
@@ -98,10 +95,10 @@ func applyOracleRedoIncrementRecord(cfg *config.CfgFile, engine *db.Engine, logm
 				go GetIncrementResult(done, resultQueue)
 
 				// 转换捕获内容以及数据应用
-				go func(engine *db.Engine, tbl, targetSchemaName string, rowsResult []db.LogminerContent, taskQueue chan IncrementPayload) {
+				go func(engine *service.Engine, tbl, targetSchemaName string, rowsResult []service.LogminerContent, taskQueue chan IncrementPayload) {
 					defer func() {
 						if err := recover(); err != nil {
-							zlog.Logger.Fatal("translatorAndApplyOracleIncrementRecord",
+							service.Logger.Fatal("translatorAndApplyOracleIncrementRecord",
 								zap.String("schema", cfg.TargetConfig.SchemaName),
 								zap.String("table", tbl),
 								zap.Error(fmt.Errorf("%v", err)))
@@ -123,7 +120,7 @@ func applyOracleRedoIncrementRecord(cfg *config.CfgFile, engine *db.Engine, logm
 
 				return nil
 			}
-			zlog.Logger.Warn("increment table log file logminer null data, transferdb will continue to capture",
+			service.Logger.Warn("increment table log file logminer null data, transferdb will continue to capture",
 				zap.String("mysql schema", cfg.TargetConfig.SchemaName),
 				zap.String("table", tbl),
 				zap.String("status", "success"))

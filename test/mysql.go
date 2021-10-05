@@ -18,13 +18,13 @@ package main
 import (
 	"fmt"
 
-	"github.com/wentaojin/transferdb/pkg/config"
+	"github.com/wentaojin/transferdb/service"
 
-	"github.com/wentaojin/transferdb/db"
+	"github.com/wentaojin/transferdb/server"
 )
 
 func main() {
-	mysqlCfg := config.TargetConfig{
+	mysqlCfg := service.TargetConfig{
 		Username:      "marvin",
 		Password:      "marvin",
 		Host:          "192.168.2.30",
@@ -32,11 +32,11 @@ func main() {
 		ConnectParams: "charset=utf8mb4&parseTime=True&loc=Local&multiStatements=true&tidb_txn_mode='optimistic'",
 		MetaSchema:    "steven",
 	}
-	engine, err := db.NewMySQLEngineGeneralDB(mysqlCfg, 300)
+	engine, err := server.NewMySQLEngineGeneralDB(mysqlCfg, 300)
 	if err != nil {
 		fmt.Println(err)
 	}
-	cols, res, err := db.Query(engine.MysqlDB, "select * from t1")
+	cols, res, err := service.Query(engine.MysqlDB, "select * from t1")
 	if err != nil {
 		fmt.Println(err)
 	}

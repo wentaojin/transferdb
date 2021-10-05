@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package db
+package service
 
 import (
 	"context"
@@ -22,15 +22,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/wentaojin/transferdb/utils"
+
 	"go.uber.org/zap"
-
-	"github.com/wentaojin/transferdb/zlog"
-
-	"github.com/wentaojin/transferdb/util"
 )
 
 func (e *Engine) GetOracleRedoLogSCN(scn string) (int, error) {
-	_, res, err := Query(e.OracleDB, util.StringsBuilder(`select  FIRST_CHANGE# AS SCN
+	_, res, err := Query(e.OracleDB, utils.StringsBuilder(`select  FIRST_CHANGE# AS SCN
   from (SELECT  GROUP#,
                first_change#,
                MEMBERS,
@@ -53,7 +51,7 @@ func (e *Engine) GetOracleRedoLogSCN(scn string) (int, error) {
 
 func (e *Engine) GetOracleArchivedLogSCN(scn string) (int, error) {
 	var globalSCN int
-	_, res, err := Query(e.OracleDB, util.StringsBuilder(`select FIRST_CHANGE# AS SCN
+	_, res, err := Query(e.OracleDB, utils.StringsBuilder(`select FIRST_CHANGE# AS SCN
   from (select FIRST_CHANGE#,FIRST_TIME
           from v$archived_log
          where STATUS = 'A'
@@ -73,7 +71,7 @@ func (e *Engine) GetOracleArchivedLogSCN(scn string) (int, error) {
 }
 
 func (e *Engine) GetOracleRedoLogFile(scn string) ([]map[string]string, error) {
-	_, res, err := Query(e.OracleDB, util.StringsBuilder(`SELECT 
+	_, res, err := Query(e.OracleDB, utils.StringsBuilder(`SELECT 
        --l.GROUP# GROUP_NUMBER,
        l.FIRST_CHANGE# AS FIRST_CHANGE,
        --l.BYTES / 1024 / 1024 AS LOG_SIZE,
@@ -89,7 +87,7 @@ func (e *Engine) GetOracleRedoLogFile(scn string) ([]map[string]string, error) {
 }
 
 func (e *Engine) GetOracleArchivedLogFile(scn string) ([]map[string]string, error) {
-	_, res, err := Query(e.OracleDB, util.StringsBuilder(`SELECT NAME AS LOG_FILE,
+	_, res, err := Query(e.OracleDB, utils.StringsBuilder(`SELECT NAME AS LOG_FILE,
        NEXT_CHANGE# AS NEXT_CHANGE,
        --BLOCKS * BLOCK_SIZE / 1024 / 1024 AS LOG_SIZE,
        FIRST_CHANGE# AS FIRST_CHANGE
@@ -104,7 +102,7 @@ func (e *Engine) GetOracleArchivedLogFile(scn string) ([]map[string]string, erro
 }
 
 func (e *Engine) GetOracleCurrentRedoMaxSCN() (int, int, string, error) {
-	_, res, err := Query(e.OracleDB, util.StringsBuilder(`SELECT
+	_, res, err := Query(e.OracleDB, utils.StringsBuilder(`SELECT
        l.FIRST_CHANGE# AS FIRST_CHANGE,
        l.NEXT_CHANGE# AS NEXT_CHANGE,
        lf.MEMBER LOG_FILE
@@ -132,7 +130,7 @@ func (e *Engine) GetOracleCurrentRedoMaxSCN() (int, int, string, error) {
 }
 
 func (e *Engine) GetOracleALLRedoLogFile() ([]string, error) {
-	_, res, err := Query(e.OracleDB, util.StringsBuilder(`SELECT
+	_, res, err := Query(e.OracleDB, utils.StringsBuilder(`SELECT
        lf.MEMBER LOG_FILE
   FROM v$LOGFILE lf`))
 	if err != nil {
@@ -196,7 +194,7 @@ func (e *Engine) GetMySQLTableIncrementMetaRecord(sourceSchemaName string) ([]st
 
 func (e *Engine) AddOracleLogminerlogFile(logFile string) error {
 	ctx, _ := context.WithCancel(context.Background())
-	_, err := e.OracleDB.ExecContext(ctx, util.StringsBuilder(`BEGIN
+	_, err := e.OracleDB.ExecContext(ctx, utils.StringsBuilder(`BEGIN
   dbms_logmnr.add_logfile(logfilename => '`, logFile, `',
                           options     => dbms_logmnr.NEW);
 END;`))
@@ -208,7 +206,7 @@ END;`))
 
 func (e *Engine) StartOracleLogminerStoredProcedure(scn string) error {
 	ctx, _ := context.WithCancel(context.Background())
-	_, err := e.OracleDB.ExecContext(ctx, util.StringsBuilder(`BEGIN
+	_, err := e.OracleDB.ExecContext(ctx, utils.StringsBuilder(`BEGIN
   dbms_logmnr.start_logmnr(startSCN => `, scn, `,
                            options  => SYS.DBMS_LOGMNR.SKIP_CORRUPTION +       -- 日志遇到坏块，不报错退出，直接跳过
                                        SYS.DBMS_LOGMNR.NO_SQL_DELIMITER +
@@ -225,7 +223,7 @@ END;`))
 
 func (e *Engine) EndOracleLogminerStoredProcedure() error {
 	ctx, _ := context.WithCancel(context.Background())
-	_, err := e.OracleDB.ExecContext(ctx, util.StringsBuilder(`BEGIN
+	_, err := e.OracleDB.ExecContext(ctx, utils.StringsBuilder(`BEGIN
   dbms_logmnr.end_logmnr();
 END;`))
 	if err != nil {
@@ -253,7 +251,7 @@ func (e *Engine) GetOracleLogminerContentToMySQL(schemaName string, sourceTableN
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(logminerQueryTimeout)*time.Second)
 	defer cancel()
 
-	querySQL := util.StringsBuilder(`SELECT SCN,
+	querySQL := utils.StringsBuilder(`SELECT SCN,
        SEG_OWNER,
        TABLE_NAME,
        SQL_REDO,
@@ -267,7 +265,7 @@ func (e *Engine) GetOracleLogminerContentToMySQL(schemaName string, sourceTableN
    AND SCN >= `, lastCheckpoint, ` ORDER BY SCN`)
 
 	startTime := time.Now()
-	zlog.Logger.Info("logminer sql",
+	Logger.Info("logminer sql",
 		zap.String("sql", querySQL),
 		zap.Time("start time", startTime))
 
@@ -285,7 +283,7 @@ func (e *Engine) GetOracleLogminerContentToMySQL(schemaName string, sourceTableN
 		lcs = append(lcs, lc)
 	}
 	endTime := time.Now()
-	zlog.Logger.Info("logminer sql",
+	Logger.Info("logminer sql",
 		zap.String("sql", querySQL),
 		zap.Time("end time", endTime),
 		zap.String("cost time", time.Since(startTime).String()))

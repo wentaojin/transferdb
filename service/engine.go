@@ -13,57 +13,97 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package db
+package service
 
 import (
 	"database/sql"
 	"fmt"
 	"strings"
-	"time"
 
-	"github.com/godror/godror"
+	"github.com/wentaojin/transferdb/utils"
 
-	"github.com/wentaojin/transferdb/pkg/config"
-
-	"github.com/godror/godror/dsn"
-
-	"github.com/wentaojin/transferdb/util"
-
-	_ "github.com/godror/godror"
+	"gorm.io/gorm"
 )
 
-// 创建 oracle 数据库引擎
-func NewOracleDBEngine(oraCfg config.SourceConfig) (*sql.DB, error) {
-	// https://pkg.go.dev/github.com/godror/godror
-	// https://github.com/godror/godror/blob/db9cd12d89cdc1c60758aa3f36ece36cf5a61814/doc/connection.md
-	// 时区以及配置设置
-	loc, err := time.LoadLocation(oraCfg.Timezone)
-	if err != nil {
-		return nil, err
-	}
-	oraDsn := godror.ConnectionParams{
-		CommonParams: godror.CommonParams{
-			Username:      oraCfg.Username,
-			ConnectString: oraCfg.ConnectString,
-			Password:      godror.NewPassword(oraCfg.Password),
-			OnInitStmts:   oraCfg.SessionParams,
-			Timezone:      loc,
-		},
-		PoolParams: godror.PoolParams{
-			MinSessions:    dsn.DefaultPoolMinSessions,
-			MaxSessions:    dsn.DefaultPoolMaxSessions,
-			WaitTimeout:    dsn.DefaultWaitTimeout,
-			MaxLifeTime:    dsn.DefaultMaxLifeTime,
-			SessionTimeout: dsn.DefaultSessionTimeout,
-		},
-	}
-	sqlDB := sql.OpenDB(godror.NewConnector(oraDsn))
+var (
+	// Oracle/Mysql 对于 'NULL' 统一字符 NULL 处理，查询出来转成 NULL,所以需要判断处理
+	// 查询字段值 NULL
+	// 如果字段值 = NULLABLE 则表示值是 NULL
+	// 如果字段值 = "" 则表示值是空字符串
+	// 如果字段值 = 'NULL' 则表示值是 NULL 字符串
+	// 如果字段值 = 'null' 则表示值是 null 字符串
+	IsNull = "NULLABLE"
+)
 
-	err = sqlDB.Ping()
+// 定义数据库引擎
+type Engine struct {
+	OracleDB *sql.DB
+	MysqlDB  *sql.DB
+	GormDB   *gorm.DB
+}
+
+// 查询返回表字段列和对应的字段行数据
+func Query(db *sql.DB, querySQL string) ([]string, []map[string]string, error) {
+	var (
+		cols []string
+		res  []map[string]string
+	)
+	rows, err := db.Query(querySQL)
 	if err != nil {
-		return sqlDB, fmt.Errorf("error on ping oracle database connection:%v", err)
+		return cols, res, fmt.Errorf("[%v] error on general query SQL [%v] failed", err.Error(), querySQL)
 	}
-	return sqlDB, nil
+	defer rows.Close()
+
+	//不确定字段通用查询，自动获取字段名称
+	cols, err = rows.Columns()
+	if err != nil {
+		return cols, res, fmt.Errorf("[%v] error on general query rows.Columns failed", err.Error())
+	}
+
+	values := make([][]byte, len(cols))
+	scans := make([]interface{}, len(cols))
+	for i := range values {
+		scans[i] = &values[i]
+	}
+
+	for rows.Next() {
+		err = rows.Scan(scans...)
+		if err != nil {
+			return cols, res, fmt.Errorf("[%v] error on general query rows.Scan failed", err.Error())
+		}
+
+		row := make(map[string]string)
+		for k, v := range values {
+			key := cols[k]
+			// 数据库类型 MySQL NULL 是 NULL，空字符串是空字符串
+			// 数据库类型 Oracle NULL、空字符串归于一类 NULL
+			// Oracle/Mysql 对于 'NULL' 统一字符 NULL 处理，查询出来转成 NULL,所以需要判断处理
+			if v == nil { // 处理 NULL 情况，当数据库类型 MySQL 等于 nil
+				row[key] = IsNull
+			} else {
+				// 处理空字符串以及其他值情况
+				row[key] = string(v)
+			}
+		}
+		res = append(res, row)
+	}
+	return cols, res, nil
+}
+
+// 初始化同步表结构
+func (e *Engine) InitMysqlEngineDB() error {
+	if err := e.GormDB.AutoMigrate(
+		// todo: 自定义表名适配删除 - 数据同步不支持表名不一致
+		//&CustomTableNameMap{},
+		&TableMeta{},
+		&CustomTableColumnTypeMap{},
+		&CustomSchemaColumnTypeMap{},
+		&TableFullMeta{},
+		&TableIncrementMeta{},
+	); err != nil {
+		return fmt.Errorf("init mysql engine db data failed: %v", err)
+	}
+	return nil
 }
 
 func (e *Engine) IsExistOracleSchema(schemaName string) error {
@@ -71,7 +111,7 @@ func (e *Engine) IsExistOracleSchema(schemaName string) error {
 	if err != nil {
 		return err
 	}
-	if !util.IsContainString(schemas, strings.ToUpper(schemaName)) {
+	if !utils.IsContainString(schemas, strings.ToUpper(schemaName)) {
 		return fmt.Errorf("oracle schema [%s] isn't exist in the database", schemaName)
 	}
 	return nil
@@ -82,7 +122,7 @@ func (e *Engine) IsExistOracleTable(schemaName string, includeTables []string) e
 	if err != nil {
 		return err
 	}
-	ok, noExistTables := util.IsSubsetString(tables, includeTables)
+	ok, noExistTables := utils.IsSubsetString(tables, includeTables)
 	if !ok {
 		return fmt.Errorf("oracle include-tables values [%v] isn't exist in the db schema [%v]", noExistTables, schemaName)
 	}
@@ -146,12 +186,12 @@ func (e *Engine) QueryFormatOracleRows(querySQL string) ([]string, []string, err
 			} else if string(raw) == "" {
 				result[i] = "NULL"
 			} else {
-				ok := util.IsNum(string(raw))
+				ok := utils.IsNum(string(raw))
 				switch {
 				case ok && columnTypes[i] != "string":
 					result[i] = string(raw)
 				default:
-					result[i] = util.StringsBuilder("'", string(raw), "'")
+					result[i] = utils.StringsBuilder("'", string(raw), "'")
 				}
 
 			}
@@ -165,7 +205,7 @@ func (e *Engine) QueryFormatOracleRows(querySQL string) ([]string, []string, err
 
 	for _, row := range actualRows {
 		//数据按行返回，格式如下：(1,2) (2,3) ,用于数据拼接 batch
-		rowsResult = append(rowsResult, util.StringsBuilder("(", strings.Join(row, ","), ")"))
+		rowsResult = append(rowsResult, utils.StringsBuilder("(", strings.Join(row, ","), ")"))
 	}
 
 	return cols, rowsResult, nil

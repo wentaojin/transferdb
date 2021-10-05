@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package db
+package server
 
 import (
 	"database/sql"
@@ -21,6 +21,7 @@ import (
 	"log"
 	"strings"
 
+	"github.com/wentaojin/transferdb/service"
 )
 
 type Postgres struct {
@@ -45,7 +46,7 @@ func NewPostgresDSN(dbUser, dbPassword, ipAddr, dbPort, dbName string) *Postgres
 }
 
 func (p *Postgres) QuerySQL(querySQL string) (cols []string, res []map[string]string) {
-	cols, res ,_= Query(p.DB, querySQL)
+	cols, res, _ = service.Query(p.DB, querySQL)
 	return
 }
 
@@ -53,7 +54,7 @@ func (p *Postgres) GetSchemaMeta() (schemaMeta []string) {
 	querySQL := fmt.Sprintf(`SELECT DISTINCT nspname 
 FROM pg_namespace 
 WHERE nspname not in ('pg_toast','pg_temp_1','pg_toast_temp_1','pg_catalog','information_schema')`)
-	cols, res,_ := Query(p.DB, querySQL)
+	cols, res, _ := service.Query(p.DB, querySQL)
 	for _, col := range cols {
 		for _, r := range res {
 			schemaMeta = append(schemaMeta, r[col])
@@ -103,7 +104,7 @@ func (p *Postgres) GetTableMeta(schemaName string) (tableMeta []map[string]strin
                    LEFT JOIN pg_catalog.pg_class dc ON (d.classoid=dc.oid AND dc.relname='pg_class') 
                    LEFT JOIN pg_catalog.pg_namespace dn ON (dn.oid=dc.relnamespace AND dn.nspname='pg_catalog') 
                    WHERE c.relnamespace = n.oid and c.relkind in('r','v') and n.nspname='%s'`, schemaName)
-	_, tableMeta ,_= Query(p.DB, querySQL)
+	_, tableMeta, _ = service.Query(p.DB, querySQL)
 	return
 }
 
@@ -118,7 +119,7 @@ FROM
 WHERE
 	viewname = '%s' 
 	AND schemaname = '%s'`, viewName, schemaName)
-	_, viewMeta,_ = Query(p.DB, querySQL)
+	_, viewMeta, _ = service.Query(p.DB, querySQL)
 	return
 }
 
@@ -150,7 +151,7 @@ ORDER BY
 	) pcol
 	LEFT JOIN pg_description des ON pcol.oid = des.objoid 
 	AND pcol.ordinal_position = des.objsubid`, strings.ToLower(schemaName), strings.ToLower(tableName))
-	_, colMeta,_ = Query(p.DB, querySQL)
+	_, colMeta, _ = service.Query(p.DB, querySQL)
 	return colMeta
 }
 
@@ -185,7 +186,7 @@ GROUP BY
 --	TABLE_NAME,
 --	key_seq,
 	pk_name`, strings.ToLower(schemaName), strings.ToLower(tableName))
-	_, pkList,_ = Query(p.DB, querySQL)
+	_, pkList, _ = service.Query(p.DB, querySQL)
 	return
 }
 
@@ -204,7 +205,7 @@ WHERE
 	AND tc.table_schema = '%s' 
 GROUP BY
 	tc.CONSTRAINT_NAME`, strings.ToLower(tableName), strings.ToLower(schemaName))
-	_, ukList,_ = Query(p.DB, querySQL)
+	_, ukList, _ = service.Query(p.DB, querySQL)
 	return
 }
 
@@ -223,7 +224,7 @@ WHERE
 	constraint_type = 'FOREIGN KEY' 
 	AND tc.TABLE_NAME = '%s' 
 	AND tc.table_schema = '%s'`, strings.ToLower(tableName), strings.ToLower(schemaName))
-	_, fkList,_ = Query(p.DB, querySQL)
+	_, fkList, _ = service.Query(p.DB, querySQL)
 	return
 }
 
@@ -269,6 +270,6 @@ GROUP BY
 	TABLE_NAME,
 	index_name,
 	is_unique`, strings.ToLower(tableName), strings.ToLower(schemaName), strings.ToLower(tableName), strings.ToLower(schemaName))
-	_, idxMeta,_ = Query(p.DB, querySQL)
+	_, idxMeta, _ = service.Query(p.DB, querySQL)
 	return
 }

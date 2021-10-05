@@ -22,7 +22,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/wentaojin/transferdb/zlog"
+	"github.com/wentaojin/transferdb/service"
 
 	"go.uber.org/zap"
 )
@@ -39,7 +39,7 @@ func SetupSignalHandler(shutdownFunc func()) {
 
 	go func() {
 		sig := <-closeSignalChan
-		zlog.Logger.Info("got signal to exit", zap.Stringer("signal", sig))
+		service.Logger.Info("got signal to exit", zap.Stringer("signal", sig))
 		shutdownFunc()
 	}()
 }

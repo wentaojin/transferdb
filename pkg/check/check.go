@@ -16,12 +16,11 @@ limitations under the License.
 package check
 
 import (
-	"github.com/wentaojin/transferdb/db"
-	"github.com/wentaojin/transferdb/pkg/config"
+	"github.com/wentaojin/transferdb/service"
 )
 
 // 转换表生成
-func generateOracleToMySQLTables(engine *db.Engine, cfg *config.CfgFile) ([]*Table, error) {
+func generateOracleToMySQLTables(engine *service.Engine, cfg *service.CfgFile) ([]*Table, error) {
 	exporterTableSlice, err := cfg.GenerateTables(engine)
 	if err != nil {
 		return []*Table{}, err

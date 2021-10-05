@@ -21,7 +21,6 @@ import (
 )
 
 func main() {
-
 	var wg sync.WaitGroup
 	ch := make(chan struct{}, 3)
 	for i := 0; i < 10; i++ {

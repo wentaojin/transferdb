@@ -20,8 +20,7 @@ import (
 	"strings"
 
 	"github.com/wentaojin/transferdb/pkg/taskflow"
-
-	"github.com/wentaojin/transferdb/db"
+	"github.com/wentaojin/transferdb/service"
 
 	"github.com/xxjwxc/gowp/workpool"
 )
@@ -30,10 +29,10 @@ func main() {
 	tableList := []string{"a", "b", "c"}
 
 	var (
-		lcMap map[string][]db.LogminerContent
-		lc    []db.LogminerContent
+		lcMap map[string][]service.LogminerContent
+		lc    []service.LogminerContent
 	)
-	lcMap = make(map[string][]db.LogminerContent)
+	lcMap = make(map[string][]service.LogminerContent)
 
 	for _, table := range tableList {
 		lcMap[strings.ToUpper(table)] = lc
@@ -44,7 +43,7 @@ func main() {
 	// new 了这个 job 后，该 job 就开始准备从 channel 接收数据了
 	s := taskflow.NewScheduleJob(1, lcMap, func() { c <- struct{}{} })
 
-	data := []db.LogminerContent{
+	data := []service.LogminerContent{
 		{
 			SCN:       0,
 			SegOwner:  "c",

@@ -19,11 +19,11 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/wentaojin/transferdb/util"
+	"github.com/wentaojin/transferdb/utils"
+
+	"github.com/wentaojin/transferdb/service"
 
 	"go.uber.org/zap"
-
-	"github.com/wentaojin/transferdb/zlog"
 
 	"github.com/pingcap/parser/format"
 
@@ -62,8 +62,8 @@ type Stmt struct {
 // WARNING: sql parser Format() has be discrepancy ,be is instead of Restore()
 func (v *Stmt) Enter(in ast.Node) (ast.Node, bool) {
 	if node, ok := in.(*ast.TableName); ok {
-		v.Schema = util.StringsBuilder("`", strings.ToUpper(node.Schema.String()), "`")
-		v.Table = util.StringsBuilder("`", strings.ToUpper(node.Name.String()), "`")
+		v.Schema = utils.StringsBuilder("`", strings.ToUpper(node.Schema.String()), "`")
+		v.Table = utils.StringsBuilder("`", strings.ToUpper(node.Name.String()), "`")
 	}
 
 	if node, ok := in.(*ast.UpdateStmt); ok {
@@ -77,7 +77,7 @@ func (v *Stmt) Enter(in ast.Node) (ast.Node, bool) {
 			flags := format.DefaultRestoreFlags
 			err := val.Expr.Restore(format.NewRestoreCtx(flags, &sb))
 			if err != nil {
-				zlog.Logger.Error("sql parser failed",
+				service.Logger.Error("sql parser failed",
 					zap.String("stmt", v.Marshal()))
 			}
 		}
@@ -91,7 +91,7 @@ func (v *Stmt) Enter(in ast.Node) (ast.Node, bool) {
 					flags := format.DefaultRestoreFlags
 					err := exprNode.Restore(format.NewRestoreCtx(flags, &sb))
 					if err != nil {
-						zlog.Logger.Error("sql parser failed",
+						service.Logger.Error("sql parser failed",
 							zap.String("stmt", v.Marshal()))
 					}
 					v.WhereExpr = sb.String()
@@ -106,16 +106,16 @@ func (v *Stmt) Enter(in ast.Node) (ast.Node, bool) {
 		v.Operation = "INSERT"
 		v.Data = make(map[string]interface{}, 1)
 		for i, col := range node.Columns {
-			v.Columns = append(v.Columns, util.StringsBuilder("`", strings.ToUpper(col.String()), "`"))
+			v.Columns = append(v.Columns, utils.StringsBuilder("`", strings.ToUpper(col.String()), "`"))
 			for _, lists := range node.Lists {
 				var sb strings.Builder
 				flags := format.DefaultRestoreFlags
 				err := lists[i].Restore(format.NewRestoreCtx(flags, &sb))
 				if err != nil {
-					zlog.Logger.Error("sql parser failed",
+					service.Logger.Error("sql parser failed",
 						zap.String("stmt", v.Marshal()))
 				}
-				v.Data[util.StringsBuilder("`", strings.ToUpper(col.String()), "`")] = sb.String()
+				v.Data[utils.StringsBuilder("`", strings.ToUpper(col.String()), "`")] = sb.String()
 			}
 		}
 	}
@@ -132,7 +132,7 @@ func (v *Stmt) Enter(in ast.Node) (ast.Node, bool) {
 					flags := format.DefaultRestoreFlags
 					err := exprNode.Restore(format.NewRestoreCtx(flags, &sb))
 					if err != nil {
-						zlog.Logger.Error("sql parser failed",
+						service.Logger.Error("sql parser failed",
 							zap.String("stmt", v.Marshal()))
 					}
 					v.WhereExpr = sb.String()
@@ -158,7 +158,7 @@ func (v *Stmt) Leave(in ast.Node) (ast.Node, bool) {
 func (v *Stmt) Marshal() string {
 	b, err := json.Marshal(&v)
 	if err != nil {
-		zlog.Logger.Error("marshal stmt to string",
+		service.Logger.Error("marshal stmt to string",
 			zap.String("string", string(b)),
 			zap.Error(err))
 	}
@@ -177,12 +177,12 @@ func beforeData(where ast.ExprNode, before map[string]interface{}) {
 			flags := format.DefaultRestoreFlags
 			err := binaryNode.R.Restore(format.NewRestoreCtx(flags, &value))
 			if err != nil {
-				zlog.Logger.Error("sql parser failed",
+				service.Logger.Error("sql parser failed",
 					zap.String("error", err.Error()))
 			}
 			err = binaryNode.L.Restore(format.NewRestoreCtx(flags, &column))
 			if err != nil {
-				zlog.Logger.Error("sql parser failed",
+				service.Logger.Error("sql parser failed",
 					zap.String("error", err.Error()))
 			}
 			before[strings.ToUpper(column.String())] = value.String()

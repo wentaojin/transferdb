@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package db
+package service
 
 import (
 	"fmt"
@@ -21,12 +21,11 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/wentaojin/transferdb/utils"
+
 	"gorm.io/gorm"
 
-	"github.com/wentaojin/transferdb/zlog"
 	"go.uber.org/zap"
-
-	"github.com/wentaojin/transferdb/util"
 )
 
 // 该函数只应用于全量同步模式或者 ALL 同步模式
@@ -87,7 +86,7 @@ func (e *Engine) ModifyMySQLTableMetaRecord(metaSchemaName, sourceSchemaName, so
 				`clear mysql meta schema [%s] table [table_full_meta] reocrd with source table [%s] failed: %v`,
 				metaSchemaName, sourceTableName, err.Error())
 		}
-		zlog.Logger.Info("clear mysql meta",
+		Logger.Info("clear mysql meta",
 			zap.String("schema", sourceSchemaName),
 			zap.String("table", sourceTableName),
 			zap.String("sql", rowidSQL),
@@ -115,7 +114,7 @@ func (e *Engine) TruncateMySQLTableFullMetaRecord(metaSchemaName string) error {
 		return fmt.Errorf("truncate mysql meta schema table [table_full_meta] reocrd failed: %v", err.Error())
 	}
 
-	zlog.Logger.Info("truncate table full meta record",
+	Logger.Info("truncate table full meta record",
 		zap.String("schema", metaSchemaName),
 		zap.String("table", "table_full_meta"),
 		zap.String("status", "success"))
@@ -132,7 +131,7 @@ func (e *Engine) ClearMySQLTableMetaRecord(metaSchemaName, sourceSchemaName stri
 		}).Error; err != nil {
 		return err
 	}
-	zlog.Logger.Info("modify table meta record",
+	Logger.Info("modify table meta record",
 		zap.String("schema", metaSchemaName),
 		zap.String("table", "table_meta"),
 		zap.String("status", "success"))
@@ -144,7 +143,7 @@ func (e *Engine) TruncateMySQLTableRecord(targetSchemaName string, tableMetas []
 		if err := e.GormDB.Exec(fmt.Sprintf("TRUNCATE TABLE %s.%s", targetSchemaName, table.SourceTableName)).Error; err != nil {
 			return fmt.Errorf("truncate mysql meta schema table [%v] reocrd failed: %v", table.SourceTableName, err.Error())
 		}
-		zlog.Logger.Info("truncate table record",
+		Logger.Info("truncate table record",
 			zap.String("schema", targetSchemaName),
 			zap.String("table", table.SourceTableName),
 			zap.String("status", "success"))
@@ -175,7 +174,7 @@ func (e *Engine) InitMySQLTableFullMeta(schemaName, tableName string, globalSCN 
 
 	// 用于判断是否需要切分
 	// 当行数少于 parallel*10000 则不切分
-	zlog.Logger.Info("get oracle table statistics rows",
+	Logger.Info("get oracle table statistics rows",
 		zap.String("schema", schemaName),
 		zap.String("table", tableName),
 		zap.Int("rows", tableRows))
@@ -292,7 +291,7 @@ func (e *Engine) GetMySQLTableFullMetaRowIDRecord(schemaName, tableName string) 
 }
 
 func (e *Engine) GetOracleTableRecordByRowIDSQL(sql string) ([]string, []string, error) {
-	zlog.Logger.Info("exec sql",
+	Logger.Info("exec sql",
 		zap.String("sql", sql))
 	cols, res, err := e.QueryFormatOracleRows(sql)
 	if err != nil {
@@ -376,7 +375,7 @@ func (e *Engine) getAndInitOracleNormalTableTableFullMetaByRowID(
 	} else {
 		var fullMetaBatch []TableFullMeta
 		splitNums := len(fullMetas) / insertBatchSize
-		splitMetaIdxSlice := util.SplitIntSlice(fullMetaIdx, int64(splitNums))
+		splitMetaIdxSlice := utils.SplitIntSlice(fullMetaIdx, int64(splitNums))
 		for _, ms := range splitMetaIdxSlice {
 			for _, idx := range ms {
 				fullMetaBatch = append(fullMetaBatch, fullMetas[idx])

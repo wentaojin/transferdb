@@ -20,18 +20,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wentaojin/transferdb/db"
-	"github.com/wentaojin/transferdb/pkg/config"
-	"github.com/wentaojin/transferdb/util"
-	"github.com/wentaojin/transferdb/zlog"
+	"github.com/wentaojin/transferdb/utils"
+
+	"github.com/wentaojin/transferdb/service"
 
 	"github.com/xxjwxc/gowp/workpool"
 	"go.uber.org/zap"
 )
 
-func ReverseOracleToMySQLTable(engine *db.Engine, cfg *config.CfgFile) error {
+func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) error {
 	startTime := time.Now()
-	zlog.Logger.Info("reverse table oracle to mysql start",
+	service.Logger.Info("reverse table oracle to mysql start",
 		zap.String("schema", cfg.SourceConfig.SchemaName))
 
 	if err := reverseOracleToMySQLTableInspect(engine, cfg); err != nil {
@@ -39,7 +38,7 @@ func ReverseOracleToMySQLTable(engine *db.Engine, cfg *config.CfgFile) error {
 	}
 
 	// 获取待转换表
-	zlog.Logger.Info("get oracle to mysql all tables")
+	service.Logger.Info("get oracle to mysql all tables")
 	tables, err := generateOracleToMySQLTables(engine, cfg)
 	if err != nil {
 		return err
@@ -68,18 +67,18 @@ func ReverseOracleToMySQLTable(engine *db.Engine, cfg *config.CfgFile) error {
 
 	endTime := time.Now()
 	if !wp.IsDone() {
-		zlog.Logger.Info("reverse table oracle to mysql failed",
+		service.Logger.Info("reverse table oracle to mysql failed",
 			zap.String("cost", endTime.Sub(startTime).String()),
 			zap.Error(fmt.Errorf("reverse table task failed, please clear and rerunning")))
 		return fmt.Errorf("reverse table task failed, please clear and rerunning")
 	}
-	zlog.Logger.Info("reverse table oracle to mysql finished",
+	service.Logger.Info("reverse table oracle to mysql finished",
 		zap.String("cost", endTime.Sub(startTime).String()))
 	return nil
 }
 
 // 表转换前检查
-func reverseOracleToMySQLTableInspect(engine *db.Engine, cfg *config.CfgFile) error {
+func reverseOracleToMySQLTableInspect(engine *service.Engine, cfg *service.CfgFile) error {
 	if err := engine.IsExistOracleSchema(cfg.SourceConfig.SchemaName); err != nil {
 		return err
 	}
@@ -88,7 +87,7 @@ func reverseOracleToMySQLTableInspect(engine *db.Engine, cfg *config.CfgFile) er
 		return err
 	}
 	if !ok {
-		_, _, err := db.Query(engine.MysqlDB, fmt.Sprintf(`CREATE DATABASE IF NOT EXISTS %s`, cfg.TargetConfig.SchemaName))
+		_, _, err := service.Query(engine.MysqlDB, fmt.Sprintf(`CREATE DATABASE IF NOT EXISTS %s`, cfg.TargetConfig.SchemaName))
 		if err != nil {
 			return err
 		}
@@ -124,7 +123,7 @@ func reverseOracleToMySQLTableInspect(engine *db.Engine, cfg *config.CfgFile) er
 				}
 			} else {
 				// 表跳过重命名以及创建
-				zlog.Logger.Warn("appear warning",
+				service.Logger.Warn("appear warning",
 					zap.String("schema", cfg.TargetConfig.SchemaName),
 					zap.String("table", tbl),
 					zap.String("warn",
@@ -136,7 +135,7 @@ func reverseOracleToMySQLTableInspect(engine *db.Engine, cfg *config.CfgFile) er
 }
 
 // 转换表生成
-func generateOracleToMySQLTables(engine *db.Engine, cfg *config.CfgFile) ([]Table, error) {
+func generateOracleToMySQLTables(engine *service.Engine, cfg *service.CfgFile) ([]Table, error) {
 	exporterTableSlice, err := cfg.GenerateTables(engine)
 	if err != nil {
 		return []Table{}, err
@@ -149,7 +148,7 @@ func generateOracleToMySQLTables(engine *db.Engine, cfg *config.CfgFile) ([]Tabl
 	}
 
 	if len(partitionTables) != 0 {
-		zlog.Logger.Warn("partition tables",
+		service.Logger.Warn("partition tables",
 			zap.String("schema", cfg.SourceConfig.SchemaName),
 			zap.String("partition table list", fmt.Sprintf("%v", partitionTables)),
 			zap.String("suggest", "if necessary, please manually convert and process the tables in the above list"))
@@ -257,7 +256,7 @@ func generateOracleToMySQLTables(engine *db.Engine, cfg *config.CfgFile) ([]Tabl
 		// - 自定义表字段类型规则存在，而库字段类型也存在的情况，则使用表字段类型转换规则
 		// - 两者都不存在，则不追加任何转换规则，字段类型转换时使用内置类型转换规则
 		for _, tblName := range customTableColumnTypeSlice {
-			if util.IsContainString(exporterTableSlice, tblName.SourceTableName) {
+			if utils.IsContainString(exporterTableSlice, tblName.SourceTableName) {
 				tmpColTypes := columnTypesMap[tblName.SourceTableName]
 				for idx, col := range tmpColTypes {
 					if strings.ToUpper(tblName.SourceColumnType) == strings.ToUpper(col.SourceColumnType) {
@@ -274,7 +273,7 @@ func generateOracleToMySQLTables(engine *db.Engine, cfg *config.CfgFile) ([]Tabl
 		}
 
 		// 筛选过滤不属于自定义表字段类型规则的表并加载获取转换规则
-		notLayInCustomTableSlice := util.FilterDifferenceStringItems(exporterTableSlice, customTableSlice)
+		notLayInCustomTableSlice := utils.FilterDifferenceStringItems(exporterTableSlice, customTableSlice)
 		for _, tbl := range notLayInCustomTableSlice {
 			var colTypes []ColumnType
 			for _, tblName := range customSchemaColumnTypeSlice {

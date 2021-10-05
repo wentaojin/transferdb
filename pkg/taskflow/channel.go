@@ -18,12 +18,12 @@ package taskflow
 import (
 	"strings"
 
-	"github.com/wentaojin/transferdb/db"
+	"github.com/wentaojin/transferdb/service"
 )
 
 type LogminerData struct {
-	ch   chan db.LogminerContent         // 用来 同步的channel
-	data map[string][]db.LogminerContent // 存储数据的slice
+	ch   chan service.LogminerContent         // 用来 同步的channel
+	data map[string][]service.LogminerContent // 存储数据的slice
 }
 
 func (s *LogminerData) Schedule() {
@@ -40,13 +40,13 @@ func (s *LogminerData) Close() {
 	close(s.ch)
 }
 
-func (s *LogminerData) AddData(v db.LogminerContent) {
+func (s *LogminerData) AddData(v service.LogminerContent) {
 	s.ch <- v // 发送数据到 channel
 }
 
-func NewScheduleJob(size int, lcMap map[string][]db.LogminerContent, done func()) *LogminerData {
+func NewScheduleJob(size int, lcMap map[string][]service.LogminerContent, done func()) *LogminerData {
 	s := &LogminerData{
-		ch:   make(chan db.LogminerContent, size),
+		ch:   make(chan service.LogminerContent, size),
 		data: lcMap,
 	}
 

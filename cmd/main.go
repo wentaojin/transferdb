@@ -22,12 +22,11 @@ import (
 	_ "net/http/pprof"
 	"os"
 
+	"github.com/wentaojin/transferdb/service"
+
 	"github.com/wentaojin/transferdb/pkg/signal"
 
-	"github.com/wentaojin/transferdb/pkg/config"
 	"github.com/wentaojin/transferdb/server"
-	"github.com/wentaojin/transferdb/zlog"
-
 	"go.uber.org/zap"
 )
 
@@ -47,18 +46,18 @@ func main() {
 	}()
 
 	// 获取程序版本
-	config.GetAppVersion(*version)
+	service.GetAppVersion(*version)
 
 	// 读取配置文件
-	cfg, err := config.ReadConfigFile(*conf)
+	cfg, err := service.ReadConfigFile(*conf)
 	if err != nil {
 		log.Fatalf("read config file [%s] failed: %v", *conf, err)
 	}
 	// 初始化日志 logger
-	if err := zlog.NewZapLogger(cfg); err != nil {
+	if err := service.NewZapLogger(cfg); err != nil {
 		log.Fatalf("create global zap logger failed: %v", err)
 	}
-	config.RecordAppVersion("transferdb", zlog.Logger, cfg)
+	service.RecordAppVersion("transferdb", service.Logger, cfg)
 
 	// 信号量监听处理
 	signal.SetupSignalHandler(func() {
@@ -67,6 +66,6 @@ func main() {
 
 	// 程序运行
 	if err := server.Run(cfg, *mode); err != nil {
-		zlog.Logger.Fatal("server run failed", zap.String("error", err.Error()))
+		service.Logger.Fatal("server run failed", zap.String("error", err.Error()))
 	}
 }

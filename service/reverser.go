@@ -13,16 +13,15 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package db
+package service
 
 import (
 	"fmt"
 	"strings"
 
-	"github.com/wentaojin/transferdb/zlog"
-	"go.uber.org/zap"
+	"github.com/wentaojin/transferdb/utils"
 
-	"github.com/wentaojin/transferdb/util"
+	"go.uber.org/zap"
 )
 
 func (e *Engine) IsExistMySQLSchema(schemaName string) (bool, error) {
@@ -30,7 +29,7 @@ func (e *Engine) IsExistMySQLSchema(schemaName string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if !util.IsContainString(schemas, strings.ToUpper(schemaName)) {
+	if !utils.IsContainString(schemas, strings.ToUpper(schemaName)) {
 		return false, nil
 	}
 	return true, nil
@@ -45,13 +44,13 @@ func (e *Engine) FilterIntersectionMySQLTable(schemaName string, includeTables [
 	for _, tbl := range includeTables {
 		includeTbl = append(includeTbl, strings.ToUpper(tbl))
 	}
-	return util.FilterIntersectionStringItems(tables, includeTbl), nil
+	return utils.FilterIntersectionStringItems(tables, includeTbl), nil
 }
 
 func (e *Engine) RenameMySQLTableName(schemaName string, tableName string) error {
 	backupTable := fmt.Sprintf("%s_bak", tableName)
 	querySQL := fmt.Sprintf("RENAME TABLE `%s`.`%s` TO `%s`.`%s`", schemaName, tableName, schemaName, backupTable)
-	zlog.Logger.Info("Exec SQL",
+	Logger.Info("Exec SQL",
 		zap.String("schema", schemaName),
 		zap.String("table", tableName),
 		zap.String("sql", fmt.Sprintf("%v", querySQL)))
@@ -80,7 +79,7 @@ func (e *Engine) FilterDifferenceOracleTable(schemaName string, excludeTables []
 	if err != nil {
 		return []string{}, err
 	}
-	return util.FilterDifferenceStringItems(tables, excludeTables), nil
+	return utils.FilterDifferenceStringItems(tables, excludeTables), nil
 }
 
 func (e *Engine) GetOracleTableComment(schemaName string, tableName string) ([]map[string]string, error) {
@@ -102,8 +101,11 @@ and upper(table_name)=upper('%s')`, strings.ToUpper(schemaName), strings.ToUpper
 }
 
 func (e *Engine) GetOracleTableColumn(schemaName string, tableName string) ([]map[string]string, error) {
+	// all_tab_columns 视图 https://docs.oracle.com/cd/B19306_01/server.102/b14237/statviews_2094.html
 	querySQL := fmt.Sprintf(`select t.COLUMN_NAME,
 	     t.DATA_TYPE,
+		 t.CHAR_LENGTH,
+		 NVL(t.CHAR_USED,'UNKNOWN') CHAR_USED,
 	     NVL(t.DATA_LENGTH,0) AS DATA_LENGTH,
 	     NVL(t.DATA_PRECISION,0) AS DATA_PRECISION,
 	     NVL(t.DATA_SCALE,0) AS DATA_SCALE,
@@ -114,8 +116,8 @@ func (e *Engine) GetOracleTableColumn(schemaName string, tableName string) ([]ma
 	where t.table_name = c.table_name
 	 and t.column_name = c.column_name
      and t.owner = c.owner
-	 and t.table_name = upper('%s')
-	 and t.owner = upper('%s')
+	 and upper(t.table_name) = upper('%s')
+	 and upper(t.owner) = upper('%s')
     order by t.COLUMN_ID`,
 		strings.ToUpper(tableName),
 		strings.ToUpper(schemaName))
@@ -328,7 +330,7 @@ func (e *Engine) FilterOraclePartitionTable(schemaName string, tableSlice []stri
 	for _, r := range res {
 		tables = append(tables, r["TABLE_NAME"])
 	}
-	return util.FilterIntersectionStringItems(tableSlice, tables), nil
+	return utils.FilterIntersectionStringItems(tableSlice, tables), nil
 }
 
 func (e *Engine) getMySQLSchema() ([]string, error) {

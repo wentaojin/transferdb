@@ -20,28 +20,34 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/wentaojin/transferdb/service"
+
 	"github.com/wentaojin/transferdb/pkg/prepare"
 
 	"github.com/wentaojin/transferdb/pkg/taskflow"
 
-	"github.com/wentaojin/transferdb/pkg/config"
-
 	"github.com/wentaojin/transferdb/pkg/reverser"
-
-	"github.com/wentaojin/transferdb/db"
 )
 
 // 程序运行
-func Run(cfg *config.CfgFile, mode string) error {
+func Run(cfg *service.CfgFile, mode string) error {
 	switch strings.ToLower(strings.TrimSpace(mode)) {
 	case "cost":
 		// todo: 收集评估改造成本
 	case "prepare":
-		// 初始化程序表结构 - only prepare 阶段
-		if err := prepare.TransferDBEnvPrepare(cfg); err != nil {
+		// 表结构转换 - only prepare 阶段
+		engine, err := NewMySQLEnginePrepareDB(
+			cfg.TargetConfig,
+			cfg.AppConfig.SlowlogThreshold,
+		)
+		if err != nil {
+			return err
+		}
+		if err := prepare.TransferDBEnvPrepare(engine); err != nil {
 			return err
 		}
 	case "reverse":
+		// 表结构转换 - reverse 阶段
 		engine, err := NewEngineDB(cfg)
 		if err != nil {
 			return err
@@ -50,8 +56,9 @@ func Run(cfg *config.CfgFile, mode string) error {
 			return err
 		}
 	case "check":
-		// todo: 校验上下游数据库表结构
+		// 表结构校验 - 上下游
 	case "full":
+		// 全量数据 ETL 非一致性抽取阶段
 		engine, err := NewEngineDB(cfg)
 		if err != nil {
 			return err
@@ -60,6 +67,7 @@ func Run(cfg *config.CfgFile, mode string) error {
 			return err
 		}
 	case "all":
+		// 全量 + 增量数据同步阶段 - logminer
 		engine, err := NewEngineDB(cfg)
 		if err != nil {
 			return err
@@ -74,17 +82,17 @@ func Run(cfg *config.CfgFile, mode string) error {
 }
 
 // 数据库引擎初始化
-func NewEngineDB(cfg *config.CfgFile) (*db.Engine, error) {
+func NewEngineDB(cfg *service.CfgFile) (*service.Engine, error) {
 	var (
-		engine *db.Engine
+		engine *service.Engine
 		oraDB  *sql.DB
 		err    error
 	)
-	oraDB, err = db.NewOracleDBEngine(cfg.SourceConfig)
+	oraDB, err = NewOracleDBEngine(cfg.SourceConfig)
 	if err != nil {
 		return engine, err
 	}
-	engine, err = db.NewMySQLEngineGeneralDB(
+	engine, err = NewMySQLEngineGeneralDB(
 		cfg.TargetConfig,
 		cfg.AppConfig.SlowlogThreshold)
 	if err != nil {

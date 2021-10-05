@@ -13,14 +13,13 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package config
+package service
 
 import (
 	"encoding/json"
 	"fmt"
 
 	"github.com/BurntSushi/toml"
-	"github.com/wentaojin/transferdb/db"
 )
 
 // 程序配置文件
@@ -114,7 +113,7 @@ func (c *CfgFile) configFromFile(file string) error {
 }
 
 // 根据配置文件获取表列表
-func (c *CfgFile) GenerateTables(engine *db.Engine) ([]string, error) {
+func (c *CfgFile) GenerateTables(engine *Engine) ([]string, error) {
 	var (
 		exporterTableSlice []string
 		err                error

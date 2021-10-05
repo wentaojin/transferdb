@@ -20,11 +20,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/wentaojin/transferdb/util"
+	"github.com/wentaojin/transferdb/utils"
 
-	"github.com/wentaojin/transferdb/db"
-	"github.com/wentaojin/transferdb/pkg/config"
-	"github.com/wentaojin/transferdb/zlog"
+	"github.com/wentaojin/transferdb/service"
 
 	"go.uber.org/zap"
 )
@@ -33,9 +31,9 @@ import (
 	全量同步任务
 */
 // 全量数据导出导入
-func LoaderOracleTableFullRecordToMySQLByFullMode(cfg *config.CfgFile, engine *db.Engine) error {
+func LoaderOracleTableFullRecordToMySQLByFullMode(cfg *service.CfgFile, engine *service.Engine) error {
 	startTime := time.Now()
-	zlog.Logger.Info("all full table data loader start",
+	service.Logger.Info("all full table data loader start",
 		zap.String("schema", cfg.SourceConfig.SchemaName))
 
 	// 获取配置文件待同步表列表
@@ -103,15 +101,15 @@ func LoaderOracleTableFullRecordToMySQLByFullMode(cfg *config.CfgFile, engine *d
 	}
 
 	endTime := time.Now()
-	zlog.Logger.Info("all full table data loader finished",
+	service.Logger.Info("all full table data loader finished",
 		zap.String("schema", cfg.SourceConfig.SchemaName),
 		zap.String("cost", endTime.Sub(startTime).String()))
 	return nil
 }
 
-func loaderOracleTableFullRecordToMySQLByAllMode(cfg *config.CfgFile, engine *db.Engine) error {
+func loaderOracleTableFullRecordToMySQLByAllMode(cfg *service.CfgFile, engine *service.Engine) error {
 	startTime := time.Now()
-	zlog.Logger.Info("all full table data loader start",
+	service.Logger.Info("all full table data loader start",
 		zap.String("schema", cfg.SourceConfig.SchemaName))
 
 	// 获取配置文件待同步表列表
@@ -185,13 +183,13 @@ func loaderOracleTableFullRecordToMySQLByAllMode(cfg *config.CfgFile, engine *db
 	}
 
 	endTime := time.Now()
-	zlog.Logger.Info("all full table data loader finished",
+	service.Logger.Info("all full table data loader finished",
 		zap.String("schema", cfg.SourceConfig.SchemaName),
 		zap.String("cost", endTime.Sub(startTime).String()))
 	return nil
 }
 
-func loaderOracleTableTask(cfg *config.CfgFile, engine *db.Engine, transferTableList, waitInitTableList []string) error {
+func loaderOracleTableTask(cfg *service.CfgFile, engine *service.Engine, transferTableList, waitInitTableList []string) error {
 	if len(waitInitTableList) > 0 {
 		if len(waitInitTableList) == len(transferTableList) {
 			if err := loaderTableFullTaskBySCN(cfg, engine, waitInitTableList); err != nil {
@@ -199,7 +197,7 @@ func loaderOracleTableTask(cfg *config.CfgFile, engine *db.Engine, transferTable
 			}
 			return nil
 		}
-		diffTableSlice := util.FilterDifferenceStringItems(transferTableList, waitInitTableList)
+		diffTableSlice := utils.FilterDifferenceStringItems(transferTableList, waitInitTableList)
 		if len(diffTableSlice) > 0 {
 			if err := loaderTableFullTaskByCheckpoint(cfg, engine, diffTableSlice); err != nil {
 				return err
@@ -222,7 +220,7 @@ func loaderOracleTableTask(cfg *config.CfgFile, engine *db.Engine, transferTable
 }
 
 // 从配置文件获取需要迁移同步的表列表
-func getTransferTableSliceByCfg(cfg *config.CfgFile, engine *db.Engine) ([]string, error) {
+func getTransferTableSliceByCfg(cfg *service.CfgFile, engine *service.Engine) ([]string, error) {
 	err := engine.IsExistOracleSchema(cfg.SourceConfig.SchemaName)
 	if err != nil {
 		return []string{}, err
@@ -259,8 +257,8 @@ func getTransferTableSliceByCfg(cfg *config.CfgFile, engine *db.Engine) ([]strin
 /*
 	增量同步任务
 */
-func SyncOracleTableAllRecordToMySQLByAllMode(cfg *config.CfgFile, engine *db.Engine) error {
-	zlog.Logger.Info("oracle to mysql increment sync table data start", zap.String("schema", cfg.SourceConfig.SchemaName))
+func SyncOracleTableAllRecordToMySQLByAllMode(cfg *service.CfgFile, engine *service.Engine) error {
+	service.Logger.Info("oracle to mysql increment sync table data start", zap.String("schema", cfg.SourceConfig.SchemaName))
 
 	// 全量数据导出导入，初始化全量元数据表以及导入完成初始化增量元数据表
 	// 如果下游数据库增量元数据表 table_increment_meta 存在记录，说明进行过全量，则跳过全量步骤，直接增量数据同步
@@ -284,14 +282,14 @@ func SyncOracleTableAllRecordToMySQLByAllMode(cfg *config.CfgFile, engine *db.En
 	return nil
 }
 
-func syncOracleTableIncrementRecordToMySQLByAllMode(cfg *config.CfgFile, engine *db.Engine) error {
+func syncOracleTableIncrementRecordToMySQLByAllMode(cfg *service.CfgFile, engine *service.Engine) error {
 	// 获取增量所需得日志文件
 	logFiles, err := getOracleTableIncrementRecordLogFile(engine, cfg.SourceConfig.SchemaName)
 	if err != nil {
 		return err
 	}
 
-	zlog.Logger.Info("increment table log file get",
+	service.Logger.Info("increment table log file get",
 		zap.String("logfile", fmt.Sprintf("%v", logFiles)))
 
 	// 遍历所有日志文件
@@ -308,7 +306,7 @@ func syncOracleTableIncrementRecordToMySQLByAllMode(cfg *config.CfgFile, engine 
 			return err
 		}
 
-		zlog.Logger.Info("increment table log file logminer",
+		service.Logger.Info("increment table log file logminer",
 			zap.String("logfile", log["LOG_FILE"]),
 			zap.Int("logfile start scn", logFileStartSCN),
 			zap.Int("logminer start scn", logFileStartSCN),
@@ -368,11 +366,11 @@ func syncOracleTableIncrementRecordToMySQLByAllMode(cfg *config.CfgFile, engine 
 
 		// 按表级别筛选数据
 		var (
-			logminerContentMap map[string][]db.LogminerContent
+			logminerContentMap map[string][]service.LogminerContent
 		)
 		if len(rowsResult) > 0 {
 			// 判断当前日志文件是否是重做日志文件
-			if util.IsContainString(redoLogList, log["LOG_FILE"]) {
+			if utils.IsContainString(redoLogList, log["LOG_FILE"]) {
 				// 判断是否是当前重做日志文件
 				// 如果当前日志文件是当前重做日志文件则 filterOracleRedoGreaterOrEqualRecordByTable 只运行一次大于或等于，也就是只重放一次已消费得 SCN
 				if logFileStartSCN == currentRedoLogFirstChange && log["LOG_FILE"] == currentRedoLogFileName {
@@ -381,13 +379,13 @@ func syncOracleTableIncrementRecordToMySQLByAllMode(cfg *config.CfgFile, engine 
 						transferTableSlice,
 						transferTableMetaMap,
 						cfg.AllConfig.FilterThreads,
-						util.CurrentResetFlag,
+						utils.CurrentResetFlag,
 					)
 					if err != nil {
 						return err
 					}
-					zlog.Logger.Warn("oracle current redo log reset flag", zap.Int("CurrentResetFlag", util.CurrentResetFlag))
-					util.CurrentResetFlag = 1
+					service.Logger.Warn("oracle current redo log reset flag", zap.Int("CurrentResetFlag", utils.CurrentResetFlag))
+					utils.CurrentResetFlag = 1
 				} else {
 					logminerContentMap, err = filterOracleRedoGreaterOrEqualRecordByTable(
 						rowsResult,
@@ -432,7 +430,7 @@ func syncOracleTableIncrementRecordToMySQLByAllMode(cfg *config.CfgFile, engine 
 
 					continue
 				}
-				zlog.Logger.Warn("increment table log file logminer data that needn't to be consumed by current redo, transferdb will continue to capture")
+				service.Logger.Warn("increment table log file logminer data that needn't to be consumed by current redo, transferdb will continue to capture")
 				continue
 			}
 			logminerContentMap, err = filterOracleRedoGreaterOrEqualRecordByTable(
@@ -460,12 +458,12 @@ func syncOracleTableIncrementRecordToMySQLByAllMode(cfg *config.CfgFile, engine 
 				}
 				continue
 			}
-			zlog.Logger.Warn("increment table log file logminer data that needn't to be consumed by logfile, transferdb will continue to capture")
+			service.Logger.Warn("increment table log file logminer data that needn't to be consumed by logfile, transferdb will continue to capture")
 			continue
 		}
 
 		// 当前日志文件不存在数据记录
-		if util.IsContainString(redoLogList, log["LOG_FILE"]) {
+		if utils.IsContainString(redoLogList, log["LOG_FILE"]) {
 			if logFileStartSCN == currentRedoLogFirstChange && log["LOG_FILE"] == currentRedoLogFileName {
 				// 当前所有日志文件内容应用完毕，判断是否直接更新 GLOBAL_SCN 至当前重做日志文件起始 SCN
 				if err := engine.UpdateSingleTableIncrementMetaSCNByCurrentRedo(
@@ -498,13 +496,13 @@ func syncOracleTableIncrementRecordToMySQLByAllMode(cfg *config.CfgFile, engine 
 				return err
 			}
 		}
-		zlog.Logger.Warn("increment table log file logminer null data, transferdb will continue to capture")
+		service.Logger.Warn("increment table log file logminer null data, transferdb will continue to capture")
 		continue
 	}
 	return nil
 }
 
-func getOracleTableIncrementRecordLogFile(engine *db.Engine, sourceSchemaName string) ([]map[string]string, error) {
+func getOracleTableIncrementRecordLogFile(engine *service.Engine, sourceSchemaName string) ([]map[string]string, error) {
 	// 获取增量表起始最小 SCN 号
 	globalSCN, err := engine.GetMySQLTableIncrementMetaMinGlobalSCNTime(sourceSchemaName)
 	if err != nil {
