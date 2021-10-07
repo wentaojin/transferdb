@@ -241,34 +241,37 @@ func NewOracleTableINFO(schemaName, tableName string, engine *service.Engine) (*
 	return oraTable, nil
 }
 
-func NewMySQLTableINFO(schemaName, tableName string, engine *service.Engine) (*Table, error) {
+func NewMySQLTableINFO(schemaName, tableName string, engine *service.Engine) (*Table, string, error) {
 	mysqlTable := &Table{
 		SchemaName: schemaName,
 		TableName:  tableName,
 	}
-	characterSet, collation, err := engine.GetMySQLTableCharacterSetAndCollation(schemaName, tableName)
-	if err != nil {
-		return mysqlTable, err
-	}
 
 	version, err := engine.GetMySQLDBVersion()
 	if err != nil {
-		return mysqlTable, err
+		return mysqlTable, version, err
 	}
+
+	// 是否 TiDB 版本
 	isTiDB := false
 	if strings.Contains(version, "TiDB") {
 		isTiDB = true
 	}
 
+	characterSet, collation, err := engine.GetMySQLTableCharacterSetAndCollation(schemaName, tableName)
+	if err != nil {
+		return mysqlTable, version, err
+	}
+
 	comment, err := engine.GetMySQLTableComment(schemaName, tableName)
 	if err != nil {
-		return mysqlTable, err
+		return mysqlTable, version, err
 	}
 	mysqlTable.TableComment = comment
 
 	columnInfo, err := engine.GetMySQLTableColumn(schemaName, tableName)
 	if err != nil {
-		return mysqlTable, err
+		return mysqlTable, version, err
 	}
 	columns := make(map[string]Column, len(columnInfo))
 
@@ -301,7 +304,7 @@ func NewMySQLTableINFO(schemaName, tableName string, engine *service.Engine) (*T
 
 	indexInfo, err := engine.GetMySQLTableIndex(schemaName, tableName)
 	if err != nil {
-		return mysqlTable, err
+		return mysqlTable, version, err
 	}
 	var indexes []Index
 	for _, indexCol := range indexInfo {
@@ -314,7 +317,7 @@ func NewMySQLTableINFO(schemaName, tableName string, engine *service.Engine) (*T
 	var puConstraints []ConstraintPUKey
 	puInfo, err := engine.GetMySQLTablePrimaryAndUniqueKey(schemaName, tableName)
 	if err != nil {
-		return mysqlTable, err
+		return mysqlTable, version, err
 	}
 	for _, pu := range puInfo {
 		puConstraints = append(puConstraints, ConstraintPUKey{
@@ -330,12 +333,12 @@ func NewMySQLTableINFO(schemaName, tableName string, engine *service.Engine) (*T
 	)
 	isPart, err := engine.IsMySQLPartitionTable(schemaName, tableName)
 	if err != nil {
-		return mysqlTable, err
+		return mysqlTable, version, err
 	}
 	if isPart {
 		partInfo, err := engine.GetMySQLPartitionTableINFO(schemaName, tableName)
 		if err != nil {
-			return mysqlTable, err
+			return mysqlTable, version, err
 		}
 		for _, part := range partInfo {
 			parts = append(parts, Partition{
@@ -350,7 +353,7 @@ func NewMySQLTableINFO(schemaName, tableName string, engine *service.Engine) (*T
 	if !isTiDB {
 		fkInfo, err := engine.GetMySQLTableForeignKey(schemaName, tableName)
 		if err != nil {
-			return mysqlTable, err
+			return mysqlTable, version, err
 		}
 		for _, fk := range fkInfo {
 			fkConstraints = append(fkConstraints, ConstraintForeign{
@@ -372,7 +375,7 @@ func NewMySQLTableINFO(schemaName, tableName string, engine *service.Engine) (*T
 		if utils.VersionOrdinal(dbVersion) > utils.VersionOrdinal(MySQLCheckConsVersion) {
 			ckInfo, err := engine.GetMySQLTableCheckKey(schemaName, tableName)
 			if err != nil {
-				return mysqlTable, err
+				return mysqlTable, version, err
 			}
 			for _, ck := range ckInfo {
 				ckConstraints = append(ckConstraints, ConstraintCheck{
@@ -391,5 +394,5 @@ func NewMySQLTableINFO(schemaName, tableName string, engine *service.Engine) (*T
 	mysqlTable.CheckConstraints = ckConstraints
 	mysqlTable.IsPartition = isPart
 	mysqlTable.Partitions = parts
-	return mysqlTable, nil
+	return mysqlTable, version, nil
 }

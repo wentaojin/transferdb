@@ -74,9 +74,14 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 		return err
 	}
 
-	mysqlTable, err := NewMySQLTableINFO(d.TargetSchemaName, d.TableName, d.Engine)
+	mysqlTable, mysqlVersion, err := NewMySQLTableINFO(d.TargetSchemaName, d.TableName, d.Engine)
 	if err != nil {
 		return err
+	}
+
+	isTiDB := false
+	if strings.Contains(mysqlVersion, "TiDB") {
+		isTiDB = true
 	}
 
 	// 输出格式：表结构一致不输出，只输出上下游不一致信息且输出以下游可执行 SQL 输出
@@ -141,36 +146,47 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 		}
 	}
 
-	diffFK, isOK := utils.IsEqualStruct(oracleTable.ForeignConstraints, mysqlTable.ForeignConstraints)
-	if !isOK {
-		builder.WriteString("/*\n")
-		builder.WriteString(" oracle table foreign key\n")
-		builder.WriteString(" mysql table foreign key\n")
-		builder.WriteString("*/\n")
-		for _, fk := range diffFK {
-			value, ok := fk.(ConstraintForeign)
-			if ok {
-				builder.WriteString(fmt.Sprintf("ALTER TABLE %s.%s ADD FOREIGN KEY(%s) REFERENCES %s.%s(%s）ON DELETE %s;\n", d.TargetSchemaName, d.TableName, value.ColumnName, d.TargetSchemaName, value.ReferencedTableName, value.ReferencedColumnName, value.DeleteRule))
-				continue
+	// TiDB 版本排除外键以及检查约束
+	if !isTiDB {
+		diffFK, isOK := utils.IsEqualStruct(oracleTable.ForeignConstraints, mysqlTable.ForeignConstraints)
+		if !isOK {
+			builder.WriteString("/*\n")
+			builder.WriteString(" oracle table foreign key\n")
+			builder.WriteString(" mysql table foreign key\n")
+			builder.WriteString("*/\n")
+			for _, fk := range diffFK {
+				value, ok := fk.(ConstraintForeign)
+				if ok {
+					builder.WriteString(fmt.Sprintf("ALTER TABLE %s.%s ADD FOREIGN KEY(%s) REFERENCES %s.%s(%s）ON DELETE %s;\n", d.TargetSchemaName, d.TableName, value.ColumnName, d.TargetSchemaName, value.ReferencedTableName, value.ReferencedColumnName, value.DeleteRule))
+					continue
+				}
+				return fmt.Errorf("table constraint foreign key assert ConstraintForeign failed")
 			}
-			return fmt.Errorf("table constraint foreign key assert ConstraintForeign failed")
 		}
-	}
 
-	diffCK, isOK := utils.IsEqualStruct(oracleTable.CheckConstraints, mysqlTable.CheckConstraints)
-	if !isOK {
-		builder.WriteString("/*\n")
-		builder.WriteString(" oracle table check key\n")
-		builder.WriteString(" mysql table check key\n")
-		builder.WriteString("*/\n")
-		for _, ck := range diffCK {
-			value, ok := ck.(ConstraintCheck)
-			if ok {
-				builder.WriteString(fmt.Sprintf("ALTER TABLE %s.%s ADD CONSTRAINT %s CHECK(%s);\n",
-					d.TargetSchemaName, d.TableName, fmt.Sprintf("%s_check_key", d.TableName), value.ConstraintExpression))
-				continue
+		var dbVersion string
+		if strings.Contains(mysqlVersion, MySQLVersionDelimiter) {
+			dbVersion = strings.Split(mysqlVersion, MySQLVersionDelimiter)[0]
+		} else {
+			dbVersion = mysqlVersion
+		}
+		if utils.VersionOrdinal(dbVersion) > utils.VersionOrdinal(MySQLCheckConsVersion) {
+			diffCK, isOK := utils.IsEqualStruct(oracleTable.CheckConstraints, mysqlTable.CheckConstraints)
+			if !isOK {
+				builder.WriteString("/*\n")
+				builder.WriteString(" oracle table check key\n")
+				builder.WriteString(" mysql table check key\n")
+				builder.WriteString("*/\n")
+				for _, ck := range diffCK {
+					value, ok := ck.(ConstraintCheck)
+					if ok {
+						builder.WriteString(fmt.Sprintf("ALTER TABLE %s.%s ADD CONSTRAINT %s CHECK(%s);\n",
+							d.TargetSchemaName, d.TableName, fmt.Sprintf("%s_check_key", d.TableName), value.ConstraintExpression))
+						continue
+					}
+					return fmt.Errorf("table constraint check key assert ConstraintCheck failed")
+				}
 			}
-			return fmt.Errorf("table constraint check key assert ConstraintCheck failed")
 		}
 	}
 
@@ -277,14 +293,11 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 		}
 	}
 
-	if textTable.String() != "" {
+	if textTable.String() != "" && len(diffColumnMsgs) != 0 {
 		builder.WriteString("/*\n")
 		builder.WriteString(fmt.Sprintf(" oracle table columns info is different from mysql\n"))
-		builder.WriteString(textTable.String() + "\n")
+		builder.WriteString(fmt.Sprintf(" %s\n", textTable.String()))
 		builder.WriteString("*/\n")
-	}
-
-	if len(diffColumnMsgs) != 0 {
 		builder.WriteString(fmt.Sprintf("-- oracle table columns info is different from mysql, generate fixed sql\n"))
 		for _, diffColMsg := range diffColumnMsgs {
 			builder.WriteString(diffColMsg)
@@ -303,8 +316,8 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 
 	// diff 记录不为空
 	if builder.String() != "" {
-		builder.WriteString(fmt.Sprintf("-- the above info comes from oracle table [%s.%s]", d.SourceSchemaName, d.TableName))
-		builder.WriteString(fmt.Sprintf("-- the above info comes from mysql table [%s.%s]", d.TargetSchemaName, d.TableName))
+		builder.WriteString(fmt.Sprintf("-- the above info comes from oracle table [%s.%s]\n", d.SourceSchemaName, d.TableName))
+		builder.WriteString(fmt.Sprintf("-- the above info comes from mysql table [%s.%s]\n", d.TargetSchemaName, d.TableName))
 		if _, err := fmt.Fprintln(d.FileMW, builder.String()); err != nil {
 			return err
 		}

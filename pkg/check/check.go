@@ -80,6 +80,7 @@ func CheckOracleTableToMySQLMapping(engine *service.Engine, cfg *service.CfgFile
 			zap.Error(fmt.Errorf("reverse table task failed, please clear and rerunning")))
 		return fmt.Errorf("reverse table task failed, please clear and rerunning")
 	}
-
+	service.Logger.Info("check table oracle to mysql finished",
+		zap.String("cost", endTime.Sub(startTime).String()))
 	return nil
 }
