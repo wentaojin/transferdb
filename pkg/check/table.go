@@ -163,6 +163,13 @@ func NewOracleTableINFO(schemaName, tableName string, engine *service.Engine) (*
 		} else {
 			OracleCharacterSet = OracleGBKCharacterSet
 		}
+		var nullable string
+		if strings.ToUpper(rowCol["NULLABLE"]) == "Y" {
+			nullable = "NULL"
+		} else {
+			nullable = "NOT NULL"
+		}
+
 		columns[strings.ToUpper(rowCol["COLUMN_NAME"])] = Column{
 			DataType:   strings.ToUpper(rowCol["DATA_TYPE"]),
 			CharLength: strings.ToUpper(rowCol["CHAR_LENGTH"]),
@@ -171,7 +178,7 @@ func NewOracleTableINFO(schemaName, tableName string, engine *service.Engine) (*
 				DataLength:    strings.ToUpper(rowCol["DATA_LENGTH"]),
 				DataPrecision: strings.ToUpper(rowCol["DATA_PRECISION"]),
 				DataScale:     strings.ToUpper(rowCol["DATA_SCALE"]),
-				NULLABLE:      strings.ToUpper(rowCol["NULLABLE"]),
+				NULLABLE:      nullable,
 				DataDefault:   strings.ToUpper(rowCol["DATA_DEFAULT"]),
 				Comment:       strings.ToUpper(rowCol["COMMENTS"]),
 			},
@@ -261,7 +268,7 @@ func NewOracleTableINFO(schemaName, tableName string, engine *service.Engine) (*
 			})
 		}
 	}
-	oraTable.TableCharacterSet = OracleCharacterSet
+	oraTable.TableCharacterSet = strings.ToUpper(OracleCharacterSet)
 	oraTable.TableCollation = OracleCollationBin
 	oraTable.Columns = columns
 	oraTable.Indexes = indexes
@@ -319,13 +326,20 @@ func NewMySQLTableINFO(schemaName, tableName string, engine *service.Engine) (*T
 		} else {
 			ca = collation
 		}
+
+		var nullable string
+		if strings.ToUpper(rowCol["NULLABLE"]) == "Y" {
+			nullable = "NULL"
+		} else {
+			nullable = "NOT NULL"
+		}
 		columns[strings.ToUpper(rowCol["COLUMN_NAME"])] = Column{
 			DataType: strings.ToUpper(rowCol["DATA_TYPE"]),
 			ColumnInfo: ColumnInfo{
 				DataLength:    strings.ToUpper(rowCol["DATA_LENGTH"]),
 				DataPrecision: strings.ToUpper(rowCol["DATA_PRECISION"]),
 				DataScale:     strings.ToUpper(rowCol["DATA_SCALE"]),
-				NULLABLE:      strings.ToUpper(rowCol["NULLABLE"]),
+				NULLABLE:      nullable,
 				DataDefault:   strings.ToUpper(rowCol["DATA_DEFAULT"]),
 				Comment:       strings.ToUpper(rowCol["COMMENTS"]),
 			},
@@ -419,8 +433,8 @@ func NewMySQLTableINFO(schemaName, tableName string, engine *service.Engine) (*T
 		}
 	}
 
-	mysqlTable.TableCharacterSet = characterSet
-	mysqlTable.TableCollation = collation
+	mysqlTable.TableCharacterSet = strings.ToUpper(characterSet)
+	mysqlTable.TableCollation = strings.ToUpper(collation)
 	mysqlTable.Columns = columns
 	mysqlTable.Indexes = indexes
 	mysqlTable.PUConstraints = puConstraints
