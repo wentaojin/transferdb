@@ -15,7 +15,13 @@ limitations under the License.
 */
 package utils
 
-import "reflect"
+import (
+	"fmt"
+	"reflect"
+
+	"github.com/wentaojin/transferdb/service"
+	"go.uber.org/zap"
+)
 
 // 数组拆分
 func SplitIntSlice(arr []int, num int64) [][]int {
@@ -121,6 +127,10 @@ func VersionOrdinal(version string) string {
 
 // 用于对比 struct 是否相等
 func IsEqualStruct(structA, structB interface{}) ([]interface{}, bool) {
+	service.Logger.Info("struct equal",
+		zap.String("structA", fmt.Sprintf("%v", structA)),
+		zap.String("structB", fmt.Sprintf("%v", structA)))
+
 	var diffs []interface{}
 	aVal := reflect.ValueOf(structA)
 	bVal := reflect.ValueOf(structB)

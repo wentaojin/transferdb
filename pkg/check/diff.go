@@ -100,8 +100,8 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 	service.Logger.Info("check table",
 		zap.String("table partition type check", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)))
 	if oracleTable.IsPartition != mysqlTable.IsPartition {
-		builder.WriteString(fmt.Sprintf("-- oracle table [%s.%s]", d.SourceSchemaName, d.TableName))
-		builder.WriteString(fmt.Sprintf("-- mysql table [%s.%s]", d.TargetSchemaName, d.TableName))
+		builder.WriteString(fmt.Sprintf("-- oracle table [%s.%s]\n", d.SourceSchemaName, d.TableName))
+		builder.WriteString(fmt.Sprintf("-- mysql table [%s.%s]\n", d.TargetSchemaName, d.TableName))
 		builder.WriteString("/*\n")
 		builder.WriteString(fmt.Sprintf(" oracle table type is different from mysql table type\n"))
 		builder.WriteString(fmt.Sprintf(" oracle table is partition type [%t]\n", oracleTable.IsPartition))
