@@ -1,4 +1,4 @@
-.PHONY: build prepare reverse all full gotool clean help
+.PHONY: build prepare reverse check all full gotool clean help
 
 CMDPATH="./cmd"
 BINARYPATH="bin/transferdb"
@@ -35,6 +35,9 @@ prepare: gotool
 
 reverse: gotool
 	$(GORUN) -race $(CMDPATH) --config $(CONFIGPATH) --mode reverse
+
+check: gotool
+	$(GORUN) -race $(CMDPATH) --config $(CONFIGPATH) --mode check
 
 all: gotool
 	$(GORUN) -race $(CMDPATH) --config $(CONFIGPATH) --mode all
