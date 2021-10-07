@@ -148,27 +148,30 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 		zap.String("oracle struct", oracleTable.String(PUConstraintJSON)),
 		zap.String("mysql struct", mysqlTable.String(PUConstraintJSON)))
 
-	diffPU, isOK := utils.IsEqualStruct(oracleTable.PUConstraints, mysqlTable.PUConstraints)
+	// 函数 utils.IsEqualStruct 都忽略 structA 空，但 structB 存在情况
+	addDiffPU, _, isOK := utils.IsEqualStruct(oracleTable.PUConstraints, mysqlTable.PUConstraints)
 	if !isOK {
 		builder.WriteString("/*\n")
 		builder.WriteString(" oracle table primary key and unique key\n")
 		builder.WriteString(" mysql table primary key and unique key\n")
 		builder.WriteString("*/\n")
-		for _, pu := range diffPU {
-			value, ok := pu.(ConstraintPUKey)
-			if ok {
-				switch value.ConstraintType {
-				case "PK":
-					builder.WriteString(fmt.Sprintf("ALTER TABLE %s.%s ADD PRIMARY KEY(%s);\n", d.TargetSchemaName, d.TableName, value.ConstraintColumn))
-					continue
-				case "UK":
-					builder.WriteString(fmt.Sprintf("ALTER TABLE %s.%s ADD UNIQUE(%s);\n", d.TargetSchemaName, d.TableName, value.ConstraintColumn))
-					continue
-				default:
-					return fmt.Errorf("table constraint primary and unique key diff failed: not support type [%s]", value.ConstraintType)
+		if len(addDiffPU) != 0 {
+			for _, pu := range addDiffPU {
+				value, ok := pu.(ConstraintPUKey)
+				if ok {
+					switch value.ConstraintType {
+					case "PK":
+						builder.WriteString(fmt.Sprintf("ALTER TABLE %s.%s ADD PRIMARY KEY(%s);\n", d.TargetSchemaName, d.TableName, value.ConstraintColumn))
+						continue
+					case "UK":
+						builder.WriteString(fmt.Sprintf("ALTER TABLE %s.%s ADD UNIQUE(%s);\n", d.TargetSchemaName, d.TableName, value.ConstraintColumn))
+						continue
+					default:
+						return fmt.Errorf("table constraint primary and unique key diff failed: not support type [%s]", value.ConstraintType)
+					}
 				}
+				return fmt.Errorf("table constraint primary and unique key assert ConstraintPUKey failed")
 			}
-			return fmt.Errorf("table constraint primary and unique key assert ConstraintPUKey failed")
 		}
 	}
 
@@ -179,19 +182,22 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 			zap.String("oracle struct", oracleTable.String(FKConstraintJSON)),
 			zap.String("mysql struct", mysqlTable.String(FKConstraintJSON)))
 
-		diffFK, isOK := utils.IsEqualStruct(oracleTable.ForeignConstraints, mysqlTable.ForeignConstraints)
+		addDiffFK, _, isOK := utils.IsEqualStruct(oracleTable.ForeignConstraints, mysqlTable.ForeignConstraints)
 		if !isOK {
 			builder.WriteString("/*\n")
 			builder.WriteString(" oracle table foreign key\n")
 			builder.WriteString(" mysql table foreign key\n")
 			builder.WriteString("*/\n")
-			for _, fk := range diffFK {
-				value, ok := fk.(ConstraintForeign)
-				if ok {
-					builder.WriteString(fmt.Sprintf("ALTER TABLE %s.%s ADD FOREIGN KEY(%s) REFERENCES %s.%s(%s）ON DELETE %s;\n", d.TargetSchemaName, d.TableName, value.ColumnName, d.TargetSchemaName, value.ReferencedTableName, value.ReferencedColumnName, value.DeleteRule))
-					continue
+			if len(addDiffFK) != 0 {
+				for _, fk := range addDiffFK {
+					value, ok := fk.(ConstraintForeign)
+					if ok {
+						builder.WriteString(fmt.Sprintf("ALTER TABLE %s.%s ADD FOREIGN KEY(%s) REFERENCES %s.%s(%s）ON DELETE %s;\n", d.TargetSchemaName, d.TableName, value.ColumnName, d.TargetSchemaName, value.ReferencedTableName, value.ReferencedColumnName, value.DeleteRule))
+						continue
+					}
+					return fmt.Errorf("table constraint foreign key assert ConstraintForeign failed")
 				}
-				return fmt.Errorf("table constraint foreign key assert ConstraintForeign failed")
+
 			}
 		}
 
@@ -207,20 +213,23 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 				zap.String("oracle struct", oracleTable.String(CKConstraintJSON)),
 				zap.String("mysql struct", mysqlTable.String(CKConstraintJSON)))
 
-			diffCK, isOK := utils.IsEqualStruct(oracleTable.CheckConstraints, mysqlTable.CheckConstraints)
+			addDiffCK, _, isOK := utils.IsEqualStruct(oracleTable.CheckConstraints, mysqlTable.CheckConstraints)
 			if !isOK {
 				builder.WriteString("/*\n")
 				builder.WriteString(" oracle table check key\n")
 				builder.WriteString(" mysql table check key\n")
 				builder.WriteString("*/\n")
-				for _, ck := range diffCK {
-					value, ok := ck.(ConstraintCheck)
-					if ok {
-						builder.WriteString(fmt.Sprintf("ALTER TABLE %s.%s ADD CONSTRAINT %s CHECK(%s);\n",
-							d.TargetSchemaName, d.TableName, fmt.Sprintf("%s_check_key", d.TableName), value.ConstraintExpression))
-						continue
+				if len(addDiffCK) != 0 {
+					for _, ck := range addDiffCK {
+						value, ok := ck.(ConstraintCheck)
+						if ok {
+							builder.WriteString(fmt.Sprintf("ALTER TABLE %s.%s ADD CONSTRAINT %s CHECK(%s);\n",
+								d.TargetSchemaName, d.TableName, fmt.Sprintf("%s_check_key", d.TableName), value.ConstraintExpression))
+							continue
+						}
+						return fmt.Errorf("table constraint check key assert ConstraintCheck failed")
 					}
-					return fmt.Errorf("table constraint check key assert ConstraintCheck failed")
+
 				}
 			}
 		}
@@ -231,27 +240,30 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 		zap.String("oracle struct", oracleTable.String(IndexJSON)),
 		zap.String("mysql struct", mysqlTable.String(IndexJSON)))
 
-	diffIndex, isOK := utils.IsEqualStruct(oracleTable.Indexes, mysqlTable.Indexes)
+	addDiffIndex, _, isOK := utils.IsEqualStruct(oracleTable.Indexes, mysqlTable.Indexes)
 	if !isOK {
 		builder.WriteString("/*\n")
 		builder.WriteString(" oracle table indexes\n")
 		builder.WriteString(" mysql table indexes\n")
 		builder.WriteString("*/\n")
-		for _, idx := range diffIndex {
-			value, ok := idx.(Index)
-			if ok {
-				if value.Uniqueness == "NONUNIQUE" {
-					builder.WriteString(fmt.Sprintf("CREATE INDEX %s ON %s.%s(%s);\n",
-						fmt.Sprintf("idx_%s", strings.ReplaceAll(value.IndexColumn, ",", "_")), d.TargetSchemaName, d.TableName, value.IndexColumn))
-					continue
+		if len(addDiffIndex) != 0 {
+			for _, idx := range addDiffIndex {
+				value, ok := idx.(Index)
+				if ok {
+					if value.Uniqueness == "NONUNIQUE" {
+						builder.WriteString(fmt.Sprintf("CREATE INDEX %s ON %s.%s(%s);\n",
+							fmt.Sprintf("idx_%s", strings.ReplaceAll(value.IndexColumn, ",", "_")), d.TargetSchemaName, d.TableName, value.IndexColumn))
+						continue
+					}
+					if value.Uniqueness == "UNIQUE" {
+						builder.WriteString(fmt.Sprintf("CREATE UNIQUE INDEX %s ON %s.%s(%s);\n",
+							fmt.Sprintf("idx_%s_unique", strings.ReplaceAll(value.IndexColumn, ",", "_")), d.TargetSchemaName, d.TableName, value.IndexColumn))
+						continue
+					}
 				}
-				if value.Uniqueness == "UNIQUE" {
-					builder.WriteString(fmt.Sprintf("CREATE UNIQUE INDEX %s ON %s.%s(%s);\n",
-						fmt.Sprintf("idx_%s_unique", strings.ReplaceAll(value.IndexColumn, ",", "_")), d.TargetSchemaName, d.TableName, value.IndexColumn))
-					continue
-				}
+				return fmt.Errorf("table index assert Index failed")
 			}
-			return fmt.Errorf("table index assert Index failed")
+
 		}
 	}
 
@@ -261,24 +273,27 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 		zap.String("mysql struct", mysqlTable.String(PartitionJSON)))
 
 	if mysqlTable.IsPartition && oracleTable.IsPartition {
-		diffParts, isOK := utils.IsEqualStruct(oracleTable.Partitions, mysqlTable.Partitions)
+		addDiffParts, _, isOK := utils.IsEqualStruct(oracleTable.Partitions, mysqlTable.Partitions)
 		if !isOK {
 			builder.WriteString("/*\n")
 			builder.WriteString(" oracle table partitions\n")
 			builder.WriteString(" mysql table partitions\n")
 			builder.WriteString("*/\n")
 			builder.WriteString("-- oracle partition info exist, mysql partition isn't exist, please manual modify\n")
-			for _, part := range diffParts {
-				value, ok := part.(Partition)
-				if ok {
-					partJSON, err := json.Marshal(value)
-					if err != nil {
-						return err
+			if len(addDiffParts) != 0 {
+				for _, part := range addDiffParts {
+					value, ok := part.(Partition)
+					if ok {
+						partJSON, err := json.Marshal(value)
+						if err != nil {
+							return err
+						}
+						builder.WriteString(fmt.Sprintf("# oracle partition info: %s, ", partJSON))
+						continue
 					}
-					builder.WriteString(fmt.Sprintf("# oracle partition info: %s, ", partJSON))
-					continue
+					return fmt.Errorf("table paritions assert Partition failed")
 				}
-				return fmt.Errorf("table paritions assert Partition failed")
+
 			}
 		}
 	}
@@ -304,7 +319,7 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 	for oracleColName, oracleColInfo := range oracleTable.Columns {
 		mysqlColInfo, ok := mysqlTable.Columns[oracleColName]
 		if ok {
-			diffColumnMsg, err := CheckOracleTableMapRule(
+			diffColumnMsg, err := OracleTableMapRuleCheck(
 				d.SourceSchemaName,
 				d.TargetSchemaName,
 				d.TableName,
@@ -389,7 +404,7 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 	return nil
 }
 
-func CheckOracleTableMapRule(
+func OracleTableMapRuleCheck(
 	sourceSchema, targetSchema, tableName, columnName string,
 	oracleColInfo, mysqlColInfo Column, textTable *prettytable.Table) (string, error) {
 	// 字段精度类型转换
@@ -456,8 +471,8 @@ func CheckOracleTableMapRule(
 	case "NUMBER":
 		switch {
 		case oracleDataScale > 0:
-			diffCols, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-			if mysqlDataType == "DECIMAL" && len(diffCols) == 0 && isOK {
+			addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
+			if mysqlDataType == "DECIMAL" && len(addDiffCols) == 0 && isOK {
 				return "", nil
 			}
 			if err := textTable.AddRow(
@@ -482,8 +497,8 @@ func CheckOracleTableMapRule(
 			case oracleDataPrecision == 0 && oracleDataScale == 0:
 				//MySQL column type  NUMERIC would convert to DECIMAL(11,0)
 				//buildInColumnType = "NUMERIC"
-				diffCols, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-				if mysqlDataType == "DECIMAL" && len(diffCols) == 0 && isOK {
+				addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
+				if mysqlDataType == "DECIMAL" && len(addDiffCols) == 0 && isOK {
 					return "", nil
 				}
 				if err := textTable.AddRow(
@@ -505,8 +520,8 @@ func CheckOracleTableMapRule(
 					oracleColumnComment,
 				)
 			case oracleDataPrecision >= 1 && oracleDataPrecision < 3:
-				diffCols, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-				if mysqlDataType == "TINYINT" && len(diffCols) == 0 && isOK {
+				addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
+				if mysqlDataType == "TINYINT" && len(addDiffCols) == 0 && isOK {
 					return "", nil
 				}
 				if err := textTable.AddRow(
@@ -526,8 +541,8 @@ func CheckOracleTableMapRule(
 					oracleColumnComment,
 				)
 			case oracleDataPrecision >= 3 && oracleDataPrecision < 5:
-				diffCols, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-				if mysqlDataType == "SMALLINT" && len(diffCols) == 0 && isOK {
+				addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
+				if mysqlDataType == "SMALLINT" && len(addDiffCols) == 0 && isOK {
 					return "", nil
 				}
 				if err := textTable.AddRow(
@@ -547,8 +562,8 @@ func CheckOracleTableMapRule(
 					oracleColumnComment,
 				)
 			case oracleDataPrecision >= 5 && oracleDataPrecision < 9:
-				diffCols, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-				if mysqlDataType == "INT" && len(diffCols) == 0 && isOK {
+				addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
+				if mysqlDataType == "INT" && len(addDiffCols) == 0 && isOK {
 					return "", nil
 				}
 				if err := textTable.AddRow(
@@ -568,8 +583,8 @@ func CheckOracleTableMapRule(
 					oracleColumnComment,
 				)
 			case oracleDataPrecision >= 9 && oracleDataPrecision < 19:
-				diffCols, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-				if mysqlDataType == "BIGINT" && len(diffCols) == 0 && isOK {
+				addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
+				if mysqlDataType == "BIGINT" && len(addDiffCols) == 0 && isOK {
 					return "", nil
 				}
 				if err := textTable.AddRow(
@@ -589,8 +604,8 @@ func CheckOracleTableMapRule(
 					oracleColumnComment,
 				)
 			case oracleDataPrecision >= 19 && oracleDataPrecision <= 38:
-				diffCols, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-				if mysqlDataType == "DECIMAL" && len(diffCols) == 0 && isOK {
+				addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
+				if mysqlDataType == "DECIMAL" && len(addDiffCols) == 0 && isOK {
 					return "", nil
 				}
 				if err := textTable.AddRow(
@@ -610,8 +625,8 @@ func CheckOracleTableMapRule(
 					oracleColumnComment,
 				)
 			default:
-				diffCols, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-				if mysqlDataType == "DECIMAL" && len(diffCols) == 0 && isOK {
+				addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
+				if mysqlDataType == "DECIMAL" && len(addDiffCols) == 0 && isOK {
 					return "", nil
 				}
 				if err := textTable.AddRow(
@@ -634,8 +649,8 @@ func CheckOracleTableMapRule(
 		}
 		return fixedMsg, nil
 	case "DECIMAL":
-		diffCols, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "DECIMAL" && len(diffCols) == 0 && isOK {
+		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
+		if mysqlDataType == "DECIMAL" && len(addDiffCols) == 0 && isOK {
 			return "", nil
 		}
 		switch {
@@ -681,8 +696,8 @@ func CheckOracleTableMapRule(
 			return fixedMsg, nil
 		}
 	case "DEC":
-		diffCols, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "DECIMAL" && len(diffCols) == 0 && isOK {
+		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
+		if mysqlDataType == "DECIMAL" && len(addDiffCols) == 0 && isOK {
 			return "", nil
 		}
 		switch {
@@ -728,8 +743,8 @@ func CheckOracleTableMapRule(
 			return fixedMsg, nil
 		}
 	case "DOUBLE PRECISION":
-		diffCols, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "DOUBLE PRECISION" && len(diffCols) == 0 && isOK {
+		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
+		if mysqlDataType == "DOUBLE PRECISION" && len(addDiffCols) == 0 && isOK {
 			return "", nil
 		}
 		if err := textTable.AddRow(
@@ -753,8 +768,8 @@ func CheckOracleTableMapRule(
 		return fixedMsg, nil
 	case "FLOAT":
 		if oracleDataPrecision == 0 {
-			diffCols, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-			if mysqlDataType == "FLOAT" && len(diffCols) == 0 && isOK {
+			addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
+			if mysqlDataType == "FLOAT" && len(addDiffCols) == 0 && isOK {
 				return "", nil
 			}
 			if err := textTable.AddRow(
@@ -777,8 +792,8 @@ func CheckOracleTableMapRule(
 			)
 			return fixedMsg, nil
 		}
-		diffCols, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "DOUBLE" && len(diffCols) == 0 && isOK {
+		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
+		if mysqlDataType == "DOUBLE" && len(addDiffCols) == 0 && isOK {
 			return "", nil
 		}
 		if err := textTable.AddRow(
@@ -801,8 +816,8 @@ func CheckOracleTableMapRule(
 		)
 		return fixedMsg, nil
 	case "INTEGER":
-		diffCols, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "INT" && len(diffCols) == 0 && isOK {
+		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
+		if mysqlDataType == "INT" && len(addDiffCols) == 0 && isOK {
 			return "", nil
 		}
 		if err := textTable.AddRow(
@@ -825,8 +840,8 @@ func CheckOracleTableMapRule(
 		)
 		return fixedMsg, nil
 	case "INT":
-		diffCols, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "INT" && len(diffCols) == 0 && isOK {
+		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
+		if mysqlDataType == "INT" && len(addDiffCols) == 0 && isOK {
 			return "", nil
 		}
 		if err := textTable.AddRow(
@@ -849,8 +864,8 @@ func CheckOracleTableMapRule(
 		)
 		return fixedMsg, nil
 	case "REAL":
-		diffCols, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "DOUBLE" && len(diffCols) == 0 && isOK {
+		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
+		if mysqlDataType == "DOUBLE" && len(addDiffCols) == 0 && isOK {
 			return "", nil
 		}
 		if err := textTable.AddRow(
@@ -873,8 +888,8 @@ func CheckOracleTableMapRule(
 		)
 		return fixedMsg, nil
 	case "NUMERIC":
-		diffCols, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "NUMERIC" && len(diffCols) == 0 && isOK {
+		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
+		if mysqlDataType == "NUMERIC" && len(addDiffCols) == 0 && isOK {
 			return "", nil
 		}
 		if err := textTable.AddRow(
@@ -897,8 +912,8 @@ func CheckOracleTableMapRule(
 		)
 		return fixedMsg, nil
 	case "BINARY_FLOAT":
-		diffCols, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "DOUBLE" && len(diffCols) == 0 && isOK {
+		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
+		if mysqlDataType == "DOUBLE" && len(addDiffCols) == 0 && isOK {
 			return "", nil
 		}
 		if err := textTable.AddRow(
@@ -921,8 +936,8 @@ func CheckOracleTableMapRule(
 		)
 		return fixedMsg, nil
 	case "BINARY_DOUBLE":
-		diffCols, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "DOUBLE" && len(diffCols) == 0 && isOK {
+		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
+		if mysqlDataType == "DOUBLE" && len(addDiffCols) == 0 && isOK {
 			return "", nil
 		}
 		if err := textTable.AddRow(
@@ -945,8 +960,8 @@ func CheckOracleTableMapRule(
 		)
 		return fixedMsg, nil
 	case "SMALLINT":
-		diffCols, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "DECIMAL" && len(diffCols) == 0 && isOK {
+		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
+		if mysqlDataType == "DECIMAL" && len(addDiffCols) == 0 && isOK {
 			return "", nil
 		}
 		if err := textTable.AddRow(
@@ -971,8 +986,8 @@ func CheckOracleTableMapRule(
 
 	// 字符
 	case "BFILE":
-		diffCols, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "VARCHAR" && len(diffCols) == 0 && isOK {
+		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
+		if mysqlDataType == "VARCHAR" && len(addDiffCols) == 0 && isOK {
 			return "", nil
 		}
 		if err := textTable.AddRow(
@@ -997,8 +1012,8 @@ func CheckOracleTableMapRule(
 		return fixedMsg, nil
 	case "CHARACTER":
 		if oracleDataLength < 256 {
-			diffCols, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-			if mysqlDataType == "CHARACTER" && len(diffCols) == 0 && isOK {
+			addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
+			if mysqlDataType == "CHARACTER" && len(addDiffCols) == 0 && isOK {
 				return "", nil
 			}
 			if err := textTable.AddRow(
@@ -1023,8 +1038,8 @@ func CheckOracleTableMapRule(
 			)
 			return fixedMsg, nil
 		}
-		diffCols, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "VARCHAR" && len(diffCols) == 0 && isOK {
+		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
+		if mysqlDataType == "VARCHAR" && len(addDiffCols) == 0 && isOK {
 			return "", nil
 		}
 		if err := textTable.AddRow(
@@ -1048,8 +1063,8 @@ func CheckOracleTableMapRule(
 		)
 		return fixedMsg, nil
 	case "LONG":
-		diffCols, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "LONGTEXT" && len(diffCols) == 0 && isOK {
+		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
+		if mysqlDataType == "LONGTEXT" && len(addDiffCols) == 0 && isOK {
 			return "", nil
 		}
 		if err := textTable.AddRow(
@@ -1073,8 +1088,8 @@ func CheckOracleTableMapRule(
 		)
 		return fixedMsg, nil
 	case "LONG RAW":
-		diffCols, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "LONGBLOB" && len(diffCols) == 0 && isOK {
+		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
+		if mysqlDataType == "LONGBLOB" && len(addDiffCols) == 0 && isOK {
 			return "", nil
 		}
 		if err := textTable.AddRow(
@@ -1098,8 +1113,8 @@ func CheckOracleTableMapRule(
 		)
 		return fixedMsg, nil
 	case "NCHAR VARYING":
-		diffCols, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "NCHAR VARYING" && len(diffCols) == 0 && isOK {
+		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
+		if mysqlDataType == "NCHAR VARYING" && len(addDiffCols) == 0 && isOK {
 			return "", nil
 		}
 		if err := textTable.AddRow(
@@ -1123,8 +1138,8 @@ func CheckOracleTableMapRule(
 		)
 		return fixedMsg, nil
 	case "NCLOB":
-		diffCols, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "TEXT" && len(diffCols) == 0 && isOK {
+		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
+		if mysqlDataType == "TEXT" && len(addDiffCols) == 0 && isOK {
 			return "", nil
 		}
 		if err := textTable.AddRow(
@@ -1149,8 +1164,8 @@ func CheckOracleTableMapRule(
 		return fixedMsg, nil
 	case "RAW":
 		if oracleDataLength < 256 {
-			diffCols, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-			if mysqlDataType == "BINARY" && len(diffCols) == 0 && isOK {
+			addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
+			if mysqlDataType == "BINARY" && len(addDiffCols) == 0 && isOK {
 				return "", nil
 			}
 			if err := textTable.AddRow(
@@ -1174,8 +1189,8 @@ func CheckOracleTableMapRule(
 			)
 			return fixedMsg, nil
 		}
-		diffCols, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "VARBINARY" && len(diffCols) == 0 && isOK {
+		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
+		if mysqlDataType == "VARBINARY" && len(addDiffCols) == 0 && isOK {
 			return "", nil
 		}
 		if err := textTable.AddRow(
@@ -1199,8 +1214,8 @@ func CheckOracleTableMapRule(
 		)
 		return fixedMsg, nil
 	case "ROWID":
-		diffCols, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "CHAR" && len(diffCols) == 0 && isOK {
+		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
+		if mysqlDataType == "CHAR" && len(addDiffCols) == 0 && isOK {
 			return "", nil
 		}
 		if err := textTable.AddRow(
@@ -1224,8 +1239,8 @@ func CheckOracleTableMapRule(
 		)
 		return fixedMsg, nil
 	case "UROWID":
-		diffCols, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "VARCHAR" && len(diffCols) == 0 && isOK {
+		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
+		if mysqlDataType == "VARCHAR" && len(addDiffCols) == 0 && isOK {
 			return "", nil
 		}
 		if err := textTable.AddRow(
@@ -1249,8 +1264,8 @@ func CheckOracleTableMapRule(
 		)
 		return fixedMsg, nil
 	case "VARCHAR":
-		diffCols, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "VARCHAR" && len(diffCols) == 0 && isOK {
+		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
+		if mysqlDataType == "VARCHAR" && len(addDiffCols) == 0 && isOK {
 			return "", nil
 		}
 		if err := textTable.AddRow(
@@ -1274,8 +1289,8 @@ func CheckOracleTableMapRule(
 		)
 		return fixedMsg, nil
 	case "XMLTYPE":
-		diffCols, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "LONGTEXT" && len(diffCols) == 0 && isOK {
+		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
+		if mysqlDataType == "LONGTEXT" && len(addDiffCols) == 0 && isOK {
 			return "", nil
 		}
 		if err := textTable.AddRow(
@@ -1301,8 +1316,8 @@ func CheckOracleTableMapRule(
 
 	// 二进制
 	case "CLOB":
-		diffCols, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "LONGTEXT" && len(diffCols) == 0 && isOK {
+		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
+		if mysqlDataType == "LONGTEXT" && len(addDiffCols) == 0 && isOK {
 			return "", nil
 		}
 		if err := textTable.AddRow(
@@ -1326,8 +1341,8 @@ func CheckOracleTableMapRule(
 		)
 		return fixedMsg, nil
 	case "BLOB":
-		diffCols, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "BLOB" && len(diffCols) == 0 && isOK {
+		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
+		if mysqlDataType == "BLOB" && len(addDiffCols) == 0 && isOK {
 			return "", nil
 		}
 		if err := textTable.AddRow(
@@ -1353,8 +1368,8 @@ func CheckOracleTableMapRule(
 
 	// 时间
 	case "DATE":
-		diffCols, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "DATETIME" && len(diffCols) == 0 && isOK {
+		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
+		if mysqlDataType == "DATETIME" && len(addDiffCols) == 0 && isOK {
 			return "", nil
 		}
 		if err := textTable.AddRow(
@@ -1381,8 +1396,8 @@ func CheckOracleTableMapRule(
 	// CHAR、NCHAR、VARCHAR2、NVARCHAR2( oracle 字符类型 B/C)
 	case "CHAR":
 		if oracleDataLength < 256 {
-			diffCols, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-			if mysqlDataType == "CHAR" && len(diffCols) == 0 && isOK && oracleColumnCharUsed == "char" && oracleColumnCharLength == mysqlDataLength {
+			addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
+			if mysqlDataType == "CHAR" && len(addDiffCols) == 0 && isOK && oracleColumnCharUsed == "char" && oracleColumnCharLength == mysqlDataLength {
 				return "", nil
 			}
 			if err := textTable.AddRow(
@@ -1406,8 +1421,8 @@ func CheckOracleTableMapRule(
 			)
 			return fixedMsg, nil
 		}
-		diffCols, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "VARCHAR" && len(diffCols) == 0 && isOK && oracleColumnCharUsed == "char" && oracleColumnCharLength == mysqlDataLength {
+		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
+		if mysqlDataType == "VARCHAR" && len(addDiffCols) == 0 && isOK && oracleColumnCharUsed == "char" && oracleColumnCharLength == mysqlDataLength {
 			return "", nil
 		}
 		if err := textTable.AddRow(
@@ -1432,8 +1447,8 @@ func CheckOracleTableMapRule(
 		return fixedMsg, nil
 	case "NCHAR":
 		if oracleDataLength < 256 {
-			diffCols, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-			if mysqlDataType == "NCHAR" && len(diffCols) == 0 && isOK && oracleColumnCharUsed == "char" && oracleColumnCharLength == mysqlDataLength {
+			addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
+			if mysqlDataType == "NCHAR" && len(addDiffCols) == 0 && isOK && oracleColumnCharUsed == "char" && oracleColumnCharLength == mysqlDataLength {
 				return "", nil
 			}
 			if err := textTable.AddRow(
@@ -1457,8 +1472,8 @@ func CheckOracleTableMapRule(
 			)
 			return fixedMsg, nil
 		}
-		diffCols, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "NVARCHAR" && len(diffCols) == 0 && isOK && oracleColumnCharUsed == "char" && oracleColumnCharLength == mysqlDataLength {
+		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
+		if mysqlDataType == "NVARCHAR" && len(addDiffCols) == 0 && isOK && oracleColumnCharUsed == "char" && oracleColumnCharLength == mysqlDataLength {
 			return "", nil
 		}
 		if err := textTable.AddRow(
@@ -1482,8 +1497,8 @@ func CheckOracleTableMapRule(
 		)
 		return fixedMsg, nil
 	case "VARCHAR2":
-		diffCols, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "VARCHAR" && len(diffCols) == 0 && isOK && oracleColumnCharUsed == "char" && oracleColumnCharLength == mysqlDataLength {
+		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
+		if mysqlDataType == "VARCHAR" && len(addDiffCols) == 0 && isOK && oracleColumnCharUsed == "char" && oracleColumnCharLength == mysqlDataLength {
 			return "", nil
 		}
 		if err := textTable.AddRow(
@@ -1507,8 +1522,8 @@ func CheckOracleTableMapRule(
 		)
 		return fixedMsg, nil
 	case "NVARCHAR2":
-		diffCols, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "NVARCHAR" && len(diffCols) == 0 && isOK && oracleColumnCharUsed == "char" && oracleColumnCharLength == mysqlDataLength {
+		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
+		if mysqlDataType == "NVARCHAR" && len(addDiffCols) == 0 && isOK && oracleColumnCharUsed == "char" && oracleColumnCharLength == mysqlDataLength {
 			return "", nil
 		}
 		if err := textTable.AddRow(
@@ -1535,8 +1550,8 @@ func CheckOracleTableMapRule(
 	// 默认其他类型
 	default:
 		if strings.Contains(oracleDataType, "INTERVAL") {
-			diffCols, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-			if mysqlDataType == "VARCHAR" && len(diffCols) == 0 && isOK {
+			addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
+			if mysqlDataType == "VARCHAR" && len(addDiffCols) == 0 && isOK {
 				return "", nil
 			}
 			if err := textTable.AddRow(
@@ -1561,8 +1576,8 @@ func CheckOracleTableMapRule(
 			return fixedMsg, nil
 		} else if strings.Contains(oracleDataType, "TIMESTAMP") {
 			if oracleDataScale == 0 {
-				diffCols, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-				if mysqlDataType == "DATETIME" && len(diffCols) == 0 && isOK {
+				addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
+				if mysqlDataType == "DATETIME" && len(addDiffCols) == 0 && isOK {
 					return "", nil
 				}
 				if err := textTable.AddRow(
@@ -1585,8 +1600,8 @@ func CheckOracleTableMapRule(
 				)
 				return fixedMsg, nil
 			}
-			diffCols, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-			if mysqlDataType == "DATETIME" && len(diffCols) == 0 && isOK {
+			addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
+			if mysqlDataType == "DATETIME" && len(addDiffCols) == 0 && isOK {
 				return "", nil
 			}
 			if err := textTable.AddRow(
@@ -1609,8 +1624,8 @@ func CheckOracleTableMapRule(
 			)
 			return fixedMsg, nil
 		} else {
-			diffCols, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-			if mysqlDataType == "TEXT" && len(diffCols) == 0 && isOK {
+			addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
+			if mysqlDataType == "TEXT" && len(addDiffCols) == 0 && isOK {
 				return "", nil
 			}
 			if err := textTable.AddRow(

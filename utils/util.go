@@ -122,28 +122,49 @@ func VersionOrdinal(version string) string {
 }
 
 // 用于对比 struct 是否相等
-func IsEqualStruct(structA, structB interface{}) ([]interface{}, bool) {
-	var diffs []interface{}
+func IsEqualStruct(structA, structB interface{}) ([]interface{}, []interface{}, bool) {
+	var (
+		addDiffs    []interface{}
+		removeDiffs []interface{}
+	)
 	aVal := reflect.ValueOf(structA)
 	bVal := reflect.ValueOf(structB)
 
 	if (!aVal.IsValid() && !bVal.IsValid()) || (aVal.IsNil() && bVal.IsNil()) {
-		return diffs, true
+		return addDiffs, removeDiffs, true
 	}
 
-	if (aVal.Kind() == reflect.Slice && bVal.Kind() == reflect.Slice) || (aVal.Kind() == reflect.Array && bVal.Kind() == reflect.Array) {
-		dict := make(map[interface{}]bool)
-		for bi := 0; bi < bVal.Len(); bi++ {
-			dict[bVal.Index(bi).Interface()] = true
-		}
-		for ai := 0; ai < aVal.Len(); ai++ {
-			if _, ok := dict[aVal.Index(ai).Interface()]; !ok {
-				diffs = append(diffs, aVal.Index(ai).Interface())
+	if aVal.IsNil() && !bVal.IsNil() {
+		if bVal.Kind() == reflect.Slice || bVal.Kind() == reflect.Array {
+			for bi := 0; bi < bVal.Len(); bi++ {
+				removeDiffs = append(removeDiffs, bVal.Index(bi).Interface())
 			}
 		}
 	}
-	if len(diffs) == 0 {
-		return diffs, true
+
+	if !aVal.IsNil() && bVal.IsNil() {
+		if aVal.Kind() == reflect.Slice || aVal.Kind() == reflect.Array {
+			for ai := 0; ai < aVal.Len(); ai++ {
+				addDiffs = append(addDiffs, aVal.Index(ai).Interface())
+			}
+		}
 	}
-	return diffs, false
+
+	if !aVal.IsNil() && !bVal.IsNil() {
+		if (aVal.Kind() == reflect.Slice && bVal.Kind() == reflect.Slice) || (aVal.Kind() == reflect.Array && bVal.Kind() == reflect.Array) {
+			dict := make(map[interface{}]bool)
+			for bi := 0; bi < bVal.Len(); bi++ {
+				dict[bVal.Index(bi).Interface()] = true
+			}
+			for ai := 0; ai < aVal.Len(); ai++ {
+				if _, ok := dict[aVal.Index(ai).Interface()]; !ok {
+					addDiffs = append(addDiffs, aVal.Index(ai).Interface())
+				}
+			}
+		}
+	}
+	if len(addDiffs) == 0 && len(removeDiffs) == 0 {
+		return addDiffs, removeDiffs, true
+	}
+	return addDiffs, removeDiffs, false
 }
