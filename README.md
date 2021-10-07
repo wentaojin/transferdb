@@ -9,7 +9,7 @@ transferdb 用于异构数据库迁移（ Oracle 数据库 -> MySQL 数据库）
    4. 下游若遇到同名表，则进行 rename 原表 _bak 为结尾，然后创建表
 2. 支持表索引创建
    1. 排除基于函数的索引或者位图索引创建(日志输出打印，可以搜索 WARN 日志以及 FUNCTION-BASED NORMAL、BITMAP 关键筛选过滤)
-   2. 下游若遇到同名索引，则进行索引名_ping 以 _ping 为后缀重创建
+   2. 下游若遇到同名索引，则进行索引名 _ping 以 _ping 为后缀重创建
 3. 支持非空约束、外键约束、检查约束、主键约束、唯一约束创建，生效与否取决于下游数据库
 4. 数据同步【数据同步需要存在主键或者唯一键】
    1. 数据同步无论 FULL / ALL 模式需要注意时间格式，ORACLE date 格式复杂，同步前可先简单验证下迁移时间格式是否存在问题，transferdb timezone PICK 数据库操作系统的时区
@@ -34,11 +34,23 @@ export LD_LIBRARY_PATH=/data1/soft/client/instantclient_19_8
 echo $LD_LIBRARY_PATH
 
 3、transferdb 配置文件 config.toml 样例位于 conf 目录下,详情请见说明以及配置
-4、$ ./transferdb --config config.toml --mode prepare
 
-元数据库 db_meta（默认）：
-表 custom_schema_column_type_maps 库表字段类型转换规则
-表 custom_table_column_type_maps 表级别字段类型转换规则，表级别优先级高于库级别
+4、表结构转换
+$ ./transferdb --config config.toml --mode prepare
+$ ./transferdb --config config.toml --mode reverse
+
+元数据库[默认 db_meta]，自定义转换规则，prepare 阶段后，reverse 阶段前设置，参见 conf/reverse_table_test.sql 文件自定义规则示例，：
+表 custom_schema_column_type_maps 用于数据库内字段类型转换规则 -》库级别
+表 custom_table_column_type_maps  用于表级别字段类型转换规则，表级别优先级高于库级别 -》表级别
+
+5、表结构检查(独立于表结构转换，可单独运行，校验规则使用内置规则)
+$ ./transferdb --config config.toml --mode check
+
+6、数据全量抽数
+$ ./transferdb --config config.toml --mode full
+
+7、数据同步（全量 + 增量）
+$ ./transferdb --config config.toml --mode all
 ```
 
 ALL 模式同步

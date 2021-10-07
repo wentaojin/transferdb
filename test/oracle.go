@@ -42,7 +42,7 @@ func main() {
 	engine := service.Engine{
 		OracleDB: sqlDB,
 	}
-	col, res, err := engine.QueryFormatOracleRows(`select t.COLUMN_NAME,
+	col, res, err := service.Query(engine.OracleDB, `select t.COLUMN_NAME,
 	     t.DATA_TYPE,
 			 t.CHAR_LENGTH, 
 			 NVL(t.CHAR_USED,'UNKNOWN') CHAR_USED,
@@ -51,7 +51,7 @@ func main() {
 	     NVL(t.DATA_SCALE,0) AS DATA_SCALE,
 	     t.NULLABLE,
 	     t.DATA_DEFAULT,
-	     NVL(c.COMMENTS,'') COMMENTS
+	     c.COMMENTS
 	from all_tab_columns t, all_col_comments c
 	where t.table_name = c.table_name
 	 and t.column_name = c.column_name
@@ -63,6 +63,10 @@ func main() {
 		fmt.Println(err)
 	}
 	fmt.Println(col)
-	fmt.Println(res)
+	for _, r := range res {
+		if r["DATA_DEFAULT"] == "" || r["COMMENTS"] == "" {
+			fmt.Println(r)
+		}
+	}
 
 }

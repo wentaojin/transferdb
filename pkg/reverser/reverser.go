@@ -67,7 +67,7 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 
 	endTime := time.Now()
 	if !wp.IsDone() {
-		service.Logger.Info("reverse table oracle to mysql failed",
+		service.Logger.Error("reverse table oracle to mysql failed",
 			zap.String("cost", endTime.Sub(startTime).String()),
 			zap.Error(fmt.Errorf("reverse table task failed, please clear and rerunning")))
 		return fmt.Errorf("reverse table task failed, please clear and rerunning")

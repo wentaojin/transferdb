@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/wentaojin/transferdb/pkg/check"
+
 	"github.com/wentaojin/transferdb/service"
 
 	"github.com/wentaojin/transferdb/pkg/prepare"
@@ -57,6 +59,13 @@ func Run(cfg *service.CfgFile, mode string) error {
 		}
 	case "check":
 		// 表结构校验 - 上下游
+		engine, err := NewEngineDB(cfg)
+		if err != nil {
+			return err
+		}
+		if err := check.CheckOracleTableToMySQLMapping(engine, cfg); err != nil {
+			return err
+		}
 	case "full":
 		// 全量数据 ETL 非一致性抽取阶段
 		engine, err := NewEngineDB(cfg)

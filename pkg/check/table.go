@@ -18,6 +18,8 @@ package check
 import (
 	"strings"
 
+	"github.com/wentaojin/transferdb/utils"
+
 	"github.com/wentaojin/transferdb/service"
 )
 
@@ -39,6 +41,8 @@ type Table struct {
 	SchemaName         string
 	TableName          string
 	TableComment       string
+	TableCharacterSet  string
+	TableCollation     string
 	Columns            map[string]Column // KEY 字段名
 	Indexes            []Index
 	PUConstraints      []ConstraintPUKey
@@ -225,6 +229,8 @@ func NewOracleTableINFO(schemaName, tableName string, engine *service.Engine) (*
 			})
 		}
 	}
+	oraTable.TableCharacterSet = OracleCharacterSet
+	oraTable.TableCollation = OracleCollationBin
 	oraTable.Columns = columns
 	oraTable.Indexes = indexes
 	oraTable.PUConstraints = puConstraints
@@ -240,14 +246,11 @@ func NewMySQLTableINFO(schemaName, tableName string, engine *service.Engine) (*T
 		SchemaName: schemaName,
 		TableName:  tableName,
 	}
-	characterSet, err := engine.GetMySQLDBServerCharacterSet()
+	characterSet, collation, err := engine.GetMySQLTableCharacterSetAndCollation(schemaName, tableName)
 	if err != nil {
 		return mysqlTable, err
 	}
-	collation, err := engine.GetMySQLDBServerCollation()
-	if err != nil {
-		return mysqlTable, err
-	}
+
 	version, err := engine.GetMySQLDBVersion()
 	if err != nil {
 		return mysqlTable, err
@@ -379,6 +382,8 @@ func NewMySQLTableINFO(schemaName, tableName string, engine *service.Engine) (*T
 		}
 	}
 
+	mysqlTable.TableCharacterSet = characterSet
+	mysqlTable.TableCollation = collation
 	mysqlTable.Columns = columns
 	mysqlTable.Indexes = indexes
 	mysqlTable.PUConstraints = puConstraints

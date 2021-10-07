@@ -16,21 +16,47 @@ limitations under the License.
 package main
 
 import (
-	"log"
+	"fmt"
+	"os"
+	"path/filepath"
 	"sync"
+	"time"
+
+	"github.com/xxjwxc/gowp/workpool"
+
+	"github.com/wentaojin/transferdb/pkg/check"
 )
 
 func main() {
-	var wg sync.WaitGroup
-	ch := make(chan struct{}, 3)
-	for i := 0; i < 10; i++ {
-		ch <- struct{}{}
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
-			log.Println(i)
-			<-ch
-		}(i)
+	pwdDir, err := os.Getwd()
+	if err != nil {
+		fmt.Println(err)
 	}
-	wg.Wait()
+	file, err := os.OpenFile(filepath.Join(pwdDir, "transferdb.sql"), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer file.Close()
+
+	wr := &check.FileMW{Mutex: sync.Mutex{}, Writer: file}
+
+	wp := workpool.New(10)
+	for i := 0; i < 1000; i++ {
+		// 变量替换，直接使用原变量会导致并发输出有问题
+		variables := i
+		fileWR := wr
+		wp.Do(func() error {
+			if _, err := fmt.Fprintln(fileWR, fmt.Sprintf("%v %d", time.Now(), variables)); err != nil {
+				return err
+			}
+			return nil
+		})
+	}
+	if err = wp.Wait(); err != nil {
+		fmt.Println(err)
+	}
+
+	if !wp.IsDone() {
+		fmt.Println("not done")
+	}
 }

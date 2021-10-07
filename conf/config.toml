@@ -17,7 +17,7 @@ insert-batch-size = 500
 slowlog-threshold = 300
 
 [reverse]
-# 任务并发
+# 任务并发 -- 用于 reverse/check 阶段
 reverse-threads = 8
 
 [full]
