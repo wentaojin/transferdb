@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/wentaojin/transferdb/utils"
 
@@ -69,6 +70,14 @@ func (d *FileMW) Write(b []byte) (n int, err error) {
 // 2、忽略上下游不同索引名、约束名对比，只对比下游是否存在同等约束下同等字段是否存在
 // 3、分区只对比分区类型、分区键、分区表达式等，不对比具体每个分区下的情况
 func (d *DiffWriter) DiffOracleAndMySQLTable() error {
+	startTime := time.Now()
+	service.Logger.Info("check table start",
+		zap.String("oracle table", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)),
+		zap.String("mysql table", fmt.Sprintf("%s.%s", d.TargetSchemaName, d.TableName)))
+
+	service.Logger.Info("check table",
+		zap.String("get oracle table", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)),
+		zap.String("get mysql table", fmt.Sprintf("%s.%s", d.TargetSchemaName, d.TableName)))
 	oracleTable, err := NewOracleTableINFO(d.SourceSchemaName, d.TableName, d.Engine)
 	if err != nil {
 		return err
@@ -88,6 +97,8 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 	var builder strings.Builder
 
 	// 表类型检查
+	service.Logger.Info("check table",
+		zap.String("table partition type check", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)))
 	if oracleTable.IsPartition != mysqlTable.IsPartition {
 		builder.WriteString(fmt.Sprintf("-- oracle table [%s.%s]", d.SourceSchemaName, d.TableName))
 		builder.WriteString(fmt.Sprintf("-- mysql table [%s.%s]", d.TargetSchemaName, d.TableName))
@@ -110,6 +121,8 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 	}
 
 	// 表注释检查
+	service.Logger.Info("check table",
+		zap.String("table comment check", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)))
 	if oracleTable.TableComment != mysqlTable.TableComment {
 		builder.WriteString("/*\n")
 		builder.WriteString(fmt.Sprintf(" oracle table comment [%s]\n", oracleTable.TableComment))
@@ -119,6 +132,8 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 	}
 
 	// 表字符集以及排序规则检查
+	service.Logger.Info("check table",
+		zap.String("table character set and collation check", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)))
 	if !strings.Contains(mysqlTable.TableCharacterSet, OracleUTF8CharacterSet) || !strings.Contains(mysqlTable.TableCollation, OracleCollationBin) {
 		builder.WriteString("/*\n")
 		builder.WriteString(fmt.Sprintf(" oracle table character set [%s], collation [%s]\n", oracleTable.TableCharacterSet, oracleTable.TableCollation))
@@ -128,6 +143,8 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 	}
 
 	// 表约束、索引以及分区检查
+	service.Logger.Info("check table",
+		zap.String("table pk and uk constraint check", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)))
 	diffPU, isOK := utils.IsEqualStruct(oracleTable.PUConstraints, mysqlTable.PUConstraints)
 	if !isOK {
 		builder.WriteString("/*\n")
@@ -154,6 +171,8 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 
 	// TiDB 版本排除外键以及检查约束
 	if !isTiDB {
+		service.Logger.Info("check table",
+			zap.String("table fk constraint check", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)))
 		diffFK, isOK := utils.IsEqualStruct(oracleTable.ForeignConstraints, mysqlTable.ForeignConstraints)
 		if !isOK {
 			builder.WriteString("/*\n")
@@ -177,6 +196,8 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 			dbVersion = mysqlVersion
 		}
 		if utils.VersionOrdinal(dbVersion) > utils.VersionOrdinal(MySQLCheckConsVersion) {
+			service.Logger.Info("check table",
+				zap.String("table ck constraint check", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)))
 			diffCK, isOK := utils.IsEqualStruct(oracleTable.CheckConstraints, mysqlTable.CheckConstraints)
 			if !isOK {
 				builder.WriteString("/*\n")
@@ -196,6 +217,8 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 		}
 	}
 
+	service.Logger.Info("check table",
+		zap.String("table indexes check", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)))
 	diffIndex, isOK := utils.IsEqualStruct(oracleTable.Indexes, mysqlTable.Indexes)
 	if !isOK {
 		builder.WriteString("/*\n")
@@ -220,6 +243,8 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 		}
 	}
 
+	service.Logger.Info("check table",
+		zap.String("table partition check", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)))
 	if mysqlTable.IsPartition && oracleTable.IsPartition {
 		diffParts, isOK := utils.IsEqualStruct(oracleTable.Partitions, mysqlTable.Partitions)
 		if !isOK {
@@ -302,6 +327,9 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 	}
 
 	if textTable.String() != "" && len(diffColumnMsgs) != 0 {
+		service.Logger.Info("check table",
+			zap.String("table column info check, generate fixed sql", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)))
+
 		builder.WriteString("/*\n")
 		builder.WriteString(fmt.Sprintf(" oracle table columns info is different from mysql\n"))
 		builder.WriteString(fmt.Sprintf(" %s\n", textTable.String()))
@@ -313,6 +341,8 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 	}
 
 	if len(createColumnMetas) != 0 {
+		service.Logger.Info("check table",
+			zap.String("table column info check, generate created sql", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)))
 		builder.WriteString("/*\n")
 		builder.WriteString(fmt.Sprintf(" oracle table columns info isn't exist in mysql, generate created sql\n"))
 		builder.WriteString("*/\n")
@@ -331,6 +361,11 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 		}
 	}
 
+	endTime := time.Now()
+	service.Logger.Info("check table finished",
+		zap.String("oracle table", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)),
+		zap.String("mysql table", fmt.Sprintf("%s.%s", d.TargetSchemaName, d.TableName)),
+		zap.String("cost", endTime.Sub(startTime).String()))
 	return nil
 }
 
