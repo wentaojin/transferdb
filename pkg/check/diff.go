@@ -96,6 +96,12 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 		builder.WriteString(fmt.Sprintf(" oracle table is partition type [%t]\n", oracleTable.IsPartition))
 		builder.WriteString(fmt.Sprintf(" mysql table is partition type [%t]\n", mysqlTable.IsPartition))
 		builder.WriteString("*/\n")
+		builder.WriteString(fmt.Sprintf("-- the above info comes from oracle table [%s.%s]\n", d.SourceSchemaName, d.TableName))
+		builder.WriteString(fmt.Sprintf("-- the above info comes from mysql table [%s.%s]\n", d.TargetSchemaName, d.TableName))
+		if _, err := fmt.Fprintln(d.FileMW, builder.String()); err != nil {
+			return err
+		}
+
 		service.Logger.Warn("table type different",
 			zap.String("oracle table", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)),
 			zap.String("mysql table", fmt.Sprintf("%s.%s", d.TargetSchemaName, d.TableName)),
@@ -201,12 +207,12 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 			if ok {
 				if value.Uniqueness == "NONUNIQUE" {
 					builder.WriteString(fmt.Sprintf("CREATE INDEX %s ON %s.%s(%s);\n",
-						fmt.Sprintf("idx_%s", value.IndexColumn), d.TargetSchemaName, d.TableName, value.IndexColumn))
+						fmt.Sprintf("idx_%s", strings.ReplaceAll(value.IndexColumn, ",", "_")), d.TargetSchemaName, d.TableName, value.IndexColumn))
 					continue
 				}
 				if value.Uniqueness == "UNIQUE" {
 					builder.WriteString(fmt.Sprintf("CREATE UNIQUE INDEX %s ON %s.%s(%s);\n",
-						fmt.Sprintf("idx_%s_unique", value.IndexColumn), d.TargetSchemaName, d.TableName, value.IndexColumn))
+						fmt.Sprintf("idx_%s_unique", strings.ReplaceAll(value.IndexColumn, ",", "_")), d.TargetSchemaName, d.TableName, value.IndexColumn))
 					continue
 				}
 			}
@@ -214,24 +220,26 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 		}
 	}
 
-	diffParts, isOK := utils.IsEqualStruct(oracleTable.Partitions, mysqlTable.Partitions)
-	if !isOK {
-		builder.WriteString("/*\n")
-		builder.WriteString(" oracle table partitions\n")
-		builder.WriteString(" mysql table partitions\n")
-		builder.WriteString("*/\n")
-		builder.WriteString("-- oracle partition info exist, mysql partition isn't exist, please manual modify\n")
-		for _, part := range diffParts {
-			value, ok := part.(Partition)
-			if ok {
-				partJSON, err := json.Marshal(value)
-				if err != nil {
-					return err
+	if mysqlTable.IsPartition && oracleTable.IsPartition {
+		diffParts, isOK := utils.IsEqualStruct(oracleTable.Partitions, mysqlTable.Partitions)
+		if !isOK {
+			builder.WriteString("/*\n")
+			builder.WriteString(" oracle table partitions\n")
+			builder.WriteString(" mysql table partitions\n")
+			builder.WriteString("*/\n")
+			builder.WriteString("-- oracle partition info exist, mysql partition isn't exist, please manual modify\n")
+			for _, part := range diffParts {
+				value, ok := part.(Partition)
+				if ok {
+					partJSON, err := json.Marshal(value)
+					if err != nil {
+						return err
+					}
+					builder.WriteString(fmt.Sprintf("# oracle partition info: %s, ", partJSON))
+					continue
 				}
-				builder.WriteString(fmt.Sprintf("# oracle partition info: %s, ", partJSON))
-				continue
+				return fmt.Errorf("table paritions assert Partition failed")
 			}
-			return fmt.Errorf("table paritions assert Partition failed")
 		}
 	}
 
@@ -1236,8 +1244,6 @@ func CheckOracleTableMapRule(
 		)
 		return fixedMsg, nil
 
-		// CHAR、NCHAR、VARCHAR2、NVARCHAR2( oracle 字符类型 B/C)
-
 	// 二进制
 	case "CLOB":
 		diffCols, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
@@ -1317,6 +1323,7 @@ func CheckOracleTableMapRule(
 		return fixedMsg, nil
 
 	// oracle 字符类型 bytes/char 判断 B/C
+	// CHAR、NCHAR、VARCHAR2、NVARCHAR2( oracle 字符类型 B/C)
 	case "CHAR":
 		if oracleDataLength < 256 {
 			diffCols, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)

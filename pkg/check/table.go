@@ -24,10 +24,10 @@ import (
 )
 
 const (
-	OracleGBKCharacterSet  = "gbk"
-	OracleUTF8CharacterSet = "utf8"
+	OracleGBKCharacterSet  = "GBK"
+	OracleUTF8CharacterSet = "UTF8"
 	// oracle collation 默认大小写敏感，a != A
-	OracleCollationBin = "bin"
+	OracleCollationBin = "BIN"
 	// MySQL 支持 check 约束版本 > 8.0.15
 	MySQLCheckConsVersion = "8.0.15"
 	// MySQL 版本分隔符号
@@ -118,7 +118,7 @@ func NewOracleTableINFO(schemaName, tableName string, engine *service.Engine) (*
 	if err != nil {
 		return oraTable, err
 	}
-	oraTable.TableComment = commentInfo[0]["COMMENTS"]
+	oraTable.TableComment = strings.ToUpper(commentInfo[0]["COMMENTS"])
 
 	columnInfo, err := engine.GetOracleTableColumn(schemaName, tableName)
 	if err != nil {
@@ -133,20 +133,20 @@ func NewOracleTableINFO(schemaName, tableName string, engine *service.Engine) (*
 		} else {
 			OracleCharacterSet = OracleGBKCharacterSet
 		}
-		columns[rowCol["COLUMN_NAME"]] = Column{
-			DataType:   rowCol["DATA_TYPE"],
-			CharLength: rowCol["CHAR_LENGTH"],
-			CharUsed:   rowCol["CHAR_USED"],
+		columns[strings.ToUpper(rowCol["COLUMN_NAME"])] = Column{
+			DataType:   strings.ToUpper(rowCol["DATA_TYPE"]),
+			CharLength: strings.ToUpper(rowCol["CHAR_LENGTH"]),
+			CharUsed:   strings.ToUpper(rowCol["CHAR_USED"]),
 			ColumnInfo: ColumnInfo{
-				DataLength:    rowCol["DATA_LENGTH"],
-				DataPrecision: rowCol["DATA_PRECISION"],
-				DataScale:     rowCol["DATA_SCALE"],
-				NULLABLE:      rowCol["NULLABLE"],
-				DataDefault:   rowCol["DATA_DEFAULT"],
-				Comment:       rowCol["COMMENTS"],
+				DataLength:    strings.ToUpper(rowCol["DATA_LENGTH"]),
+				DataPrecision: strings.ToUpper(rowCol["DATA_PRECISION"]),
+				DataScale:     strings.ToUpper(rowCol["DATA_SCALE"]),
+				NULLABLE:      strings.ToUpper(rowCol["NULLABLE"]),
+				DataDefault:   strings.ToUpper(rowCol["DATA_DEFAULT"]),
+				Comment:       strings.ToUpper(rowCol["COMMENTS"]),
 			},
-			CharacterSet: OracleCharacterSet,
-			Collation:    OracleCollationBin,
+			CharacterSet: strings.ToUpper(OracleCharacterSet),
+			Collation:    strings.ToUpper(OracleCollationBin),
 		}
 	}
 
@@ -157,8 +157,8 @@ func NewOracleTableINFO(schemaName, tableName string, engine *service.Engine) (*
 	var indexes []Index
 	for _, indexCol := range indexInfo {
 		indexes = append(indexes, Index{
-			Uniqueness:  indexCol["UNIQUENESS"],
-			IndexColumn: indexCol["COLUMN_LIST"],
+			Uniqueness:  strings.ToUpper(indexCol["UNIQUENESS"]),
+			IndexColumn: strings.ToUpper(indexCol["COLUMN_LIST"]),
 		})
 	}
 
@@ -170,7 +170,7 @@ func NewOracleTableINFO(schemaName, tableName string, engine *service.Engine) (*
 	for _, pk := range pkInfo {
 		puConstraints = append(puConstraints, ConstraintPUKey{
 			ConstraintType:   "PK",
-			ConstraintColumn: pk["COLUMN_LIST"],
+			ConstraintColumn: strings.ToUpper(pk["COLUMN_LIST"]),
 		})
 	}
 
@@ -181,7 +181,7 @@ func NewOracleTableINFO(schemaName, tableName string, engine *service.Engine) (*
 	for _, pk := range ukInfo {
 		puConstraints = append(puConstraints, ConstraintPUKey{
 			ConstraintType:   "UK",
-			ConstraintColumn: pk["COLUMN_LIST"],
+			ConstraintColumn: strings.ToUpper(pk["COLUMN_LIST"]),
 		})
 	}
 
@@ -192,11 +192,11 @@ func NewOracleTableINFO(schemaName, tableName string, engine *service.Engine) (*
 	}
 	for _, fk := range fkInfo {
 		fkConstraints = append(fkConstraints, ConstraintForeign{
-			ColumnName:            fk["COLUMN_LIST"],
-			ReferencedTableSchema: fk["R_OWNER"],
-			ReferencedTableName:   fk["RTABLE_NAME"],
-			ReferencedColumnName:  fk["RCOLUMN_LIST"],
-			DeleteRule:            fk["DELETE_RULE"],
+			ColumnName:            strings.ToUpper(fk["COLUMN_LIST"]),
+			ReferencedTableSchema: strings.ToUpper(fk["R_OWNER"]),
+			ReferencedTableName:   strings.ToUpper(fk["RTABLE_NAME"]),
+			ReferencedColumnName:  strings.ToUpper(fk["RCOLUMN_LIST"]),
+			DeleteRule:            strings.ToUpper(fk["DELETE_RULE"]),
 			UpdateRule:            "", // Oracle 不支持 Update Rule
 		})
 	}
@@ -207,7 +207,7 @@ func NewOracleTableINFO(schemaName, tableName string, engine *service.Engine) (*
 	}
 	for _, ck := range ckInfo {
 		ckConstraints = append(ckConstraints, ConstraintCheck{
-			ConstraintExpression: ck["SEARCH_CONDITION"],
+			ConstraintExpression: strings.ToUpper(ck["SEARCH_CONDITION"]),
 		})
 	}
 	isPart, err := engine.IsOraclePartitionTable(schemaName, tableName)
@@ -222,10 +222,10 @@ func NewOracleTableINFO(schemaName, tableName string, engine *service.Engine) (*
 		}
 		for _, part := range partInfo {
 			parts = append(parts, Partition{
-				PartitionKey:     part["PARTITION_EXPRESS"],
-				PartitionType:    part["PARTITIONING_TYPE"],
-				SubPartitionKey:  part["SUBPARTITION_EXPRESS"],
-				SubPartitionType: part["SUBPARTITIONING_TYPE"],
+				PartitionKey:     strings.ToUpper(part["PARTITION_EXPRESS"]),
+				PartitionType:    strings.ToUpper(part["PARTITIONING_TYPE"]),
+				SubPartitionKey:  strings.ToUpper(part["SUBPARTITION_EXPRESS"]),
+				SubPartitionType: strings.ToUpper(part["SUBPARTITIONING_TYPE"]),
 			})
 		}
 	}
@@ -267,7 +267,7 @@ func NewMySQLTableINFO(schemaName, tableName string, engine *service.Engine) (*T
 	if err != nil {
 		return mysqlTable, version, err
 	}
-	mysqlTable.TableComment = comment
+	mysqlTable.TableComment = strings.ToUpper(comment)
 
 	columnInfo, err := engine.GetMySQLTableColumn(schemaName, tableName)
 	if err != nil {
@@ -277,28 +277,28 @@ func NewMySQLTableINFO(schemaName, tableName string, engine *service.Engine) (*T
 
 	for _, rowCol := range columnInfo {
 		var cs, ca string
-		if rowCol["CHARACTER_SET_NAME"] != characterSet {
+		if strings.ToUpper(rowCol["CHARACTER_SET_NAME"]) != strings.ToUpper(characterSet) {
 			cs = rowCol["CHARACTER_SET_NAME"]
 		} else {
 			cs = characterSet
 		}
-		if rowCol["COLLATION_NAME"] != collation {
+		if strings.ToUpper(rowCol["COLLATION_NAME"]) != strings.ToUpper(collation) {
 			ca = rowCol["COLLATION_NAME"]
 		} else {
 			ca = collation
 		}
-		columns[rowCol["COLUMN_NAME"]] = Column{
-			DataType: rowCol["DATA_TYPE"],
+		columns[strings.ToUpper(rowCol["COLUMN_NAME"])] = Column{
+			DataType: strings.ToUpper(rowCol["DATA_TYPE"]),
 			ColumnInfo: ColumnInfo{
-				DataLength:    rowCol["DATA_LENGTH"],
-				DataPrecision: rowCol["DATA_PRECISION"],
-				DataScale:     rowCol["DATA_SCALE"],
-				NULLABLE:      rowCol["NULLABLE"],
-				DataDefault:   rowCol["DATA_DEFAULT"],
-				Comment:       rowCol["COMMENTS"],
+				DataLength:    strings.ToUpper(rowCol["DATA_LENGTH"]),
+				DataPrecision: strings.ToUpper(rowCol["DATA_PRECISION"]),
+				DataScale:     strings.ToUpper(rowCol["DATA_SCALE"]),
+				NULLABLE:      strings.ToUpper(rowCol["NULLABLE"]),
+				DataDefault:   strings.ToUpper(rowCol["DATA_DEFAULT"]),
+				Comment:       strings.ToUpper(rowCol["COMMENTS"]),
 			},
-			CharacterSet: cs,
-			Collation:    ca,
+			CharacterSet: strings.ToUpper(cs),
+			Collation:    strings.ToUpper(ca),
 		}
 	}
 
@@ -309,8 +309,8 @@ func NewMySQLTableINFO(schemaName, tableName string, engine *service.Engine) (*T
 	var indexes []Index
 	for _, indexCol := range indexInfo {
 		indexes = append(indexes, Index{
-			Uniqueness:  indexCol["UNIQUENESS"],
-			IndexColumn: indexCol["COLUMN_LIST"],
+			Uniqueness:  strings.ToUpper(indexCol["UNIQUENESS"]),
+			IndexColumn: strings.ToUpper(indexCol["COLUMN_LIST"]),
 		})
 	}
 
@@ -321,8 +321,8 @@ func NewMySQLTableINFO(schemaName, tableName string, engine *service.Engine) (*T
 	}
 	for _, pu := range puInfo {
 		puConstraints = append(puConstraints, ConstraintPUKey{
-			ConstraintType:   pu["CONSTRAINT_TYPE"],
-			ConstraintColumn: pu["COLUMN_LIST"],
+			ConstraintType:   strings.ToUpper(pu["CONSTRAINT_TYPE"]),
+			ConstraintColumn: strings.ToUpper(pu["COLUMN_LIST"]),
 		})
 	}
 
@@ -342,10 +342,10 @@ func NewMySQLTableINFO(schemaName, tableName string, engine *service.Engine) (*T
 		}
 		for _, part := range partInfo {
 			parts = append(parts, Partition{
-				PartitionKey:     part["PARTITION_EXPRESS"],
-				PartitionType:    part["PARTITIONING_TYPE"],
-				SubPartitionKey:  part["SUBPARTITION_EXPRESS"],
-				SubPartitionType: part["SUBPARTITIONING_TYPE"],
+				PartitionKey:     strings.ToUpper(part["PARTITION_EXPRESS"]),
+				PartitionType:    strings.ToUpper(part["PARTITIONING_TYPE"]),
+				SubPartitionKey:  strings.ToUpper(part["SUBPARTITION_EXPRESS"]),
+				SubPartitionType: strings.ToUpper(part["SUBPARTITIONING_TYPE"]),
 			})
 		}
 	}
@@ -357,12 +357,12 @@ func NewMySQLTableINFO(schemaName, tableName string, engine *service.Engine) (*T
 		}
 		for _, fk := range fkInfo {
 			fkConstraints = append(fkConstraints, ConstraintForeign{
-				ColumnName:            fk["COLUMN_LIST"],
-				ReferencedTableSchema: fk["R_OWNER"],
-				ReferencedTableName:   fk["RTABLE_NAME"],
-				ReferencedColumnName:  fk["RCOLUMN_LIST"],
-				DeleteRule:            fk["DELETE_RULE"],
-				UpdateRule:            fk["UPDATE_RULE"],
+				ColumnName:            strings.ToUpper(fk["COLUMN_LIST"]),
+				ReferencedTableSchema: strings.ToUpper(fk["R_OWNER"]),
+				ReferencedTableName:   strings.ToUpper(fk["RTABLE_NAME"]),
+				ReferencedColumnName:  strings.ToUpper(fk["RCOLUMN_LIST"]),
+				DeleteRule:            strings.ToUpper(fk["DELETE_RULE"]),
+				UpdateRule:            strings.ToUpper(fk["UPDATE_RULE"]),
 			})
 		}
 
@@ -379,7 +379,7 @@ func NewMySQLTableINFO(schemaName, tableName string, engine *service.Engine) (*T
 			}
 			for _, ck := range ckInfo {
 				ckConstraints = append(ckConstraints, ConstraintCheck{
-					ConstraintExpression: ck["SEARCH_CONDITION"],
+					ConstraintExpression: strings.ToUpper(ck["SEARCH_CONDITION"]),
 				})
 			}
 		}
