@@ -17,46 +17,35 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
-	"sync"
-	"time"
-
-	"github.com/xxjwxc/gowp/workpool"
 
 	"github.com/wentaojin/transferdb/pkg/check"
+	"github.com/wentaojin/transferdb/utils"
 )
 
 func main() {
-	pwdDir, err := os.Getwd()
-	if err != nil {
-		fmt.Println(err)
-	}
-	file, err := os.OpenFile(filepath.Join(pwdDir, "transferdb.sql"), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
-	if err != nil {
-		fmt.Println(err)
-	}
-	defer file.Close()
+	ora := check.ColumnInfo{
 
-	wr := &check.FileMW{Mutex: sync.Mutex{}, Writer: file}
-
-	wp := workpool.New(10)
-	for i := 0; i < 1000; i++ {
-		// 变量替换，直接使用原变量会导致并发输出有问题
-		variables := i
-		fileWR := wr
-		wp.Do(func() error {
-			if _, err := fmt.Fprintln(fileWR, fmt.Sprintf("%v %d", time.Now(), variables)); err != nil {
-				return err
-			}
-			return nil
-		})
-	}
-	if err = wp.Wait(); err != nil {
-		fmt.Println(err)
+		DataLength:    "10",
+		DataPrecision: "12",
+		DataScale:     "23",
+		NULLABLE:      "34",
+		DataDefault:   "'pc'",
+		Comment:       "",
 	}
 
-	if !wp.IsDone() {
-		fmt.Println("not done")
+	mysql := check.ColumnInfo{
+		DataLength:    "10",
+		DataPrecision: "12",
+		DataScale:     "245",
+		NULLABLE:      "34",
+		DataDefault:   "pc",
+		Comment:       "",
+	}
+	addDiff, removeDiff, isOK := utils.IsEqualStruct(ora, mysql)
+	if !isOK {
+		fmt.Printf("%v: 1 \n", addDiff)
+		fmt.Printf("%v: 2\n", removeDiff)
+	} else {
+		fmt.Println(11111)
 	}
 }

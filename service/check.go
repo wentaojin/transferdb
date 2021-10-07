@@ -157,14 +157,16 @@ ORDER BY ORDINAL_POSITION`, schemaName, tableName))
 }
 
 func (e *Engine) GetMySQLTableIndex(schemaName, tableName string) ([]map[string]string, error) {
-	_, res, err := Query(e.MysqlDB, fmt.Sprintf(`SELECT INDEX_NAME,IF(NON_UNIQUE=1,"NONUNIQUE","UNIQUE") AS UNIQUENESS,
+	_, res, err := Query(e.MysqlDB, fmt.Sprintf(`SELECT 
+		INDEX_NAME,INDEX_TYPE,EXPRESSION COLUMN_EXPRESSION,
+		IF(NON_UNIQUE=1,"NONUNIQUE","UNIQUE") AS UNIQUENESS,
        GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX SEPARATOR ',') AS COLUMN_LIST
 FROM INFORMATION_SCHEMA.STATISTICS
 WHERE 
   INDEX_NAME NOT IN ('PRIMARY','UNIQUE')
   AND UPPER(TABLE_SCHEMA) = UPPER('%s')
   AND UPPER(TABLE_NAME) = UPPER('%s')
-GROUP BY INDEX_NAME,UNIQUENESS`, schemaName, tableName))
+GROUP BY INDEX_NAME,UNIQUENESS,INDEX_TYPE,COLUMN_EXPRESSION`, schemaName, tableName))
 	if err != nil {
 		return res, err
 	}
