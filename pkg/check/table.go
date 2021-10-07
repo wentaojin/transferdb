@@ -16,6 +16,7 @@ limitations under the License.
 package check
 
 import (
+	"encoding/json"
 	"strings"
 
 	"github.com/wentaojin/transferdb/utils"
@@ -35,6 +36,14 @@ const (
 	// MySQL 字符集/排序规则
 	MySQLCharacterSet = "utf8mb4"
 	MySQLCollation    = "utf8mb4_bin"
+
+	// JSON 格式化某字段
+	ColumnsJSON      = "column"
+	IndexJSON        = "index"
+	PUConstraintJSON = "puk"
+	FKConstraintJSON = "fk"
+	CKConstraintJSON = "ck"
+	PartitionJSON    = "partition"
 )
 
 type Table struct {
@@ -98,6 +107,25 @@ type Partition struct {
 	PartitionType    string
 	SubPartitionKey  string
 	SubPartitionType string
+}
+
+func (t *Table) String(jsonType string) string {
+	var jsonStr []byte
+	switch jsonType {
+	case ColumnsJSON:
+		jsonStr, _ = json.Marshal(t.PUConstraints)
+	case PUConstraintJSON:
+		jsonStr, _ = json.Marshal(t.PUConstraints)
+	case FKConstraintJSON:
+		jsonStr, _ = json.Marshal(t.ForeignConstraints)
+	case CKConstraintJSON:
+		jsonStr, _ = json.Marshal(t.CheckConstraints)
+	case IndexJSON:
+		jsonStr, _ = json.Marshal(t.Indexes)
+	case PartitionJSON:
+		jsonStr, _ = json.Marshal(t.Partitions)
+	}
+	return string(jsonStr)
 }
 
 func NewOracleTableINFO(schemaName, tableName string, engine *service.Engine) (*Table, error) {

@@ -127,7 +127,7 @@ func IsEqualStruct(structA, structB interface{}) ([]interface{}, bool) {
 	aVal := reflect.ValueOf(structA)
 	bVal := reflect.ValueOf(structB)
 
-	if (!aVal.IsValid() && !bVal.IsValid()) || (aVal.IsNil() && bVal.IsValid()) {
+	if (!aVal.IsValid() && !bVal.IsValid()) || (aVal.IsNil() && bVal.IsNil()) {
 		return diffs, true
 	}
 

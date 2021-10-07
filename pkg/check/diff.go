@@ -144,7 +144,10 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 
 	// 表约束、索引以及分区检查
 	service.Logger.Info("check table",
-		zap.String("table pk and uk constraint check", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)))
+		zap.String("table pk and uk constraint check", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)),
+		zap.String("oracle struct", oracleTable.String(PUConstraintJSON)),
+		zap.String("mysql struct", mysqlTable.String(PUConstraintJSON)))
+
 	diffPU, isOK := utils.IsEqualStruct(oracleTable.PUConstraints, mysqlTable.PUConstraints)
 	if !isOK {
 		builder.WriteString("/*\n")
@@ -172,7 +175,10 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 	// TiDB 版本排除外键以及检查约束
 	if !isTiDB {
 		service.Logger.Info("check table",
-			zap.String("table fk constraint check", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)))
+			zap.String("table fk constraint check", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)),
+			zap.String("oracle struct", oracleTable.String(FKConstraintJSON)),
+			zap.String("mysql struct", mysqlTable.String(FKConstraintJSON)))
+
 		diffFK, isOK := utils.IsEqualStruct(oracleTable.ForeignConstraints, mysqlTable.ForeignConstraints)
 		if !isOK {
 			builder.WriteString("/*\n")
@@ -197,7 +203,10 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 		}
 		if utils.VersionOrdinal(dbVersion) > utils.VersionOrdinal(MySQLCheckConsVersion) {
 			service.Logger.Info("check table",
-				zap.String("table ck constraint check", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)))
+				zap.String("table ck constraint check", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)),
+				zap.String("oracle struct", oracleTable.String(CKConstraintJSON)),
+				zap.String("mysql struct", mysqlTable.String(CKConstraintJSON)))
+
 			diffCK, isOK := utils.IsEqualStruct(oracleTable.CheckConstraints, mysqlTable.CheckConstraints)
 			if !isOK {
 				builder.WriteString("/*\n")
@@ -218,7 +227,10 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 	}
 
 	service.Logger.Info("check table",
-		zap.String("table indexes check", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)))
+		zap.String("table indexes check", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)),
+		zap.String("oracle struct", oracleTable.String(IndexJSON)),
+		zap.String("mysql struct", mysqlTable.String(IndexJSON)))
+
 	diffIndex, isOK := utils.IsEqualStruct(oracleTable.Indexes, mysqlTable.Indexes)
 	if !isOK {
 		builder.WriteString("/*\n")
@@ -244,7 +256,10 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 	}
 
 	service.Logger.Info("check table",
-		zap.String("table partition check", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)))
+		zap.String("table partition check", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)),
+		zap.String("oracle struct", oracleTable.String(PartitionJSON)),
+		zap.String("mysql struct", mysqlTable.String(PartitionJSON)))
+
 	if mysqlTable.IsPartition && oracleTable.IsPartition {
 		diffParts, isOK := utils.IsEqualStruct(oracleTable.Partitions, mysqlTable.Partitions)
 		if !isOK {
@@ -328,7 +343,9 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 
 	if textTable.String() != "" && len(diffColumnMsgs) != 0 {
 		service.Logger.Info("check table",
-			zap.String("table column info check, generate fixed sql", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)))
+			zap.String("table column info check, generate fixed sql", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)),
+			zap.String("oracle struct", oracleTable.String(ColumnsJSON)),
+			zap.String("mysql struct", mysqlTable.String(ColumnsJSON)))
 
 		builder.WriteString("/*\n")
 		builder.WriteString(fmt.Sprintf(" oracle table columns info is different from mysql\n"))
@@ -342,7 +359,10 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 
 	if len(createColumnMetas) != 0 {
 		service.Logger.Info("check table",
-			zap.String("table column info check, generate created sql", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)))
+			zap.String("table column info check, generate created sql", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)),
+			zap.String("oracle struct", oracleTable.String(ColumnsJSON)),
+			zap.String("mysql struct", mysqlTable.String(ColumnsJSON)))
+
 		builder.WriteString("/*\n")
 		builder.WriteString(fmt.Sprintf(" oracle table columns info isn't exist in mysql, generate created sql\n"))
 		builder.WriteString("*/\n")
