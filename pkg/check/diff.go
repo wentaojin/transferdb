@@ -99,6 +99,7 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 	// 表类型检查
 	service.Logger.Info("check table",
 		zap.String("table partition type check", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)))
+
 	if oracleTable.IsPartition != mysqlTable.IsPartition {
 		builder.WriteString(fmt.Sprintf("-- oracle table [%s.%s]\n", d.SourceSchemaName, d.TableName))
 		builder.WriteString(fmt.Sprintf("-- mysql table [%s.%s]\n", d.TargetSchemaName, d.TableName))
@@ -123,6 +124,7 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 	// 表注释检查
 	service.Logger.Info("check table",
 		zap.String("table comment check", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)))
+
 	if oracleTable.TableComment != mysqlTable.TableComment {
 		builder.WriteString("/*\n")
 		builder.WriteString(fmt.Sprintf(" oracle table comment [%s]\n", oracleTable.TableComment))
@@ -134,6 +136,7 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 	// 表字符集以及排序规则检查
 	service.Logger.Info("check table",
 		zap.String("table character set and collation check", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)))
+
 	if !strings.Contains(mysqlTable.TableCharacterSet, OracleUTF8CharacterSet) || !strings.Contains(mysqlTable.TableCollation, OracleCollationBin) {
 		builder.WriteString("/*\n")
 		builder.WriteString(fmt.Sprintf(" oracle table character set [%s], collation [%s]\n", oracleTable.TableCharacterSet, oracleTable.TableCollation))
@@ -267,12 +270,12 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 		}
 	}
 
-	service.Logger.Info("check table",
-		zap.String("table partition check", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)),
-		zap.String("oracle struct", oracleTable.String(PartitionJSON)),
-		zap.String("mysql struct", mysqlTable.String(PartitionJSON)))
-
 	if mysqlTable.IsPartition && oracleTable.IsPartition {
+		service.Logger.Info("check table",
+			zap.String("table partition check", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)),
+			zap.String("oracle struct", oracleTable.String(PartitionJSON)),
+			zap.String("mysql struct", mysqlTable.String(PartitionJSON)))
+
 		addDiffParts, _, isOK := utils.IsEqualStruct(oracleTable.Partitions, mysqlTable.Partitions)
 		if !isOK {
 			builder.WriteString("/*\n")
@@ -315,6 +318,9 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 		diffColumnMsgs    []string
 		createColumnMetas []string
 	)
+
+	service.Logger.Info("check table",
+		zap.String("table column info check", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)))
 
 	for oracleColName, oracleColInfo := range oracleTable.Columns {
 		mysqlColInfo, ok := mysqlTable.Columns[oracleColName]
@@ -471,6 +477,9 @@ func OracleTableMapRuleCheck(
 	case "NUMBER":
 		switch {
 		case oracleDataScale > 0:
+			fmt.Println(oracleColInfo.ColumnInfo)
+			fmt.Println(mysqlColInfo.ColumnInfo)
+
 			addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
 			if mysqlDataType == "DECIMAL" && len(addDiffCols) == 0 && isOK {
 				return "", nil
