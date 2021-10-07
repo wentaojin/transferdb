@@ -256,25 +256,22 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 					if value.Uniqueness == "NONUNIQUE" && value.IndexType == "NORMAL" {
 						builder.WriteString(fmt.Sprintf("CREATE INDEX %s ON %s.%s(%s);\n",
 							fmt.Sprintf("idx_%s", strings.ReplaceAll(value.IndexColumn, ",", "_")), d.TargetSchemaName, d.TableName, value.IndexColumn))
-						continue
 					}
 					if value.Uniqueness == "UNIQUE" && value.IndexType == "NORMAL" {
 						builder.WriteString(fmt.Sprintf("CREATE UNIQUE INDEX %s ON %s.%s(%s);\n",
 							fmt.Sprintf("idx_%s_unique", strings.ReplaceAll(value.IndexColumn, ",", "_")), d.TargetSchemaName, d.TableName, value.IndexColumn))
-						continue
 					}
 					if !isTiDB {
 						if value.Uniqueness == "NONUNIQUE" && value.IndexType == "BITMAP" {
 							builder.WriteString(fmt.Sprintf("CREATE BITMAP INDEX %s ON %s.%s(%s);\n",
 								fmt.Sprintf("idx_%s", strings.ReplaceAll(value.IndexColumn, ",", "_")), d.TargetSchemaName, d.TableName, value.IndexColumn))
-							continue
 						}
 					}
 					if value.Uniqueness == "NONUNIQUE" && value.IndexType == "FUNCTION-BASED NORMAL" {
 						builder.WriteString(fmt.Sprintf("CREATE INDEX %s ON %s.%s(%s);\n",
 							fmt.Sprintf("idx_%s", strings.ReplaceAll(value.IndexColumn, ",", "_")), d.TargetSchemaName, d.TableName, value.ColumnExpress))
-						continue
 					}
+					continue
 				}
 				return fmt.Errorf("table index assert Index failed")
 			}
