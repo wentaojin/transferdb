@@ -598,7 +598,7 @@ func ReverseOracleTableColumnMapRule(
 			if dataScale == 0 {
 				buildInColumnType = "DATETIME"
 			}
-			buildInColumnType = fmt.Sprintf("DATETIME(%s)", dataScale)
+			buildInColumnType = fmt.Sprintf("DATETIME(%d)", dataScale)
 		} else {
 			originColumnType = dataType
 			buildInColumnType = "TEXT"
