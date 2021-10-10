@@ -122,7 +122,7 @@ func VersionOrdinal(version string) string {
 }
 
 // 用于对比 struct 是否相等
-func IsEqualStruct(structA, structB interface{}) ([]interface{}, []interface{}, bool) {
+func DiffStructArray(structA, structB interface{}) ([]interface{}, []interface{}, bool) {
 	var (
 		addDiffs    []interface{}
 		removeDiffs []interface{}

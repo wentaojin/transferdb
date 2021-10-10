@@ -133,7 +133,7 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 		builder.WriteString(fmt.Sprintf("ALTER TABLE %s.%s COMMENT '%s';\n", d.TargetSchemaName, d.TableName, oracleTable.TableComment))
 	}
 
-	// 表字符集以及排序规则检查
+	// 表级别字符集以及排序规则检查
 	service.Logger.Info("check table",
 		zap.String("table character set and collation check", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)))
 
@@ -145,14 +145,30 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 		builder.WriteString(fmt.Sprintf("ALTER TABLE %s.%s CHARACTER SET = %s, COLLATE = %s;\n", d.TargetSchemaName, d.TableName, MySQLCharacterSet, MySQLCollation))
 	}
 
+	// 表字段级别字符集以及排序规则校验 -> 基于原表字段类型以及字符集、排序规则
+	service.Logger.Info("check table",
+		zap.String("table column character set and collation check", fmt.Sprintf("%s.%s", d.TargetSchemaName, d.TableName)))
+
+	for mysqlColName, mysqlColInfo := range mysqlTable.Columns {
+		if mysqlColInfo.CharacterSet != "" || mysqlColInfo.Collation != "" {
+			if mysqlColInfo.CharacterSet != strings.ToUpper(MySQLCharacterSet) || mysqlColInfo.Collation != strings.ToUpper(MySQLCollation) {
+				builder.WriteString("/*\n")
+				builder.WriteString(fmt.Sprintf(" mysql column character set check, generate created sql\n"))
+				builder.WriteString("*/\n")
+				builder.WriteString(fmt.Sprintf("ALTER TABLE %s.%s MODIFY %s %s(%s) CHARACTER SET %s COLLATE %s;\n",
+					d.TargetSchemaName, d.TableName, mysqlColName, mysqlColInfo.DataType, mysqlColInfo.DataLength, MySQLCharacterSet, MySQLCollation))
+			}
+		}
+	}
+
 	// 表约束、索引以及分区检查
 	service.Logger.Info("check table",
 		zap.String("table pk and uk constraint check", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)),
 		zap.String("oracle struct", oracleTable.String(PUConstraintJSON)),
 		zap.String("mysql struct", mysqlTable.String(PUConstraintJSON)))
 
-	// 函数 utils.IsEqualStruct 都忽略 structA 空，但 structB 存在情况
-	addDiffPU, _, isOK := utils.IsEqualStruct(oracleTable.PUConstraints, mysqlTable.PUConstraints)
+	// 函数 utils.DiffStructArray 都忽略 structA 空，但 structB 存在情况
+	addDiffPU, _, isOK := utils.DiffStructArray(oracleTable.PUConstraints, mysqlTable.PUConstraints)
 	if !isOK {
 		builder.WriteString("/*\n")
 		builder.WriteString(" oracle table primary key and unique key\n")
@@ -185,7 +201,7 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 			zap.String("oracle struct", oracleTable.String(FKConstraintJSON)),
 			zap.String("mysql struct", mysqlTable.String(FKConstraintJSON)))
 
-		addDiffFK, _, isOK := utils.IsEqualStruct(oracleTable.ForeignConstraints, mysqlTable.ForeignConstraints)
+		addDiffFK, _, isOK := utils.DiffStructArray(oracleTable.ForeignConstraints, mysqlTable.ForeignConstraints)
 		if !isOK {
 			builder.WriteString("/*\n")
 			builder.WriteString(" oracle table foreign key\n")
@@ -216,7 +232,7 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 				zap.String("oracle struct", oracleTable.String(CKConstraintJSON)),
 				zap.String("mysql struct", mysqlTable.String(CKConstraintJSON)))
 
-			addDiffCK, _, isOK := utils.IsEqualStruct(oracleTable.CheckConstraints, mysqlTable.CheckConstraints)
+			addDiffCK, _, isOK := utils.DiffStructArray(oracleTable.CheckConstraints, mysqlTable.CheckConstraints)
 			if !isOK {
 				builder.WriteString("/*\n")
 				builder.WriteString(" oracle table check key\n")
@@ -243,7 +259,7 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 		zap.String("oracle struct", oracleTable.String(IndexJSON)),
 		zap.String("mysql struct", mysqlTable.String(IndexJSON)))
 
-	addDiffIndex, _, isOK := utils.IsEqualStruct(oracleTable.Indexes, mysqlTable.Indexes)
+	addDiffIndex, _, isOK := utils.DiffStructArray(oracleTable.Indexes, mysqlTable.Indexes)
 	if !isOK {
 		builder.WriteString("/*\n")
 		builder.WriteString(" oracle table indexes\n")
@@ -285,7 +301,7 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 			zap.String("oracle struct", oracleTable.String(PartitionJSON)),
 			zap.String("mysql struct", mysqlTable.String(PartitionJSON)))
 
-		addDiffParts, _, isOK := utils.IsEqualStruct(oracleTable.Partitions, mysqlTable.Partitions)
+		addDiffParts, _, isOK := utils.DiffStructArray(oracleTable.Partitions, mysqlTable.Partitions)
 		if !isOK {
 			builder.WriteString("/*\n")
 			builder.WriteString(" oracle table partitions\n")
@@ -435,10 +451,6 @@ func OracleTableMapRuleCheck(
 	if err != nil {
 		return "", fmt.Errorf("oracle schema [%s] table [%s] column data_scale string to int failed: %v", sourceSchema, tableName, err)
 	}
-	oracleColumnCharLength, err := strconv.Atoi(oracleColInfo.CharLength)
-	if err != nil {
-		return "", fmt.Errorf("oracle schema [%s] table [%s] column char_length string to int failed: %v", sourceSchema, tableName, err)
-	}
 
 	mysqlDataLength, err := strconv.Atoi(mysqlColInfo.DataLength)
 	if err != nil {
@@ -453,32 +465,27 @@ func OracleTableMapRuleCheck(
 	if err != nil {
 		return "", fmt.Errorf("mysql schema table [%s.%s] reverser column data_scale string to int failed: %v", targetSchema, tableName, err)
 	}
-
+	mysqlDatetimePrecision, err := strconv.Atoi(mysqlColInfo.DatetimePrecision)
+	if err != nil {
+		return "", fmt.Errorf("mysql schema table [%s.%s] reverser column datetime_precision string to int failed: %v", targetSchema, tableName, err)
+	}
 	// 字段默认值、注释判断
 	mysqlDataType := strings.ToUpper(mysqlColInfo.DataType)
 	oracleDataType := strings.ToUpper(oracleColInfo.DataType)
 	var (
-		oracleDataDefault    string
-		oracleColumnComment  string
 		fixedMsg             string
 		oracleColumnCharUsed string
 	)
-	if oracleColInfo.DataDefault == "" {
-		oracleDataDefault = "NULL"
-	} else {
-		oracleDataDefault = oracleColInfo.DataDefault
-	}
-	if oracleColInfo.Comment == "" {
-		oracleColumnComment = ""
-	} else {
-		oracleColumnComment = oracleColInfo.Comment
-	}
 
 	if oracleColInfo.CharUsed == "C" {
 		oracleColumnCharUsed = "char"
 	} else {
 		oracleColumnCharUsed = "bytes"
 	}
+
+	oracleColMeta := generateColumnNullCommentDefaultMeta(oracleColInfo.NULLABLE, oracleColInfo.Comment, oracleColInfo.DataDefault)
+	mysqlColMeta := generateColumnNullCommentDefaultMeta(mysqlColInfo.NULLABLE, mysqlColInfo.Comment, mysqlColInfo.DataDefault)
+
 	// 字段类型判断
 	// CHARACTER SET %s COLLATE %s（OnLy 作用字符类型）
 	switch oracleDataType {
@@ -486,385 +493,334 @@ func OracleTableMapRuleCheck(
 	case "NUMBER":
 		switch {
 		case oracleDataScale > 0:
-			addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-			if mysqlDataType == "DECIMAL" && len(addDiffCols) == 0 && isOK {
+			if mysqlDataType == "DECIMAL" && oracleDataPrecision == mysqlDataPrecision && oracleDataScale == mysqlDataScale && oracleColMeta == mysqlColMeta {
 				return "", nil
 			}
 			if err := textTable.AddRow(
 				columnName,
-				fmt.Sprintf("NUMBER(%d,%d) %s DEFAULT %s COMMENT '%s'", oracleDataPrecision, oracleDataScale, oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment),
-				fmt.Sprintf("%s(%d,%d) %s DEFAULT %s COMMENT '%s'", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColInfo.NULLABLE, mysqlColInfo.DataDefault, mysqlColInfo.Comment),
-				fmt.Sprintf("DECIMAL(%d,%d) %s DEFAULT %s COMMENT '%s'", oracleDataPrecision, oracleDataScale, oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment)); err != nil {
+				fmt.Sprintf("NUMBER(%d,%d) %s", oracleDataPrecision, oracleDataScale, oracleColMeta),
+				fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
+				fmt.Sprintf("DECIMAL(%d,%d) %s", oracleDataPrecision, oracleDataScale, oracleColMeta)); err != nil {
 				return "", err
 			}
 
-			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s DEFAULT %s COMMENT '%s';\n",
+			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 				targetSchema,
 				tableName,
 				columnName,
 				fmt.Sprintf("DECIMAL(%d,%d)", oracleDataPrecision, oracleDataScale),
-				oracleColInfo.NULLABLE,
-				oracleDataDefault,
-				oracleColumnComment,
+				oracleColMeta,
 			)
 		case oracleDataScale == 0:
 			switch {
 			case oracleDataPrecision == 0 && oracleDataScale == 0:
-				//MySQL column type  NUMERIC would convert to DECIMAL(11,0)
-				//buildInColumnType = "NUMERIC"
-				addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-				if mysqlDataType == "DECIMAL" && len(addDiffCols) == 0 && isOK {
+				// MySQL column type  NUMERIC would convert to DECIMAL(11,0)
+				// buildInColumnType = "NUMERIC"
+				if mysqlDataType == "DECIMAL" && mysqlDataPrecision == 11 && mysqlDataScale == oracleDataScale && oracleColMeta == mysqlColMeta {
 					return "", nil
 				}
 				if err := textTable.AddRow(
 					columnName,
-					fmt.Sprintf("NUMBER %s DEFAULT %s COMMENT '%s'", oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment),
-					fmt.Sprintf("%s(%d,%d) %s DEFAULT %s COMMENT '%s'", mysqlDataType, mysqlDataPrecision,
-						mysqlDataScale, mysqlColInfo.NULLABLE, mysqlColInfo.DataDefault, mysqlColInfo.Comment),
-					fmt.Sprintf("DECIMAL(11,0) %s DEFAULT %s COMMENT '%s'", oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment)); err != nil {
+					fmt.Sprintf("NUMBER %s", oracleColMeta),
+					fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
+					fmt.Sprintf("DECIMAL(11,0) %s", oracleColMeta)); err != nil {
 					return "", err
 				}
 
-				fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s DEFAULT %s COMMENT '%s';\n",
+				fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 					targetSchema,
 					tableName,
 					columnName,
 					"DECIMAL(11,0)",
-					oracleColInfo.NULLABLE,
-					oracleDataDefault,
-					oracleColumnComment,
+					oracleColMeta,
 				)
 			case oracleDataPrecision >= 1 && oracleDataPrecision < 3:
-				addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-				if mysqlDataType == "TINYINT" && len(addDiffCols) == 0 && isOK {
+				if mysqlDataType == "TINYINT" && mysqlDataPrecision >= 3 && mysqlDataScale == oracleDataScale && oracleColMeta == mysqlColMeta {
 					return "", nil
 				}
 				if err := textTable.AddRow(
 					columnName,
-					fmt.Sprintf("NUMBER(%d) %s DEFAULT %s COMMENT '%s'", oracleDataPrecision, oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment),
-					fmt.Sprintf("%s(%d,%d) %s DEFAULT %s COMMENT '%s'", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColInfo.NULLABLE, mysqlColInfo.DataDefault, mysqlColInfo.Comment),
-					fmt.Sprintf("TINYINT %s DEFAULT %s COMMENT '%s'", oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment)); err != nil {
+					fmt.Sprintf("NUMBER(%d) %s", oracleDataPrecision, oracleColMeta),
+					fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataPrecision, mysqlColMeta),
+					fmt.Sprintf("TINYINT %s", oracleColMeta)); err != nil {
 					return "", err
 				}
-				fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s DEFAULT %s COMMENT '%s';\n",
+				fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 					targetSchema,
 					tableName,
 					columnName,
 					"TINYINT",
-					oracleColInfo.NULLABLE,
-					oracleDataDefault,
-					oracleColumnComment,
+					oracleColMeta,
 				)
 			case oracleDataPrecision >= 3 && oracleDataPrecision < 5:
-				addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-				if mysqlDataType == "SMALLINT" && len(addDiffCols) == 0 && isOK {
+				if mysqlDataType == "SMALLINT" && mysqlDataPrecision >= 5 && mysqlDataScale == oracleDataScale && oracleColMeta == mysqlColMeta {
 					return "", nil
 				}
 				if err := textTable.AddRow(
 					columnName,
-					fmt.Sprintf("NUMBER(%d) %s DEFAULT %s COMMENT '%s'", oracleDataPrecision, oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment),
-					fmt.Sprintf("%s(%d,%d) %s DEFAULT %s COMMENT '%s'", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColInfo.NULLABLE, mysqlColInfo.DataDefault, mysqlColInfo.Comment),
-					fmt.Sprintf("SMALLINT %s DEFAULT %s COMMENT '%s'", oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment)); err != nil {
+					fmt.Sprintf("NUMBER(%d) %s", oracleDataPrecision, oracleColMeta),
+					fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataPrecision, mysqlColMeta),
+					fmt.Sprintf("SMALLINT %s", oracleColMeta)); err != nil {
 					return "", err
 				}
-				fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s DEFAULT %s COMMENT '%s';\n",
+				fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 					targetSchema,
 					tableName,
 					columnName,
 					"SMALLINT",
-					oracleColInfo.NULLABLE,
-					oracleDataDefault,
-					oracleColumnComment,
+					oracleColMeta,
 				)
 			case oracleDataPrecision >= 5 && oracleDataPrecision < 9:
-				addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-				if mysqlDataType == "INT" && len(addDiffCols) == 0 && isOK {
+				if mysqlDataType == "INT" && mysqlDataPrecision >= 9 && mysqlDataScale == oracleDataScale && oracleColMeta == mysqlColMeta {
 					return "", nil
 				}
 				if err := textTable.AddRow(
 					columnName,
-					fmt.Sprintf("NUMBER(%d) %s DEFAULT %s COMMENT '%s'", oracleDataPrecision, oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment),
-					fmt.Sprintf("%s(%d,%d) %s DEFAULT %s COMMENT '%s'", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColInfo.NULLABLE, mysqlColInfo.DataDefault, mysqlColInfo.Comment),
-					fmt.Sprintf("INT %s DEFAULT %s COMMENT '%s'", oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment)); err != nil {
+					fmt.Sprintf("NUMBER(%d) %s", oracleDataPrecision, oracleColMeta),
+					fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataPrecision, mysqlColMeta),
+					fmt.Sprintf("INT %s", oracleColMeta)); err != nil {
 					return "", err
 				}
-				fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s DEFAULT %s COMMENT '%s';\n",
+				fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 					targetSchema,
 					tableName,
 					columnName,
 					"INT",
-					oracleColInfo.NULLABLE,
-					oracleDataDefault,
-					oracleColumnComment,
+					oracleColMeta,
 				)
 			case oracleDataPrecision >= 9 && oracleDataPrecision < 19:
-				addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-				if mysqlDataType == "BIGINT" && len(addDiffCols) == 0 && isOK {
+				if mysqlDataType == "BIGINT" && mysqlDataPrecision >= 19 && mysqlDataScale == oracleDataScale && oracleColMeta == mysqlColMeta {
 					return "", nil
 				}
 				if err := textTable.AddRow(
 					columnName,
-					fmt.Sprintf("NUMBER(%d) %s DEFAULT %s COMMENT '%s'", oracleDataPrecision, oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment),
-					fmt.Sprintf("%s(%d,%d) %s DEFAULT %s COMMENT '%s'", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColInfo.NULLABLE, mysqlColInfo.DataDefault, mysqlColInfo.Comment),
-					fmt.Sprintf("BIGINT %s DEFAULT %s COMMENT '%s'", oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment)); err != nil {
+					fmt.Sprintf("NUMBER(%d) %s", oracleDataPrecision, oracleColMeta),
+					fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataPrecision, mysqlColMeta),
+					fmt.Sprintf("BIGINT %s", oracleColMeta)); err != nil {
 					return "", err
 				}
-				fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s DEFAULT %s COMMENT '%s';\n",
+				fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 					targetSchema,
 					tableName,
 					columnName,
 					"BIGINT",
-					oracleColInfo.NULLABLE,
-					oracleDataDefault,
-					oracleColumnComment,
+					oracleColMeta,
 				)
 			case oracleDataPrecision >= 19 && oracleDataPrecision <= 38:
-				addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-				if mysqlDataType == "DECIMAL" && len(addDiffCols) == 0 && isOK {
+				if mysqlDataType == "DECIMAL" && mysqlDataPrecision >= 19 && mysqlDataPrecision <= 38 && mysqlDataScale == oracleDataScale && oracleColMeta == mysqlColMeta {
 					return "", nil
 				}
 				if err := textTable.AddRow(
 					columnName,
-					fmt.Sprintf("NUMBER(%d) %s DEFAULT %s COMMENT '%s'", oracleDataPrecision, oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment),
-					fmt.Sprintf("%s(%d,%d) %s DEFAULT %s COMMENT '%s'", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColInfo.NULLABLE, mysqlColInfo.DataDefault, mysqlColInfo.Comment),
-					fmt.Sprintf("DECIMAL(%d) %s DEFAULT %s COMMENT '%s'", oracleDataPrecision, oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment)); err != nil {
+					fmt.Sprintf("NUMBER(%d) %s", oracleDataPrecision, oracleColMeta),
+					fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataPrecision, mysqlColMeta),
+					fmt.Sprintf("DECIMAL(%d) %s", oracleDataPrecision, oracleColMeta)); err != nil {
 					return "", err
 				}
-				fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s DEFAULT %s COMMENT '%s';\n",
+				fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 					targetSchema,
 					tableName,
 					columnName,
 					fmt.Sprintf("DECIMAL(%d)", oracleDataPrecision),
-					oracleColInfo.NULLABLE,
-					oracleDataDefault,
-					oracleColumnComment,
+					oracleColMeta,
 				)
 			default:
-				addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-				if mysqlDataType == "DECIMAL" && len(addDiffCols) == 0 && isOK {
+				if mysqlDataType == "DECIMAL" && mysqlDataPrecision == oracleDataPrecision && mysqlDataScale == 4 && oracleColMeta == mysqlColMeta {
 					return "", nil
 				}
 				if err := textTable.AddRow(
 					columnName,
-					fmt.Sprintf("NUMBER(%d) %s DEFAULT %s COMMENT '%s'", oracleDataPrecision, oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment),
-					fmt.Sprintf("%s(%d,%d) %s DEFAULT %s COMMENT '%s'", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColInfo.NULLABLE, mysqlColInfo.DataDefault, mysqlColInfo.Comment),
-					fmt.Sprintf("DECIMAL(%d,4) %s DEFAULT %s COMMENT '%s'", oracleDataPrecision, oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment)); err != nil {
+					fmt.Sprintf("NUMBER(%d) %s", oracleDataPrecision, oracleColMeta),
+					fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
+					fmt.Sprintf("DECIMAL(%d,4) %s", oracleDataPrecision, oracleColMeta)); err != nil {
 					return "", err
 				}
-				fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s DEFAULT %s COMMENT '%s';\n",
+				fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 					targetSchema,
 					tableName,
 					columnName,
 					fmt.Sprintf("DECIMAL(%d,4)", oracleDataPrecision),
-					oracleColInfo.NULLABLE,
-					oracleDataDefault,
-					oracleColumnComment,
+					oracleColMeta,
 				)
 			}
 		}
 		return fixedMsg, nil
 	case "DECIMAL":
-		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "DECIMAL" && len(addDiffCols) == 0 && isOK {
-			return "", nil
-		}
 		switch {
 		case oracleDataScale == 0 && oracleDataPrecision == 0:
-			if err := textTable.AddRow(
-				columnName,
-				fmt.Sprintf("DECIMAL %s DEFAULT %s COMMENT '%s'", oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment),
-				fmt.Sprintf("%s(%d,%d) %s DEFAULT %s COMMENT '%s'", mysqlDataType, mysqlDataPrecision,
-					mysqlDataScale, mysqlColInfo.NULLABLE, mysqlColInfo.DataDefault, mysqlColInfo.Comment),
-				fmt.Sprintf("DECIMAL %s DEFAULT %s COMMENT '%s'", oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment)); err != nil {
-				return "", err
-			}
-
-			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s DEFAULT %s COMMENT '%s';\n",
-				targetSchema,
-				tableName,
-				columnName,
-				"DECIMAL",
-				oracleColInfo.NULLABLE,
-				oracleDataDefault,
-				oracleColumnComment,
-			)
-			return fixedMsg, nil
-		default:
-			if err := textTable.AddRow(
-				columnName,
-				fmt.Sprintf("DECIMAL(%d,%d) %s DEFAULT %s COMMENT '%s'", oracleDataPrecision, oracleDataScale, oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment),
-				fmt.Sprintf("%s(%d,%d) %s DEFAULT %s COMMENT '%s'", mysqlDataType, mysqlDataPrecision,
-					mysqlDataScale, mysqlColInfo.NULLABLE, mysqlColInfo.DataDefault, mysqlColInfo.Comment),
-				fmt.Sprintf("DECIMAL(%d,%d) %s DEFAULT %s COMMENT '%s'", oracleDataPrecision, oracleDataScale, oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment)); err != nil {
-				return "", err
-			}
-
-			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s DEFAULT %s COMMENT '%s';\n",
-				targetSchema,
-				tableName,
-				columnName,
-				fmt.Sprintf("DECIMAL(%d,%d)", oracleDataPrecision, oracleDataScale),
-				oracleColInfo.NULLABLE,
-				oracleDataDefault,
-				oracleColumnComment,
-			)
-			return fixedMsg, nil
-		}
-	case "DEC":
-		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "DECIMAL" && len(addDiffCols) == 0 && isOK {
-			return "", nil
-		}
-		switch {
-		case oracleDataScale == 0 && oracleDataPrecision == 0:
-			if err := textTable.AddRow(
-				columnName,
-				fmt.Sprintf("DECIMAL %s DEFAULT %s COMMENT '%s'", oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment),
-				fmt.Sprintf("%s(%d,%d) %s DEFAULT %s COMMENT '%s'", mysqlDataType, mysqlDataPrecision,
-					mysqlDataScale, mysqlColInfo.NULLABLE, mysqlColInfo.DataDefault, mysqlColInfo.Comment),
-				fmt.Sprintf("DECIMAL %s DEFAULT %s COMMENT '%s'", oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment)); err != nil {
-				return "", err
-			}
-
-			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s DEFAULT %s COMMENT '%s';\n",
-				targetSchema,
-				tableName,
-				columnName,
-				"DECIMAL",
-				oracleColInfo.NULLABLE,
-				oracleDataDefault,
-				oracleColumnComment,
-			)
-			return fixedMsg, nil
-		default:
-			if err := textTable.AddRow(
-				columnName,
-				fmt.Sprintf("DECIMAL(%d,%d) %s DEFAULT %s COMMENT '%s'", oracleDataPrecision, oracleDataScale, oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment),
-				fmt.Sprintf("%s(%d,%d) %s DEFAULT %s COMMENT '%s'", mysqlDataType, mysqlDataPrecision,
-					mysqlDataScale, mysqlColInfo.NULLABLE, mysqlColInfo.DataDefault, mysqlColInfo.Comment),
-				fmt.Sprintf("DECIMAL(%d,%d) %s DEFAULT %s COMMENT '%s'", oracleDataPrecision, oracleDataScale, oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment)); err != nil {
-				return "", err
-			}
-
-			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s DEFAULT %s COMMENT '%s';\n",
-				targetSchema,
-				tableName,
-				columnName,
-				fmt.Sprintf("DECIMAL(%d,%d)", oracleDataPrecision, oracleDataScale),
-				oracleColInfo.NULLABLE,
-				oracleDataDefault,
-				oracleColumnComment,
-			)
-			return fixedMsg, nil
-		}
-	case "DOUBLE PRECISION":
-		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "DOUBLE PRECISION" && len(addDiffCols) == 0 && isOK {
-			return "", nil
-		}
-		if err := textTable.AddRow(
-			columnName,
-			fmt.Sprintf("DOUBLE PRECISION %s DEFAULT %s COMMENT '%s'", oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment),
-			fmt.Sprintf("%s(%d,%d) %s DEFAULT %s COMMENT '%s'", mysqlDataType, mysqlDataPrecision,
-				mysqlDataScale, mysqlColInfo.NULLABLE, mysqlColInfo.DataDefault, mysqlColInfo.Comment),
-			fmt.Sprintf("DOUBLE PRECISION %s DEFAULT %s COMMENT '%s'", oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment)); err != nil {
-			return "", err
-		}
-
-		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s DEFAULT %s COMMENT '%s';\n",
-			targetSchema,
-			tableName,
-			columnName,
-			"DOUBLE PRECISION",
-			oracleColInfo.NULLABLE,
-			oracleDataDefault,
-			oracleColumnComment,
-		)
-		return fixedMsg, nil
-	case "FLOAT":
-		if oracleDataPrecision == 0 {
-			addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-			if mysqlDataType == "FLOAT" && len(addDiffCols) == 0 && isOK {
+			if mysqlDataType == "DECIMAL" && mysqlDataPrecision == 10 && mysqlDataScale == oracleDataScale && oracleColMeta == mysqlColMeta {
 				return "", nil
 			}
 			if err := textTable.AddRow(
 				columnName,
-				fmt.Sprintf("FLOAT %s DEFAULT %s COMMENT '%s'", oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment),
-				fmt.Sprintf("%s(%d,%d) %s DEFAULT %s COMMENT '%s'", mysqlDataType, mysqlDataPrecision,
-					mysqlDataScale, mysqlColInfo.NULLABLE, mysqlColInfo.DataDefault, mysqlColInfo.Comment),
-				fmt.Sprintf("FLOAT %s DEFAULT %s COMMENT '%s'", oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment)); err != nil {
+				fmt.Sprintf("DECIMAL %s", oracleColMeta),
+				fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
+				fmt.Sprintf("DECIMAL %s", oracleColMeta)); err != nil {
 				return "", err
 			}
 
-			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s DEFAULT %s COMMENT '%s';\n",
+			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
+				targetSchema,
+				tableName,
+				columnName,
+				"DECIMAL",
+				oracleColMeta,
+			)
+			return fixedMsg, nil
+		default:
+			if mysqlDataType == "DECIMAL" && mysqlDataPrecision == oracleDataPrecision && mysqlDataScale == oracleDataScale && oracleColMeta == mysqlColMeta {
+				return "", nil
+			}
+			if err := textTable.AddRow(
+				columnName,
+				fmt.Sprintf("DECIMAL(%d,%d) %s", oracleDataPrecision, oracleDataScale, oracleColMeta),
+				fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
+				fmt.Sprintf("DECIMAL(%d,%d) %s", oracleDataPrecision, oracleDataScale, oracleColMeta)); err != nil {
+				return "", err
+			}
+
+			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
+				targetSchema,
+				tableName,
+				columnName,
+				fmt.Sprintf("DECIMAL(%d,%d)", oracleDataPrecision, oracleDataScale),
+				oracleColMeta,
+			)
+			return fixedMsg, nil
+		}
+	case "DEC":
+		switch {
+		case oracleDataScale == 0 && oracleDataPrecision == 0:
+			if mysqlDataType == "DECIMAL" && mysqlDataPrecision == 10 && mysqlDataScale == oracleDataScale && oracleColMeta == mysqlColMeta {
+				return "", nil
+			}
+			if err := textTable.AddRow(
+				columnName,
+				fmt.Sprintf("DECIMAL %s", oracleColMeta),
+				fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
+				fmt.Sprintf("DECIMAL %s", oracleColMeta)); err != nil {
+				return "", err
+			}
+
+			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
+				targetSchema,
+				tableName,
+				columnName,
+				"DECIMAL",
+				oracleColMeta,
+			)
+			return fixedMsg, nil
+		default:
+			if mysqlDataType == "DECIMAL" && mysqlDataPrecision == oracleDataPrecision && mysqlDataScale == oracleDataScale && oracleColMeta == mysqlColMeta {
+				return "", nil
+			}
+			if err := textTable.AddRow(
+				columnName,
+				fmt.Sprintf("DECIMAL(%d,%d) %s", oracleDataPrecision, oracleDataScale, oracleColMeta),
+				fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
+				fmt.Sprintf("DECIMAL(%d,%d) %s", oracleDataPrecision, oracleDataScale, oracleColMeta)); err != nil {
+				return "", err
+			}
+
+			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
+				targetSchema,
+				tableName,
+				columnName,
+				fmt.Sprintf("DECIMAL(%d,%d)", oracleDataPrecision, oracleDataScale),
+				oracleColMeta,
+			)
+			return fixedMsg, nil
+		}
+	case "DOUBLE PRECISION":
+		if mysqlDataType == "DOUBLE" && mysqlDataPrecision == 22 && mysqlDataScale == 0 && oracleColMeta == mysqlColMeta {
+			return "", nil
+		}
+		if err := textTable.AddRow(
+			columnName,
+			fmt.Sprintf("DOUBLE PRECISION %s", oracleColMeta),
+			fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
+			fmt.Sprintf("DOUBLE PRECISION %s", oracleColMeta)); err != nil {
+			return "", err
+		}
+
+		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
+			targetSchema,
+			tableName,
+			columnName,
+			"DOUBLE PRECISION",
+			oracleColMeta,
+		)
+		return fixedMsg, nil
+	case "FLOAT":
+		if oracleDataPrecision == 0 {
+			if mysqlDataType == "FLOAT" && mysqlDataPrecision == 12 && mysqlDataScale == 0 && oracleColMeta == mysqlColMeta {
+				return "", nil
+			}
+			if err := textTable.AddRow(
+				columnName,
+				fmt.Sprintf("FLOAT %s", oracleColMeta),
+				fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
+				fmt.Sprintf("FLOAT %s", oracleColMeta)); err != nil {
+				return "", err
+			}
+
+			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 				targetSchema,
 				tableName,
 				columnName,
 				"FLOAT",
-				oracleColInfo.NULLABLE,
-				oracleDataDefault,
-				oracleColumnComment,
+				oracleColMeta,
 			)
 			return fixedMsg, nil
 		}
-		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "DOUBLE" && len(addDiffCols) == 0 && isOK {
+		if mysqlDataType == "DOUBLE" && mysqlDataPrecision == 22 && mysqlDataScale == 0 && oracleColMeta == mysqlColMeta {
 			return "", nil
 		}
 		if err := textTable.AddRow(
 			columnName,
-			fmt.Sprintf("FLOAT %s DEFAULT %s COMMENT '%s'", oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment),
-			fmt.Sprintf("%s(%d,%d) %s DEFAULT %s COMMENT '%s'", mysqlDataType, mysqlDataPrecision,
-				mysqlDataScale, mysqlColInfo.NULLABLE, mysqlColInfo.DataDefault, mysqlColInfo.Comment),
-			fmt.Sprintf("DOUBLE %s DEFAULT %s COMMENT '%s'", oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment)); err != nil {
+			fmt.Sprintf("FLOAT %s", oracleColMeta),
+			fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
+			fmt.Sprintf("DOUBLE %s", oracleColMeta)); err != nil {
 			return "", err
 		}
 
-		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s DEFAULT %s COMMENT '%s';\n",
+		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 			targetSchema,
 			tableName,
 			columnName,
 			"DOUBLE",
-			oracleColInfo.NULLABLE,
-			oracleDataDefault,
-			oracleColumnComment,
+			oracleColMeta,
 		)
 		return fixedMsg, nil
 	case "INTEGER":
-		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "INT" && len(addDiffCols) == 0 && isOK {
+		if mysqlDataType == "INT" && mysqlDataPrecision >= 10 && mysqlDataScale == 0 && oracleColMeta == mysqlColMeta {
 			return "", nil
 		}
 		if err := textTable.AddRow(
 			columnName,
-			fmt.Sprintf("INTEGER %s DEFAULT %s COMMENT '%s'", oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment),
-			fmt.Sprintf("%s(%d,%d) %s DEFAULT %s COMMENT '%s'", mysqlDataType, mysqlDataPrecision,
-				mysqlDataScale, mysqlColInfo.NULLABLE, mysqlColInfo.DataDefault, mysqlColInfo.Comment),
-			fmt.Sprintf("INT %s DEFAULT %s COMMENT '%s'", oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment)); err != nil {
+			fmt.Sprintf("INTEGER %s", oracleColMeta),
+			fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
+			fmt.Sprintf("INT %s", oracleColMeta)); err != nil {
 			return "", err
 		}
 
-		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s DEFAULT %s COMMENT '%s';\n",
+		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 			targetSchema,
 			tableName,
 			columnName,
 			"INT",
-			oracleColInfo.NULLABLE,
-			oracleDataDefault,
-			oracleColumnComment,
+			oracleColMeta,
 		)
 		return fixedMsg, nil
 	case "INT":
-		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "INT" && len(addDiffCols) == 0 && isOK {
+		if mysqlDataType == "INT" && mysqlDataPrecision >= 10 && mysqlDataScale == 0 && oracleColMeta == mysqlColMeta {
 			return "", nil
 		}
 		if err := textTable.AddRow(
 			columnName,
-			fmt.Sprintf("INTEGER %s DEFAULT %s COMMENT '%s'", oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment),
-			fmt.Sprintf("%s(%d,%d) %s DEFAULT %s COMMENT '%s'", mysqlDataType, mysqlDataPrecision,
-				mysqlDataScale, mysqlColInfo.NULLABLE, mysqlColInfo.DataDefault, mysqlColInfo.Comment),
-			fmt.Sprintf("INT %s DEFAULT %s COMMENT '%s'", oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment)); err != nil {
+			fmt.Sprintf("INT %s", oracleColMeta),
+			fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
+			fmt.Sprintf("INT %s", oracleColMeta)); err != nil {
 			return "", err
 		}
 
@@ -873,537 +829,436 @@ func OracleTableMapRuleCheck(
 			tableName,
 			columnName,
 			"INT",
-			oracleColInfo.NULLABLE,
-			oracleDataDefault,
-			oracleColumnComment,
+			oracleColMeta,
 		)
 		return fixedMsg, nil
 	case "REAL":
-		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "DOUBLE" && len(addDiffCols) == 0 && isOK {
+		if mysqlDataType == "DOUBLE" && mysqlDataPrecision == 22 && mysqlDataScale == 0 && oracleColMeta == mysqlColMeta {
 			return "", nil
 		}
 		if err := textTable.AddRow(
 			columnName,
-			fmt.Sprintf("REAL %s DEFAULT %s COMMENT '%s'", oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment),
-			fmt.Sprintf("%s(%d,%d) %s DEFAULT %s COMMENT '%s'", mysqlDataType, mysqlDataPrecision,
-				mysqlDataScale, mysqlColInfo.NULLABLE, mysqlColInfo.DataDefault, mysqlColInfo.Comment),
-			fmt.Sprintf("DOUBLE %s DEFAULT %s COMMENT '%s'", oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment)); err != nil {
+			fmt.Sprintf("REAL %s", oracleColMeta),
+			fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
+			fmt.Sprintf("DOUBLE %s", oracleColMeta)); err != nil {
 			return "", err
 		}
 
-		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s DEFAULT %s COMMENT '%s';\n",
+		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 			targetSchema,
 			tableName,
 			columnName,
 			"DOUBLE",
-			oracleColInfo.NULLABLE,
-			oracleDataDefault,
-			oracleColumnComment,
+			oracleColMeta,
 		)
 		return fixedMsg, nil
 	case "NUMERIC":
-		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "NUMERIC" && len(addDiffCols) == 0 && isOK {
+		if mysqlDataType == "DECIMAL" && mysqlDataPrecision == oracleDataPrecision && mysqlDataScale == oracleDataScale && oracleColMeta == mysqlColMeta {
 			return "", nil
 		}
 		if err := textTable.AddRow(
 			columnName,
-			fmt.Sprintf("NUMERIC(%d,%d) %s DEFAULT %s COMMENT '%s'", oracleDataPrecision, oracleDataScale, oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment),
-			fmt.Sprintf("%s(%d,%d) %s DEFAULT %s COMMENT '%s'", mysqlDataType, mysqlDataPrecision,
-				mysqlDataScale, mysqlColInfo.NULLABLE, mysqlColInfo.DataDefault, mysqlColInfo.Comment),
-			fmt.Sprintf("NUMERIC(%d,%d) %s DEFAULT %s COMMENT '%s'", oracleDataPrecision, oracleDataScale, oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment)); err != nil {
+			fmt.Sprintf("NUMERIC(%d,%d) %s", oracleDataPrecision, oracleDataScale, oracleColMeta),
+			fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
+			fmt.Sprintf("DECIMAL(%d,%d) %s", oracleDataPrecision, oracleDataScale, oracleColMeta)); err != nil {
 			return "", err
 		}
 
-		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s DEFAULT %s COMMENT '%s';\n",
+		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 			targetSchema,
 			tableName,
 			columnName,
-			fmt.Sprintf("NUMERIC(%d,%d)", oracleDataPrecision, oracleDataScale),
-			oracleColInfo.NULLABLE,
-			oracleDataDefault,
-			oracleColumnComment,
+			fmt.Sprintf("DECIMAL(%d,%d)", oracleDataPrecision, oracleDataScale),
+			oracleColMeta,
 		)
 		return fixedMsg, nil
 	case "BINARY_FLOAT":
-		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "DOUBLE" && len(addDiffCols) == 0 && isOK {
+		if mysqlDataType == "DOUBLE" && mysqlDataPrecision == 22 && mysqlDataScale == 0 && oracleColMeta == mysqlColMeta {
 			return "", nil
 		}
 		if err := textTable.AddRow(
 			columnName,
-			fmt.Sprintf("BINARY_FLOAT %s DEFAULT %s COMMENT '%s'", oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment),
-			fmt.Sprintf("%s(%d,%d) %s DEFAULT %s COMMENT '%s'", mysqlDataType, mysqlDataPrecision,
-				mysqlDataScale, mysqlColInfo.NULLABLE, mysqlColInfo.DataDefault, mysqlColInfo.Comment),
-			fmt.Sprintf("DOUBLE %s DEFAULT %s COMMENT '%s'", oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment)); err != nil {
+			fmt.Sprintf("BINARY_FLOAT %s", oracleColMeta),
+			fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
+			fmt.Sprintf("DOUBLE %s", oracleColMeta)); err != nil {
 			return "", err
 		}
 
-		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s DEFAULT %s COMMENT '%s';\n",
+		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 			targetSchema,
 			tableName,
 			columnName,
 			"DOUBLE",
-			oracleColInfo.NULLABLE,
-			oracleDataDefault,
-			oracleColumnComment,
+			oracleColMeta,
 		)
 		return fixedMsg, nil
 	case "BINARY_DOUBLE":
-		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "DOUBLE" && len(addDiffCols) == 0 && isOK {
+		if mysqlDataType == "DOUBLE" && mysqlDataPrecision == 22 && mysqlDataScale == 0 && oracleColMeta == mysqlColMeta {
 			return "", nil
 		}
 		if err := textTable.AddRow(
 			columnName,
-			fmt.Sprintf("BINARY_DOUBLE %s DEFAULT %s COMMENT '%s'", oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment),
-			fmt.Sprintf("%s(%d,%d) %s DEFAULT %s COMMENT '%s'", mysqlDataType, mysqlDataPrecision,
-				mysqlDataScale, mysqlColInfo.NULLABLE, mysqlColInfo.DataDefault, mysqlColInfo.Comment),
-			fmt.Sprintf("DOUBLE %s DEFAULT %s COMMENT '%s'", oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment)); err != nil {
+			fmt.Sprintf("BINARY_DOUBLE %s", oracleColMeta),
+			fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
+			fmt.Sprintf("DOUBLE %s", oracleColMeta)); err != nil {
 			return "", err
 		}
 
-		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s DEFAULT %s COMMENT '%s';\n",
+		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 			targetSchema,
 			tableName,
 			columnName,
 			"DOUBLE",
-			oracleColInfo.NULLABLE,
-			oracleDataDefault,
-			oracleColumnComment,
+			oracleColMeta,
 		)
 		return fixedMsg, nil
 	case "SMALLINT":
-		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "DECIMAL" && len(addDiffCols) == 0 && isOK {
+		if mysqlDataType == "DECIMAL" && mysqlDataPrecision == 38 && mysqlDataScale == 0 && oracleColMeta == mysqlColMeta {
 			return "", nil
 		}
 		if err := textTable.AddRow(
 			columnName,
-			fmt.Sprintf("SMALLINT %s DEFAULT %s COMMENT '%s'", oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment),
-			fmt.Sprintf("%s(%d,%d) %s DEFAULT %s COMMENT '%s'", mysqlDataType, mysqlDataPrecision,
-				mysqlDataScale, mysqlColInfo.NULLABLE, mysqlColInfo.DataDefault, mysqlColInfo.Comment),
-			fmt.Sprintf("DECIMAL(38) %s DEFAULT %s COMMENT '%s'", oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment)); err != nil {
+			fmt.Sprintf("SMALLINT %s", oracleColMeta),
+			fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
+			fmt.Sprintf("DECIMAL(38) %s", oracleColMeta)); err != nil {
 			return "", err
 		}
 
-		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s DEFAULT %s COMMENT '%s';\n",
+		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 			targetSchema,
 			tableName,
 			columnName,
 			"DECIMAL(38)",
-			oracleColInfo.NULLABLE,
-			oracleDataDefault,
-			oracleColumnComment,
+			oracleColMeta,
 		)
 		return fixedMsg, nil
 
 	// 字符
 	case "BFILE":
-		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "VARCHAR" && len(addDiffCols) == 0 && isOK {
+		if mysqlDataType == "VARCHAR" && mysqlDataLength == 255 && oracleColMeta == mysqlColMeta {
 			return "", nil
 		}
 		if err := textTable.AddRow(
 			columnName,
-			fmt.Sprintf("BFILE %s DEFAULT %s COMMENT '%s'", oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment),
-			fmt.Sprintf("%s(%d) %s DEFAULT %s COMMENT '%s'", mysqlDataType, mysqlDataLength, mysqlColInfo.NULLABLE, mysqlColInfo.DataDefault, mysqlColInfo.Comment),
-			fmt.Sprintf("VARCHAR(255) %s DEFAULT %s COMMENT '%s'", oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment)); err != nil {
+			fmt.Sprintf("BFILE %s", oracleColMeta),
+			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
+			fmt.Sprintf("VARCHAR(255) %s", oracleColMeta)); err != nil {
 			return "", err
 		}
 
-		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s CHARACTER SET %s COLLATE %s %s DEFAULT %s COMMENT '%s';\n",
+		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 			targetSchema,
 			tableName,
 			columnName,
 			"VARCHAR(255)",
-			MySQLCharacterSet,
-			MySQLCollation,
-			oracleColInfo.NULLABLE,
-			oracleDataDefault,
-			oracleColumnComment,
+			oracleColMeta,
 		)
 		return fixedMsg, nil
 	case "CHARACTER":
 		if oracleDataLength < 256 {
-			addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-			if mysqlDataType == "CHARACTER" && len(addDiffCols) == 0 && isOK {
+			if mysqlDataType == "CHAR" && mysqlDataLength == oracleDataLength && oracleColMeta == mysqlColMeta {
 				return "", nil
 			}
 			if err := textTable.AddRow(
 				columnName,
-				fmt.Sprintf("CHARACTER(%d) %s DEFAULT %s COMMENT '%s'", oracleDataLength, oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment),
-				fmt.Sprintf("%s(%d) %s DEFAULT %s COMMENT '%s'", mysqlDataType,
-					mysqlDataLength, mysqlColInfo.NULLABLE, mysqlColInfo.DataDefault, mysqlColInfo.Comment),
-				fmt.Sprintf("CHARACTER(%d) %s DEFAULT %s COMMENT '%s'", oracleDataLength, oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment)); err != nil {
+				fmt.Sprintf("CHARACTER(%d) %s", oracleDataLength, oracleColMeta),
+				fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
+				fmt.Sprintf("CHAR(%d) %s", oracleDataLength, oracleColMeta)); err != nil {
 				return "", err
 			}
 
-			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s CHARACTER SET %s COLLATE %s %s DEFAULT %s COMMENT '%s';\n",
+			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 				targetSchema,
 				tableName,
 				columnName,
-				fmt.Sprintf("CHARACTER(%d)", oracleDataLength),
-				MySQLCharacterSet,
-				MySQLCollation,
-				oracleColInfo.NULLABLE,
-				oracleDataDefault,
-				oracleColumnComment,
+				fmt.Sprintf("CHAR(%d)", oracleDataLength),
+				oracleColMeta,
 			)
 			return fixedMsg, nil
 		}
-		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "VARCHAR" && len(addDiffCols) == 0 && isOK {
+		if mysqlDataType == "VARCHAR" && mysqlDataLength == oracleDataLength && oracleColMeta == mysqlColMeta {
 			return "", nil
 		}
 		if err := textTable.AddRow(
 			columnName,
-			fmt.Sprintf("CHARACTER(%d) %s DEFAULT %s COMMENT '%s'", oracleDataLength, oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment),
-			fmt.Sprintf("%s(%d) %s DEFAULT %s COMMENT '%s'", mysqlDataType, mysqlDataLength, mysqlColInfo.NULLABLE, mysqlColInfo.DataDefault, mysqlColInfo.Comment),
-			fmt.Sprintf("VARCHAR(%d) %s DEFAULT %s COMMENT '%s'", oracleDataLength, oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment)); err != nil {
+			fmt.Sprintf("CHARACTER(%d) %s", oracleDataLength, oracleColMeta),
+			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
+			fmt.Sprintf("VARCHAR(%d) %s", oracleDataLength, oracleColMeta)); err != nil {
 			return "", err
 		}
 
-		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s CHARACTER SET %s COLLATE %s %s DEFAULT %s COMMENT '%s';\n",
+		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 			targetSchema,
 			tableName,
 			columnName,
 			fmt.Sprintf("VARCHAR(%d)", oracleDataLength),
-			MySQLCharacterSet,
-			MySQLCollation,
-			oracleColInfo.NULLABLE,
-			oracleDataDefault,
-			oracleColumnComment,
+			oracleColMeta,
 		)
 		return fixedMsg, nil
 	case "LONG":
-		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "LONGTEXT" && len(addDiffCols) == 0 && isOK {
+		if mysqlDataType == "LONGTEXT" && mysqlDataLength == 4294967295 && oracleColMeta == mysqlColMeta {
 			return "", nil
 		}
 		if err := textTable.AddRow(
 			columnName,
-			fmt.Sprintf("LONG %s DEFAULT %s COMMENT '%s'", oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment),
-			fmt.Sprintf("%s(%d) %s DEFAULT %s COMMENT '%s'", mysqlDataType, mysqlDataLength, mysqlColInfo.NULLABLE, mysqlColInfo.DataDefault, mysqlColInfo.Comment),
-			fmt.Sprintf("LONGTEXT %s DEFAULT %s COMMENT '%s'", oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment)); err != nil {
+			fmt.Sprintf("LONG %s", oracleColMeta),
+			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
+			fmt.Sprintf("LONGTEXT %s", oracleColMeta)); err != nil {
 			return "", err
 		}
 
-		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s CHARACTER SET %s COLLATE %s DEFAULT %s COMMENT '%s';\n",
+		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 			targetSchema,
 			tableName,
 			columnName,
 			"LONGTEXT",
-			MySQLCharacterSet,
-			MySQLCollation,
-			oracleColInfo.NULLABLE,
-			oracleDataDefault,
-			oracleColumnComment,
+			oracleColMeta,
 		)
 		return fixedMsg, nil
 	case "LONG RAW":
-		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "LONGBLOB" && len(addDiffCols) == 0 && isOK {
+		if mysqlDataType == "LONGBLOB" && mysqlDataLength == 4294967295 && oracleColMeta == mysqlColMeta {
 			return "", nil
 		}
 		if err := textTable.AddRow(
 			columnName,
-			fmt.Sprintf("LONG RAW %s DEFAULT %s COMMENT '%s'", oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment),
-			fmt.Sprintf("%s(%d) %s DEFAULT %s COMMENT '%s'", mysqlDataType, mysqlDataLength, mysqlColInfo.NULLABLE, mysqlColInfo.DataDefault, mysqlColInfo.Comment),
-			fmt.Sprintf("LONGBLOB %s DEFAULT %s COMMENT '%s'", oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment)); err != nil {
+			fmt.Sprintf("LONG RAW %s", oracleColMeta),
+			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
+			fmt.Sprintf("LONGBLOB %s", oracleColMeta)); err != nil {
 			return "", err
 		}
 
-		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s CHARACTER SET %s COLLATE %s DEFAULT %s COMMENT '%s';\n",
+		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 			targetSchema,
 			tableName,
 			columnName,
 			"LONGBLOB",
-			MySQLCharacterSet,
-			MySQLCollation,
-			oracleColInfo.NULLABLE,
-			oracleDataDefault,
-			oracleColumnComment,
+			oracleColMeta,
 		)
 		return fixedMsg, nil
 	case "NCHAR VARYING":
-		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "NCHAR VARYING" && len(addDiffCols) == 0 && isOK {
+		if mysqlDataType == "NCHAR VARYING" && mysqlDataLength == oracleDataLength && oracleColMeta == mysqlColMeta {
 			return "", nil
 		}
 		if err := textTable.AddRow(
 			columnName,
-			fmt.Sprintf("NCHAR VARYING %s DEFAULT %s COMMENT '%s'", oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment),
-			fmt.Sprintf("%s(%d) %s DEFAULT %s COMMENT '%s'", mysqlDataType, mysqlDataLength, mysqlColInfo.NULLABLE, mysqlColInfo.DataDefault, mysqlColInfo.Comment),
-			fmt.Sprintf("NCHAR VARYING(%d) %s DEFAULT %s COMMENT '%s'", oracleDataLength, oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment)); err != nil {
+			fmt.Sprintf("NCHAR VARYING %s", oracleColMeta),
+			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
+			fmt.Sprintf("NCHAR VARYING(%d) %s", oracleDataLength, oracleColMeta)); err != nil {
 			return "", err
 		}
 
-		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s CHARACTER SET %s COLLATE %s DEFAULT %s COMMENT '%s';\n",
+		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 			targetSchema,
 			tableName,
 			columnName,
 			fmt.Sprintf("NCHAR VARYING(%d)", oracleDataLength),
-			MySQLCharacterSet,
-			MySQLCollation,
-			oracleColInfo.NULLABLE,
-			oracleDataDefault,
-			oracleColumnComment,
+			oracleColMeta,
 		)
 		return fixedMsg, nil
 	case "NCLOB":
-		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "TEXT" && len(addDiffCols) == 0 && isOK {
+		if mysqlDataType == "TEXT" && mysqlDataLength == 65535 && oracleColMeta == mysqlColMeta {
 			return "", nil
 		}
 		if err := textTable.AddRow(
 			columnName,
-			fmt.Sprintf("NCLOB %s DEFAULT %s COMMENT '%s'", oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment),
-			fmt.Sprintf("%s(%d) %s DEFAULT %s COMMENT '%s'", mysqlDataType, mysqlDataLength, mysqlColInfo.NULLABLE, mysqlColInfo.DataDefault, mysqlColInfo.Comment),
-			fmt.Sprintf("TEXT %s DEFAULT %s COMMENT '%s'", oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment)); err != nil {
+			fmt.Sprintf("NCLOB %s", oracleColMeta),
+			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
+			fmt.Sprintf("TEXT %s", oracleColMeta)); err != nil {
 			return "", err
 		}
 
-		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s CHARACTER SET %s COLLATE %s DEFAULT %s COMMENT '%s';\n",
+		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 			targetSchema,
 			tableName,
 			columnName,
 			"TEXT",
-			MySQLCharacterSet,
-			MySQLCollation,
-			oracleColInfo.NULLABLE,
-			oracleDataDefault,
-			oracleColumnComment,
+			oracleColMeta,
 		)
 		return fixedMsg, nil
 	case "RAW":
 		if oracleDataLength < 256 {
-			addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-			if mysqlDataType == "BINARY" && len(addDiffCols) == 0 && isOK {
+			if mysqlDataType == "BINARY" && mysqlDataLength == oracleDataLength && oracleColMeta == mysqlColMeta {
 				return "", nil
 			}
 			if err := textTable.AddRow(
 				columnName,
-				fmt.Sprintf("RAW(%d) %s DEFAULT %s COMMENT '%s'", oracleDataLength, oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment),
-				fmt.Sprintf("%s(%d) %s DEFAULT %s COMMENT '%s'", mysqlDataType, mysqlDataLength, mysqlColInfo.NULLABLE, mysqlColInfo.DataDefault, mysqlColInfo.Comment),
-				fmt.Sprintf("BINARY(%d) %s DEFAULT %s COMMENT '%s'", oracleDataLength, oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment)); err != nil {
+				fmt.Sprintf("RAW(%d)", oracleDataLength, oracleColMeta),
+				fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
+				fmt.Sprintf("BINARY(%d) %s", oracleDataLength, oracleColMeta)); err != nil {
 				return "", err
 			}
 
-			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s CHARACTER SET %s COLLATE %s DEFAULT %s COMMENT '%s';\n",
+			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 				targetSchema,
 				tableName,
 				columnName,
 				fmt.Sprintf("BINARY(%d)", oracleDataLength),
-				MySQLCharacterSet,
-				MySQLCollation,
-				oracleColInfo.NULLABLE,
-				oracleDataDefault,
-				oracleColumnComment,
+				oracleColMeta,
 			)
 			return fixedMsg, nil
 		}
-		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "VARBINARY" && len(addDiffCols) == 0 && isOK {
+
+		if mysqlDataType == "VARBINARY" && mysqlDataLength == oracleDataLength && oracleColMeta == mysqlColMeta {
 			return "", nil
 		}
 		if err := textTable.AddRow(
 			columnName,
-			fmt.Sprintf("RAW(%d) %s DEFAULT %s COMMENT '%s'", oracleDataLength, oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment),
-			fmt.Sprintf("%s(%d) %s DEFAULT %s COMMENT '%s'", mysqlDataType, mysqlDataLength, mysqlColInfo.NULLABLE, mysqlColInfo.DataDefault, mysqlColInfo.Comment),
-			fmt.Sprintf("VARBINARY(%d) %s DEFAULT %s COMMENT '%s'", oracleDataLength, oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment)); err != nil {
+			fmt.Sprintf("RAW(%d) %s", oracleDataLength, oracleColMeta),
+			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
+			fmt.Sprintf("VARBINARY(%d) %s", oracleDataLength, oracleColMeta)); err != nil {
 			return "", err
 		}
 
-		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s CHARACTER SET %s COLLATE %s DEFAULT %s COMMENT '%s';\n",
+		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 			targetSchema,
 			tableName,
 			columnName,
 			fmt.Sprintf("VARBINARY(%d)", oracleDataLength),
-			MySQLCharacterSet,
-			MySQLCollation,
-			oracleColInfo.NULLABLE,
-			oracleDataDefault,
-			oracleColumnComment,
+			oracleColMeta,
 		)
 		return fixedMsg, nil
 	case "ROWID":
-		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "CHAR" && len(addDiffCols) == 0 && isOK {
+		if mysqlDataType == "CHAR" && mysqlDataLength == 10 && oracleColMeta == mysqlColMeta {
 			return "", nil
 		}
 		if err := textTable.AddRow(
 			columnName,
-			fmt.Sprintf("ROWID %s DEFAULT %s COMMENT '%s'", oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment),
-			fmt.Sprintf("%s(%d) %s DEFAULT %s COMMENT '%s'", mysqlDataType, mysqlDataLength, mysqlColInfo.NULLABLE, mysqlColInfo.DataDefault, mysqlColInfo.Comment),
-			fmt.Sprintf("CHAR(10) %s DEFAULT %s COMMENT '%s'", oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment)); err != nil {
+			fmt.Sprintf("ROWID %s", oracleColMeta),
+			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
+			fmt.Sprintf("CHAR(10) %s", oracleColMeta)); err != nil {
 			return "", err
 		}
 
-		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s CHARACTER SET %s COLLATE %s DEFAULT %s COMMENT '%s';\n",
+		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 			targetSchema,
 			tableName,
 			columnName,
 			"CHAR(10)",
-			MySQLCharacterSet,
-			MySQLCollation,
-			oracleColInfo.NULLABLE,
-			oracleDataDefault,
-			oracleColumnComment,
+			oracleColMeta,
 		)
 		return fixedMsg, nil
 	case "UROWID":
-		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "VARCHAR" && len(addDiffCols) == 0 && isOK {
+		if mysqlDataType == "VARCHAR" && mysqlDataLength == oracleDataLength && oracleColMeta == mysqlColMeta {
 			return "", nil
 		}
 		if err := textTable.AddRow(
 			columnName,
-			fmt.Sprintf("UROWID %s DEFAULT %s COMMENT '%s'", oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment),
-			fmt.Sprintf("%s(%d) %s DEFAULT %s COMMENT '%s'", mysqlDataType, mysqlDataLength, mysqlColInfo.NULLABLE, mysqlColInfo.DataDefault, mysqlColInfo.Comment),
-			fmt.Sprintf("VARCHAR(%d) %s DEFAULT %s COMMENT '%s'", oracleDataLength, oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment)); err != nil {
+			fmt.Sprintf("UROWID %s", oracleColMeta),
+			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
+			fmt.Sprintf("VARCHAR(%d) %s", oracleDataLength, oracleColMeta)); err != nil {
 			return "", err
 		}
 
-		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s CHARACTER SET %s COLLATE %s DEFAULT %s COMMENT '%s';\n",
+		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 			targetSchema,
 			tableName,
 			columnName,
 			fmt.Sprintf("VARCHAR(%d)", oracleDataLength),
-			MySQLCharacterSet,
-			MySQLCollation,
-			oracleColInfo.NULLABLE,
-			oracleDataDefault,
-			oracleColumnComment,
+			oracleColMeta,
 		)
 		return fixedMsg, nil
 	case "VARCHAR":
-		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "VARCHAR" && len(addDiffCols) == 0 && isOK {
+		if mysqlDataType == "VARCHAR" && mysqlDataLength == oracleDataLength && oracleColMeta == mysqlColMeta {
 			return "", nil
 		}
 		if err := textTable.AddRow(
 			columnName,
-			fmt.Sprintf("VARCHAR(%d) %s DEFAULT %s COMMENT '%s'", oracleDataLength, oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment),
-			fmt.Sprintf("%s(%d) %s DEFAULT %s COMMENT '%s'", mysqlDataType, mysqlDataLength, mysqlColInfo.NULLABLE, mysqlColInfo.DataDefault, mysqlColInfo.Comment),
-			fmt.Sprintf("VARCHAR(%d) %s DEFAULT %s COMMENT '%s'", oracleDataLength, oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment)); err != nil {
+			fmt.Sprintf("VARCHAR(%d) %s", oracleDataLength, oracleColMeta),
+			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
+			fmt.Sprintf("VARCHAR(%d) %s", oracleDataLength, oracleColMeta)); err != nil {
 			return "", err
 		}
 
-		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s CHARACTER SET %s COLLATE %s DEFAULT %s COMMENT '%s';\n",
+		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 			targetSchema,
 			tableName,
 			columnName,
 			fmt.Sprintf("VARCHAR(%d)", oracleDataLength),
-			MySQLCharacterSet,
-			MySQLCollation,
-			oracleColInfo.NULLABLE,
-			oracleDataDefault,
-			oracleColumnComment,
+			oracleColMeta,
 		)
 		return fixedMsg, nil
 	case "XMLTYPE":
-		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "LONGTEXT" && len(addDiffCols) == 0 && isOK {
+		if mysqlDataType == "LONGTEXT" && mysqlDataLength == 4294967295 && oracleColMeta == mysqlColMeta {
 			return "", nil
 		}
 		if err := textTable.AddRow(
 			columnName,
-			fmt.Sprintf("XMLTYPE %s DEFAULT %s COMMENT '%s'", oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment),
-			fmt.Sprintf("%s(%d) %s DEFAULT %s COMMENT '%s'", mysqlDataType, mysqlDataLength, mysqlColInfo.NULLABLE, mysqlColInfo.DataDefault, mysqlColInfo.Comment),
-			fmt.Sprintf("LONGTEXT %s DEFAULT %s COMMENT '%s'", oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment)); err != nil {
+			fmt.Sprintf("XMLTYPE %s", oracleColMeta),
+			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
+			fmt.Sprintf("LONGTEXT %s", oracleColMeta)); err != nil {
 			return "", err
 		}
 
-		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s CHARACTER SET %s COLLATE %s DEFAULT %s COMMENT '%s';\n",
+		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 			targetSchema,
 			tableName,
 			columnName,
 			"LONGTEXT",
-			MySQLCharacterSet,
-			MySQLCollation,
-			oracleColInfo.NULLABLE,
-			oracleDataDefault,
-			oracleColumnComment,
+			oracleColMeta,
 		)
 		return fixedMsg, nil
 
 	// 二进制
 	case "CLOB":
-		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "LONGTEXT" && len(addDiffCols) == 0 && isOK {
+		if mysqlDataType == "LONGTEXT" && mysqlDataLength == 4294967295 && oracleColMeta == mysqlColMeta {
 			return "", nil
 		}
 		if err := textTable.AddRow(
 			columnName,
-			fmt.Sprintf("CLOB %s DEFAULT %s COMMENT '%s'", oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment),
-			fmt.Sprintf("%s(%d) %s DEFAULT %s COMMENT '%s'", mysqlDataType, mysqlDataLength, mysqlColInfo.NULLABLE, mysqlColInfo.DataDefault, mysqlColInfo.Comment),
-			fmt.Sprintf("LONGTEXT %s DEFAULT %s COMMENT '%s'", oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment)); err != nil {
+			fmt.Sprintf("CLOB %s", oracleColMeta),
+			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
+			fmt.Sprintf("LONGTEXT %s", oracleColMeta)); err != nil {
 			return "", err
 		}
 
-		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s CHARACTER SET %s COLLATE %s %s DEFAULT %s COMMENT '%s';\n",
+		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 			targetSchema,
 			tableName,
 			columnName,
 			"LONGTEXT",
-			MySQLCharacterSet,
-			MySQLCollation,
-			oracleColInfo.NULLABLE,
-			oracleDataDefault,
-			oracleColumnComment,
+			oracleColMeta,
 		)
 		return fixedMsg, nil
 	case "BLOB":
-		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "BLOB" && len(addDiffCols) == 0 && isOK {
+		if mysqlDataType == "BLOB" && mysqlDataLength == 65535 && oracleColMeta == mysqlColMeta {
 			return "", nil
 		}
 		if err := textTable.AddRow(
 			columnName,
-			fmt.Sprintf("BLOB %s DEFAULT %s COMMENT '%s'", oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment),
-			fmt.Sprintf("%s(%d) %s DEFAULT %s COMMENT '%s'", mysqlDataType, mysqlDataLength, mysqlColInfo.NULLABLE, mysqlColInfo.DataDefault, mysqlColInfo.Comment),
-			fmt.Sprintf("BLOB %s DEFAULT %s COMMENT '%s'", oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment)); err != nil {
+			fmt.Sprintf("BLOB %s", oracleColMeta),
+			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
+			fmt.Sprintf("BLOB %s", oracleColMeta)); err != nil {
 			return "", err
 		}
 
-		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s CHARACTER SET %s COLLATE %s %s DEFAULT %s COMMENT '%s';\n",
+		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 			targetSchema,
 			tableName,
 			columnName,
 			"BLOB",
-			MySQLCharacterSet,
-			MySQLCollation,
-			oracleColInfo.NULLABLE,
-			oracleDataDefault,
-			oracleColumnComment,
+			oracleColMeta,
 		)
 		return fixedMsg, nil
 
 	// 时间
 	case "DATE":
-		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "DATETIME" && len(addDiffCols) == 0 && isOK {
+		if mysqlDataType == "DATETIME" && mysqlDataLength == 0 && mysqlDataPrecision == 0 && mysqlDataScale == 0 && oracleColMeta == mysqlColMeta {
 			return "", nil
 		}
 		if err := textTable.AddRow(
 			columnName,
-			fmt.Sprintf("DATE %s DEFAULT %s COMMENT '%s'", oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment),
-			fmt.Sprintf("%s(%d,%d) %s DEFAULT %s COMMENT '%s'", mysqlDataType, mysqlDataPrecision,
-				mysqlDataScale, mysqlColInfo.NULLABLE, mysqlColInfo.DataDefault, mysqlColInfo.Comment),
-			fmt.Sprintf("DATETIME %s DEFAULT %s COMMENT '%s'", oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment)); err != nil {
+			fmt.Sprintf("DATE %s", oracleColMeta),
+			fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
+			fmt.Sprintf("DATETIME %s", oracleColMeta)); err != nil {
 			return "", err
 		}
 
-		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s DEFAULT %s COMMENT '%s';\n",
+		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 			targetSchema,
 			tableName,
 			columnName,
 			"DATETIME",
-			oracleColInfo.NULLABLE,
-			oracleDataDefault,
-			oracleColumnComment,
+			oracleColMeta,
 		)
 		return fixedMsg, nil
 
@@ -1411,256 +1266,208 @@ func OracleTableMapRuleCheck(
 	// CHAR、NCHAR、VARCHAR2、NVARCHAR2( oracle 字符类型 B/C)
 	case "CHAR":
 		if oracleDataLength < 256 {
-			addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-			if mysqlDataType == "CHAR" && len(addDiffCols) == 0 && isOK && oracleColumnCharUsed == "char" && oracleColumnCharLength == mysqlDataLength {
+			if mysqlDataType == "CHAR" && mysqlDataLength == oracleDataLength && oracleColMeta == mysqlColMeta && oracleColumnCharUsed == "char" {
 				return "", nil
 			}
 			if err := textTable.AddRow(
 				columnName,
-				fmt.Sprintf("CHAR(%d %s) %s DEFAULT %s COMMENT '%s'", oracleDataLength, oracleColumnCharUsed, oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment),
-				fmt.Sprintf("%s(%d) %s DEFAULT %s COMMENT '%s'", mysqlDataType, mysqlDataLength, mysqlColInfo.NULLABLE, mysqlColInfo.DataDefault, mysqlColInfo.Comment),
-				fmt.Sprintf("CHAR(%d) %s DEFAULT %s COMMENT '%s'", oracleDataLength, oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment)); err != nil {
+				fmt.Sprintf("CHAR(%d %s) %s", oracleDataLength, oracleColumnCharUsed, oracleColMeta),
+				fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
+				fmt.Sprintf("CHAR(%d) %s", oracleDataLength, oracleColMeta)); err != nil {
 				return "", err
 			}
 
-			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s CHARACTER SET %s COLLATE %s %s DEFAULT %s COMMENT '%s';\n",
+			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 				targetSchema,
 				tableName,
 				columnName,
 				fmt.Sprintf("CHAR(%d)", oracleDataLength),
-				MySQLCharacterSet,
-				MySQLCollation,
-				oracleColInfo.NULLABLE,
-				oracleDataDefault,
-				oracleColumnComment,
+				oracleColMeta,
 			)
 			return fixedMsg, nil
 		}
-		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "VARCHAR" && len(addDiffCols) == 0 && isOK && oracleColumnCharUsed == "char" && oracleColumnCharLength == mysqlDataLength {
+		if mysqlDataType == "VARCHAR" && mysqlDataLength == oracleDataLength && oracleColMeta == mysqlColMeta && oracleColumnCharUsed == "char" {
 			return "", nil
 		}
 		if err := textTable.AddRow(
 			columnName,
-			fmt.Sprintf("CHAR(%d %s) %s DEFAULT %s COMMENT '%s'", oracleDataLength, oracleColumnCharUsed, oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment),
-			fmt.Sprintf("%s(%d) %s DEFAULT %s COMMENT '%s'", mysqlDataType, mysqlDataLength, mysqlColInfo.NULLABLE, mysqlColInfo.DataDefault, mysqlColInfo.Comment),
-			fmt.Sprintf("VARCHAR(%d) %s DEFAULT %s COMMENT '%s'", oracleDataLength, oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment)); err != nil {
+			fmt.Sprintf("CHAR(%d %s) %s", oracleDataLength, oracleColumnCharUsed, oracleColMeta),
+			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
+			fmt.Sprintf("VARCHAR(%d) %s", oracleDataLength, oracleColMeta)); err != nil {
 			return "", err
 		}
 
-		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s CHARACTER SET %s COLLATE %s %s DEFAULT %s COMMENT '%s';\n",
+		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 			targetSchema,
 			tableName,
 			columnName,
 			fmt.Sprintf("VARCHAR(%d)", oracleDataLength),
-			MySQLCharacterSet,
-			MySQLCollation,
-			oracleColInfo.NULLABLE,
-			oracleDataDefault,
-			oracleColumnComment,
+			oracleColMeta,
 		)
 		return fixedMsg, nil
 	case "NCHAR":
 		if oracleDataLength < 256 {
-			addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-			if mysqlDataType == "NCHAR" && len(addDiffCols) == 0 && isOK && oracleColumnCharUsed == "char" && oracleColumnCharLength == mysqlDataLength {
+			if mysqlDataType == "NCHAR" && mysqlDataLength == oracleDataLength && oracleColMeta == mysqlColMeta && oracleColumnCharUsed == "char" {
 				return "", nil
 			}
 			if err := textTable.AddRow(
 				columnName,
-				fmt.Sprintf("NCHAR(%d %s) %s DEFAULT %s COMMENT '%s'", oracleDataLength, oracleColumnCharUsed, oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment),
-				fmt.Sprintf("%s(%d) %s DEFAULT %s COMMENT '%s'", mysqlDataType, mysqlDataLength, mysqlColInfo.NULLABLE, mysqlColInfo.DataDefault, mysqlColInfo.Comment),
-				fmt.Sprintf("NCHAR(%d) %s DEFAULT %s COMMENT '%s'", oracleDataLength, oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment)); err != nil {
+				fmt.Sprintf("NCHAR(%d %s) %s", oracleDataLength, oracleColumnCharUsed, oracleColMeta),
+				fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
+				fmt.Sprintf("NCHAR(%d) %s", oracleDataLength, oracleColMeta)); err != nil {
 				return "", err
 			}
 
-			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s CHARACTER SET %s COLLATE %s %s DEFAULT %s COMMENT '%s';\n",
+			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 				targetSchema,
 				tableName,
 				columnName,
 				fmt.Sprintf("NCHAR(%d)", oracleDataLength),
-				MySQLCharacterSet,
-				MySQLCollation,
-				oracleColInfo.NULLABLE,
-				oracleDataDefault,
-				oracleColumnComment,
+				oracleColMeta,
 			)
 			return fixedMsg, nil
 		}
-		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "NVARCHAR" && len(addDiffCols) == 0 && isOK && oracleColumnCharUsed == "char" && oracleColumnCharLength == mysqlDataLength {
+		if mysqlDataType == "NVARCHAR" && mysqlDataLength == oracleDataLength && oracleColMeta == mysqlColMeta && oracleColumnCharUsed == "char" {
 			return "", nil
 		}
 		if err := textTable.AddRow(
 			columnName,
-			fmt.Sprintf("NVARCHAR(%d %s) %s DEFAULT %s COMMENT '%s'", oracleDataLength, oracleColumnCharUsed, oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment),
-			fmt.Sprintf("%s(%d) %s DEFAULT %s COMMENT '%s'", mysqlDataType, mysqlDataLength, mysqlColInfo.NULLABLE, mysqlColInfo.DataDefault, mysqlColInfo.Comment),
-			fmt.Sprintf("NVARCHAR(%d) %s DEFAULT %s COMMENT '%s'", oracleDataLength, oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment)); err != nil {
+			fmt.Sprintf("NVARCHAR(%d %s) %s", oracleDataLength, oracleColumnCharUsed, oracleColMeta),
+			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
+			fmt.Sprintf("NVARCHAR(%d) %s", oracleDataLength, oracleColMeta)); err != nil {
 			return "", err
 		}
 
-		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s CHARACTER SET %s COLLATE %s %s DEFAULT %s COMMENT '%s';\n",
+		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 			targetSchema,
 			tableName,
 			columnName,
 			fmt.Sprintf("NVARCHAR(%d)", oracleDataLength),
-			MySQLCharacterSet,
-			MySQLCollation,
-			oracleColInfo.NULLABLE,
-			oracleDataDefault,
-			oracleColumnComment,
+			oracleColMeta,
 		)
 		return fixedMsg, nil
 	case "VARCHAR2":
-		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "VARCHAR" && len(addDiffCols) == 0 && isOK && oracleColumnCharUsed == "char" && oracleColumnCharLength == mysqlDataLength {
+		if mysqlDataType == "VARCHAR" && mysqlDataLength == oracleDataLength && oracleColMeta == mysqlColMeta && oracleColumnCharUsed == "char" {
 			return "", nil
 		}
 		if err := textTable.AddRow(
 			columnName,
-			fmt.Sprintf("VARCHAR2(%d %s) %s DEFAULT %s COMMENT '%s'", oracleDataLength, oracleColumnCharUsed, oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment),
-			fmt.Sprintf("%s(%d) %s DEFAULT %s COMMENT '%s'", mysqlDataType, mysqlDataLength, mysqlColInfo.NULLABLE, mysqlColInfo.DataDefault, mysqlColInfo.Comment),
-			fmt.Sprintf("VARCHAR(%d) %s DEFAULT %s COMMENT '%s'", oracleDataLength, oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment)); err != nil {
+			fmt.Sprintf("VARCHAR2(%d %s) %s", oracleDataLength, oracleColumnCharUsed, oracleColMeta),
+			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
+			fmt.Sprintf("VARCHAR(%d) %s", oracleDataLength, oracleColMeta)); err != nil {
 			return "", err
 		}
 
-		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s CHARACTER SET %s COLLATE %s %s DEFAULT %s COMMENT '%s';\n",
+		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 			targetSchema,
 			tableName,
 			columnName,
 			fmt.Sprintf("VARCHAR(%d)", oracleDataLength),
-			MySQLCharacterSet,
-			MySQLCollation,
-			oracleColInfo.NULLABLE,
-			oracleDataDefault,
-			oracleColumnComment,
+			oracleColMeta,
 		)
 		return fixedMsg, nil
 	case "NVARCHAR2":
-		addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-		if mysqlDataType == "NVARCHAR" && len(addDiffCols) == 0 && isOK && oracleColumnCharUsed == "char" && oracleColumnCharLength == mysqlDataLength {
+		if mysqlDataType == "NVARCHAR" && mysqlDataLength == oracleDataLength && oracleColMeta == mysqlColMeta && oracleColumnCharUsed == "char" {
 			return "", nil
 		}
 		if err := textTable.AddRow(
 			columnName,
-			fmt.Sprintf("NVARCHAR2(%d %s) %s DEFAULT %s COMMENT '%s'", oracleDataLength, oracleColumnCharUsed, oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment),
-			fmt.Sprintf("%s(%d) %s DEFAULT %s COMMENT '%s'", mysqlDataType, mysqlDataLength, mysqlColInfo.NULLABLE, mysqlColInfo.DataDefault, mysqlColInfo.Comment),
-			fmt.Sprintf("NVARCHAR(%d) %s DEFAULT %s COMMENT '%s'", oracleDataLength, oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment)); err != nil {
+			fmt.Sprintf("NVARCHAR2(%d %s) %s", oracleDataLength, oracleColumnCharUsed, oracleColMeta),
+			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
+			fmt.Sprintf("NVARCHAR(%d) %s", oracleDataLength, oracleColMeta)); err != nil {
 			return "", err
 		}
 
-		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s CHARACTER SET %s COLLATE %s %s DEFAULT %s COMMENT '%s';\n",
+		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 			targetSchema,
 			tableName,
 			columnName,
 			fmt.Sprintf("NVARCHAR(%d)", oracleDataLength),
-			MySQLCharacterSet,
-			MySQLCollation,
-			oracleColInfo.NULLABLE,
-			oracleDataDefault,
-			oracleColumnComment,
+			oracleColMeta,
 		)
 		return fixedMsg, nil
 
 	// 默认其他类型
 	default:
 		if strings.Contains(oracleDataType, "INTERVAL") {
-			addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-			if mysqlDataType == "VARCHAR" && len(addDiffCols) == 0 && isOK {
+			if mysqlDataType == "VARCHAR" && mysqlDataLength == 30 && oracleColMeta == mysqlColMeta {
 				return "", nil
 			}
 			if err := textTable.AddRow(
 				columnName,
-				fmt.Sprintf("%s %s DEFAULT %s COMMENT '%s'", oracleDataType, oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment),
-				fmt.Sprintf("%s(%d) %s DEFAULT %s COMMENT '%s'", mysqlDataType, mysqlDataLength, mysqlColInfo.NULLABLE, mysqlColInfo.DataDefault, mysqlColInfo.Comment),
-				fmt.Sprintf("VARCHAR(30) %s DEFAULT %s COMMENT '%s'", oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment)); err != nil {
+				fmt.Sprintf("%s %s", oracleDataType, oracleColMeta),
+				fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
+				fmt.Sprintf("VARCHAR(30) %s", oracleColMeta)); err != nil {
 				return "", err
 			}
 
-			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s CHARACTER SET %s COLLATE %s %s DEFAULT %s COMMENT '%s';\n",
+			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 				targetSchema,
 				tableName,
 				columnName,
 				"VARCHAR(30)",
-				MySQLCharacterSet,
-				MySQLCollation,
-				oracleColInfo.NULLABLE,
-				oracleDataDefault,
-				oracleColumnComment,
+				oracleColMeta,
 			)
 			return fixedMsg, nil
 		} else if strings.Contains(oracleDataType, "TIMESTAMP") {
 			if oracleDataScale == 0 {
-				addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-				if mysqlDataType == "DATETIME" && len(addDiffCols) == 0 && isOK {
+				if mysqlDataType == "TIMESTAMP" && mysqlDataLength == 0 && mysqlDataPrecision == 0 && mysqlDataScale == 0 && mysqlDatetimePrecision == 0 && oracleColMeta == mysqlColMeta {
 					return "", nil
 				}
 				if err := textTable.AddRow(
 					columnName,
-					fmt.Sprintf("%s %s DEFAULT %s COMMENT '%s'", oracleDataType, oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment),
-					fmt.Sprintf("%s(%d,%d) %s DEFAULT %s COMMENT '%s'", mysqlDataType, mysqlDataPrecision,
-						mysqlDataScale, mysqlColInfo.NULLABLE, mysqlColInfo.DataDefault, mysqlColInfo.Comment),
-					fmt.Sprintf("DATETIME %s DEFAULT %s COMMENT '%s'", oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment)); err != nil {
+					fmt.Sprintf("%s %s", oracleDataType, oracleColMeta),
+					fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
+					fmt.Sprintf("TIMESTAMP %s", oracleColMeta)); err != nil {
 					return "", err
 				}
 
-				fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s DEFAULT %s COMMENT '%s';\n",
+				fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 					targetSchema,
 					tableName,
 					columnName,
-					"DATETIME",
-					oracleColInfo.NULLABLE,
-					oracleDataDefault,
-					oracleColumnComment,
+					"TIMESTAMP",
+					oracleColMeta,
 				)
 				return fixedMsg, nil
 			}
-			addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-			if mysqlDataType == "DATETIME" && len(addDiffCols) == 0 && isOK {
+			if mysqlDataType == "TIMESTAMP" && mysqlDataScale == 0 && mysqlDataLength == 0 && mysqlDataPrecision == 0 && mysqlDatetimePrecision <= 6 && oracleColMeta == mysqlColMeta {
 				return "", nil
 			}
 			if err := textTable.AddRow(
 				columnName,
-				fmt.Sprintf("%s %s DEFAULT %s COMMENT '%s'", oracleDataType, oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment),
-				fmt.Sprintf("%s(%d,%d) %s DEFAULT %s COMMENT '%s'", mysqlDataType, mysqlDataPrecision,
-					mysqlDataScale, mysqlColInfo.NULLABLE, mysqlColInfo.DataDefault, mysqlColInfo.Comment),
-				fmt.Sprintf("DATETIME(%d) %s DEFAULT %s COMMENT '%s'", oracleDataScale, oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment)); err != nil {
+				fmt.Sprintf("%s(%d) %s", oracleDataType, oracleDataScale, oracleColMeta),
+				fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDatetimePrecision, mysqlColMeta),
+				fmt.Sprintf("TIMESTAMP(%d) %s", oracleDataScale, oracleColMeta)); err != nil {
 				return "", err
 			}
 
-			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s DEFAULT %s COMMENT '%s';\n",
+			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 				targetSchema,
 				tableName,
 				columnName,
-				fmt.Sprintf("DATETIME(%d)", oracleDataScale),
-				oracleColInfo.NULLABLE,
-				oracleDataDefault,
-				oracleColumnComment,
+				fmt.Sprintf("TIMESTAMP(%d)", oracleDataScale),
+				oracleColMeta,
 			)
 			return fixedMsg, nil
 		} else {
-			addDiffCols, _, isOK := utils.IsEqualStruct(oracleColInfo.ColumnInfo, mysqlColInfo.ColumnInfo)
-			if mysqlDataType == "TEXT" && len(addDiffCols) == 0 && isOK {
+			if mysqlDataType == "TEXT" && mysqlDataLength == 65535 && mysqlDataScale == 0 && oracleColMeta == mysqlColMeta {
 				return "", nil
 			}
 			if err := textTable.AddRow(
 				columnName,
-				fmt.Sprintf("%s %s DEFAULT %s COMMENT '%s'", oracleDataType, oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment),
-				fmt.Sprintf("%s(%d) %s DEFAULT %s COMMENT '%s'", mysqlDataType, mysqlDataLength, mysqlColInfo.NULLABLE, mysqlColInfo.DataDefault, mysqlColInfo.Comment),
-				fmt.Sprintf("TEXT %s DEFAULT %s COMMENT '%s'", oracleColInfo.NULLABLE, oracleDataDefault, oracleColumnComment)); err != nil {
+				fmt.Sprintf("%s %s", oracleDataType, oracleColMeta),
+				fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
+				fmt.Sprintf("TEXT %s", oracleColMeta)); err != nil {
 				return "", err
 			}
 
-			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s CHARACTER SET %s COLLATE %s %s DEFAULT %s COMMENT '%s';\n",
+			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 				targetSchema,
 				tableName,
 				columnName,
 				"TEXT",
-				MySQLCharacterSet,
-				MySQLCollation,
-				oracleColInfo.NULLABLE,
-				oracleDataDefault,
-				oracleColumnComment,
+				oracleColMeta,
 			)
 			return fixedMsg, nil
 		}

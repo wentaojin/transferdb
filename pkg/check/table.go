@@ -17,6 +17,7 @@ package check
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"github.com/wentaojin/transferdb/utils"
@@ -71,12 +72,13 @@ type Column struct {
 }
 
 type ColumnInfo struct {
-	DataLength    string
-	DataPrecision string
-	DataScale     string
-	NULLABLE      string
-	DataDefault   string
-	Comment       string
+	DataLength        string
+	DataPrecision     string
+	DataScale         string
+	DatetimePrecision string
+	NULLABLE          string
+	DataDefault       string
+	Comment           string
 }
 
 type Index struct {
@@ -175,12 +177,13 @@ func NewOracleTableINFO(schemaName, tableName string, engine *service.Engine) (*
 			CharLength: strings.ToUpper(rowCol["CHAR_LENGTH"]),
 			CharUsed:   strings.ToUpper(rowCol["CHAR_USED"]),
 			ColumnInfo: ColumnInfo{
-				DataLength:    strings.ToUpper(rowCol["DATA_LENGTH"]),
-				DataPrecision: strings.ToUpper(rowCol["DATA_PRECISION"]),
-				DataScale:     strings.ToUpper(rowCol["DATA_SCALE"]),
-				NULLABLE:      nullable,
-				DataDefault:   strings.ToUpper(rowCol["DATA_DEFAULT"]),
-				Comment:       strings.ToUpper(rowCol["COMMENTS"]),
+				DataLength:        strings.ToUpper(rowCol["DATA_LENGTH"]),
+				DataPrecision:     strings.ToUpper(rowCol["DATA_PRECISION"]),
+				DataScale:         strings.ToUpper(rowCol["DATA_SCALE"]),
+				DatetimePrecision: "", // only mysql
+				NULLABLE:          nullable,
+				DataDefault:       strings.ToUpper(rowCol["DATA_DEFAULT"]),
+				Comment:           strings.ToUpper(rowCol["COMMENTS"]),
 			},
 			CharacterSet: strings.ToUpper(OracleCharacterSet),
 			Collation:    strings.ToUpper(OracleCollationBin),
@@ -315,18 +318,6 @@ func NewMySQLTableINFO(schemaName, tableName string, engine *service.Engine) (*T
 	columns := make(map[string]Column, len(columnInfo))
 
 	for _, rowCol := range columnInfo {
-		var cs, ca string
-		if strings.ToUpper(rowCol["CHARACTER_SET_NAME"]) != strings.ToUpper(characterSet) {
-			cs = rowCol["CHARACTER_SET_NAME"]
-		} else {
-			cs = characterSet
-		}
-		if strings.ToUpper(rowCol["COLLATION_NAME"]) != strings.ToUpper(collation) {
-			ca = rowCol["COLLATION_NAME"]
-		} else {
-			ca = collation
-		}
-
 		var nullable string
 		if strings.ToUpper(rowCol["NULLABLE"]) == "Y" {
 			nullable = "NULL"
@@ -336,15 +327,16 @@ func NewMySQLTableINFO(schemaName, tableName string, engine *service.Engine) (*T
 		columns[strings.ToUpper(rowCol["COLUMN_NAME"])] = Column{
 			DataType: strings.ToUpper(rowCol["DATA_TYPE"]),
 			ColumnInfo: ColumnInfo{
-				DataLength:    strings.ToUpper(rowCol["DATA_LENGTH"]),
-				DataPrecision: strings.ToUpper(rowCol["DATA_PRECISION"]),
-				DataScale:     strings.ToUpper(rowCol["DATA_SCALE"]),
-				NULLABLE:      nullable,
-				DataDefault:   strings.ToUpper(rowCol["DATA_DEFAULT"]),
-				Comment:       strings.ToUpper(rowCol["COMMENTS"]),
+				DataLength:        strings.ToUpper(rowCol["DATA_LENGTH"]),
+				DataPrecision:     strings.ToUpper(rowCol["DATA_PRECISION"]),
+				DataScale:         strings.ToUpper(rowCol["DATA_SCALE"]),
+				DatetimePrecision: strings.ToUpper(rowCol["DATETIME_PRECISION"]),
+				NULLABLE:          nullable,
+				DataDefault:       strings.ToUpper(rowCol["DATA_DEFAULT"]),
+				Comment:           strings.ToUpper(rowCol["COMMENTS"]),
 			},
-			CharacterSet: strings.ToUpper(cs),
-			Collation:    strings.ToUpper(ca),
+			CharacterSet: strings.ToUpper(rowCol["CHARACTER_SET_NAME"]),
+			Collation:    strings.ToUpper(rowCol["COLLATION_NAME"]),
 		}
 	}
 
@@ -443,4 +435,35 @@ func NewMySQLTableINFO(schemaName, tableName string, engine *service.Engine) (*T
 	mysqlTable.IsPartition = isPart
 	mysqlTable.Partitions = parts
 	return mysqlTable, version, nil
+}
+
+func generateColumnNullCommentDefaultMeta(dataNullable, comments, dataDefault string) string {
+	var (
+		colMeta string
+	)
+
+	if dataNullable == "NULL" {
+		switch {
+		case comments != "" && dataDefault != "":
+			colMeta = fmt.Sprintf("DEFAULT %s COMMENT '%s'", dataDefault, comments)
+		case comments != "" && dataDefault == "":
+			colMeta = fmt.Sprintf("DEFAULT NULL COMMENT '%s'", comments)
+		case comments == "" && dataDefault != "":
+			colMeta = fmt.Sprintf("DEFAULT %s", dataDefault)
+		case comments == "" && dataDefault == "":
+			colMeta = "DEFAULT NULL"
+		}
+	} else {
+		switch {
+		case comments != "" && dataDefault != "":
+			colMeta = fmt.Sprintf("%s DEFAULT %s COMMENT '%s'", dataNullable, dataDefault, comments)
+		case comments != "" && dataDefault == "":
+			colMeta = fmt.Sprintf("%s COMMENT '%s'", dataNullable, comments)
+		case comments == "" && dataDefault != "":
+			colMeta = fmt.Sprintf("%s DEFAULT %s", dataNullable, dataDefault)
+		case comments == "" && dataDefault == "":
+			colMeta = fmt.Sprintf("%s", dataNullable)
+		}
+	}
+	return colMeta
 }
