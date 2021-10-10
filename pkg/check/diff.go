@@ -838,7 +838,7 @@ func OracleTableMapRuleCheck(
 			return "", err
 		}
 
-		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s DEFAULT %s COMMENT '%s';\n",
+		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 			targetSchema,
 			tableName,
 			columnName,
@@ -1096,7 +1096,7 @@ func OracleTableMapRuleCheck(
 			}
 			if err := textTable.AddRow(
 				columnName,
-				fmt.Sprintf("RAW(%d)", oracleDataLength, oracleColMeta),
+				fmt.Sprintf("RAW(%d) %s", oracleDataLength, oracleColMeta),
 				fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
 				fmt.Sprintf("BINARY(%d) %s", oracleDataLength, oracleColMeta)); err != nil {
 				return "", err
@@ -1464,7 +1464,7 @@ func OracleTableMapRuleCheck(
 			}
 			if err := textTable.AddRow(
 				columnName,
-				fmt.Sprintf("%s(%d) %s", oracleDataType, oracleDataScale, oracleColMeta),
+				fmt.Sprintf("%s %s", oracleDataType, oracleColMeta),
 				fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDatetimePrecision, mysqlColMeta),
 				fmt.Sprintf("TIMESTAMP(%d) %s", oracleDataScale, oracleColMeta)); err != nil {
 				return "", err
