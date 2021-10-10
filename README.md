@@ -43,7 +43,7 @@ $ ./transferdb --config config.toml --mode reverse
 表 custom_schema_column_type_maps 用于数据库内字段类型转换规则 -》库级别
 表 custom_table_column_type_maps  用于表级别字段类型转换规则，表级别优先级高于库级别 -》表级别
 
-5、表结构检查(独立于表结构转换，可单独运行，校验规则使用内置规则)
+5、表结构检查(独立于表结构转换，可单独运行，校验规则使用内置规则), 输出示例见 conf/check_table_data.sql
 $ ./transferdb --config config.toml --mode check
 
 6、数据全量抽数
