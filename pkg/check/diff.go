@@ -251,12 +251,10 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 		zap.String("oracle struct", oracleTable.String(IndexJSON)),
 		zap.String("mysql struct", mysqlTable.String(IndexJSON)))
 
+	var createIndexSQL []string
+
 	addDiffIndex, _, isOK := utils.DiffStructArray(oracleTable.Indexes, mysqlTable.Indexes)
 	if len(addDiffIndex) != 0 && !isOK {
-		builder.WriteString("/*\n")
-		builder.WriteString(" oracle table indexes\n")
-		builder.WriteString(" mysql table indexes\n")
-		builder.WriteString("*/\n")
 		for _, idx := range addDiffIndex {
 			value, ok := idx.(Index)
 			if ok {
@@ -269,9 +267,10 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 						}
 					}
 					if len(equalArray) == 0 {
-						builder.WriteString(fmt.Sprintf("CREATE INDEX %s ON %s.%s(%s);\n",
+						createIndexSQL = append(createIndexSQL, fmt.Sprintf("CREATE INDEX %s ON %s.%s(%s);\n",
 							fmt.Sprintf("idx_%s", strings.ReplaceAll(value.IndexColumn, ",", "_")), d.TargetSchemaName, d.TableName, value.IndexColumn))
 					}
+					continue
 				}
 				if value.Uniqueness == "UNIQUE" && value.IndexType == "NORMAL" {
 					// 考虑 MySQL 索引类型 BTREE，额外判断处理
@@ -282,21 +281,33 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 						}
 					}
 					if len(equalArray) == 0 {
-						builder.WriteString(fmt.Sprintf("CREATE UNIQUE INDEX %s ON %s.%s(%s);\n",
+						createIndexSQL = append(createIndexSQL, fmt.Sprintf("CREATE UNIQUE INDEX %s ON %s.%s(%s);\n",
 							fmt.Sprintf("idx_%s_unique", strings.ReplaceAll(value.IndexColumn, ",", "_")), d.TargetSchemaName, d.TableName, value.IndexColumn))
 					}
+					continue
 				}
 				if value.Uniqueness == "NONUNIQUE" && value.IndexType == "BITMAP" {
-					builder.WriteString(fmt.Sprintf("CREATE BITMAP INDEX %s ON %s.%s(%s);\n",
+					createIndexSQL = append(createIndexSQL, fmt.Sprintf("CREATE BITMAP INDEX %s ON %s.%s(%s);\n",
 						fmt.Sprintf("idx_%s", strings.ReplaceAll(value.IndexColumn, ",", "_")), d.TargetSchemaName, d.TableName, value.IndexColumn))
+					continue
 				}
 				if value.Uniqueness == "NONUNIQUE" && value.IndexType == "FUNCTION-BASED NORMAL" {
-					builder.WriteString(fmt.Sprintf("CREATE INDEX %s ON %s.%s(%s);\n",
+					createIndexSQL = append(createIndexSQL, fmt.Sprintf("CREATE INDEX %s ON %s.%s(%s);\n",
 						fmt.Sprintf("idx_%s", strings.ReplaceAll(value.IndexColumn, ",", "_")), d.TargetSchemaName, d.TableName, value.ColumnExpress))
+					continue
 				}
-				continue
 			}
 			return fmt.Errorf("table index assert Index failed")
+		}
+	}
+
+	if len(createIndexSQL) != 0 {
+		builder.WriteString("/*\n")
+		builder.WriteString(" oracle table indexes\n")
+		builder.WriteString(" mysql table indexes\n")
+		builder.WriteString("*/\n")
+		for _, indexSQL := range createIndexSQL {
+			builder.WriteString(indexSQL)
 		}
 	}
 
