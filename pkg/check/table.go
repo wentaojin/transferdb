@@ -82,10 +82,14 @@ type ColumnInfo struct {
 }
 
 type Index struct {
-	Uniqueness    string
-	IndexColumn   string
+	IndexInfo
 	IndexType     string
 	ColumnExpress string
+}
+
+type IndexInfo struct {
+	Uniqueness  string
+	IndexColumn string
 }
 
 type ConstraintPUKey struct {
@@ -197,8 +201,10 @@ func NewOracleTableINFO(schemaName, tableName string, engine *service.Engine) (*
 	var indexes []Index
 	for _, indexCol := range indexInfo {
 		indexes = append(indexes, Index{
-			Uniqueness:    strings.ToUpper(indexCol["UNIQUENESS"]),
-			IndexColumn:   strings.ToUpper(indexCol["COLUMN_LIST"]),
+			IndexInfo: IndexInfo{
+				Uniqueness:  strings.ToUpper(indexCol["UNIQUENESS"]),
+				IndexColumn: strings.ToUpper(indexCol["COLUMN_LIST"]),
+			},
 			IndexType:     strings.ToUpper(indexCol["INDEX_TYPE"]),
 			ColumnExpress: strings.ToUpper(indexCol["COLUMN_EXPRESSION"]),
 		})
@@ -347,8 +353,10 @@ func NewMySQLTableINFO(schemaName, tableName string, engine *service.Engine) (*T
 	var indexes []Index
 	for _, indexCol := range indexInfo {
 		indexes = append(indexes, Index{
-			Uniqueness:    strings.ToUpper(indexCol["UNIQUENESS"]),
-			IndexColumn:   strings.ToUpper(indexCol["COLUMN_LIST"]),
+			IndexInfo: IndexInfo{
+				Uniqueness:  strings.ToUpper(indexCol["UNIQUENESS"]),
+				IndexColumn: strings.ToUpper(indexCol["COLUMN_LIST"]),
+			},
 			IndexType:     strings.ToUpper(indexCol["INDEX_TYPE"]),
 			ColumnExpress: strings.ToUpper(indexCol["COLUMN_EXPRESSION"]),
 		})

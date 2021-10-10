@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -167,28 +168,26 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 
 	// 函数 utils.DiffStructArray 都忽略 structA 空，但 structB 存在情况
 	addDiffPU, _, isOK := utils.DiffStructArray(oracleTable.PUConstraints, mysqlTable.PUConstraints)
-	if !isOK {
+	if len(addDiffPU) != 0 && !isOK {
 		builder.WriteString("/*\n")
 		builder.WriteString(" oracle table primary key and unique key\n")
 		builder.WriteString(" mysql table primary key and unique key\n")
 		builder.WriteString("*/\n")
-		if len(addDiffPU) != 0 {
-			for _, pu := range addDiffPU {
-				value, ok := pu.(ConstraintPUKey)
-				if ok {
-					switch value.ConstraintType {
-					case "PK":
-						builder.WriteString(fmt.Sprintf("ALTER TABLE %s.%s ADD PRIMARY KEY(%s);\n", d.TargetSchemaName, d.TableName, value.ConstraintColumn))
-						continue
-					case "UK":
-						builder.WriteString(fmt.Sprintf("ALTER TABLE %s.%s ADD UNIQUE(%s);\n", d.TargetSchemaName, d.TableName, value.ConstraintColumn))
-						continue
-					default:
-						return fmt.Errorf("table constraint primary and unique key diff failed: not support type [%s]", value.ConstraintType)
-					}
+		for _, pu := range addDiffPU {
+			value, ok := pu.(ConstraintPUKey)
+			if ok {
+				switch value.ConstraintType {
+				case "PK":
+					builder.WriteString(fmt.Sprintf("ALTER TABLE %s.%s ADD PRIMARY KEY(%s);\n", d.TargetSchemaName, d.TableName, value.ConstraintColumn))
+					continue
+				case "UK":
+					builder.WriteString(fmt.Sprintf("ALTER TABLE %s.%s ADD UNIQUE(%s);\n", d.TargetSchemaName, d.TableName, value.ConstraintColumn))
+					continue
+				default:
+					return fmt.Errorf("table constraint primary and unique key diff failed: not support type [%s]", value.ConstraintType)
 				}
-				return fmt.Errorf("table constraint primary and unique key assert ConstraintPUKey failed")
 			}
+			return fmt.Errorf("table constraint primary and unique key assert ConstraintPUKey failed")
 		}
 	}
 
@@ -200,21 +199,19 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 			zap.String("mysql struct", mysqlTable.String(FKConstraintJSON)))
 
 		addDiffFK, _, isOK := utils.DiffStructArray(oracleTable.ForeignConstraints, mysqlTable.ForeignConstraints)
-		if !isOK {
+		if len(addDiffFK) != 0 && !isOK {
 			builder.WriteString("/*\n")
 			builder.WriteString(" oracle table foreign key\n")
 			builder.WriteString(" mysql table foreign key\n")
 			builder.WriteString("*/\n")
-			if len(addDiffFK) != 0 {
-				for _, fk := range addDiffFK {
-					value, ok := fk.(ConstraintForeign)
-					if ok {
-						builder.WriteString(fmt.Sprintf("ALTER TABLE %s.%s ADD FOREIGN KEY(%s) REFERENCES %s.%s(%s）ON DELETE %s;\n", d.TargetSchemaName, d.TableName, value.ColumnName, d.TargetSchemaName, value.ReferencedTableName, value.ReferencedColumnName, value.DeleteRule))
-						continue
-					}
-					return fmt.Errorf("table constraint foreign key assert ConstraintForeign failed")
-				}
 
+			for _, fk := range addDiffFK {
+				value, ok := fk.(ConstraintForeign)
+				if ok {
+					builder.WriteString(fmt.Sprintf("ALTER TABLE %s.%s ADD FOREIGN KEY(%s) REFERENCES %s.%s(%s）ON DELETE %s;\n", d.TargetSchemaName, d.TableName, value.ColumnName, d.TargetSchemaName, value.ReferencedTableName, value.ReferencedColumnName, value.DeleteRule))
+					continue
+				}
+				return fmt.Errorf("table constraint foreign key assert ConstraintForeign failed")
 			}
 		}
 
@@ -231,22 +228,19 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 				zap.String("mysql struct", mysqlTable.String(CKConstraintJSON)))
 
 			addDiffCK, _, isOK := utils.DiffStructArray(oracleTable.CheckConstraints, mysqlTable.CheckConstraints)
-			if !isOK {
+			if len(addDiffCK) != 0 && !isOK {
 				builder.WriteString("/*\n")
 				builder.WriteString(" oracle table check key\n")
 				builder.WriteString(" mysql table check key\n")
 				builder.WriteString("*/\n")
-				if len(addDiffCK) != 0 {
-					for _, ck := range addDiffCK {
-						value, ok := ck.(ConstraintCheck)
-						if ok {
-							builder.WriteString(fmt.Sprintf("ALTER TABLE %s.%s ADD CONSTRAINT %s CHECK(%s);\n",
-								d.TargetSchemaName, d.TableName, fmt.Sprintf("%s_check_key", d.TableName), value.ConstraintExpression))
-							continue
-						}
-						return fmt.Errorf("table constraint check key assert ConstraintCheck failed")
+				for _, ck := range addDiffCK {
+					value, ok := ck.(ConstraintCheck)
+					if ok {
+						builder.WriteString(fmt.Sprintf("ALTER TABLE %s.%s ADD CONSTRAINT %s CHECK(%s);\n",
+							d.TargetSchemaName, d.TableName, fmt.Sprintf("%s_check_key", d.TableName), value.ConstraintExpression))
+						continue
 					}
-
+					return fmt.Errorf("table constraint check key assert ConstraintCheck failed")
 				}
 			}
 		}
@@ -258,38 +252,51 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 		zap.String("mysql struct", mysqlTable.String(IndexJSON)))
 
 	addDiffIndex, _, isOK := utils.DiffStructArray(oracleTable.Indexes, mysqlTable.Indexes)
-	if !isOK {
+	if len(addDiffIndex) != 0 && !isOK {
 		builder.WriteString("/*\n")
 		builder.WriteString(" oracle table indexes\n")
 		builder.WriteString(" mysql table indexes\n")
 		builder.WriteString("*/\n")
-		if len(addDiffIndex) != 0 {
-			for _, idx := range addDiffIndex {
-				value, ok := idx.(Index)
-				if ok {
-					if value.Uniqueness == "NONUNIQUE" && value.IndexType == "NORMAL" {
+		for _, idx := range addDiffIndex {
+			value, ok := idx.(Index)
+			if ok {
+				if value.Uniqueness == "NONUNIQUE" && value.IndexType == "NORMAL" {
+					// 考虑 MySQL 索引类型 BTREE，额外判断处理
+					var equalArray []interface{}
+					for _, mysqlIndexInfo := range mysqlTable.Indexes {
+						if reflect.DeepEqual(value.IndexInfo, mysqlIndexInfo.IndexInfo) {
+							equalArray = append(equalArray, value.IndexInfo)
+						}
+					}
+					if len(equalArray) == 0 {
 						builder.WriteString(fmt.Sprintf("CREATE INDEX %s ON %s.%s(%s);\n",
 							fmt.Sprintf("idx_%s", strings.ReplaceAll(value.IndexColumn, ",", "_")), d.TargetSchemaName, d.TableName, value.IndexColumn))
 					}
-					if value.Uniqueness == "UNIQUE" && value.IndexType == "NORMAL" {
+				}
+				if value.Uniqueness == "UNIQUE" && value.IndexType == "NORMAL" {
+					// 考虑 MySQL 索引类型 BTREE，额外判断处理
+					var equalArray []interface{}
+					for _, mysqlIndexInfo := range mysqlTable.Indexes {
+						if reflect.DeepEqual(value.IndexInfo, mysqlIndexInfo.IndexInfo) {
+							equalArray = append(equalArray, value.IndexInfo)
+						}
+					}
+					if len(equalArray) == 0 {
 						builder.WriteString(fmt.Sprintf("CREATE UNIQUE INDEX %s ON %s.%s(%s);\n",
 							fmt.Sprintf("idx_%s_unique", strings.ReplaceAll(value.IndexColumn, ",", "_")), d.TargetSchemaName, d.TableName, value.IndexColumn))
 					}
-					if !isTiDB {
-						if value.Uniqueness == "NONUNIQUE" && value.IndexType == "BITMAP" {
-							builder.WriteString(fmt.Sprintf("CREATE BITMAP INDEX %s ON %s.%s(%s);\n",
-								fmt.Sprintf("idx_%s", strings.ReplaceAll(value.IndexColumn, ",", "_")), d.TargetSchemaName, d.TableName, value.IndexColumn))
-						}
-					}
-					if value.Uniqueness == "NONUNIQUE" && value.IndexType == "FUNCTION-BASED NORMAL" {
-						builder.WriteString(fmt.Sprintf("CREATE INDEX %s ON %s.%s(%s);\n",
-							fmt.Sprintf("idx_%s", strings.ReplaceAll(value.IndexColumn, ",", "_")), d.TargetSchemaName, d.TableName, value.ColumnExpress))
-					}
-					continue
 				}
-				return fmt.Errorf("table index assert Index failed")
+				if value.Uniqueness == "NONUNIQUE" && value.IndexType == "BITMAP" {
+					builder.WriteString(fmt.Sprintf("CREATE BITMAP INDEX %s ON %s.%s(%s);\n",
+						fmt.Sprintf("idx_%s", strings.ReplaceAll(value.IndexColumn, ",", "_")), d.TargetSchemaName, d.TableName, value.IndexColumn))
+				}
+				if value.Uniqueness == "NONUNIQUE" && value.IndexType == "FUNCTION-BASED NORMAL" {
+					builder.WriteString(fmt.Sprintf("CREATE INDEX %s ON %s.%s(%s);\n",
+						fmt.Sprintf("idx_%s", strings.ReplaceAll(value.IndexColumn, ",", "_")), d.TargetSchemaName, d.TableName, value.ColumnExpress))
+				}
+				continue
 			}
-
+			return fmt.Errorf("table index assert Index failed")
 		}
 	}
 
@@ -300,26 +307,24 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 			zap.String("mysql struct", mysqlTable.String(PartitionJSON)))
 
 		addDiffParts, _, isOK := utils.DiffStructArray(oracleTable.Partitions, mysqlTable.Partitions)
-		if !isOK {
+		if len(addDiffParts) != 0 && !isOK {
 			builder.WriteString("/*\n")
 			builder.WriteString(" oracle table partitions\n")
 			builder.WriteString(" mysql table partitions\n")
 			builder.WriteString("*/\n")
 			builder.WriteString("-- oracle partition info exist, mysql partition isn't exist, please manual modify\n")
-			if len(addDiffParts) != 0 {
-				for _, part := range addDiffParts {
-					value, ok := part.(Partition)
-					if ok {
-						partJSON, err := json.Marshal(value)
-						if err != nil {
-							return err
-						}
-						builder.WriteString(fmt.Sprintf("# oracle partition info: %s, ", partJSON))
-						continue
-					}
-					return fmt.Errorf("table paritions assert Partition failed")
-				}
 
+			for _, part := range addDiffParts {
+				value, ok := part.(Partition)
+				if ok {
+					partJSON, err := json.Marshal(value)
+					if err != nil {
+						return err
+					}
+					builder.WriteString(fmt.Sprintf("# oracle partition info: %s, ", partJSON))
+					continue
+				}
+				return fmt.Errorf("table paritions assert Partition failed")
 			}
 		}
 	}
