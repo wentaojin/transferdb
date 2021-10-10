@@ -101,12 +101,10 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 		zap.String("table partition type check", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)))
 
 	if oracleTable.IsPartition != mysqlTable.IsPartition {
-		builder.WriteString(fmt.Sprintf("-- oracle table [%s.%s]\n", d.SourceSchemaName, d.TableName))
-		builder.WriteString(fmt.Sprintf("-- mysql table [%s.%s]\n", d.TargetSchemaName, d.TableName))
 		builder.WriteString("/*\n")
 		builder.WriteString(fmt.Sprintf(" oracle table type is different from mysql table type\n"))
-		builder.WriteString(fmt.Sprintf(" oracle table is partition type [%t]\n", oracleTable.IsPartition))
-		builder.WriteString(fmt.Sprintf(" mysql table is partition type [%t]\n", mysqlTable.IsPartition))
+		builder.WriteString(fmt.Sprintf(" oracle table [%s.%s] is partition type [%t]\n", d.SourceSchemaName, d.TableName, oracleTable.IsPartition))
+		builder.WriteString(fmt.Sprintf(" mysql table [%s.%s] is partition type [%t]\n", d.TargetSchemaName, d.TableName, mysqlTable.IsPartition))
 		builder.WriteString("*/\n")
 		builder.WriteString(fmt.Sprintf("-- the above info comes from oracle table [%s.%s]\n", d.SourceSchemaName, d.TableName))
 		builder.WriteString(fmt.Sprintf("-- the above info comes from mysql table [%s.%s]\n", d.TargetSchemaName, d.TableName))
@@ -150,10 +148,10 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 		zap.String("table column character set and collation check", fmt.Sprintf("%s.%s", d.TargetSchemaName, d.TableName)))
 
 	for mysqlColName, mysqlColInfo := range mysqlTable.Columns {
-		if mysqlColInfo.CharacterSet != "" || mysqlColInfo.Collation != "" {
+		if mysqlColInfo.CharacterSet != "UNKNOWN" || mysqlColInfo.Collation != "UNKNOWN" {
 			if mysqlColInfo.CharacterSet != strings.ToUpper(MySQLCharacterSet) || mysqlColInfo.Collation != strings.ToUpper(MySQLCollation) {
 				builder.WriteString("/*\n")
-				builder.WriteString(fmt.Sprintf(" mysql column character set check, generate created sql\n"))
+				builder.WriteString(fmt.Sprintf(" mysql column character set and collation check, generate created sql\n"))
 				builder.WriteString("*/\n")
 				builder.WriteString(fmt.Sprintf("ALTER TABLE %s.%s MODIFY %s %s(%s) CHARACTER SET %s COLLATE %s;\n",
 					d.TargetSchemaName, d.TableName, mysqlColName, mysqlColInfo.DataType, mysqlColInfo.DataLength, MySQLCharacterSet, MySQLCollation))
