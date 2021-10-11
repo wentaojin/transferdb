@@ -25,11 +25,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jedib0t/go-pretty/v6/table"
+
 	"github.com/wentaojin/transferdb/utils"
 
 	"github.com/wentaojin/transferdb/service"
-
-	"github.com/tatsushid/go-prettytable"
 
 	"github.com/wentaojin/transferdb/pkg/reverser"
 
@@ -342,20 +342,14 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 
 	// 表字段检查
 	// 注释格式化
-	textTable, err := prettytable.NewTable([]prettytable.Column{
-		{Header: "column"},
-		{Header: "oracle"},
-		{Header: "mysql"},
-		{Header: "suggest"},
-	}...)
-	if err != nil {
-		return err
-	}
-	textTable.Separator = " | "
+	textTable := table.NewWriter()
+	textTable.SetStyle(table.StyleLight)
+	textTable.AppendHeader(table.Row{"Column", "ORACLE", "MySQL", "Suggest"})
 
 	var (
 		diffColumnMsgs    []string
 		createColumnMetas []string
+		tableRowArr       []table.Row
 	)
 
 	service.Logger.Info("check table",
@@ -364,20 +358,19 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 	for oracleColName, oracleColInfo := range oracleTable.Columns {
 		mysqlColInfo, ok := mysqlTable.Columns[oracleColName]
 		if ok {
-			diffColumnMsg, err := OracleTableMapRuleCheck(
+			diffColumnMsg, tableRows, err := OracleTableMapRuleCheck(
 				d.SourceSchemaName,
 				d.TargetSchemaName,
 				d.TableName,
 				oracleColName,
 				oracleColInfo,
-				mysqlColInfo,
-				textTable,
-			)
+				mysqlColInfo)
 			if err != nil {
 				return err
 			}
-			if diffColumnMsg != "" {
+			if diffColumnMsg != "" && len(tableRows) != 0 {
 				diffColumnMsgs = append(diffColumnMsgs, diffColumnMsg)
+				tableRowArr = append(tableRowArr, tableRows...)
 			}
 			continue
 		}
@@ -401,7 +394,7 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 		}
 	}
 
-	if textTable.String() != "" && len(diffColumnMsgs) != 0 {
+	if len(tableRowArr) != 0 && len(diffColumnMsgs) != 0 {
 		service.Logger.Info("check table",
 			zap.String("table column info check, generate fixed sql", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)),
 			zap.String("oracle struct", oracleTable.String(ColumnsJSON)),
@@ -409,7 +402,7 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 
 		builder.WriteString("/*\n")
 		builder.WriteString(fmt.Sprintf(" oracle table columns info is different from mysql\n"))
-		builder.WriteString(fmt.Sprintf(" %s\n", textTable.String()))
+		builder.WriteString(fmt.Sprintf("%s\n", textTable.Render()))
 		builder.WriteString("*/\n")
 		builder.WriteString(fmt.Sprintf("-- oracle table columns info is different from mysql, generate fixed sql\n"))
 		for _, diffColMsg := range diffColumnMsgs {
@@ -451,37 +444,39 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 
 func OracleTableMapRuleCheck(
 	sourceSchema, targetSchema, tableName, columnName string,
-	oracleColInfo, mysqlColInfo Column, textTable *prettytable.Table) (string, error) {
+	oracleColInfo, mysqlColInfo Column) (string, []table.Row, error) {
+	var tableRows []table.Row
+
 	// 字段精度类型转换
 	oracleDataLength, err := strconv.Atoi(oracleColInfo.DataLength)
 	if err != nil {
-		return "", fmt.Errorf("oracle schema [%s] table [%s] column data_length string to int failed: %v", sourceSchema, tableName, err)
+		return "", nil, fmt.Errorf("oracle schema [%s] table [%s] column data_length string to int failed: %v", sourceSchema, tableName, err)
 	}
 	oracleDataPrecision, err := strconv.Atoi(oracleColInfo.DataPrecision)
 	if err != nil {
-		return "", fmt.Errorf("oracle schema [%s] table [%s] column data_precision string to int failed: %v", sourceSchema, tableName, err)
+		return "", nil, fmt.Errorf("oracle schema [%s] table [%s] column data_precision string to int failed: %v", sourceSchema, tableName, err)
 	}
 	oracleDataScale, err := strconv.Atoi(oracleColInfo.DataScale)
 	if err != nil {
-		return "", fmt.Errorf("oracle schema [%s] table [%s] column data_scale string to int failed: %v", sourceSchema, tableName, err)
+		return "", nil, fmt.Errorf("oracle schema [%s] table [%s] column data_scale string to int failed: %v", sourceSchema, tableName, err)
 	}
 
 	mysqlDataLength, err := strconv.Atoi(mysqlColInfo.DataLength)
 	if err != nil {
-		return "", fmt.Errorf("mysql schema table [%s.%s] column data_length string to int failed: %v",
+		return "", nil, fmt.Errorf("mysql schema table [%s.%s] column data_length string to int failed: %v",
 			targetSchema, tableName, err)
 	}
 	mysqlDataPrecision, err := strconv.Atoi(mysqlColInfo.DataPrecision)
 	if err != nil {
-		return "", fmt.Errorf("mysql schema table [%s.%s] reverser column data_precision string to int failed: %v", targetSchema, tableName, err)
+		return "", nil, fmt.Errorf("mysql schema table [%s.%s] reverser column data_precision string to int failed: %v", targetSchema, tableName, err)
 	}
 	mysqlDataScale, err := strconv.Atoi(mysqlColInfo.DataScale)
 	if err != nil {
-		return "", fmt.Errorf("mysql schema table [%s.%s] reverser column data_scale string to int failed: %v", targetSchema, tableName, err)
+		return "", nil, fmt.Errorf("mysql schema table [%s.%s] reverser column data_scale string to int failed: %v", targetSchema, tableName, err)
 	}
 	mysqlDatetimePrecision, err := strconv.Atoi(mysqlColInfo.DatetimePrecision)
 	if err != nil {
-		return "", fmt.Errorf("mysql schema table [%s.%s] reverser column datetime_precision string to int failed: %v", targetSchema, tableName, err)
+		return "", nil, fmt.Errorf("mysql schema table [%s.%s] reverser column datetime_precision string to int failed: %v", targetSchema, tableName, err)
 	}
 	// 字段默认值、注释判断
 	mysqlDataType := strings.ToUpper(mysqlColInfo.DataType)
@@ -508,15 +503,13 @@ func OracleTableMapRuleCheck(
 		switch {
 		case oracleDataScale > 0:
 			if mysqlDataType == "DECIMAL" && oracleDataPrecision == mysqlDataPrecision && oracleDataScale == mysqlDataScale && oracleColMeta == mysqlColMeta {
-				return "", nil
+				return "", nil, nil
 			}
-			if err := textTable.AddRow(
-				columnName,
+
+			tableRows = append(tableRows, table.Row{columnName,
 				fmt.Sprintf("NUMBER(%d,%d) %s", oracleDataPrecision, oracleDataScale, oracleColMeta),
 				fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
-				fmt.Sprintf("DECIMAL(%d,%d) %s", oracleDataPrecision, oracleDataScale, oracleColMeta)); err != nil {
-				return "", err
-			}
+				fmt.Sprintf("DECIMAL(%d,%d) %s", oracleDataPrecision, oracleDataScale, oracleColMeta)})
 
 			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 				targetSchema,
@@ -531,15 +524,13 @@ func OracleTableMapRuleCheck(
 				// MySQL column type  NUMERIC would convert to DECIMAL(11,0)
 				// buildInColumnType = "NUMERIC"
 				if mysqlDataType == "DECIMAL" && mysqlDataPrecision == 11 && mysqlDataScale == oracleDataScale && oracleColMeta == mysqlColMeta {
-					return "", nil
+					return "", nil, nil
 				}
-				if err := textTable.AddRow(
-					columnName,
+
+				tableRows = append(tableRows, table.Row{columnName,
 					fmt.Sprintf("NUMBER %s", oracleColMeta),
 					fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
-					fmt.Sprintf("DECIMAL(11,0) %s", oracleColMeta)); err != nil {
-					return "", err
-				}
+					fmt.Sprintf("DECIMAL(11,0) %s", oracleColMeta)})
 
 				fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 					targetSchema,
@@ -550,15 +541,14 @@ func OracleTableMapRuleCheck(
 				)
 			case oracleDataPrecision >= 1 && oracleDataPrecision < 3:
 				if mysqlDataType == "TINYINT" && mysqlDataPrecision >= 3 && mysqlDataScale == oracleDataScale && oracleColMeta == mysqlColMeta {
-					return "", nil
+					return "", nil, nil
 				}
-				if err := textTable.AddRow(
-					columnName,
+
+				tableRows = append(tableRows, table.Row{columnName,
 					fmt.Sprintf("NUMBER(%d) %s", oracleDataPrecision, oracleColMeta),
 					fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataPrecision, mysqlColMeta),
-					fmt.Sprintf("TINYINT %s", oracleColMeta)); err != nil {
-					return "", err
-				}
+					fmt.Sprintf("TINYINT %s", oracleColMeta)})
+
 				fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 					targetSchema,
 					tableName,
@@ -568,15 +558,14 @@ func OracleTableMapRuleCheck(
 				)
 			case oracleDataPrecision >= 3 && oracleDataPrecision < 5:
 				if mysqlDataType == "SMALLINT" && mysqlDataPrecision >= 5 && mysqlDataScale == oracleDataScale && oracleColMeta == mysqlColMeta {
-					return "", nil
+					return "", nil, nil
 				}
-				if err := textTable.AddRow(
+				tableRows = append(tableRows, table.Row{
 					columnName,
 					fmt.Sprintf("NUMBER(%d) %s", oracleDataPrecision, oracleColMeta),
 					fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataPrecision, mysqlColMeta),
-					fmt.Sprintf("SMALLINT %s", oracleColMeta)); err != nil {
-					return "", err
-				}
+					fmt.Sprintf("SMALLINT %s", oracleColMeta)})
+
 				fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 					targetSchema,
 					tableName,
@@ -586,15 +575,14 @@ func OracleTableMapRuleCheck(
 				)
 			case oracleDataPrecision >= 5 && oracleDataPrecision < 9:
 				if mysqlDataType == "INT" && mysqlDataPrecision >= 9 && mysqlDataScale == oracleDataScale && oracleColMeta == mysqlColMeta {
-					return "", nil
+					return "", nil, nil
 				}
-				if err := textTable.AddRow(
+				tableRows = append(tableRows, table.Row{
 					columnName,
 					fmt.Sprintf("NUMBER(%d) %s", oracleDataPrecision, oracleColMeta),
 					fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataPrecision, mysqlColMeta),
-					fmt.Sprintf("INT %s", oracleColMeta)); err != nil {
-					return "", err
-				}
+					fmt.Sprintf("INT %s", oracleColMeta)})
+
 				fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 					targetSchema,
 					tableName,
@@ -604,15 +592,14 @@ func OracleTableMapRuleCheck(
 				)
 			case oracleDataPrecision >= 9 && oracleDataPrecision < 19:
 				if mysqlDataType == "BIGINT" && mysqlDataPrecision >= 19 && mysqlDataScale == oracleDataScale && oracleColMeta == mysqlColMeta {
-					return "", nil
+					return "", nil, nil
 				}
-				if err := textTable.AddRow(
+				tableRows = append(tableRows, table.Row{
 					columnName,
 					fmt.Sprintf("NUMBER(%d) %s", oracleDataPrecision, oracleColMeta),
 					fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataPrecision, mysqlColMeta),
-					fmt.Sprintf("BIGINT %s", oracleColMeta)); err != nil {
-					return "", err
-				}
+					fmt.Sprintf("BIGINT %s", oracleColMeta)})
+
 				fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 					targetSchema,
 					tableName,
@@ -622,15 +609,14 @@ func OracleTableMapRuleCheck(
 				)
 			case oracleDataPrecision >= 19 && oracleDataPrecision <= 38:
 				if mysqlDataType == "DECIMAL" && mysqlDataPrecision >= 19 && mysqlDataPrecision <= 38 && mysqlDataScale == oracleDataScale && oracleColMeta == mysqlColMeta {
-					return "", nil
+					return "", nil, nil
 				}
-				if err := textTable.AddRow(
+				tableRows = append(tableRows, table.Row{
 					columnName,
 					fmt.Sprintf("NUMBER(%d) %s", oracleDataPrecision, oracleColMeta),
 					fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataPrecision, mysqlColMeta),
-					fmt.Sprintf("DECIMAL(%d) %s", oracleDataPrecision, oracleColMeta)); err != nil {
-					return "", err
-				}
+					fmt.Sprintf("DECIMAL(%d) %s", oracleDataPrecision, oracleColMeta)})
+
 				fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 					targetSchema,
 					tableName,
@@ -640,15 +626,14 @@ func OracleTableMapRuleCheck(
 				)
 			default:
 				if mysqlDataType == "DECIMAL" && mysqlDataPrecision == oracleDataPrecision && mysqlDataScale == 4 && oracleColMeta == mysqlColMeta {
-					return "", nil
+					return "", nil, nil
 				}
-				if err := textTable.AddRow(
+				tableRows = append(tableRows, table.Row{
 					columnName,
 					fmt.Sprintf("NUMBER(%d) %s", oracleDataPrecision, oracleColMeta),
 					fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
-					fmt.Sprintf("DECIMAL(%d,4) %s", oracleDataPrecision, oracleColMeta)); err != nil {
-					return "", err
-				}
+					fmt.Sprintf("DECIMAL(%d,4) %s", oracleDataPrecision, oracleColMeta)})
+
 				fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 					targetSchema,
 					tableName,
@@ -658,20 +643,18 @@ func OracleTableMapRuleCheck(
 				)
 			}
 		}
-		return fixedMsg, nil
+		return fixedMsg, tableRows, nil
 	case "DECIMAL":
 		switch {
 		case oracleDataScale == 0 && oracleDataPrecision == 0:
 			if mysqlDataType == "DECIMAL" && mysqlDataPrecision == 10 && mysqlDataScale == oracleDataScale && oracleColMeta == mysqlColMeta {
-				return "", nil
+				return "", nil, nil
 			}
-			if err := textTable.AddRow(
+			tableRows = append(tableRows, table.Row{
 				columnName,
 				fmt.Sprintf("DECIMAL %s", oracleColMeta),
 				fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
-				fmt.Sprintf("DECIMAL %s", oracleColMeta)); err != nil {
-				return "", err
-			}
+				fmt.Sprintf("DECIMAL %s", oracleColMeta)})
 
 			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 				targetSchema,
@@ -680,18 +663,16 @@ func OracleTableMapRuleCheck(
 				"DECIMAL",
 				oracleColMeta,
 			)
-			return fixedMsg, nil
+			return fixedMsg, tableRows, nil
 		default:
 			if mysqlDataType == "DECIMAL" && mysqlDataPrecision == oracleDataPrecision && mysqlDataScale == oracleDataScale && oracleColMeta == mysqlColMeta {
-				return "", nil
+				return "", nil, nil
 			}
-			if err := textTable.AddRow(
+			tableRows = append(tableRows, table.Row{
 				columnName,
 				fmt.Sprintf("DECIMAL(%d,%d) %s", oracleDataPrecision, oracleDataScale, oracleColMeta),
 				fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
-				fmt.Sprintf("DECIMAL(%d,%d) %s", oracleDataPrecision, oracleDataScale, oracleColMeta)); err != nil {
-				return "", err
-			}
+				fmt.Sprintf("DECIMAL(%d,%d) %s", oracleDataPrecision, oracleDataScale, oracleColMeta)})
 
 			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 				targetSchema,
@@ -700,21 +681,19 @@ func OracleTableMapRuleCheck(
 				fmt.Sprintf("DECIMAL(%d,%d)", oracleDataPrecision, oracleDataScale),
 				oracleColMeta,
 			)
-			return fixedMsg, nil
+			return fixedMsg, tableRows, nil
 		}
 	case "DEC":
 		switch {
 		case oracleDataScale == 0 && oracleDataPrecision == 0:
 			if mysqlDataType == "DECIMAL" && mysqlDataPrecision == 10 && mysqlDataScale == oracleDataScale && oracleColMeta == mysqlColMeta {
-				return "", nil
+				return "", nil, nil
 			}
-			if err := textTable.AddRow(
+			tableRows = append(tableRows, table.Row{
 				columnName,
 				fmt.Sprintf("DECIMAL %s", oracleColMeta),
 				fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
-				fmt.Sprintf("DECIMAL %s", oracleColMeta)); err != nil {
-				return "", err
-			}
+				fmt.Sprintf("DECIMAL %s", oracleColMeta)})
 
 			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 				targetSchema,
@@ -723,18 +702,16 @@ func OracleTableMapRuleCheck(
 				"DECIMAL",
 				oracleColMeta,
 			)
-			return fixedMsg, nil
+			return fixedMsg, tableRows, nil
 		default:
 			if mysqlDataType == "DECIMAL" && mysqlDataPrecision == oracleDataPrecision && mysqlDataScale == oracleDataScale && oracleColMeta == mysqlColMeta {
-				return "", nil
+				return "", nil, nil
 			}
-			if err := textTable.AddRow(
+			tableRows = append(tableRows, table.Row{
 				columnName,
 				fmt.Sprintf("DECIMAL(%d,%d) %s", oracleDataPrecision, oracleDataScale, oracleColMeta),
 				fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
-				fmt.Sprintf("DECIMAL(%d,%d) %s", oracleDataPrecision, oracleDataScale, oracleColMeta)); err != nil {
-				return "", err
-			}
+				fmt.Sprintf("DECIMAL(%d,%d) %s", oracleDataPrecision, oracleDataScale, oracleColMeta)})
 
 			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 				targetSchema,
@@ -743,19 +720,17 @@ func OracleTableMapRuleCheck(
 				fmt.Sprintf("DECIMAL(%d,%d)", oracleDataPrecision, oracleDataScale),
 				oracleColMeta,
 			)
-			return fixedMsg, nil
+			return fixedMsg, tableRows, nil
 		}
 	case "DOUBLE PRECISION":
 		if mysqlDataType == "DOUBLE" && mysqlDataPrecision == 22 && mysqlDataScale == 0 && oracleColMeta == mysqlColMeta {
-			return "", nil
+			return "", nil, nil
 		}
-		if err := textTable.AddRow(
+		tableRows = append(tableRows, table.Row{
 			columnName,
 			fmt.Sprintf("DOUBLE PRECISION %s", oracleColMeta),
 			fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
-			fmt.Sprintf("DOUBLE PRECISION %s", oracleColMeta)); err != nil {
-			return "", err
-		}
+			fmt.Sprintf("DOUBLE PRECISION %s", oracleColMeta)})
 
 		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 			targetSchema,
@@ -764,19 +739,17 @@ func OracleTableMapRuleCheck(
 			"DOUBLE PRECISION",
 			oracleColMeta,
 		)
-		return fixedMsg, nil
+		return fixedMsg, tableRows, nil
 	case "FLOAT":
 		if oracleDataPrecision == 0 {
 			if mysqlDataType == "FLOAT" && mysqlDataPrecision == 12 && mysqlDataScale == 0 && oracleColMeta == mysqlColMeta {
-				return "", nil
+				return "", nil, nil
 			}
-			if err := textTable.AddRow(
+			tableRows = append(tableRows, table.Row{
 				columnName,
 				fmt.Sprintf("FLOAT %s", oracleColMeta),
 				fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
-				fmt.Sprintf("FLOAT %s", oracleColMeta)); err != nil {
-				return "", err
-			}
+				fmt.Sprintf("FLOAT %s", oracleColMeta)})
 
 			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 				targetSchema,
@@ -785,18 +758,16 @@ func OracleTableMapRuleCheck(
 				"FLOAT",
 				oracleColMeta,
 			)
-			return fixedMsg, nil
+			return fixedMsg, tableRows, nil
 		}
 		if mysqlDataType == "DOUBLE" && mysqlDataPrecision == 22 && mysqlDataScale == 0 && oracleColMeta == mysqlColMeta {
-			return "", nil
+			return "", nil, nil
 		}
-		if err := textTable.AddRow(
+		tableRows = append(tableRows, table.Row{
 			columnName,
 			fmt.Sprintf("FLOAT %s", oracleColMeta),
 			fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
-			fmt.Sprintf("DOUBLE %s", oracleColMeta)); err != nil {
-			return "", err
-		}
+			fmt.Sprintf("DOUBLE %s", oracleColMeta)})
 
 		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 			targetSchema,
@@ -805,18 +776,16 @@ func OracleTableMapRuleCheck(
 			"DOUBLE",
 			oracleColMeta,
 		)
-		return fixedMsg, nil
+		return fixedMsg, tableRows, nil
 	case "INTEGER":
 		if mysqlDataType == "INT" && mysqlDataPrecision >= 10 && mysqlDataScale == 0 && oracleColMeta == mysqlColMeta {
-			return "", nil
+			return "", nil, nil
 		}
-		if err := textTable.AddRow(
+		tableRows = append(tableRows, table.Row{
 			columnName,
 			fmt.Sprintf("INTEGER %s", oracleColMeta),
 			fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
-			fmt.Sprintf("INT %s", oracleColMeta)); err != nil {
-			return "", err
-		}
+			fmt.Sprintf("INT %s", oracleColMeta)})
 
 		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 			targetSchema,
@@ -825,18 +794,16 @@ func OracleTableMapRuleCheck(
 			"INT",
 			oracleColMeta,
 		)
-		return fixedMsg, nil
+		return fixedMsg, tableRows, nil
 	case "INT":
 		if mysqlDataType == "INT" && mysqlDataPrecision >= 10 && mysqlDataScale == 0 && oracleColMeta == mysqlColMeta {
-			return "", nil
+			return "", nil, nil
 		}
-		if err := textTable.AddRow(
+		tableRows = append(tableRows, table.Row{
 			columnName,
 			fmt.Sprintf("INT %s", oracleColMeta),
 			fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
-			fmt.Sprintf("INT %s", oracleColMeta)); err != nil {
-			return "", err
-		}
+			fmt.Sprintf("INT %s", oracleColMeta)})
 
 		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 			targetSchema,
@@ -845,18 +812,16 @@ func OracleTableMapRuleCheck(
 			"INT",
 			oracleColMeta,
 		)
-		return fixedMsg, nil
+		return fixedMsg, tableRows, nil
 	case "REAL":
 		if mysqlDataType == "DOUBLE" && mysqlDataPrecision == 22 && mysqlDataScale == 0 && oracleColMeta == mysqlColMeta {
-			return "", nil
+			return "", nil, nil
 		}
-		if err := textTable.AddRow(
+		tableRows = append(tableRows, table.Row{
 			columnName,
 			fmt.Sprintf("REAL %s", oracleColMeta),
 			fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
-			fmt.Sprintf("DOUBLE %s", oracleColMeta)); err != nil {
-			return "", err
-		}
+			fmt.Sprintf("DOUBLE %s", oracleColMeta)})
 
 		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 			targetSchema,
@@ -865,18 +830,16 @@ func OracleTableMapRuleCheck(
 			"DOUBLE",
 			oracleColMeta,
 		)
-		return fixedMsg, nil
+		return fixedMsg, tableRows, nil
 	case "NUMERIC":
 		if mysqlDataType == "DECIMAL" && mysqlDataPrecision == oracleDataPrecision && mysqlDataScale == oracleDataScale && oracleColMeta == mysqlColMeta {
-			return "", nil
+			return "", nil, nil
 		}
-		if err := textTable.AddRow(
+		tableRows = append(tableRows, table.Row{
 			columnName,
 			fmt.Sprintf("NUMERIC(%d,%d) %s", oracleDataPrecision, oracleDataScale, oracleColMeta),
 			fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
-			fmt.Sprintf("DECIMAL(%d,%d) %s", oracleDataPrecision, oracleDataScale, oracleColMeta)); err != nil {
-			return "", err
-		}
+			fmt.Sprintf("DECIMAL(%d,%d) %s", oracleDataPrecision, oracleDataScale, oracleColMeta)})
 
 		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 			targetSchema,
@@ -885,18 +848,16 @@ func OracleTableMapRuleCheck(
 			fmt.Sprintf("DECIMAL(%d,%d)", oracleDataPrecision, oracleDataScale),
 			oracleColMeta,
 		)
-		return fixedMsg, nil
+		return fixedMsg, tableRows, nil
 	case "BINARY_FLOAT":
 		if mysqlDataType == "DOUBLE" && mysqlDataPrecision == 22 && mysqlDataScale == 0 && oracleColMeta == mysqlColMeta {
-			return "", nil
+			return "", nil, nil
 		}
-		if err := textTable.AddRow(
+		tableRows = append(tableRows, table.Row{
 			columnName,
 			fmt.Sprintf("BINARY_FLOAT %s", oracleColMeta),
 			fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
-			fmt.Sprintf("DOUBLE %s", oracleColMeta)); err != nil {
-			return "", err
-		}
+			fmt.Sprintf("DOUBLE %s", oracleColMeta)})
 
 		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 			targetSchema,
@@ -905,18 +866,16 @@ func OracleTableMapRuleCheck(
 			"DOUBLE",
 			oracleColMeta,
 		)
-		return fixedMsg, nil
+		return fixedMsg, tableRows, nil
 	case "BINARY_DOUBLE":
 		if mysqlDataType == "DOUBLE" && mysqlDataPrecision == 22 && mysqlDataScale == 0 && oracleColMeta == mysqlColMeta {
-			return "", nil
+			return "", nil, nil
 		}
-		if err := textTable.AddRow(
+		tableRows = append(tableRows, table.Row{
 			columnName,
 			fmt.Sprintf("BINARY_DOUBLE %s", oracleColMeta),
 			fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
-			fmt.Sprintf("DOUBLE %s", oracleColMeta)); err != nil {
-			return "", err
-		}
+			fmt.Sprintf("DOUBLE %s", oracleColMeta)})
 
 		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 			targetSchema,
@@ -925,18 +884,16 @@ func OracleTableMapRuleCheck(
 			"DOUBLE",
 			oracleColMeta,
 		)
-		return fixedMsg, nil
+		return fixedMsg, tableRows, nil
 	case "SMALLINT":
 		if mysqlDataType == "DECIMAL" && mysqlDataPrecision == 38 && mysqlDataScale == 0 && oracleColMeta == mysqlColMeta {
-			return "", nil
+			return "", nil, nil
 		}
-		if err := textTable.AddRow(
+		tableRows = append(tableRows, table.Row{
 			columnName,
 			fmt.Sprintf("SMALLINT %s", oracleColMeta),
 			fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
-			fmt.Sprintf("DECIMAL(38) %s", oracleColMeta)); err != nil {
-			return "", err
-		}
+			fmt.Sprintf("DECIMAL(38) %s", oracleColMeta)})
 
 		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 			targetSchema,
@@ -945,20 +902,18 @@ func OracleTableMapRuleCheck(
 			"DECIMAL(38)",
 			oracleColMeta,
 		)
-		return fixedMsg, nil
+		return fixedMsg, tableRows, nil
 
 	// 字符
 	case "BFILE":
 		if mysqlDataType == "VARCHAR" && mysqlDataLength == 255 && oracleColMeta == mysqlColMeta {
-			return "", nil
+			return "", nil, nil
 		}
-		if err := textTable.AddRow(
+		tableRows = append(tableRows, table.Row{
 			columnName,
 			fmt.Sprintf("BFILE %s", oracleColMeta),
 			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
-			fmt.Sprintf("VARCHAR(255) %s", oracleColMeta)); err != nil {
-			return "", err
-		}
+			fmt.Sprintf("VARCHAR(255) %s", oracleColMeta)})
 
 		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 			targetSchema,
@@ -967,19 +922,17 @@ func OracleTableMapRuleCheck(
 			"VARCHAR(255)",
 			oracleColMeta,
 		)
-		return fixedMsg, nil
+		return fixedMsg, tableRows, nil
 	case "CHARACTER":
 		if oracleDataLength < 256 {
 			if mysqlDataType == "CHAR" && mysqlDataLength == oracleDataLength && oracleColMeta == mysqlColMeta {
-				return "", nil
+				return "", nil, nil
 			}
-			if err := textTable.AddRow(
+			tableRows = append(tableRows, table.Row{
 				columnName,
 				fmt.Sprintf("CHARACTER(%d) %s", oracleDataLength, oracleColMeta),
 				fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
-				fmt.Sprintf("CHAR(%d) %s", oracleDataLength, oracleColMeta)); err != nil {
-				return "", err
-			}
+				fmt.Sprintf("CHAR(%d) %s", oracleDataLength, oracleColMeta)})
 
 			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 				targetSchema,
@@ -988,18 +941,16 @@ func OracleTableMapRuleCheck(
 				fmt.Sprintf("CHAR(%d)", oracleDataLength),
 				oracleColMeta,
 			)
-			return fixedMsg, nil
+			return fixedMsg, tableRows, nil
 		}
 		if mysqlDataType == "VARCHAR" && mysqlDataLength == oracleDataLength && oracleColMeta == mysqlColMeta {
-			return "", nil
+			return "", nil, nil
 		}
-		if err := textTable.AddRow(
+		tableRows = append(tableRows, table.Row{
 			columnName,
 			fmt.Sprintf("CHARACTER(%d) %s", oracleDataLength, oracleColMeta),
 			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
-			fmt.Sprintf("VARCHAR(%d) %s", oracleDataLength, oracleColMeta)); err != nil {
-			return "", err
-		}
+			fmt.Sprintf("VARCHAR(%d) %s", oracleDataLength, oracleColMeta)})
 
 		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 			targetSchema,
@@ -1008,18 +959,16 @@ func OracleTableMapRuleCheck(
 			fmt.Sprintf("VARCHAR(%d)", oracleDataLength),
 			oracleColMeta,
 		)
-		return fixedMsg, nil
+		return fixedMsg, tableRows, nil
 	case "LONG":
 		if mysqlDataType == "LONGTEXT" && mysqlDataLength == 4294967295 && oracleColMeta == mysqlColMeta {
-			return "", nil
+			return "", nil, nil
 		}
-		if err := textTable.AddRow(
+		tableRows = append(tableRows, table.Row{
 			columnName,
 			fmt.Sprintf("LONG %s", oracleColMeta),
 			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
-			fmt.Sprintf("LONGTEXT %s", oracleColMeta)); err != nil {
-			return "", err
-		}
+			fmt.Sprintf("LONGTEXT %s", oracleColMeta)})
 
 		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 			targetSchema,
@@ -1028,18 +977,16 @@ func OracleTableMapRuleCheck(
 			"LONGTEXT",
 			oracleColMeta,
 		)
-		return fixedMsg, nil
+		return fixedMsg, tableRows, nil
 	case "LONG RAW":
 		if mysqlDataType == "LONGBLOB" && mysqlDataLength == 4294967295 && oracleColMeta == mysqlColMeta {
-			return "", nil
+			return "", nil, nil
 		}
-		if err := textTable.AddRow(
+		tableRows = append(tableRows, table.Row{
 			columnName,
 			fmt.Sprintf("LONG RAW %s", oracleColMeta),
 			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
-			fmt.Sprintf("LONGBLOB %s", oracleColMeta)); err != nil {
-			return "", err
-		}
+			fmt.Sprintf("LONGBLOB %s", oracleColMeta)})
 
 		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 			targetSchema,
@@ -1048,18 +995,16 @@ func OracleTableMapRuleCheck(
 			"LONGBLOB",
 			oracleColMeta,
 		)
-		return fixedMsg, nil
+		return fixedMsg, tableRows, nil
 	case "NCHAR VARYING":
 		if mysqlDataType == "NCHAR VARYING" && mysqlDataLength == oracleDataLength && oracleColMeta == mysqlColMeta {
-			return "", nil
+			return "", nil, nil
 		}
-		if err := textTable.AddRow(
+		tableRows = append(tableRows, table.Row{
 			columnName,
 			fmt.Sprintf("NCHAR VARYING %s", oracleColMeta),
 			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
-			fmt.Sprintf("NCHAR VARYING(%d) %s", oracleDataLength, oracleColMeta)); err != nil {
-			return "", err
-		}
+			fmt.Sprintf("NCHAR VARYING(%d) %s", oracleDataLength, oracleColMeta)})
 
 		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 			targetSchema,
@@ -1068,18 +1013,16 @@ func OracleTableMapRuleCheck(
 			fmt.Sprintf("NCHAR VARYING(%d)", oracleDataLength),
 			oracleColMeta,
 		)
-		return fixedMsg, nil
+		return fixedMsg, tableRows, nil
 	case "NCLOB":
 		if mysqlDataType == "TEXT" && mysqlDataLength == 65535 && oracleColMeta == mysqlColMeta {
-			return "", nil
+			return "", nil, nil
 		}
-		if err := textTable.AddRow(
+		tableRows = append(tableRows, table.Row{
 			columnName,
 			fmt.Sprintf("NCLOB %s", oracleColMeta),
 			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
-			fmt.Sprintf("TEXT %s", oracleColMeta)); err != nil {
-			return "", err
-		}
+			fmt.Sprintf("TEXT %s", oracleColMeta)})
 
 		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 			targetSchema,
@@ -1088,19 +1031,17 @@ func OracleTableMapRuleCheck(
 			"TEXT",
 			oracleColMeta,
 		)
-		return fixedMsg, nil
+		return fixedMsg, tableRows, nil
 	case "RAW":
 		if oracleDataLength < 256 {
 			if mysqlDataType == "BINARY" && mysqlDataLength == oracleDataLength && oracleColMeta == mysqlColMeta {
-				return "", nil
+				return "", nil, nil
 			}
-			if err := textTable.AddRow(
+			tableRows = append(tableRows, table.Row{
 				columnName,
 				fmt.Sprintf("RAW(%d) %s", oracleDataLength, oracleColMeta),
 				fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
-				fmt.Sprintf("BINARY(%d) %s", oracleDataLength, oracleColMeta)); err != nil {
-				return "", err
-			}
+				fmt.Sprintf("BINARY(%d) %s", oracleDataLength, oracleColMeta)})
 
 			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 				targetSchema,
@@ -1109,19 +1050,17 @@ func OracleTableMapRuleCheck(
 				fmt.Sprintf("BINARY(%d)", oracleDataLength),
 				oracleColMeta,
 			)
-			return fixedMsg, nil
+			return fixedMsg, tableRows, nil
 		}
 
 		if mysqlDataType == "VARBINARY" && mysqlDataLength == oracleDataLength && oracleColMeta == mysqlColMeta {
-			return "", nil
+			return "", nil, nil
 		}
-		if err := textTable.AddRow(
+		tableRows = append(tableRows, table.Row{
 			columnName,
 			fmt.Sprintf("RAW(%d) %s", oracleDataLength, oracleColMeta),
 			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
-			fmt.Sprintf("VARBINARY(%d) %s", oracleDataLength, oracleColMeta)); err != nil {
-			return "", err
-		}
+			fmt.Sprintf("VARBINARY(%d) %s", oracleDataLength, oracleColMeta)})
 
 		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 			targetSchema,
@@ -1130,18 +1069,16 @@ func OracleTableMapRuleCheck(
 			fmt.Sprintf("VARBINARY(%d)", oracleDataLength),
 			oracleColMeta,
 		)
-		return fixedMsg, nil
+		return fixedMsg, tableRows, nil
 	case "ROWID":
 		if mysqlDataType == "CHAR" && mysqlDataLength == 10 && oracleColMeta == mysqlColMeta {
-			return "", nil
+			return "", nil, nil
 		}
-		if err := textTable.AddRow(
+		tableRows = append(tableRows, table.Row{
 			columnName,
 			fmt.Sprintf("ROWID %s", oracleColMeta),
 			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
-			fmt.Sprintf("CHAR(10) %s", oracleColMeta)); err != nil {
-			return "", err
-		}
+			fmt.Sprintf("CHAR(10) %s", oracleColMeta)})
 
 		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 			targetSchema,
@@ -1150,18 +1087,16 @@ func OracleTableMapRuleCheck(
 			"CHAR(10)",
 			oracleColMeta,
 		)
-		return fixedMsg, nil
+		return fixedMsg, tableRows, nil
 	case "UROWID":
 		if mysqlDataType == "VARCHAR" && mysqlDataLength == oracleDataLength && oracleColMeta == mysqlColMeta {
-			return "", nil
+			return "", nil, nil
 		}
-		if err := textTable.AddRow(
+		tableRows = append(tableRows, table.Row{
 			columnName,
 			fmt.Sprintf("UROWID %s", oracleColMeta),
 			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
-			fmt.Sprintf("VARCHAR(%d) %s", oracleDataLength, oracleColMeta)); err != nil {
-			return "", err
-		}
+			fmt.Sprintf("VARCHAR(%d) %s", oracleDataLength, oracleColMeta)})
 
 		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 			targetSchema,
@@ -1170,18 +1105,16 @@ func OracleTableMapRuleCheck(
 			fmt.Sprintf("VARCHAR(%d)", oracleDataLength),
 			oracleColMeta,
 		)
-		return fixedMsg, nil
+		return fixedMsg, tableRows, nil
 	case "VARCHAR":
 		if mysqlDataType == "VARCHAR" && mysqlDataLength == oracleDataLength && oracleColMeta == mysqlColMeta {
-			return "", nil
+			return "", nil, nil
 		}
-		if err := textTable.AddRow(
+		tableRows = append(tableRows, table.Row{
 			columnName,
 			fmt.Sprintf("VARCHAR(%d) %s", oracleDataLength, oracleColMeta),
 			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
-			fmt.Sprintf("VARCHAR(%d) %s", oracleDataLength, oracleColMeta)); err != nil {
-			return "", err
-		}
+			fmt.Sprintf("VARCHAR(%d) %s", oracleDataLength, oracleColMeta)})
 
 		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 			targetSchema,
@@ -1190,18 +1123,16 @@ func OracleTableMapRuleCheck(
 			fmt.Sprintf("VARCHAR(%d)", oracleDataLength),
 			oracleColMeta,
 		)
-		return fixedMsg, nil
+		return fixedMsg, tableRows, nil
 	case "XMLTYPE":
 		if mysqlDataType == "LONGTEXT" && mysqlDataLength == 4294967295 && oracleColMeta == mysqlColMeta {
-			return "", nil
+			return "", nil, nil
 		}
-		if err := textTable.AddRow(
+		tableRows = append(tableRows, table.Row{
 			columnName,
 			fmt.Sprintf("XMLTYPE %s", oracleColMeta),
 			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
-			fmt.Sprintf("LONGTEXT %s", oracleColMeta)); err != nil {
-			return "", err
-		}
+			fmt.Sprintf("LONGTEXT %s", oracleColMeta)})
 
 		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 			targetSchema,
@@ -1210,20 +1141,18 @@ func OracleTableMapRuleCheck(
 			"LONGTEXT",
 			oracleColMeta,
 		)
-		return fixedMsg, nil
+		return fixedMsg, tableRows, nil
 
 	// 二进制
 	case "CLOB":
 		if mysqlDataType == "LONGTEXT" && mysqlDataLength == 4294967295 && oracleColMeta == mysqlColMeta {
-			return "", nil
+			return "", nil, nil
 		}
-		if err := textTable.AddRow(
+		tableRows = append(tableRows, table.Row{
 			columnName,
 			fmt.Sprintf("CLOB %s", oracleColMeta),
 			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
-			fmt.Sprintf("LONGTEXT %s", oracleColMeta)); err != nil {
-			return "", err
-		}
+			fmt.Sprintf("LONGTEXT %s", oracleColMeta)})
 
 		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 			targetSchema,
@@ -1232,18 +1161,16 @@ func OracleTableMapRuleCheck(
 			"LONGTEXT",
 			oracleColMeta,
 		)
-		return fixedMsg, nil
+		return fixedMsg, tableRows, nil
 	case "BLOB":
 		if mysqlDataType == "BLOB" && mysqlDataLength == 65535 && oracleColMeta == mysqlColMeta {
-			return "", nil
+			return "", nil, nil
 		}
-		if err := textTable.AddRow(
+		tableRows = append(tableRows, table.Row{
 			columnName,
 			fmt.Sprintf("BLOB %s", oracleColMeta),
 			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
-			fmt.Sprintf("BLOB %s", oracleColMeta)); err != nil {
-			return "", err
-		}
+			fmt.Sprintf("BLOB %s", oracleColMeta)})
 
 		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 			targetSchema,
@@ -1252,20 +1179,18 @@ func OracleTableMapRuleCheck(
 			"BLOB",
 			oracleColMeta,
 		)
-		return fixedMsg, nil
+		return fixedMsg, tableRows, nil
 
 	// 时间
 	case "DATE":
 		if mysqlDataType == "DATETIME" && mysqlDataLength == 0 && mysqlDataPrecision == 0 && mysqlDataScale == 0 && oracleColMeta == mysqlColMeta {
-			return "", nil
+			return "", nil, nil
 		}
-		if err := textTable.AddRow(
+		tableRows = append(tableRows, table.Row{
 			columnName,
 			fmt.Sprintf("DATE %s", oracleColMeta),
 			fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
-			fmt.Sprintf("DATETIME %s", oracleColMeta)); err != nil {
-			return "", err
-		}
+			fmt.Sprintf("DATETIME %s", oracleColMeta)})
 
 		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 			targetSchema,
@@ -1274,7 +1199,7 @@ func OracleTableMapRuleCheck(
 			"DATETIME",
 			oracleColMeta,
 		)
-		return fixedMsg, nil
+		return fixedMsg, tableRows, nil
 
 	// oracle 字符类型 bytes/char 判断 B/C
 	// CHAR、NCHAR、VARCHAR2、NVARCHAR2( oracle 字符类型 B/C)
@@ -1282,15 +1207,13 @@ func OracleTableMapRuleCheck(
 	case "CHAR":
 		if oracleDataLength < 256 {
 			if mysqlDataType == "CHAR" && mysqlDataLength == oracleDataLength && oracleColMeta == mysqlColMeta && oracleColumnCharUsed == "char" {
-				return "", nil
+				return "", nil, nil
 			}
-			if err := textTable.AddRow(
+			tableRows = append(tableRows, table.Row{
 				columnName,
 				fmt.Sprintf("CHAR(%d %s) %s", oracleDataLength, oracleColumnCharUsed, oracleColMeta),
 				fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
-				fmt.Sprintf("CHAR(%d) %s", oracleDataLength, oracleColMeta)); err != nil {
-				return "", err
-			}
+				fmt.Sprintf("CHAR(%d) %s", oracleDataLength, oracleColMeta)})
 
 			if mysqlDataType == "CHAR" && mysqlDataLength != oracleDataLength && oracleColMeta != mysqlColMeta {
 				fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
@@ -1302,18 +1225,16 @@ func OracleTableMapRuleCheck(
 				)
 			}
 
-			return fixedMsg, nil
+			return fixedMsg, tableRows, nil
 		}
 		if mysqlDataType == "VARCHAR" && mysqlDataLength == oracleDataLength && oracleColMeta == mysqlColMeta && oracleColumnCharUsed == "char" {
-			return "", nil
+			return "", nil, nil
 		}
-		if err := textTable.AddRow(
+		tableRows = append(tableRows, table.Row{
 			columnName,
 			fmt.Sprintf("CHAR(%d %s) %s", oracleDataLength, oracleColumnCharUsed, oracleColMeta),
 			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
-			fmt.Sprintf("VARCHAR(%d) %s", oracleDataLength, oracleColMeta)); err != nil {
-			return "", err
-		}
+			fmt.Sprintf("VARCHAR(%d) %s", oracleDataLength, oracleColMeta)})
 
 		if mysqlDataType == "VARCHAR" && mysqlDataLength != oracleDataLength && oracleColMeta != mysqlColMeta {
 			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
@@ -1324,19 +1245,17 @@ func OracleTableMapRuleCheck(
 				oracleColMeta,
 			)
 		}
-		return fixedMsg, nil
+		return fixedMsg, tableRows, nil
 	case "NCHAR":
 		if oracleDataLength < 256 {
 			if mysqlDataType == "NCHAR" && mysqlDataLength == oracleDataLength && oracleColMeta == mysqlColMeta && oracleColumnCharUsed == "char" {
-				return "", nil
+				return "", nil, nil
 			}
-			if err := textTable.AddRow(
+			tableRows = append(tableRows, table.Row{
 				columnName,
 				fmt.Sprintf("NCHAR(%d %s) %s", oracleDataLength, oracleColumnCharUsed, oracleColMeta),
 				fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
-				fmt.Sprintf("NCHAR(%d) %s", oracleDataLength, oracleColMeta)); err != nil {
-				return "", err
-			}
+				fmt.Sprintf("NCHAR(%d) %s", oracleDataLength, oracleColMeta)})
 
 			if mysqlDataType == "NCHAR" && mysqlDataLength != oracleDataLength && oracleColMeta != mysqlColMeta {
 				fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
@@ -1347,18 +1266,16 @@ func OracleTableMapRuleCheck(
 					oracleColMeta,
 				)
 			}
-			return fixedMsg, nil
+			return fixedMsg, tableRows, nil
 		}
 		if mysqlDataType == "NVARCHAR" && mysqlDataLength == oracleDataLength && oracleColMeta == mysqlColMeta && oracleColumnCharUsed == "char" {
-			return "", nil
+			return "", nil, nil
 		}
-		if err := textTable.AddRow(
+		tableRows = append(tableRows, table.Row{
 			columnName,
 			fmt.Sprintf("NVARCHAR(%d %s) %s", oracleDataLength, oracleColumnCharUsed, oracleColMeta),
 			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
-			fmt.Sprintf("NVARCHAR(%d) %s", oracleDataLength, oracleColMeta)); err != nil {
-			return "", err
-		}
+			fmt.Sprintf("NVARCHAR(%d) %s", oracleDataLength, oracleColMeta)})
 
 		if mysqlDataType == "NVARCHAR" && mysqlDataLength != oracleDataLength && oracleColMeta != mysqlColMeta {
 			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
@@ -1369,18 +1286,16 @@ func OracleTableMapRuleCheck(
 				oracleColMeta,
 			)
 		}
-		return fixedMsg, nil
+		return fixedMsg, tableRows, nil
 	case "VARCHAR2":
 		if mysqlDataType == "VARCHAR" && mysqlDataLength == oracleDataLength && oracleColMeta == mysqlColMeta && oracleColumnCharUsed == "char" {
-			return "", nil
+			return "", nil, nil
 		}
-		if err := textTable.AddRow(
+		tableRows = append(tableRows, table.Row{
 			columnName,
 			fmt.Sprintf("VARCHAR2(%d %s) %s", oracleDataLength, oracleColumnCharUsed, oracleColMeta),
 			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
-			fmt.Sprintf("VARCHAR(%d) %s", oracleDataLength, oracleColMeta)); err != nil {
-			return "", err
-		}
+			fmt.Sprintf("VARCHAR(%d) %s", oracleDataLength, oracleColMeta)})
 
 		if mysqlDataType == "VARCHAR" && mysqlDataLength != oracleDataLength && oracleColMeta != mysqlColMeta {
 			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
@@ -1391,18 +1306,16 @@ func OracleTableMapRuleCheck(
 				oracleColMeta,
 			)
 		}
-		return fixedMsg, nil
+		return fixedMsg, tableRows, nil
 	case "NVARCHAR2":
 		if mysqlDataType == "NVARCHAR" && mysqlDataLength == oracleDataLength && oracleColMeta == mysqlColMeta && oracleColumnCharUsed == "char" {
-			return "", nil
+			return "", nil, nil
 		}
-		if err := textTable.AddRow(
+		tableRows = append(tableRows, table.Row{
 			columnName,
 			fmt.Sprintf("NVARCHAR2(%d %s) %s", oracleDataLength, oracleColumnCharUsed, oracleColMeta),
 			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
-			fmt.Sprintf("NVARCHAR(%d) %s", oracleDataLength, oracleColMeta)); err != nil {
-			return "", err
-		}
+			fmt.Sprintf("NVARCHAR(%d) %s", oracleDataLength, oracleColMeta)})
 
 		if mysqlDataType == "NVARCHAR" && mysqlDataLength != oracleDataLength && oracleColMeta != mysqlColMeta {
 			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
@@ -1413,21 +1326,19 @@ func OracleTableMapRuleCheck(
 				oracleColMeta,
 			)
 		}
-		return fixedMsg, nil
+		return fixedMsg, tableRows, nil
 
 	// 默认其他类型
 	default:
 		if strings.Contains(oracleDataType, "INTERVAL") {
 			if mysqlDataType == "VARCHAR" && mysqlDataLength == 30 && oracleColMeta == mysqlColMeta {
-				return "", nil
+				return "", nil, nil
 			}
-			if err := textTable.AddRow(
+			tableRows = append(tableRows, table.Row{
 				columnName,
 				fmt.Sprintf("%s %s", oracleDataType, oracleColMeta),
 				fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
-				fmt.Sprintf("VARCHAR(30) %s", oracleColMeta)); err != nil {
-				return "", err
-			}
+				fmt.Sprintf("VARCHAR(30) %s", oracleColMeta)})
 
 			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 				targetSchema,
@@ -1436,19 +1347,17 @@ func OracleTableMapRuleCheck(
 				"VARCHAR(30)",
 				oracleColMeta,
 			)
-			return fixedMsg, nil
+			return fixedMsg, tableRows, nil
 		} else if strings.Contains(oracleDataType, "TIMESTAMP") {
 			if oracleDataScale == 0 {
 				if mysqlDataType == "TIMESTAMP" && mysqlDataLength == 0 && mysqlDataPrecision == 0 && mysqlDataScale == 0 && mysqlDatetimePrecision == 0 && oracleColMeta == mysqlColMeta {
-					return "", nil
+					return "", nil, nil
 				}
-				if err := textTable.AddRow(
+				tableRows = append(tableRows, table.Row{
 					columnName,
 					fmt.Sprintf("%s %s", oracleDataType, oracleColMeta),
 					fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
-					fmt.Sprintf("TIMESTAMP %s", oracleColMeta)); err != nil {
-					return "", err
-				}
+					fmt.Sprintf("TIMESTAMP %s", oracleColMeta)})
 
 				fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 					targetSchema,
@@ -1457,18 +1366,16 @@ func OracleTableMapRuleCheck(
 					"TIMESTAMP",
 					oracleColMeta,
 				)
-				return fixedMsg, nil
+				return fixedMsg, tableRows, nil
 			}
 			if mysqlDataType == "TIMESTAMP" && mysqlDataScale == 0 && mysqlDataLength == 0 && mysqlDataPrecision == 0 && mysqlDatetimePrecision <= 6 && oracleColMeta == mysqlColMeta {
-				return "", nil
+				return "", nil, nil
 			}
-			if err := textTable.AddRow(
+			tableRows = append(tableRows, table.Row{
 				columnName,
 				fmt.Sprintf("%s %s", oracleDataType, oracleColMeta),
 				fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDatetimePrecision, mysqlColMeta),
-				fmt.Sprintf("TIMESTAMP(%d) %s", oracleDataScale, oracleColMeta)); err != nil {
-				return "", err
-			}
+				fmt.Sprintf("TIMESTAMP(%d) %s", oracleDataScale, oracleColMeta)})
 
 			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 				targetSchema,
@@ -1477,18 +1384,16 @@ func OracleTableMapRuleCheck(
 				fmt.Sprintf("TIMESTAMP(%d)", oracleDataScale),
 				oracleColMeta,
 			)
-			return fixedMsg, nil
+			return fixedMsg, tableRows, nil
 		} else {
 			if mysqlDataType == "TEXT" && mysqlDataLength == 65535 && mysqlDataScale == 0 && oracleColMeta == mysqlColMeta {
-				return "", nil
+				return "", nil, nil
 			}
-			if err := textTable.AddRow(
+			tableRows = append(tableRows, table.Row{
 				columnName,
 				fmt.Sprintf("%s %s", oracleDataType, oracleColMeta),
 				fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
-				fmt.Sprintf("TEXT %s", oracleColMeta)); err != nil {
-				return "", err
-			}
+				fmt.Sprintf("TEXT %s", oracleColMeta)})
 
 			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 				targetSchema,
@@ -1497,7 +1402,7 @@ func OracleTableMapRuleCheck(
 				"TEXT",
 				oracleColMeta,
 			)
-			return fixedMsg, nil
+			return fixedMsg, tableRows, nil
 		}
 	}
 }

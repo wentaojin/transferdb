@@ -41,7 +41,7 @@ func main() {
 		DataDefault:   "pc",
 		Comment:       "",
 	}
-	addDiff, removeDiff, isOK := utils.IsEqualStruct(ora, mysql)
+	addDiff, removeDiff, isOK := utils.DiffStructArray(ora, mysql)
 	if !isOK {
 		fmt.Printf("%v: 1 \n", addDiff)
 		fmt.Printf("%v: 2\n", removeDiff)

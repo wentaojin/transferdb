@@ -22,9 +22,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/xxjwxc/gowp/workpool"
-
+	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/wentaojin/transferdb/pkg/check"
+	"github.com/xxjwxc/gowp/workpool"
 )
 
 func main() {
@@ -41,6 +41,23 @@ func main() {
 	wr := &check.FileMW{Mutex: sync.Mutex{}, Writer: file}
 
 	wp := workpool.New(10)
+
+	t := table.NewWriter()
+	t.SetStyle(table.StyleLight)
+	t.AppendSeparator()
+
+	t.AppendHeader(table.Row{"#", "First Name", "Last Name", "Salary"})
+
+	t.AppendRows([]table.Row{
+		{1, "Arya", "Stark", 3000},
+		{20, "Jon", "Snow", 2000, "You know nothing, Jon Snow!"},
+		{300, "Tyrion", "Lannister", 5000},
+	})
+	t.Render()
+	if _, err := fmt.Fprintln(wr, fmt.Sprintf("/*\n%s\n*/\n", t.Render())); err != nil {
+		fmt.Println(err)
+	}
+
 	for i := 0; i < 1000; i++ {
 		// 变量替换，直接使用原变量会导致并发输出有问题
 		variables := i
