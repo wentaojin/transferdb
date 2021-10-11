@@ -345,7 +345,7 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 	var (
 		diffColumnMsgs    []string
 		createColumnMetas []string
-		tableRowArr       []table.Row
+		tableRowArray     []table.Row
 	)
 
 	service.Logger.Info("check table",
@@ -366,7 +366,7 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 			}
 			if diffColumnMsg != "" && len(tableRows) != 0 {
 				diffColumnMsgs = append(diffColumnMsgs, diffColumnMsg)
-				tableRowArr = append(tableRowArr, tableRows...)
+				tableRowArray = append(tableRowArray, tableRows...)
 			}
 			continue
 		}
@@ -390,7 +390,7 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 		}
 	}
 
-	if len(tableRowArr) != 0 && len(diffColumnMsgs) != 0 {
+	if len(tableRowArray) != 0 && len(diffColumnMsgs) != 0 {
 		service.Logger.Info("check table",
 			zap.String("table column info check, generate fixed sql", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)),
 			zap.String("oracle struct", oracleTable.String(ColumnsJSON)),
@@ -399,6 +399,7 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 		textTable := table.NewWriter()
 		textTable.SetStyle(table.StyleLight)
 		textTable.AppendHeader(table.Row{"Column", "ORACLE", "MySQL", "Suggest"})
+		textTable.AppendRows(tableRowArray)
 
 		builder.WriteString("/*\n")
 		builder.WriteString(fmt.Sprintf(" oracle table columns info is different from mysql\n"))
