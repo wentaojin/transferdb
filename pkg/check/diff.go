@@ -342,10 +342,6 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 
 	// 表字段检查
 	// 注释格式化
-	textTable := table.NewWriter()
-	textTable.SetStyle(table.StyleLight)
-	textTable.AppendHeader(table.Row{"Column", "ORACLE", "MySQL", "Suggest"})
-
 	var (
 		diffColumnMsgs    []string
 		createColumnMetas []string
@@ -399,6 +395,10 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 			zap.String("table column info check, generate fixed sql", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)),
 			zap.String("oracle struct", oracleTable.String(ColumnsJSON)),
 			zap.String("mysql struct", mysqlTable.String(ColumnsJSON)))
+
+		textTable := table.NewWriter()
+		textTable.SetStyle(table.StyleLight)
+		textTable.AppendHeader(table.Row{"Column", "ORACLE", "MySQL", "Suggest"})
 
 		builder.WriteString("/*\n")
 		builder.WriteString(fmt.Sprintf(" oracle table columns info is different from mysql\n"))

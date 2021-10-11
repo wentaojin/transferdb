@@ -29,7 +29,7 @@ import (
 	"github.com/wentaojin/transferdb/service"
 )
 
-func CheckOracleTableToMySQLMapping(engine *service.Engine, cfg *service.CfgFile) error {
+func OracleTableToMySQLMappingCheck(engine *service.Engine, cfg *service.CfgFile) error {
 	startTime := time.Now()
 	service.Logger.Info("check oracle and mysql table start",
 		zap.String("oracleSchema", cfg.SourceConfig.SchemaName),

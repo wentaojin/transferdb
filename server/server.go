@@ -63,7 +63,7 @@ func Run(cfg *service.CfgFile, mode string) error {
 		if err != nil {
 			return err
 		}
-		if err := check.CheckOracleTableToMySQLMapping(engine, cfg); err != nil {
+		if err := check.OracleTableToMySQLMappingCheck(engine, cfg); err != nil {
 			return err
 		}
 	case "full":
