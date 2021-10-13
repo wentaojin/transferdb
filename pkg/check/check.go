@@ -54,7 +54,7 @@ func OracleTableToMySQLMappingCheck(engine *service.Engine, cfg *service.CfgFile
 
 	wr := &FileMW{sync.Mutex{}, file}
 
-	wp := workpool.New(cfg.ReverseConfig.ReverseThreads)
+	wp := workpool.New(cfg.AppConfig.Threads)
 
 	for _, table := range exporterTableSlice {
 		sourceSchemaName := cfg.SourceConfig.SchemaName

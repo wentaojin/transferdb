@@ -46,7 +46,7 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 
 	// 设置工作池
 	// 设置 goroutine 数
-	wp := workpool.New(cfg.ReverseConfig.ReverseThreads)
+	wp := workpool.New(cfg.AppConfig.Threads)
 
 	for _, table := range tables {
 		// 变量替换，直接使用原变量会导致并发输出有问题

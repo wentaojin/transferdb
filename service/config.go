@@ -25,7 +25,6 @@ import (
 // 程序配置文件
 type CfgFile struct {
 	AppConfig       AppConfig       `toml:"app" json:"app"`
-	ReverseConfig   ReverseConfig   `toml:"reverse" json:"reverse"`
 	FullConfig      FullConfig      `toml:"full" json:"full"`
 	IncrementConfig IncrementConfig `toml:"increment" json:"increment"`
 	AllConfig       AllConfig       `toml:"all" json:"all"`
@@ -37,10 +36,7 @@ type CfgFile struct {
 type AppConfig struct {
 	InsertBatchSize  int `toml:"insert-batch-size" json:"insert-batch-size"`
 	SlowlogThreshold int `toml:"slowlog-threshold" json:"slowlog-threshold"`
-}
-
-type ReverseConfig struct {
-	ReverseThreads int `toml:"reverse-threads" json:"reverse-threads"`
+	Threads          int `toml:"threads" json:"threads"`
 }
 
 type FullConfig struct {

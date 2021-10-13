@@ -489,8 +489,10 @@ func OracleTableMapRuleCheck(
 
 	if oracleColInfo.CharUsed == "C" {
 		oracleColumnCharUsed = "char"
-	} else {
+	} else if oracleColInfo.CharUsed == "B" {
 		oracleColumnCharUsed = "bytes"
+	} else {
+		oracleColumnCharUsed = "unknown"
 	}
 
 	oracleColMeta := generateColumnNullCommentDefaultMeta(oracleColInfo.NULLABLE, oracleColInfo.Comment, oracleColInfo.DataDefault)
@@ -1216,16 +1218,18 @@ func OracleTableMapRuleCheck(
 				fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
 				fmt.Sprintf("CHAR(%d) %s", oracleDataLength, oracleColMeta)})
 
-			if mysqlDataType == "CHAR" && mysqlDataLength != oracleDataLength && oracleColMeta != mysqlColMeta {
-				fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
-					targetSchema,
-					tableName,
-					columnName,
-					fmt.Sprintf("CHAR(%d)", oracleDataLength),
-					oracleColMeta,
-				)
+			// 忽略 bytes -> char 语句修复输出
+			if mysqlDataType == "CHAR" && mysqlDataLength == oracleDataLength && oracleColMeta == mysqlColMeta {
+				return fixedMsg, tableRows, nil
 			}
 
+			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
+				targetSchema,
+				tableName,
+				columnName,
+				fmt.Sprintf("CHAR(%d)", oracleDataLength),
+				oracleColMeta,
+			)
 			return fixedMsg, tableRows, nil
 		}
 		if mysqlDataType == "VARCHAR" && mysqlDataLength == oracleDataLength && oracleColMeta == mysqlColMeta && oracleColumnCharUsed == "char" {
@@ -1237,15 +1241,17 @@ func OracleTableMapRuleCheck(
 			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
 			fmt.Sprintf("VARCHAR(%d) %s", oracleDataLength, oracleColMeta)})
 
-		if mysqlDataType == "VARCHAR" && mysqlDataLength != oracleDataLength && oracleColMeta != mysqlColMeta {
-			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
-				targetSchema,
-				tableName,
-				columnName,
-				fmt.Sprintf("VARCHAR(%d)", oracleDataLength),
-				oracleColMeta,
-			)
+		// 忽略 bytes -> char 语句修复输出
+		if mysqlDataType == "VARCHAR" && mysqlDataLength == oracleDataLength && oracleColMeta == mysqlColMeta {
+			return fixedMsg, tableRows, nil
 		}
+		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
+			targetSchema,
+			tableName,
+			columnName,
+			fmt.Sprintf("VARCHAR(%d)", oracleDataLength),
+			oracleColMeta,
+		)
 		return fixedMsg, tableRows, nil
 	case "NCHAR":
 		if oracleDataLength < 256 {
@@ -1258,15 +1264,18 @@ func OracleTableMapRuleCheck(
 				fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
 				fmt.Sprintf("NCHAR(%d) %s", oracleDataLength, oracleColMeta)})
 
-			if mysqlDataType == "NCHAR" && mysqlDataLength != oracleDataLength && oracleColMeta != mysqlColMeta {
-				fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
-					targetSchema,
-					tableName,
-					columnName,
-					fmt.Sprintf("NCHAR(%d)", oracleDataLength),
-					oracleColMeta,
-				)
+			// 忽略 bytes -> char 语句修复输出
+			if mysqlDataType == "NCHAR" && mysqlDataLength == oracleDataLength && oracleColMeta == mysqlColMeta {
+				return fixedMsg, tableRows, nil
 			}
+
+			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
+				targetSchema,
+				tableName,
+				columnName,
+				fmt.Sprintf("NCHAR(%d)", oracleDataLength),
+				oracleColMeta,
+			)
 			return fixedMsg, tableRows, nil
 		}
 		if mysqlDataType == "NVARCHAR" && mysqlDataLength == oracleDataLength && oracleColMeta == mysqlColMeta && oracleColumnCharUsed == "char" {
@@ -1278,15 +1287,18 @@ func OracleTableMapRuleCheck(
 			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
 			fmt.Sprintf("NVARCHAR(%d) %s", oracleDataLength, oracleColMeta)})
 
-		if mysqlDataType == "NVARCHAR" && mysqlDataLength != oracleDataLength && oracleColMeta != mysqlColMeta {
-			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
-				targetSchema,
-				tableName,
-				columnName,
-				fmt.Sprintf("NVARCHAR(%d)", oracleDataLength),
-				oracleColMeta,
-			)
+		// 忽略 bytes -> char 语句修复输出
+		if mysqlDataType == "NVARCHAR" && mysqlDataLength == oracleDataLength && oracleColMeta == mysqlColMeta {
+			return fixedMsg, tableRows, nil
 		}
+
+		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
+			targetSchema,
+			tableName,
+			columnName,
+			fmt.Sprintf("NVARCHAR(%d)", oracleDataLength),
+			oracleColMeta,
+		)
 		return fixedMsg, tableRows, nil
 	case "VARCHAR2":
 		if mysqlDataType == "VARCHAR" && mysqlDataLength == oracleDataLength && oracleColMeta == mysqlColMeta && oracleColumnCharUsed == "char" {
@@ -1298,15 +1310,18 @@ func OracleTableMapRuleCheck(
 			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
 			fmt.Sprintf("VARCHAR(%d) %s", oracleDataLength, oracleColMeta)})
 
-		if mysqlDataType == "VARCHAR" && mysqlDataLength != oracleDataLength && oracleColMeta != mysqlColMeta {
-			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
-				targetSchema,
-				tableName,
-				columnName,
-				fmt.Sprintf("VARCHAR(%d)", oracleDataLength),
-				oracleColMeta,
-			)
+		// 忽略 bytes -> char 语句修复输出
+		if mysqlDataType == "VARCHAR" && mysqlDataLength == oracleDataLength && oracleColMeta == mysqlColMeta {
+			return fixedMsg, tableRows, nil
 		}
+
+		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
+			targetSchema,
+			tableName,
+			columnName,
+			fmt.Sprintf("VARCHAR(%d)", oracleDataLength),
+			oracleColMeta,
+		)
 		return fixedMsg, tableRows, nil
 	case "NVARCHAR2":
 		if mysqlDataType == "NVARCHAR" && mysqlDataLength == oracleDataLength && oracleColMeta == mysqlColMeta && oracleColumnCharUsed == "char" {
@@ -1318,15 +1333,18 @@ func OracleTableMapRuleCheck(
 			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
 			fmt.Sprintf("NVARCHAR(%d) %s", oracleDataLength, oracleColMeta)})
 
-		if mysqlDataType == "NVARCHAR" && mysqlDataLength != oracleDataLength && oracleColMeta != mysqlColMeta {
-			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
-				targetSchema,
-				tableName,
-				columnName,
-				fmt.Sprintf("NVARCHAR(%d)", oracleDataLength),
-				oracleColMeta,
-			)
+		// 忽略 bytes -> char 语句修复输出
+		if mysqlDataType == "NVARCHAR" && mysqlDataLength == oracleDataLength && oracleColMeta == mysqlColMeta {
+			return fixedMsg, tableRows, nil
 		}
+
+		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
+			targetSchema,
+			tableName,
+			columnName,
+			fmt.Sprintf("NVARCHAR(%d)", oracleDataLength),
+			oracleColMeta,
+		)
 		return fixedMsg, tableRows, nil
 
 	// 默认其他类型
