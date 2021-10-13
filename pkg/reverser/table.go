@@ -426,16 +426,18 @@ func ReverseOracleTableColumnMapRule(
 		originColumnType = fmt.Sprintf("CHAR(%d)", dataLength)
 		if dataLength < 256 {
 			buildInColumnType = fmt.Sprintf("CHAR(%d)", dataLength)
+		} else {
+			buildInColumnType = fmt.Sprintf("VARCHAR(%d)", dataLength)
 		}
-		buildInColumnType = fmt.Sprintf("VARCHAR(%d)", dataLength)
 		modifyColumnType = changeOracleTableColumnType(originColumnType, columnTypes, buildInColumnType)
 		columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, dataNullable, comments, dataDefault)
 	case "CHARACTER":
 		originColumnType = fmt.Sprintf("CHARACTER(%d)", dataLength)
 		if dataLength < 256 {
 			buildInColumnType = fmt.Sprintf("CHARACTER(%d)", dataLength)
+		} else {
+			buildInColumnType = fmt.Sprintf("VARCHAR(%d)", dataLength)
 		}
-		buildInColumnType = fmt.Sprintf("VARCHAR(%d)", dataLength)
 		modifyColumnType = changeOracleTableColumnType(originColumnType, columnTypes, buildInColumnType)
 		columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, dataNullable, comments, dataDefault)
 	case "CLOB":
@@ -484,8 +486,9 @@ func ReverseOracleTableColumnMapRule(
 		originColumnType = "FLOAT"
 		if dataPrecision == 0 {
 			buildInColumnType = "FLOAT"
+		} else {
+			buildInColumnType = "DOUBLE"
 		}
-		buildInColumnType = "DOUBLE"
 		modifyColumnType = changeOracleTableColumnType(originColumnType, columnTypes, buildInColumnType)
 		columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, dataNullable, comments, dataDefault)
 	case "INTEGER":
@@ -522,8 +525,9 @@ func ReverseOracleTableColumnMapRule(
 		originColumnType = fmt.Sprintf("NCHAR(%d)", dataLength)
 		if dataLength < 256 {
 			buildInColumnType = fmt.Sprintf("NCHAR(%d)", dataLength)
+		} else {
+			buildInColumnType = fmt.Sprintf("NVARCHAR(%d)", dataLength)
 		}
-		buildInColumnType = fmt.Sprintf("NVARCHAR(%d)", dataLength)
 		modifyColumnType = changeOracleTableColumnType(originColumnType, columnTypes, buildInColumnType)
 		columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, dataNullable, comments, dataDefault)
 	case "NCHAR VARYING":
@@ -550,8 +554,9 @@ func ReverseOracleTableColumnMapRule(
 		originColumnType = fmt.Sprintf("RAW(%d)", dataLength)
 		if dataLength < 256 {
 			buildInColumnType = fmt.Sprintf("BINARY(%d)", dataLength)
+		} else {
+			buildInColumnType = fmt.Sprintf("VARBINARY(%d)", dataLength)
 		}
-		buildInColumnType = fmt.Sprintf("VARBINARY(%d)", dataLength)
 		modifyColumnType = changeOracleTableColumnType(originColumnType, columnTypes, buildInColumnType)
 		columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, dataNullable, comments, dataDefault)
 	case "REAL":
@@ -597,8 +602,9 @@ func ReverseOracleTableColumnMapRule(
 			originColumnType = dataType
 			if dataScale == 0 {
 				buildInColumnType = "TIMESTAMP"
+			} else {
+				buildInColumnType = fmt.Sprintf("TIMESTAMP(%d)", dataScale)
 			}
-			buildInColumnType = fmt.Sprintf("TIMESTAMP(%d)", dataScale)
 		} else {
 			originColumnType = dataType
 			buildInColumnType = "TEXT"
