@@ -44,13 +44,13 @@ func OracleTableToMySQLMappingCheck(engine *service.Engine, cfg *service.CfgFile
 	if err != nil {
 		return err
 	}
-	file, err := os.OpenFile(filepath.Join(pwdDir, "transferdb.sql"), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
+	file, err := os.OpenFile(filepath.Join(pwdDir, "transferdb_check.sql"), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
 
-	service.Logger.Info("check", zap.String("output", filepath.Join(pwdDir, "transferdb.sql")))
+	service.Logger.Info("check", zap.String("output", filepath.Join(pwdDir, "transferdb_check.sql")))
 
 	wr := &FileMW{sync.Mutex{}, file}
 
@@ -77,8 +77,8 @@ func OracleTableToMySQLMappingCheck(engine *service.Engine, cfg *service.CfgFile
 	if !wp.IsDone() {
 		service.Logger.Error("check table oracle to mysql failed",
 			zap.String("cost", endTime.Sub(startTime).String()),
-			zap.Error(fmt.Errorf("reverse table task failed, please clear and rerunning")))
-		return fmt.Errorf("reverse table task failed, please clear and rerunning")
+			zap.Error(fmt.Errorf("check table task failed, please rerunning")))
+		return fmt.Errorf("check table task failed, please rerunning")
 	}
 	service.Logger.Info("check table oracle to mysql finished",
 		zap.String("cost", endTime.Sub(startTime).String()))

@@ -18,7 +18,7 @@
 insert-batch-size = 500
 # 是否开启更新元数据库表慢日志，单位毫秒
 slowlog-threshold = 300
-# 任务并发 -- 只用于 reverse/check/cost 阶段
+# 任务并发 -- 只用于 reverse/check 模式阶段
 threads = 8
 
 [full]
@@ -60,13 +60,14 @@ connect-string = "172.16.4.184:8066/orcl?connect_timeout=2"
 session-params = ["alter session set nls_date_format = 'yyyy-mm-dd hh24:mi:ss'"]
 # 配置 oracle 连接时区
 timezone = "Local"
-# 配置 oracle 迁移 schema
+# 配置 oracle 迁移 schema（gather 阶段可设置可不设置，不设置则表示库内所有 schema，其他阶段必须设置）
 schema-name = "marvin"
-# 源端迁移任务表
+# 源端迁移任务表（只用于 prepare/reverse/check/all/full 阶段，gather 阶段不适用）
 # include-table 和 exclude-table 不能同时配置，两者只能配置一个,如果两个都没配置则 Schema 内表全迁移
 include-table = []
 exclude-table = []
 
+# 只用于 prepare/reverse/check/all/full 阶段，gather 阶段不适用
 [target]
 # 目标端 mysql 连接串
 username = "marvin"

@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/wentaojin/transferdb/pkg/cost"
+
 	"github.com/wentaojin/transferdb/pkg/check"
 
 	"github.com/wentaojin/transferdb/service"
@@ -34,8 +36,15 @@ import (
 // 程序运行
 func Run(cfg *service.CfgFile, mode string) error {
 	switch strings.ToLower(strings.TrimSpace(mode)) {
-	case "cost":
-		// todo: 收集评估改造成本
+	case "gather":
+		// 收集评估改造成本
+		engine, err := NewEngineDB(cfg)
+		if err != nil {
+			return err
+		}
+		if err := cost.OracleMigrateMySQLCostEvaluate(engine, cfg); err != nil {
+			return err
+		}
 	case "prepare":
 		// 表结构转换 - only prepare 阶段
 		engine, err := NewMySQLEnginePrepareDB(

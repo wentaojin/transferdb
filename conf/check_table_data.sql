@@ -1,4 +1,19 @@
 /*
+ oracle table columns info is different from mysql
+┌──────────┬──────────────────────────────────┬───────────────────────────┬────────────────────────────┐
+│ COLUMN   │ ORACLE                           │ MYSQL                     │ SUGGEST                    │
+├──────────┼──────────────────────────────────┼───────────────────────────┼────────────────────────────┤
+│ ADDRESS  │ NVARCHAR2(100 char) DEFAULT NULL │ VARCHAR(100) DEFAULT NULL │ NVARCHAR(100) DEFAULT NULL │
+│ STUNAME1 │ NCHAR(20 char) NOT NULL          │ CHAR(20) NOT NULL         │ NCHAR(20) NOT NULL         │
+└──────────┴──────────────────────────────────┴───────────────────────────┴────────────────────────────┘
+*/
+-- oracle table columns info is different from mysql, generate fixed sql
+ALTER TABLE steven.T_2021_STU MODIFY COLUMN ADDRESS NVARCHAR(100) DEFAULT NULL;
+ALTER TABLE steven.T_2021_STU MODIFY COLUMN STUNAME1 NCHAR(20) NOT NULL;
+-- the above info comes from oracle table [marvin.T_2021_STU]
+-- the above info comes from mysql table [steven.T_2021_STU]
+
+/*
  oracle table type is different from mysql table type
  oracle table [marvin.MOBILEMESSAGE] is partition type [true]
  mysql table [steven.MOBILEMESSAGE] is partition type [false]
@@ -13,6 +28,16 @@
 CREATE INDEX idx_SYS_NC00007$ ON steven.UNIQUE_TEST(SUBSTR("FNAME",1,3));
 CREATE BITMAP INDEX idx_FNAME ON steven.UNIQUE_TEST(FNAME);
 CREATE INDEX idx_SYS_NC00006$ ON steven.UNIQUE_TEST("EMAIL");
+/*
+ oracle table columns info is different from mysql
+┌────────┬───────────────────────────────────────────┬──────────────────────────────────┬─────────────────────────────────────┐
+│ COLUMN │ ORACLE                                    │ MYSQL                            │ SUGGEST                             │
+├────────┼───────────────────────────────────────────┼──────────────────────────────────┼─────────────────────────────────────┤
+│ LOC    │ VARCHAR2(120 char) NOT NULL DEFAULT 'PC'  │ VARCHAR(120) NOT NULL DEFAULT PC │ VARCHAR(120) NOT NULL DEFAULT 'PC'  │
+└────────┴───────────────────────────────────────────┴──────────────────────────────────┴─────────────────────────────────────┘
+*/
+-- oracle table columns info is different from mysql, generate fixed sql
+ALTER TABLE steven.UNIQUE_TEST MODIFY COLUMN LOC VARCHAR(120) NOT NULL DEFAULT 'PC' ;
 -- the above info comes from oracle table [marvin.UNIQUE_TEST]
 -- the above info comes from mysql table [steven.UNIQUE_TEST]
 
@@ -23,70 +48,3 @@ CREATE INDEX idx_SYS_NC00006$ ON steven.UNIQUE_TEST("EMAIL");
 */
 -- the above info comes from oracle table [marvin.GPRS_CELLTOPVOL_WK]
 -- the above info comes from mysql table [steven.GPRS_CELLTOPVOL_WK]
-
-/*
- oracle table columns info is different from mysql
-┌────────┬───────────────────────────┬──────────────────────────┬───────────────────────────┐
-│ COLUMN │ ORACLE                    │ MYSQL                    │ SUGGEST                   │
-├────────┼───────────────────────────┼──────────────────────────┼───────────────────────────┤
-│ H_DATE │ TIMESTAMP(6) DEFAULT NULL │ DATETIME(6) DEFAULT NULL │ TIMESTAMP(6) DEFAULT NULL │
-└────────┴───────────────────────────┴──────────────────────────┴───────────────────────────┘
-*/
--- oracle table columns info is different from mysql, generate fixed sql
-ALTER TABLE steven.BMSQL_HISTORY MODIFY COLUMN H_DATE TIMESTAMP(6) DEFAULT NULL;
--- the above info comes from oracle table [marvin.BMSQL_HISTORY]
--- the above info comes from mysql table [steven.BMSQL_HISTORY]
-
-/*
- oracle table columns info is different from mysql
-┌─────────┬───────────────────────────┬──────────────────────────┬───────────────────────────┐
-│ COLUMN  │ ORACLE                    │ MYSQL                    │ SUGGEST                   │
-├─────────┼───────────────────────────┼──────────────────────────┼───────────────────────────┤
-│ C_SINCE │ TIMESTAMP(6) DEFAULT NULL │ DATETIME(6) DEFAULT NULL │ TIMESTAMP(6) DEFAULT NULL │
-└─────────┴───────────────────────────┴──────────────────────────┴───────────────────────────┘
-*/
--- oracle table columns info is different from mysql, generate fixed sql
-ALTER TABLE steven.BMSQL_CUSTOMER MODIFY COLUMN C_SINCE TIMESTAMP(6) DEFAULT NULL;
--- the above info comes from oracle table [marvin.BMSQL_CUSTOMER]
--- the above info comes from mysql table [steven.BMSQL_CUSTOMER]
-
-/*
- oracle table columns info is different from mysql
-┌───────────────┬───────────────────────────┬─────────────���────────────┬───────────────────────────┐
-│ COLUMN        │ ORACLE                    │ MYSQL                    │ SUGGEST                   │
-├───────────────┼───────────────────────────┼──────────────────────────┼───────────────────────────┤
-│ OL_DELIVERY_D │ TIMESTAMP(6) DEFAULT NULL │ DATETIME(6) DEFAULT NULL │ TIMESTAMP(6) DEFAULT NULL │
-└───────────────┴───────────────────────────┴──────────────────────────┴───────────────────────────┘
-*/
--- oracle table columns info is different from mysql, generate fixed sql
-ALTER TABLE steven.BMSQL_ORDER_LINE MODIFY COLUMN OL_DELIVERY_D TIMESTAMP(6) DEFAULT NULL;
--- the above info comes from oracle table [marvin.BMSQL_ORDER_LINE]
--- the above info comes from mysql table [steven.BMSQL_ORDER_LINE]
-
-/*
- oracle table columns info is different from mysql
-┌────────┬───────────────────────────┬──────────────────────┬───────────────────────────┐
-│ COLUMN │ ORACLE                    │ MYSQL                │ SUGGEST                   │
-├────────┼───────────────────────────┼──────────────────────┼───────────────────────────┤
-│ ID     │ NUMBER NOT NULL           │ INT(11,0) NOT NULL   │ DECIMAL(11,0) NOT NULL    │
-│ AGE    │ TIMESTAMP(3) DEFAULT NULL │ CHAR(0) DEFAULT NULL │ TIMESTAMP(3) DEFAULT NULL │
-└────────┴───────────────────────────┴──────────────────────┴───────────────────────────┘
-*/
--- oracle table columns info is different from mysql, generate fixed sql
-ALTER TABLE steven.T2 MODIFY COLUMN ID DECIMAL(11,0) NOT NULL;
-ALTER TABLE steven.T2 MODIFY COLUMN AGE TIMESTAMP(3) DEFAULT NULL;
--- the above info comes from oracle table [marvin.T2]
--- the above info comes from mysql table [steven.T2]
-
-/*
- oracle table columns info is different from mysql
-┌───────────┬───────────────────────────┬──────────────────────────┬───────────────────────────┐
-│ COLUMN    │ ORACLE                    │ MYSQL                    │ SUGGEST                   │
-├───────────┼───────────────────────────┼──────────────────────────┼───────────────────────────┤
-│ O_ENTRY_D │ TIMESTAMP(6) DEFAULT NULL │ DATETIME(6) DEFAULT NULL │ TIMESTAMP(6) DEFAULT NULL │
-└───────────┴───────────────────────────┴──────────────────────────┴───────────────────────────┘
-*/
--- oracle table columns info is different from mysql, generate fixed sql
-ALTER TABLE steven.BMSQL_OORDER MODIFY COLUMN O_ENTRY_D TIMESTAMP(6) DEFAULT NULL;
--- the above info comes from oracle table [marvin.BMSQL_OORDER]
--- the above info comes from mysql table [steven.BMSQL_OORDER]
