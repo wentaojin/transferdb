@@ -263,7 +263,7 @@ WHERE
 			return vals, err
 		}
 		vals = append(vals, map[string]string{
-			"SCHEMA":   owner,
+			"SCHEMA":   strings.ToUpper(val["USERNAME"]),
 			"TABLE":    tableRes[0]["GB"],
 			"INDEX":    indexRes[0]["GB"],
 			"LOBTABLE": lobTable[0]["GB"],
@@ -369,10 +369,10 @@ ORDER BY GB DESC
 			return vals, err
 		}
 		vals = append(vals, map[string]string{
-			"SCHEMA":       owner,
+			"SCHEMA":       strings.ToUpper(val["USERNAME"]),
 			"SEGMENT_NAME": tableRes[0]["SEGMENT_NAME"],
 			"SEGMENT_TYPE": tableRes[0]["SEGMENT_TYPE"],
-			"Table_Size":   tableRes[0]["GB"],
+			"TABLE_SIZE":   tableRes[0]["GB"],
 		})
 	}
 	return vals, err

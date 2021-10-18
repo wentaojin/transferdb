@@ -64,7 +64,7 @@ func GatherOracleDBOverview(engine *service.Engine) (string, error) {
 	t.SetStyle(table.StyleDefault)
 	t.Style().Title.Align = text.AlignCenter
 	t.Style().Options.SeparateRows = true
-	t.AppendHeader(table.Row{"Database Overview"}, table.RowConfig{AutoMerge: true})
+	t.AppendHeader(table.Row{"Database Overview", "Database Overview"}, table.RowConfig{AutoMerge: true})
 
 	t.AppendRows([]table.Row{
 		{"Host Name", instanceRes[0]["HOST_NAME"]},
@@ -138,7 +138,7 @@ func GatherOracleSchemaTableRowsTOP(schemaName []string, engine *service.Engine)
 	var tableRows []table.Row
 	for _, ow := range overview {
 		tableRows = append(tableRows, table.Row{
-			ow["SCHEMA"], ow["SEGMENT_NAME"], ow["SEGMENT_TYPE"], ow["GB"],
+			ow["SCHEMA"], ow["SEGMENT_NAME"], ow["SEGMENT_TYPE"], ow["TABLE_SIZE"],
 		})
 	}
 	t.AppendRows(tableRows)
@@ -168,7 +168,7 @@ func GatherOracleSchemaObjectOverview(schemaName []string, engine *service.Engin
 	t.Style().Options.SeparateRows = true
 	t.AppendHeader(table.Row{"Object Overview", "Object Overview", "Object Overview"}, table.RowConfig{AutoMerge: true})
 
-	t.AppendHeader(table.Row{"Schema", "Object_Type", "Numbers"})
+	t.AppendHeader(table.Row{"Schema", "Object_Type", "Counts"})
 
 	var tableRows []table.Row
 	for _, ow := range overview {
@@ -239,7 +239,7 @@ func GatherOracleSchemaColumnTypeAndMaxLength(schemaName []string, engine *servi
 	t.Style().Options.SeparateRows = true
 	t.AppendHeader(table.Row{"Column Object Type", "Column Object Type", "Column Object Type", "Column Object Type"}, table.RowConfig{AutoMerge: true})
 
-	t.AppendHeader(table.Row{"Schema", "Data Type", "Numbers", "Max Data Length"})
+	t.AppendHeader(table.Row{"Schema", "Data Type", "Counts", "Max Data Length"})
 
 	var tableRows []table.Row
 	for _, ow := range columnInfo {
@@ -346,7 +346,7 @@ func GatherOracleSchemaIndexType(schemaName []string, engine *service.Engine) (s
 	t.Style().Options.SeparateRows = true
 	t.AppendHeader(table.Row{"Index Object Type", "Index Object Type", "Index Object Type"}, table.RowConfig{AutoMerge: true})
 
-	t.AppendHeader(table.Row{"Schema", "Index Type", "Numbers"})
+	t.AppendHeader(table.Row{"Schema", "Index Type", "Counts"})
 
 	var tableRows []table.Row
 	for _, ow := range columnInfo {
@@ -381,7 +381,7 @@ func GatherOracleConstraintType(schemaName []string, engine *service.Engine) (st
 	t.Style().Options.SeparateRows = true
 	t.AppendHeader(table.Row{"Constraint Object Type", "Constraint Object Type", "Constraint Object Type"}, table.RowConfig{AutoMerge: true})
 
-	t.AppendHeader(table.Row{"Schema", "Constraint Type", "Numbers"})
+	t.AppendHeader(table.Row{"Schema", "Constraint Type", "Counts"})
 
 	var tableRows []table.Row
 	for _, ow := range columnInfo {
@@ -451,7 +451,7 @@ func GatherOracleSchemaSynonymType(schemaName []string, engine *service.Engine) 
 	t.Style().Options.SeparateRows = true
 	t.AppendHeader(table.Row{"Synonym Object Type", "Synonym Object Type"}, table.RowConfig{AutoMerge: true})
 
-	t.AppendHeader(table.Row{"Schema", "Numbers"})
+	t.AppendHeader(table.Row{"Schema", "COunt"})
 
 	var tableRows []table.Row
 	for _, ow := range synonymInfo {
