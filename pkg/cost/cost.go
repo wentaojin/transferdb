@@ -98,6 +98,9 @@ func OracleMigrateMySQLCostEvaluate(engine *service.Engine, cfg *service.CfgFile
 	}
 
 	var builder strings.Builder
+
+	service.Logger.Info("gather database schema array", zap.Strings("schema", usernameArray))
+
 	overviewOracle, err := GatherOracleOverview(usernameArray, engine)
 	if err != nil {
 		return err

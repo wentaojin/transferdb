@@ -61,7 +61,7 @@ func GatherOracleDBOverview(engine *service.Engine) (string, error) {
 		return "", err
 	}
 	t := table.NewWriter()
-	t.SetStyle(table.StyleDefault)
+	t.SetStyle(table.StyleLight)
 	t.Style().Title.Align = text.AlignCenter
 	t.Style().Options.SeparateRows = true
 	t.AppendHeader(table.Row{"Database Overview", "Database Overview"}, table.RowConfig{AutoMerge: true})
@@ -98,7 +98,7 @@ func GatherOracleSchemaOverview(schemaName []string, engine *service.Engine) (st
 		return "", err
 	}
 	t := table.NewWriter()
-	t.SetStyle(table.StyleDefault)
+	t.SetStyle(table.StyleLight)
 	t.Style().Title.Align = text.AlignCenter
 	t.Style().Options.SeparateRows = true
 	t.AppendHeader(table.Row{"Schema Overview", "Schema Overview", "Schema Overview", "Schema Overview", "Schema Overview", "Schema Overview"}, table.RowConfig{AutoMerge: true})
@@ -128,7 +128,7 @@ func GatherOracleSchemaTableRowsTOP(schemaName []string, engine *service.Engine)
 	}
 
 	t := table.NewWriter()
-	t.SetStyle(table.StyleDefault)
+	t.SetStyle(table.StyleLight)
 	t.Style().Title.Align = text.AlignCenter
 	t.Style().Options.SeparateRows = true
 	t.AppendHeader(table.Row{"Table TOP 10", "Table TOP 10", "Table TOP 10", "Table TOP 10"}, table.RowConfig{AutoMerge: true})
@@ -163,7 +163,7 @@ func GatherOracleSchemaObjectOverview(schemaName []string, engine *service.Engin
 	}
 
 	t := table.NewWriter()
-	t.SetStyle(table.StyleDefault)
+	t.SetStyle(table.StyleLight)
 	t.Style().Title.Align = text.AlignCenter
 	t.Style().Options.SeparateRows = true
 	t.AppendHeader(table.Row{"Object Overview", "Object Overview", "Object Overview"}, table.RowConfig{AutoMerge: true})
@@ -199,7 +199,7 @@ func GatherOracleSchemaPartitionType(schemaName []string, engine *service.Engine
 	}
 
 	t := table.NewWriter()
-	t.SetStyle(table.StyleDefault)
+	t.SetStyle(table.StyleLight)
 	t.Style().Title.Align = text.AlignCenter
 	t.Style().Options.SeparateRows = true
 	t.AppendHeader(table.Row{"Partition Type", "Partition Type", "Partition Type", "Partition Type"}, table.RowConfig{AutoMerge: true})
@@ -234,7 +234,7 @@ func GatherOracleSchemaColumnTypeAndMaxLength(schemaName []string, engine *servi
 	}
 
 	t := table.NewWriter()
-	t.SetStyle(table.StyleDefault)
+	t.SetStyle(table.StyleLight)
 	t.Style().Title.Align = text.AlignCenter
 	t.Style().Options.SeparateRows = true
 	t.AppendHeader(table.Row{"Column Object Type", "Column Object Type", "Column Object Type", "Column Object Type"}, table.RowConfig{AutoMerge: true})
@@ -269,7 +269,7 @@ func GatherOracleSchemaTableAvgRowLength(schemaName []string, engine *service.En
 	}
 
 	t := table.NewWriter()
-	t.SetStyle(table.StyleDefault)
+	t.SetStyle(table.StyleLight)
 	t.Style().Title.Align = text.AlignCenter
 	t.Style().Options.SeparateRows = true
 	t.AppendHeader(table.Row{"Avg Row Length/By Statistics", "Avg Row Length/By Statistics", "Avg Row Length/By Statistics"}, table.RowConfig{AutoMerge: true})
@@ -303,7 +303,7 @@ func GatherOracleSchemaTemporaryTable(schemaName []string, engine *service.Engin
 		return "", err
 	}
 	t := table.NewWriter()
-	t.SetStyle(table.StyleDefault)
+	t.SetStyle(table.StyleLight)
 	t.Style().Title.Align = text.AlignCenter
 	t.Style().Options.SeparateRows = true
 	t.AppendHeader(table.Row{"Temporary Table", "Temporary Table"}, table.RowConfig{AutoMerge: true})
@@ -341,7 +341,7 @@ func GatherOracleSchemaIndexType(schemaName []string, engine *service.Engine) (s
 	}
 
 	t := table.NewWriter()
-	t.SetStyle(table.StyleDefault)
+	t.SetStyle(table.StyleLight)
 	t.Style().Title.Align = text.AlignCenter
 	t.Style().Options.SeparateRows = true
 	t.AppendHeader(table.Row{"Index Object Type", "Index Object Type", "Index Object Type"}, table.RowConfig{AutoMerge: true})
@@ -376,7 +376,7 @@ func GatherOracleConstraintType(schemaName []string, engine *service.Engine) (st
 	}
 
 	t := table.NewWriter()
-	t.SetStyle(table.StyleDefault)
+	t.SetStyle(table.StyleLight)
 	t.Style().Title.Align = text.AlignCenter
 	t.Style().Options.SeparateRows = true
 	t.AppendHeader(table.Row{"Constraint Object Type", "Constraint Object Type", "Constraint Object Type"}, table.RowConfig{AutoMerge: true})
@@ -411,7 +411,7 @@ func GatherOracleSchemeCodeType(schemaName []string, engine *service.Engine) (st
 	}
 
 	t := table.NewWriter()
-	t.SetStyle(table.StyleDefault)
+	t.SetStyle(table.StyleLight)
 	t.Style().Title.Align = text.AlignCenter
 	t.Style().Options.SeparateRows = true
 	t.AppendHeader(table.Row{"Code Object Type", "Code Object Type", "Code Object Type", "Code Object Type"}, table.RowConfig{AutoMerge: true})
@@ -446,7 +446,7 @@ func GatherOracleSchemaSynonymType(schemaName []string, engine *service.Engine) 
 	}
 
 	t := table.NewWriter()
-	t.SetStyle(table.StyleDefault)
+	t.SetStyle(table.StyleLight)
 	t.Style().Title.Align = text.AlignCenter
 	t.Style().Options.SeparateRows = true
 	t.AppendHeader(table.Row{"Synonym Object Type", "Synonym Object Type"}, table.RowConfig{AutoMerge: true})
@@ -483,7 +483,7 @@ func GatherOraclePartitionTableCountsCheck(schemaName []string, engine *service.
 		return "", err
 	}
 	t := table.NewWriter()
-	t.SetStyle(table.StyleDefault)
+	t.SetStyle(table.StyleLight)
 	t.Style().Title.Align = text.AlignCenter
 	t.Style().Options.SeparateRows = true
 	t.AppendHeader(table.Row{"Partition Table Over 1024", "Partition Table Over 1024", "Partition Table Over 1024"}, table.RowConfig{AutoMerge: true})
@@ -517,7 +517,7 @@ func GatherOracleTableRowLengthCheck(schemaName []string, engine *service.Engine
 		return "", err
 	}
 	t := table.NewWriter()
-	t.SetStyle(table.StyleDefault)
+	t.SetStyle(table.StyleLight)
 	t.Style().Title.Align = text.AlignCenter
 	t.Style().Options.SeparateRows = true
 	t.AppendHeader(table.Row{"Table Row Length Over 6M", "Table Row Length Over 6M", "Table Row Length Over 6M"}, table.RowConfig{AutoMerge: true})
@@ -552,7 +552,7 @@ func GatherOracleTableIndexRowLengthCheck(schemaName []string, engine *service.E
 	}
 
 	t := table.NewWriter()
-	t.SetStyle(table.StyleDefault)
+	t.SetStyle(table.StyleLight)
 	t.Style().Title.Align = text.AlignCenter
 	t.Style().Options.SeparateRows = true
 	t.AppendHeader(table.Row{"Index Row Length Over 3072", "Index Row Length Over 3072", "Index Row Length Over 3072", "Index Row Length Over 3072"}, table.RowConfig{AutoMerge: true})
@@ -586,7 +586,7 @@ func GatherOracleTableColumnCountsCheck(schemaName []string, engine *service.Eng
 		return "", err
 	}
 	t := table.NewWriter()
-	t.SetStyle(table.StyleDefault)
+	t.SetStyle(table.StyleLight)
 	t.Style().Title.Align = text.AlignCenter
 	t.Style().Options.SeparateRows = true
 	t.AppendHeader(table.Row{"Table Column Counts Over 512", "Table Column Counts Over 512", "Table Column Counts Over 512"}, table.RowConfig{AutoMerge: true})
@@ -621,7 +621,7 @@ func GatherOracleTableIndexCountsCheck(schemaName []string, engine *service.Engi
 	}
 
 	t := table.NewWriter()
-	t.SetStyle(table.StyleDefault)
+	t.SetStyle(table.StyleLight)
 	t.Style().Title.Align = text.AlignCenter
 	t.Style().Options.SeparateRows = true
 	t.AppendHeader(table.Row{"Table Index Counts Over 64", "Table Index Counts Over 64", "Table Index Counts Over 64"}, table.RowConfig{AutoMerge: true})
@@ -656,7 +656,7 @@ func GatherOracleTableNumberTypeCheck(schemaName []string, engine *service.Engin
 	}
 
 	t := table.NewWriter()
-	t.SetStyle(table.StyleDefault)
+	t.SetStyle(table.StyleLight)
 	t.Style().Title.Align = text.AlignCenter
 	t.Style().Options.SeparateRows = true
 	t.AppendHeader(table.Row{"Table Number Type Check", "Table Number Type Check", "Table Number Type Check", "Table Number Type Check", "Table Number Type Check"}, table.RowConfig{AutoMerge: true})
@@ -689,7 +689,7 @@ func GatherOracleUsernameLengthCheck(schemaName []string, engine *service.Engine
 		return "", err
 	}
 	t := table.NewWriter()
-	t.SetStyle(table.StyleDefault)
+	t.SetStyle(table.StyleLight)
 	t.Style().Title.Align = text.AlignCenter
 	t.Style().Options.SeparateRows = true
 	t.AppendHeader(table.Row{"Username Length Check", "Username Length Check", "Username Length Check"}, table.RowConfig{AutoMerge: true})
@@ -722,7 +722,7 @@ func GatherOracleTableNameLengthCheck(schemaName []string, engine *service.Engin
 		return "", err
 	}
 	t := table.NewWriter()
-	t.SetStyle(table.StyleDefault)
+	t.SetStyle(table.StyleLight)
 	t.Style().Title.Align = text.AlignCenter
 	t.Style().Options.SeparateRows = true
 	t.AppendHeader(table.Row{"Table Name Length Check", "Table Name Length Check"}, table.RowConfig{AutoMerge: true})
@@ -756,7 +756,7 @@ func GatherOracleColumnNameLengthCheck(schemaName []string, engine *service.Engi
 	}
 
 	t := table.NewWriter()
-	t.SetStyle(table.StyleDefault)
+	t.SetStyle(table.StyleLight)
 	t.Style().Title.Align = text.AlignCenter
 	t.Style().Options.SeparateRows = true
 	t.AppendHeader(table.Row{"Table Column Name Length Check", "Table Column Name Length Check"}, table.RowConfig{AutoMerge: true})
@@ -789,7 +789,7 @@ func GatherOracleIndexNameLengthCheck(schemaName []string, engine *service.Engin
 		return "", err
 	}
 	t := table.NewWriter()
-	t.SetStyle(table.StyleDefault)
+	t.SetStyle(table.StyleLight)
 	t.Style().Title.Align = text.AlignCenter
 	t.Style().Options.SeparateRows = true
 	t.AppendHeader(table.Row{"Table Index Name Length Check", "Table Index Name Length Check", "Table Index Name Length Check"}, table.RowConfig{AutoMerge: true})
@@ -822,7 +822,7 @@ func GatherOracleViewNameLengthCheck(schemaName []string, engine *service.Engine
 		return "", err
 	}
 	t := table.NewWriter()
-	t.SetStyle(table.StyleDefault)
+	t.SetStyle(table.StyleLight)
 	t.Style().Title.Align = text.AlignCenter
 	t.Style().Options.SeparateRows = true
 	t.AppendHeader(table.Row{"Table View Name Length Check", "Table View Name Length Check", "Table View Name Length Check"}, table.RowConfig{AutoMerge: true})
@@ -855,7 +855,7 @@ func GatherOracleSequenceNameLengthCheck(schemaName []string, engine *service.En
 		return "", err
 	}
 	t := table.NewWriter()
-	t.SetStyle(table.StyleDefault)
+	t.SetStyle(table.StyleLight)
 	t.Style().Title.Align = text.AlignCenter
 	t.Style().Options.SeparateRows = true
 	t.AppendHeader(table.Row{"Table Sequence Name Length Check", "Table Sequence Name Length Check", "Table Sequence Name Length Check"}, table.RowConfig{AutoMerge: true})
