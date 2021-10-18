@@ -1,4 +1,4 @@
-.PHONY: build prepare reverse check all full gotool clean help
+.PHONY: build gather prepare reverse check all full gotool clean help
 
 CMDPATH="./cmd"
 BINARYPATH="bin/transferdb"
@@ -29,6 +29,9 @@ LDFLAGS += -X "$(REPO)/pkg/config.GitBranch=$(GITREF)"
 
 build: clean gotool
 	$(GOBUILD) -ldflags '$(LDFLAGS)' -o $(BINARYPATH) $(CMDPATH)
+
+prepare: gotool
+	$(GORUN) -race $(CMDPATH) --config $(CONFIGPATH) --mode gather
 
 prepare: gotool
 	$(GORUN) -race $(CMDPATH) --config $(CONFIGPATH) --mode prepare
