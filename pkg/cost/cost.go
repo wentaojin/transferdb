@@ -22,8 +22,6 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/sync/errgroup"
-
 	"github.com/wentaojin/transferdb/service"
 	"go.uber.org/zap"
 )
@@ -99,66 +97,33 @@ func OracleMigrateMySQLCostEvaluate(engine *service.Engine, cfg *service.CfgFile
 		usernameArray = append(usernameArray, fmt.Sprintf("'%s'", usernameMap["USERNAME"]))
 	}
 
-	var eg errgroup.Group
-
-	overviewChan := make(chan string)
-	typeChan := make(chan string)
-	checkChan := make(chan string)
-
-	eg.Go(func() error {
-		overviewOracle, err := GatherOracleOverview(usernameArray, engine)
-		if err != nil {
-			return err
-		}
-		overviewChan <- overviewOracle
-		return nil
-	})
-
-	eg.Go(func() error {
-		typeOracle, err := GatherOracleType(usernameArray, engine)
-		if err != nil {
-			return err
-		}
-		typeChan <- typeOracle
-		return nil
-	})
-
-	eg.Go(func() error {
-		checkOracle, err := GatherOracleCheck(usernameArray, engine)
-		if err != nil {
-			return err
-		}
-		checkChan <- checkOracle
-		return nil
-	})
-
 	var builder strings.Builder
-	for i := 0; i < 3; i++ {
-		select {
-		case msg1 := <-overviewChan:
-			if msg1 != "" {
-				builder.WriteString(msg1)
-			}
-		case msg2 := <-typeChan:
-			if msg2 != "" {
-				builder.WriteString(msg2)
-			}
-		case msg3 := <-checkChan:
-			if msg3 != "" {
-				builder.WriteString(msg3)
-			}
-		}
+	overviewOracle, err := GatherOracleOverview(usernameArray, engine)
+	if err != nil {
+		return err
+	}
+
+	if overviewOracle != "" {
+		builder.WriteString(overviewOracle)
+	}
+
+	typeOracle, err := GatherOracleType(usernameArray, engine)
+	if err != nil {
+		return err
+	}
+	if typeOracle != "" {
+		builder.WriteString(typeOracle)
+	}
+
+	checkOracle, err := GatherOracleCheck(usernameArray, engine)
+	if err != nil {
+		return err
+	}
+	if checkOracle != "" {
+		builder.WriteString(checkOracle)
 	}
 
 	endTime := time.Now()
-	if err := eg.Wait(); err != nil {
-		service.Logger.Error("evaluate oracle migrate mysql cost finished",
-			zap.String("cost", endTime.Sub(startTime).String()),
-			zap.Error(fmt.Errorf("evaluate schema cost task failed, please rerunning")),
-			zap.Error(err))
-		return fmt.Errorf("evaluate schema cost task failed, please rerunning, error: %v", err)
-	}
-
 	if builder.String() != "" {
 		pwdDir, err := os.Getwd()
 		if err != nil {
