@@ -109,7 +109,7 @@ func (e *Engine) GetOracleNumCPU() (string, error) {
 }
 
 func (e *Engine) GetOracleMemoryGB() (string, error) {
-	_, res, err := Query(e.OracleDB, `select value/1024/1024/1024 mem_gb from v$osstat where stat_name='PHYSICAL_MEMORY_BYTES';`)
+	_, res, err := Query(e.OracleDB, `select value/1024/1024/1024 mem_gb from v$osstat where stat_name='PHYSICAL_MEMORY_BYTES'`)
 	if err != nil {
 		return "", err
 	}
