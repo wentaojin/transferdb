@@ -30,7 +30,7 @@ LDFLAGS += -X "$(REPO)/pkg/config.GitBranch=$(GITREF)"
 build: clean gotool
 	$(GOBUILD) -ldflags '$(LDFLAGS)' -o $(BINARYPATH) $(CMDPATH)
 
-prepare: gotool
+gather: gotool
 	$(GORUN) -race $(CMDPATH) --config $(CONFIGPATH) --mode gather
 
 prepare: gotool
