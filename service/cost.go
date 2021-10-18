@@ -262,6 +262,20 @@ WHERE
 		if err != nil {
 			return vals, err
 		}
+
+		if tableRes[0]["GB"] == "" {
+			tableRes[0]["GB"] = "0"
+		}
+		if indexRes[0]["GB"] == "" {
+			indexRes[0]["GB"] = "0"
+		}
+		if lobTable[0]["GB"] == "" {
+			lobTable[0]["GB"] = "0"
+		}
+		if lobIndex[0]["GB"] == "" {
+			lobIndex[0]["GB"] = "0"
+		}
+
 		vals = append(vals, map[string]string{
 			"SCHEMA":   strings.ToUpper(val["USERNAME"]),
 			"TABLE":    tableRes[0]["GB"],
@@ -710,9 +724,9 @@ func (e *Engine) GetOracleTableIndexCountsOver64(schemaName []string) ([]map[str
 func (e *Engine) GetOracleTableNumberTypeCheck(schemaName []string) ([]map[string]string, error) {
 	var sql string
 	if len(schemaName) == 0 {
-		sql = `select OWNER,TABLE_NAME,COLUMN_NAME,DATA_PRECISION,DATA_SCALE from dba_tab_columns where DATA_PRECISION is null and OWNER not in ('HR','DVF','DVSYS','LBACSYS','MDDATA','OLAPSYS','ORDPLUGINS','ORDDATA','MDSYS','SI_INFORMTN_SCHEMA','ORDSYS','CTXSYS','OJVMSYS','WMSYS','ANONYMOUS','XDB','GGSYS','GSMCATUSER','APPQOSSYS','DBSNMP','SYS$UMF','ORACLE_OCM','DBSFWUSER','REMOTE_SCHEDULER_AGENT','XS$NULL','DIP','GSMROOTUSER','GSMADMIN_INTERNAL','GSMUSER','OUTLN','SYSBACKUP','SYSDG','SYSTEM','SYSRAC','AUDSYS','SYSKM','SYS','OGG','SPA','APEX_050000','SQL_MONITOR')  and DATA_TYPE='NUMBER' and DATA_PRECISION is null ORDER BY OWNER,COLUMN_NAME`
+		sql = `select OWNER,TABLE_NAME,COLUMN_NAME,NVL(DATA_PRECISION,0) DATA_PRECISION,NVL(DATA_SCALE,0) DATA_SCALE from dba_tab_columns where DATA_PRECISION is null and OWNER not in ('HR','DVF','DVSYS','LBACSYS','MDDATA','OLAPSYS','ORDPLUGINS','ORDDATA','MDSYS','SI_INFORMTN_SCHEMA','ORDSYS','CTXSYS','OJVMSYS','WMSYS','ANONYMOUS','XDB','GGSYS','GSMCATUSER','APPQOSSYS','DBSNMP','SYS$UMF','ORACLE_OCM','DBSFWUSER','REMOTE_SCHEDULER_AGENT','XS$NULL','DIP','GSMROOTUSER','GSMADMIN_INTERNAL','GSMUSER','OUTLN','SYSBACKUP','SYSDG','SYSTEM','SYSRAC','AUDSYS','SYSKM','SYS','OGG','SPA','APEX_050000','SQL_MONITOR')  and DATA_TYPE='NUMBER' and DATA_PRECISION is null ORDER BY OWNER,COLUMN_NAME`
 	} else {
-		sql = fmt.Sprintf(`select OWNER,TABLE_NAME,COLUMN_NAME,DATA_PRECISION,DATA_SCALE from dba_tab_columns where DATA_PRECISION is null and OWNER IN (%s) and DATA_TYPE='NUMBER' and DATA_PRECISION is null ORDER BY OWNER,COLUMN_NAME`, strings.Join(schemaName, ","))
+		sql = fmt.Sprintf(`select OWNER,TABLE_NAME,COLUMN_NAME,NVL(DATA_PRECISION,0) DATA_PRECISION,NVL(DATA_SCALE,0) DATA_SCALE from dba_tab_columns where DATA_PRECISION is null and OWNER IN (%s) and DATA_TYPE='NUMBER' and DATA_PRECISION is null ORDER BY OWNER,COLUMN_NAME`, strings.Join(schemaName, ","))
 	}
 
 	_, res, err := Query(e.OracleDB, sql)

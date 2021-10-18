@@ -421,7 +421,7 @@ func GatherOracleSchemeCodeType(schemaName []string, engine *service.Engine) (st
 	var tableRows []table.Row
 	for _, ow := range synonymInfo {
 		tableRows = append(tableRows, table.Row{
-			ow["OWNER"], ow["NAME"], ow["TYPE"], ow["LINE"],
+			ow["OWNER"], ow["NAME"], ow["TYPE"], ow["LINES"],
 		})
 	}
 	t.AppendRows(tableRows)
