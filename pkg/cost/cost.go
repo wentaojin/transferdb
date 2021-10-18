@@ -132,6 +132,24 @@ func OracleMigrateMySQLCostEvaluate(engine *service.Engine, cfg *service.CfgFile
 		return nil
 	})
 
+	var builder strings.Builder
+	for i := 0; i < 3; i++ {
+		select {
+		case msg1 := <-overviewChan:
+			if msg1 != "" {
+				builder.WriteString(msg1)
+			}
+		case msg2 := <-typeChan:
+			if msg2 != "" {
+				builder.WriteString(msg2)
+			}
+		case msg3 := <-checkChan:
+			if msg3 != "" {
+				builder.WriteString(msg3)
+			}
+		}
+	}
+
 	endTime := time.Now()
 	if err := eg.Wait(); err != nil {
 		service.Logger.Error("evaluate oracle migrate mysql cost finished",
@@ -139,23 +157,6 @@ func OracleMigrateMySQLCostEvaluate(engine *service.Engine, cfg *service.CfgFile
 			zap.Error(fmt.Errorf("evaluate schema cost task failed, please rerunning")),
 			zap.Error(err))
 		return fmt.Errorf("evaluate schema cost task failed, please rerunning, error: %v", err)
-	}
-
-	var builder strings.Builder
-
-	select {
-	case msg1 := <-overviewChan:
-		if msg1 != "" {
-			builder.WriteString(msg1)
-		}
-	case msg2 := <-typeChan:
-		if msg2 != "" {
-			builder.WriteString(msg2)
-		}
-	case msg3 := <-checkChan:
-		if msg3 != "" {
-			builder.WriteString(msg3)
-		}
 	}
 
 	if builder.String() != "" {
