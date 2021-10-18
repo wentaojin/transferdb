@@ -180,7 +180,7 @@ func (e *Engine) GetOracleSchemaOverview(schemaName []string) ([]map[string]stri
 	}
 
 	for _, val := range res {
-		owner := strings.ToUpper(val["USERNAME"])
+		owner := fmt.Sprintf("'%s'", strings.ToUpper(val["USERNAME"]))
 		_, tableRes, err := Query(e.OracleDB, fmt.Sprintf(`SELECT DECODE(
 		TRUNC ( ROUND(SUM( bytes )/ 1024 / 1024 / 1024 ,2)),
 		0,
@@ -337,7 +337,7 @@ func (e *Engine) GetOracleSchemaTableRowsTOP(schemaName []string) ([]map[string]
 		return vals, err
 	}
 	for _, val := range res {
-		owner := strings.ToUpper(val["USERNAME"])
+		owner := fmt.Sprintf("'%s'", strings.ToUpper(val["USERNAME"]))
 		_, tableRes, err := Query(e.OracleDB, fmt.Sprintf(`SELECT *
 FROM
 (
