@@ -103,7 +103,7 @@ func GatherOracleSchemaOverview(schemaName []string, engine *service.Engine) (st
 	t.Style().Options.SeparateRows = true
 	t.AppendHeader(table.Row{"Schema Overview", "Schema Overview", "Schema Overview", "Schema Overview", "Schema Overview", "Schema Overview"}, table.RowConfig{AutoMerge: true})
 
-	t.AppendHeader(table.Row{"Schema", "Table Size/GB", "Index Size/GB", "Lob Table Size/GB", "Lob Index Size/GB", "ALL Tables Rows"})
+	t.AppendHeader(table.Row{"Schema", "Table Size/GB", "Index Size/GB", "Lob Table Size/GB", "Lob Index Size/GB", "ALL Tables ROWS"})
 
 	var tableRows []table.Row
 	for _, ow := range overview {
@@ -416,7 +416,7 @@ func GatherOracleSchemeCodeType(schemaName []string, engine *service.Engine) (st
 	t.Style().Options.SeparateRows = true
 	t.AppendHeader(table.Row{"Code Object Type", "Code Object Type", "Code Object Type", "Code Object Type"}, table.RowConfig{AutoMerge: true})
 
-	t.AppendHeader(table.Row{"Schema", "NAME", "TYPE", "Code Total Rows"})
+	t.AppendHeader(table.Row{"Schema", "NAME", "TYPE", "Code Total LINES"})
 
 	var tableRows []table.Row
 	for _, ow := range synonymInfo {
@@ -430,7 +430,7 @@ func GatherOracleSchemeCodeType(schemaName []string, engine *service.Engine) (st
 		{Number: 1, AutoMerge: true},
 	})
 
-	t.SetCaption("The database schema code type and total rows overview.\n")
+	t.SetCaption("The database schema code type and total lines overview.\n")
 
 	return t.Render(), nil
 }
