@@ -77,8 +77,9 @@ func OracleTableToMySQLMappingCheck(engine *service.Engine, cfg *service.CfgFile
 	if !wp.IsDone() {
 		service.Logger.Error("check table oracle to mysql failed",
 			zap.String("cost", endTime.Sub(startTime).String()),
-			zap.Error(fmt.Errorf("check table task failed, please rerunning")))
-		return fmt.Errorf("check table task failed, please rerunning")
+			zap.Error(fmt.Errorf("check table task failed, please rerunning")),
+			zap.Error(err))
+		return fmt.Errorf("check table task failed, please rerunning, error: %v", err)
 	}
 	service.Logger.Info("check table oracle to mysql finished",
 		zap.String("cost", endTime.Sub(startTime).String()))

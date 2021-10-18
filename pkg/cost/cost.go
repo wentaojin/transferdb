@@ -136,8 +136,9 @@ func OracleMigrateMySQLCostEvaluate(engine *service.Engine, cfg *service.CfgFile
 	if err := eg.Wait(); err != nil {
 		service.Logger.Error("evaluate oracle migrate mysql cost finished",
 			zap.String("cost", endTime.Sub(startTime).String()),
-			zap.Error(fmt.Errorf("evaluate schema cost task failed, please rerunning")))
-		return fmt.Errorf("evaluate schema cost task failed, please rerunning")
+			zap.Error(fmt.Errorf("evaluate schema cost task failed, please rerunning")),
+			zap.Error(err))
+		return fmt.Errorf("evaluate schema cost task failed, please rerunning, error: %v", err)
 	}
 
 	var builder strings.Builder
