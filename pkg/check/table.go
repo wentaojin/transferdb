@@ -306,9 +306,23 @@ func NewMySQLTableINFO(schemaName, tableName string, engine *service.Engine) (*T
 		isTiDB = true
 	}
 
-	characterSet, collation, err := engine.GetMySQLTableCharacterSetAndCollation(schemaName, tableName)
+	var (
+		characterSet, collation, count string
+	)
+	characterSet, collation, count, err = engine.GetMySQLTableCharacterSetAndCollation(schemaName, tableName)
 	if err != nil {
 		return mysqlTable, version, err
+	}
+
+	if count == "0" {
+		characterSet, err = engine.GetMySQLDBServerCharacterSet()
+		if err != nil {
+			return mysqlTable, version, err
+		}
+		collation, err = engine.GetMySQLDBServerCollation()
+		if err != nil {
+			return mysqlTable, version, err
+		}
 	}
 
 	comment, err := engine.GetMySQLTableComment(schemaName, tableName)
