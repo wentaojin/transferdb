@@ -314,7 +314,7 @@ func NewMySQLTableINFO(schemaName, tableName string, engine *service.Engine) (*T
 		return mysqlTable, version, err
 	}
 
-	if count == "0" {
+	if count == "0" || characterSet == "UNKNOWN" || collation == "UNKNOWN" {
 		characterSet, err = engine.GetMySQLDBServerCharacterSet()
 		if err != nil {
 			return mysqlTable, version, err

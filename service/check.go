@@ -108,7 +108,8 @@ FROM
 WHERE
 	CCSA.collation_name = T.table_collation 
 	AND UPPER( T.table_schema ) = UPPER( '%s' ) 
-	AND UPPER( T.table_name ) = UPPER( '%s' )`, schemaName, tableName))
+	AND UPPER( T.table_name ) = UPPER( '%s' )
+	GROUP BY CHARACTER_SET_NAME,COLLATION`, schemaName, tableName))
 	if err != nil {
 		return "", "", "", err
 	}
