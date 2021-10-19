@@ -267,9 +267,10 @@ LIMIT 1`, schemaName, tableName))
 	if err != nil {
 		return false, err
 	}
-	if res[0]["PARTITION_NAME"] == "0" {
+	if len(res) == 0 || res[0]["PARTITION_NAME"] == "0" {
 		return false, nil
 	}
+
 	return true, nil
 }
 
