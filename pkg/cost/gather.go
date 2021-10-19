@@ -274,7 +274,7 @@ func GatherOracleSchemaTableAvgRowLength(schemaName []string, engine *service.En
 	t.Style().Options.SeparateRows = true
 	t.AppendHeader(table.Row{"Avg Row Length/By Statistics", "Avg Row Length/By Statistics", "Avg Row Length/By Statistics"}, table.RowConfig{AutoMerge: true})
 
-	t.AppendHeader(table.Row{"Schema", "Table Name", "Avg Row Length"})
+	t.AppendHeader(table.Row{"Schema", "Table Name", "Avg Row Length/Bytes"})
 
 	var tableRows []table.Row
 	for _, ow := range synonymInfo {
@@ -522,7 +522,7 @@ func GatherOracleTableRowLengthCheck(schemaName []string, engine *service.Engine
 	t.Style().Options.SeparateRows = true
 	t.AppendHeader(table.Row{"Table Row Length Over 6M", "Table Row Length Over 6M", "Table Row Length Over 6M"}, table.RowConfig{AutoMerge: true})
 
-	t.AppendHeader(table.Row{"Schema", "Table Name", "Avg Row Length"})
+	t.AppendHeader(table.Row{"Schema", "Table Name", "Avg Row Length/Bytes"})
 
 	var tableRows []table.Row
 	for _, ow := range synonymInfo {
