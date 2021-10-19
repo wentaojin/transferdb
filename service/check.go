@@ -137,6 +137,9 @@ func (e *Engine) GetMySQLTableComment(schemaName, tableName string) (string, err
 	if err != nil {
 		return "", err
 	}
+	if len(res) == 0 {
+		return "", err
+	}
 	return res[0]["TABLE_COMMENT"], nil
 }
 
