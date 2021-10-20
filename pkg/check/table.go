@@ -169,11 +169,24 @@ func NewOracleTableINFO(schemaName, tableName string, engine *service.Engine) (*
 		} else {
 			OracleCharacterSet = OracleGBKCharacterSet
 		}
-		var nullable string
+		var (
+			nullable    string
+			dataDefault string
+		)
 		if strings.ToUpper(rowCol["NULLABLE"]) == "Y" {
 			nullable = "NULL"
 		} else {
 			nullable = "NOT NULL"
+		}
+
+		dataDefault = strings.ToUpper(rowCol["DATA_DEFAULT"])
+
+		if strings.HasPrefix(dataDefault, "'") {
+			dataDefault = strings.TrimPrefix(dataDefault, "'")
+		}
+
+		if strings.HasSuffix(dataDefault, "'") {
+			dataDefault = strings.TrimSuffix(dataDefault, "'")
 		}
 
 		columns[strings.ToUpper(rowCol["COLUMN_NAME"])] = Column{
@@ -186,7 +199,7 @@ func NewOracleTableINFO(schemaName, tableName string, engine *service.Engine) (*
 				DataScale:         strings.ToUpper(rowCol["DATA_SCALE"]),
 				DatetimePrecision: "", // only mysql
 				NULLABLE:          nullable,
-				DataDefault:       strings.ToUpper(rowCol["DATA_DEFAULT"]),
+				DataDefault:       dataDefault,
 				Comment:           strings.ToUpper(rowCol["COMMENTS"]),
 			},
 			CharacterSet: strings.ToUpper(OracleCharacterSet),
@@ -338,12 +351,26 @@ func NewMySQLTableINFO(schemaName, tableName string, engine *service.Engine) (*T
 	columns := make(map[string]Column, len(columnInfo))
 
 	for _, rowCol := range columnInfo {
-		var nullable string
+		var (
+			nullable    string
+			dataDefault string
+		)
 		if strings.ToUpper(rowCol["NULLABLE"]) == "Y" {
 			nullable = "NULL"
 		} else {
 			nullable = "NOT NULL"
 		}
+
+		dataDefault = strings.ToUpper(rowCol["DATA_DEFAULT"])
+
+		if strings.HasPrefix(dataDefault, "'") {
+			dataDefault = fmt.Sprintf("'%s", dataDefault)
+		}
+
+		if strings.HasSuffix(dataDefault, "'") {
+			dataDefault = fmt.Sprintf("%s'", dataDefault)
+		}
+
 		columns[strings.ToUpper(rowCol["COLUMN_NAME"])] = Column{
 			DataType: strings.ToUpper(rowCol["DATA_TYPE"]),
 			ColumnInfo: ColumnInfo{
@@ -352,7 +379,7 @@ func NewMySQLTableINFO(schemaName, tableName string, engine *service.Engine) (*T
 				DataScale:         strings.ToUpper(rowCol["DATA_SCALE"]),
 				DatetimePrecision: strings.ToUpper(rowCol["DATETIME_PRECISION"]),
 				NULLABLE:          nullable,
-				DataDefault:       strings.ToUpper(rowCol["DATA_DEFAULT"]),
+				DataDefault:       dataDefault,
 				Comment:           strings.ToUpper(rowCol["COMMENTS"]),
 			},
 			CharacterSet: strings.ToUpper(rowCol["CHARACTER_SET_NAME"]),
