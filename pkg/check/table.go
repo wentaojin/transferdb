@@ -324,14 +324,22 @@ func NewMySQLTableINFO(schemaName, tableName string, engine *service.Engine) (*T
 	}
 
 	var (
-		characterSet, collation, count string
+		characterSet, collation string
 	)
-	characterSet, collation, count, err = engine.GetMySQLTableCharacterSetAndCollation(schemaName, tableName)
+
+	isExist, err := engine.IsExistMySQLTableCharacterSetAndCollation(schemaName, tableName)
 	if err != nil {
 		return mysqlTable, version, err
 	}
 
-	if count == "0" || characterSet == "UNKNOWN" || collation == "UNKNOWN" {
+	if isExist {
+		characterSet, collation, err = engine.GetMySQLTableCharacterSetAndCollation(schemaName, tableName)
+		if err != nil {
+			return mysqlTable, version, err
+		}
+	}
+
+	if characterSet == "UNKNOWN" || collation == "UNKNOWN" || characterSet == "" || collation == "" {
 		characterSet, err = engine.GetMySQLDBServerCharacterSet()
 		if err != nil {
 			return mysqlTable, version, err

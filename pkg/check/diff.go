@@ -79,10 +79,6 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 	service.Logger.Info("check table",
 		zap.String("get oracle table", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)),
 		zap.String("get mysql table", fmt.Sprintf("%s.%s", d.TargetSchemaName, d.TableName)))
-	oracleTable, err := NewOracleTableINFO(d.SourceSchemaName, d.TableName, d.Engine)
-	if err != nil {
-		return err
-	}
 
 	// 输出格式：表结构一致不输出，只输出上下游不一致信息且输出以下游可执行 SQL 输出
 	var builder strings.Builder
@@ -116,10 +112,14 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 		}
 		service.Logger.Warn("table not exists",
 			zap.String("oracle table", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)),
-			zap.String("create mysql table", fmt.Sprintf("%s.%s", d.TargetSchemaName, d.TableName)),
-			zap.String("msg", builder.String()))
+			zap.String("create mysql table", fmt.Sprintf("%s.%s", d.TargetSchemaName, d.TableName)))
 
 		return nil
+	}
+
+	oracleTable, err := NewOracleTableINFO(d.SourceSchemaName, d.TableName, d.Engine)
+	if err != nil {
+		return err
 	}
 
 	mysqlTable, mysqlVersion, err := NewMySQLTableINFO(d.TargetSchemaName, d.TableName, d.Engine)

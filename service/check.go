@@ -98,10 +98,25 @@ func (e *Engine) GetMySQLDBServerCollation() (string, error) {
 	return res[0]["VALUE"], nil
 }
 
-func (e *Engine) GetMySQLTableCharacterSetAndCollation(schemaName, tableName string) (string, string, string, error) {
+func (e *Engine) GetMySQLTableCharacterSetAndCollation(schemaName, tableName string) (string, string, error) {
 	_, res, err := Query(e.MysqlDB, fmt.Sprintf(`SELECT
 	IFNULL(CCSA.CHARACTER_SET_NAME,'UNKNOWN') CHARACTER_SET_NAME,
-	IFNULL(T.table_collation,'UNKNOWN') COLLATION,
+	IFNULL(T.table_collation,'UNKNOWN') COLLATION
+FROM
+	information_schema.TABLES T,
+	information_schema.COLLATION_CHARACTER_SET_APPLICABILITY CCSA 
+WHERE
+	CCSA.collation_name = T.table_collation 
+	AND UPPER( T.table_schema ) = UPPER( '%s' ) 
+	AND UPPER( T.table_name ) = UPPER( '%s' )`, schemaName, tableName))
+	if err != nil {
+		return "", "", err
+	}
+	return res[0]["CHARACTER_SET_NAME"], res[0]["COLLATION"], nil
+}
+
+func (e *Engine) IsExistMySQLTableCharacterSetAndCollation(schemaName, tableName string) (bool, error) {
+	_, res, err := Query(e.MysqlDB, fmt.Sprintf(`SELECT
 	COUNT(1) COUNT
 FROM
 	information_schema.TABLES T,
@@ -109,15 +124,14 @@ FROM
 WHERE
 	CCSA.collation_name = T.table_collation 
 	AND UPPER( T.table_schema ) = UPPER( '%s' ) 
-	AND UPPER( T.table_name ) = UPPER( '%s' )
-	GROUP BY CHARACTER_SET_NAME,COLLATION`, schemaName, tableName))
+	AND UPPER( T.table_name ) = UPPER( '%s' )`, schemaName, tableName))
 	if err != nil {
-		return "", "", "", err
+		return false, err
 	}
-	if len(res) == 0 || res[0]["COUNT"] == "0" {
-		return "", "", "0", nil
+	if res[0]["COUNT"] == "0" {
+		return false, nil
 	}
-	return res[0]["CHARACTER_SET_NAME"], res[0]["COLLATION"], res[0]["COUNT"], nil
+	return true, nil
 }
 
 func (e *Engine) GetMySQLDBVersion() (string, error) {
