@@ -123,7 +123,7 @@ func (t *Table) String(jsonType string) string {
 	var jsonStr []byte
 	switch jsonType {
 	case ColumnsJSON:
-		jsonStr, _ = json.Marshal(t.PUConstraints)
+		jsonStr, _ = json.Marshal(t.Columns)
 	case PUConstraintJSON:
 		jsonStr, _ = json.Marshal(t.PUConstraints)
 	case FKConstraintJSON:
