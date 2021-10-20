@@ -17,6 +17,7 @@ package service
 
 import (
 	"fmt"
+	"strings"
 )
 
 /*
@@ -280,4 +281,15 @@ func (e *Engine) GetMySQLPartitionTableINFO(schemaName, tableName string) ([]map
 		return res, err
 	}
 	return res, nil
+}
+
+func (e *Engine) IsExistMySQLTable(schemaName, tableName string) (bool, error) {
+	_, res, err := Query(e.MysqlDB, fmt.Sprintf(`SELECT COUNT(1) COUNT FROM INFORMATION_SCHEMA.TABLES where UPPER(TABLE_SCHEMA) = '%s' AND UPPER(TABLE_NAME) = '%s'`, strings.ToUpper(schemaName), strings.ToUpper(tableName)))
+	if err != nil {
+		return false, err
+	}
+	if res[0]["COUNT"] == "0" {
+		return false, err
+	}
+	return true, err
 }

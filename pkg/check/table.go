@@ -63,11 +63,13 @@ type Table struct {
 }
 
 type Column struct {
-	DataType     string
-	CharLength   string
-	CharUsed     string
-	CharacterSet string
-	Collation    string
+	DataType                string
+	CharLength              string
+	CharUsed                string
+	CharacterSet            string
+	Collation               string
+	OracleOriginDataDefault string
+	MySQLOriginDataDefault  string
 	ColumnInfo
 }
 
@@ -179,7 +181,7 @@ func NewOracleTableINFO(schemaName, tableName string, engine *service.Engine) (*
 			nullable = "NOT NULL"
 		}
 
-		dataDefault = strings.ToUpper(rowCol["DATA_DEFAULT"])
+		dataDefault = rowCol["DATA_DEFAULT"]
 
 		if strings.HasPrefix(dataDefault, "'") {
 			dataDefault = strings.TrimPrefix(dataDefault, "'")
@@ -202,8 +204,10 @@ func NewOracleTableINFO(schemaName, tableName string, engine *service.Engine) (*
 				DataDefault:       dataDefault,
 				Comment:           strings.ToUpper(rowCol["COMMENTS"]),
 			},
-			CharacterSet: strings.ToUpper(OracleCharacterSet),
-			Collation:    strings.ToUpper(OracleCollationBin),
+			CharacterSet:            strings.ToUpper(OracleCharacterSet),
+			Collation:               strings.ToUpper(OracleCollationBin),
+			OracleOriginDataDefault: rowCol["DATA_DEFAULT"],
+			MySQLOriginDataDefault:  "",
 		}
 	}
 
@@ -361,7 +365,10 @@ func NewMySQLTableINFO(schemaName, tableName string, engine *service.Engine) (*T
 			nullable = "NOT NULL"
 		}
 
-		dataDefault = strings.ToUpper(rowCol["DATA_DEFAULT"])
+		// 修复 mysql 默认值存在单引号问题
+		// oracle 单引号默认值 '''PC''' , mysql 单引号默认值 'PC'
+		// 对比 oracle 会去掉前后单引号, mysql 增加前后单引号
+		dataDefault = rowCol["DATA_DEFAULT"]
 
 		if strings.HasPrefix(dataDefault, "'") {
 			dataDefault = fmt.Sprintf("'%s", dataDefault)
@@ -382,8 +389,10 @@ func NewMySQLTableINFO(schemaName, tableName string, engine *service.Engine) (*T
 				DataDefault:       dataDefault,
 				Comment:           strings.ToUpper(rowCol["COMMENTS"]),
 			},
-			CharacterSet: strings.ToUpper(rowCol["CHARACTER_SET_NAME"]),
-			Collation:    strings.ToUpper(rowCol["COLLATION_NAME"]),
+			CharacterSet:            strings.ToUpper(rowCol["CHARACTER_SET_NAME"]),
+			Collation:               strings.ToUpper(rowCol["COLLATION_NAME"]),
+			OracleOriginDataDefault: "", // only oracle
+			MySQLOriginDataDefault:  rowCol["DATA_DEFAULT"],
 		}
 	}
 

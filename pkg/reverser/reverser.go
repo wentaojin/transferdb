@@ -39,7 +39,13 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 
 	// 获取待转换表
 	service.Logger.Info("get oracle to mysql all tables")
-	tables, err := generateOracleToMySQLTables(engine, cfg)
+
+	exporterTableSlice, err := cfg.GenerateTables(engine)
+	if err != nil {
+		return err
+	}
+
+	tables, err := GenerateOracleToMySQLTables(engine, exporterTableSlice, cfg.SourceConfig.SchemaName, cfg.TargetConfig.SchemaName, cfg.TargetConfig.Overwrite)
 	if err != nil {
 		return err
 	}
@@ -136,21 +142,16 @@ func reverseOracleToMySQLTableInspect(engine *service.Engine, cfg *service.CfgFi
 }
 
 // 转换表生成
-func generateOracleToMySQLTables(engine *service.Engine, cfg *service.CfgFile) ([]Table, error) {
-	exporterTableSlice, err := cfg.GenerateTables(engine)
-	if err != nil {
-		return []Table{}, err
-	}
-
+func GenerateOracleToMySQLTables(engine *service.Engine, exporterTableSlice []string, sourceSchema, targetSchema string, overwrite bool) ([]Table, error) {
 	// 筛选过滤分区表并打印警告
-	partitionTables, err := engine.FilterOraclePartitionTable(cfg.SourceConfig.SchemaName, exporterTableSlice)
+	partitionTables, err := engine.FilterOraclePartitionTable(sourceSchema, exporterTableSlice)
 	if err != nil {
 		return []Table{}, err
 	}
 
 	if len(partitionTables) != 0 {
 		service.Logger.Warn("partition tables",
-			zap.String("schema", cfg.SourceConfig.SchemaName),
+			zap.String("schema", sourceSchema),
 			zap.String("partition table list", fmt.Sprintf("%v", partitionTables)),
 			zap.String("suggest", "if necessary, please manually convert and process the tables in the above list"))
 	}
@@ -202,11 +203,11 @@ func generateOracleToMySQLTables(engine *service.Engine, cfg *service.CfgFile) (
 		//}
 	}
 
-	customSchemaColumnTypeSlice, err := engine.GetCustomSchemaColumnTypeMap(cfg.SourceConfig.SchemaName)
+	customSchemaColumnTypeSlice, err := engine.GetCustomSchemaColumnTypeMap(sourceSchema)
 	if err != nil {
 		return []Table{}, err
 	}
-	customTableColumnTypeSlice, err := engine.GetCustomTableColumnTypeMap(cfg.SourceConfig.SchemaName)
+	customTableColumnTypeSlice, err := engine.GetCustomTableColumnTypeMap(sourceSchema)
 	if err != nil {
 		return []Table{}, err
 	}
@@ -291,8 +292,8 @@ func generateOracleToMySQLTables(engine *service.Engine, cfg *service.CfgFile) (
 	// 返回需要转换 schema table
 	for _, tbl := range exporterTableSlice {
 		var table Table
-		table.SourceSchemaName = cfg.SourceConfig.SchemaName
-		table.TargetSchemaName = cfg.TargetConfig.SchemaName
+		table.SourceSchemaName = sourceSchema
+		table.TargetSchemaName = targetSchema
 		// 表名规则
 		for _, t := range tableNameSlice {
 			if _, ok := t[tbl]; ok {
@@ -307,7 +308,7 @@ func generateOracleToMySQLTables(engine *service.Engine, cfg *service.CfgFile) (
 			table.ColumnTypes = columnTypesMap[tbl]
 		}
 		table.Engine = engine
-		table.Overwrite = cfg.TargetConfig.Overwrite
+		table.Overwrite = overwrite
 		tables = append(tables, table)
 	}
 	return tables, nil
