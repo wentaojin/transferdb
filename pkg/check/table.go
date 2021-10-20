@@ -181,7 +181,7 @@ func NewOracleTableINFO(schemaName, tableName string, engine *service.Engine) (*
 			nullable = "NOT NULL"
 		}
 
-		dataDefault = rowCol["DATA_DEFAULT"]
+		dataDefault = strings.TrimSpace(rowCol["DATA_DEFAULT"])
 
 		if strings.HasPrefix(dataDefault, "'") {
 			dataDefault = strings.TrimPrefix(dataDefault, "'")
@@ -206,8 +206,8 @@ func NewOracleTableINFO(schemaName, tableName string, engine *service.Engine) (*
 			},
 			CharacterSet:            strings.ToUpper(OracleCharacterSet),
 			Collation:               strings.ToUpper(OracleCollationBin),
-			OracleOriginDataDefault: rowCol["DATA_DEFAULT"],
-			MySQLOriginDataDefault:  "",
+			OracleOriginDataDefault: strings.TrimSpace(rowCol["DATA_DEFAULT"]),
+			MySQLOriginDataDefault:  "", // only mysql
 		}
 	}
 
@@ -376,7 +376,7 @@ func NewMySQLTableINFO(schemaName, tableName string, engine *service.Engine) (*T
 		// 修复 mysql 默认值存在单引号问题
 		// oracle 单引号默认值 '''PC''' , mysql 单引号默认值 'PC'
 		// 对比 oracle 会去掉前后单引号, mysql 增加前后单引号
-		dataDefault = rowCol["DATA_DEFAULT"]
+		dataDefault = strings.TrimSpace(rowCol["DATA_DEFAULT"])
 
 		if strings.HasPrefix(dataDefault, "'") {
 			dataDefault = fmt.Sprintf("'%s", dataDefault)
@@ -400,7 +400,7 @@ func NewMySQLTableINFO(schemaName, tableName string, engine *service.Engine) (*T
 			CharacterSet:            strings.ToUpper(rowCol["CHARACTER_SET_NAME"]),
 			Collation:               strings.ToUpper(rowCol["COLLATION_NAME"]),
 			OracleOriginDataDefault: "", // only oracle
-			MySQLOriginDataDefault:  rowCol["DATA_DEFAULT"],
+			MySQLOriginDataDefault:  strings.TrimSpace(rowCol["DATA_DEFAULT"]),
 		}
 	}
 
