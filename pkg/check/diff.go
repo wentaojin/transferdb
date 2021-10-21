@@ -166,9 +166,9 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 		}
 
 		service.Logger.Warn("table type different",
-			zap.String("oracle table", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)),
-			zap.String("mysql table", fmt.Sprintf("%s.%s", d.TargetSchemaName, d.TableName)),
-			zap.String("msg", builder.String()))
+			zap.String("oracle table", fmt.Sprintf("%s.%s partition [%t]", d.SourceSchemaName, d.TableName, oracleTable.IsPartition)),
+			zap.String("mysql table", fmt.Sprintf("%s.%s partition [%t]", d.TargetSchemaName, d.TableName,
+				mysqlTable.IsPartition)))
 		return nil
 	}
 
