@@ -91,6 +91,15 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 	if !isExist {
 		builder.WriteString("/*\n")
 		builder.WriteString(fmt.Sprintf(" oracle table exist but mysql table not exists\n"))
+
+		t := table.NewWriter()
+		t.SetStyle(table.StyleLight)
+		t.AppendHeader(table.Row{"#", "ORACLE", "MYSQL", "SUGGEST"})
+		t.AppendRows([]table.Row{
+			{"TABLE", d.TableName, "", "CREATE TABLE"},
+		})
+
+		builder.WriteString(fmt.Sprintf("%v\n", t.Render()))
 		builder.WriteString("*/\n")
 		builder.WriteString(fmt.Sprintf("-- program would auto generate and create mysql table [%s.%s]\n", d.TargetSchemaName, d.TableName))
 		reverseTables, err := reverser.GenerateOracleToMySQLTables(d.Engine, []string{d.TableName}, d.SourceSchemaName, d.TargetSchemaName, false)
@@ -105,7 +114,7 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 				return err
 			}
 		}
-		builder.WriteString(fmt.Sprintf("-- the above info comes from oracle table [%s.%s]\n", d.SourceSchemaName, d.TableName))
+		builder.WriteString(fmt.Sprintf("\n-- the above info comes from oracle table [%s.%s]\n", d.SourceSchemaName, d.TableName))
 		builder.WriteString(fmt.Sprintf("-- the above info comes from mysql table [%s.%s]\n", d.TargetSchemaName, d.TableName))
 		if _, err := fmt.Fprintln(d.FileMW, builder.String()); err != nil {
 			return err
@@ -139,11 +148,19 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 	if oracleTable.IsPartition != mysqlTable.IsPartition {
 		builder.WriteString("/*\n")
 		builder.WriteString(fmt.Sprintf(" oracle table type is different from mysql table type\n"))
-		builder.WriteString(fmt.Sprintf(" oracle table [%s.%s] is partition type [%t]\n", d.SourceSchemaName, d.TableName, oracleTable.IsPartition))
-		builder.WriteString(fmt.Sprintf(" mysql table [%s.%s] is partition type [%t]\n", d.TargetSchemaName, d.TableName, mysqlTable.IsPartition))
+
+		t := table.NewWriter()
+		t.SetStyle(table.StyleLight)
+		t.AppendHeader(table.Row{"TABLE", "PARTITION", "ORACLE", "MYSQL", "SUGGEST"})
+		t.AppendRows([]table.Row{
+			{d.TableName, "PARTITION", oracleTable.IsPartition, mysqlTable.IsPartition, "Manual Adjust"},
+		})
+		builder.WriteString(fmt.Sprintf("%v\n", t.Render()))
+
 		builder.WriteString("*/\n")
-		builder.WriteString(fmt.Sprintf("-- the above info comes from oracle table [%s.%s]\n", d.SourceSchemaName, d.TableName))
+		builder.WriteString(fmt.Sprintf("\n-- the above info comes from oracle table [%s.%s]\n", d.SourceSchemaName, d.TableName))
 		builder.WriteString(fmt.Sprintf("-- the above info comes from mysql table [%s.%s]\n", d.TargetSchemaName, d.TableName))
+
 		if _, err := fmt.Fprintln(d.FileMW, builder.String()); err != nil {
 			return err
 		}
@@ -161,8 +178,16 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 
 	if oracleTable.TableComment != mysqlTable.TableComment {
 		builder.WriteString("/*\n")
-		builder.WriteString(fmt.Sprintf(" oracle table comment [%s]\n", oracleTable.TableComment))
-		builder.WriteString(fmt.Sprintf(" mysql table comment [%s]\n", mysqlTable.TableComment))
+		builder.WriteString(fmt.Sprintf(" oracle and mysql table comment\n"))
+
+		t := table.NewWriter()
+		t.SetStyle(table.StyleLight)
+		t.AppendHeader(table.Row{"TABLE", "COMMENT", "ORACLE", "MYSQL", "SUGGEST"})
+		t.AppendRows([]table.Row{
+			{d.TableName, "COMMENT", oracleTable.TableComment, mysqlTable.TableComment, "Run SQL"},
+		})
+		builder.WriteString(fmt.Sprintf("%v\n", t.Render()))
+
 		builder.WriteString("*/\n")
 		builder.WriteString(fmt.Sprintf("ALTER TABLE %s.%s COMMENT '%s';\n", d.TargetSchemaName, d.TableName, oracleTable.TableComment))
 	}
@@ -173,8 +198,19 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 
 	if !strings.Contains(mysqlTable.TableCharacterSet, OracleUTF8CharacterSet) || !strings.Contains(mysqlTable.TableCollation, OracleCollationBin) {
 		builder.WriteString("/*\n")
-		builder.WriteString(fmt.Sprintf(" oracle table character set [%s], collation [%s]\n", oracleTable.TableCharacterSet, oracleTable.TableCollation))
-		builder.WriteString(fmt.Sprintf(" mysql table character set [%s], collation [%s]\n", mysqlTable.TableCharacterSet, mysqlTable.TableCollation))
+		builder.WriteString(fmt.Sprintf(" oracle and mysql table character set and collation\n"))
+
+		t := table.NewWriter()
+		t.SetStyle(table.StyleLight)
+		t.AppendHeader(table.Row{"TABLE", "CHARACTER AND COLLATION", "ORACLE", "MYSQL", "SUGGEST"})
+		t.AppendRows([]table.Row{
+			{d.TableName, "CHARACTER AND COLLATION",
+				fmt.Sprintf("character set[%s] collation[%s]", oracleTable.TableCharacterSet, oracleTable.TableCollation),
+				fmt.Sprintf("character set[%s] collation[%s]", mysqlTable.TableCharacterSet, mysqlTable.TableCollation),
+				"Run SQL"},
+		})
+		builder.WriteString(fmt.Sprintf("%v\n", t.Render()))
+
 		builder.WriteString("*/\n")
 		builder.WriteString(fmt.Sprintf("ALTER TABLE %s.%s CHARACTER SET = %s, COLLATE = %s;\n", d.TargetSchemaName, d.TableName, MySQLCharacterSet, MySQLCollation))
 	}
@@ -188,6 +224,17 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 			if mysqlColInfo.CharacterSet != strings.ToUpper(MySQLCharacterSet) || mysqlColInfo.Collation != strings.ToUpper(MySQLCollation) {
 				builder.WriteString("/*\n")
 				builder.WriteString(fmt.Sprintf(" mysql column character set and collation check, generate created sql\n"))
+
+				t := table.NewWriter()
+				t.SetStyle(table.StyleLight)
+				t.AppendHeader(table.Row{"TABLE", "COLUMN", "MYSQL", "SUGGEST"})
+				t.AppendRows([]table.Row{
+					{d.TableName, mysqlColName,
+						fmt.Sprintf("%s(%s)", mysqlColInfo.DataType, mysqlColInfo.DataLength),
+						"Run SQL"},
+				})
+				builder.WriteString(fmt.Sprintf("%v\n", t.Render()))
+
 				builder.WriteString("*/\n")
 				builder.WriteString(fmt.Sprintf("ALTER TABLE %s.%s MODIFY %s %s(%s) CHARACTER SET %s COLLATE %s;\n",
 					d.TargetSchemaName, d.TableName, mysqlColName, mysqlColInfo.DataType, mysqlColInfo.DataLength, MySQLCharacterSet, MySQLCollation))
@@ -205,8 +252,16 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 	addDiffPU, _, isOK := utils.DiffStructArray(oracleTable.PUConstraints, mysqlTable.PUConstraints)
 	if len(addDiffPU) != 0 && !isOK {
 		builder.WriteString("/*\n")
-		builder.WriteString(" oracle table primary key and unique key\n")
-		builder.WriteString(" mysql table primary key and unique key\n")
+		builder.WriteString(" oracle and mysql table primary key and unique key\n")
+
+		t := table.NewWriter()
+		t.SetStyle(table.StyleLight)
+		t.AppendHeader(table.Row{"TABLE", "PK AND UK", "SUGGEST"})
+		t.AppendRows([]table.Row{
+			{d.TableName, "Oracle And Mysql Different", "Run SQL"},
+		})
+		builder.WriteString(fmt.Sprintf("%v\n", t.Render()))
+
 		builder.WriteString("*/\n")
 		for _, pu := range addDiffPU {
 			value, ok := pu.(ConstraintPUKey)
@@ -236,8 +291,16 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 		addDiffFK, _, isOK := utils.DiffStructArray(oracleTable.ForeignConstraints, mysqlTable.ForeignConstraints)
 		if len(addDiffFK) != 0 && !isOK {
 			builder.WriteString("/*\n")
-			builder.WriteString(" oracle table foreign key\n")
-			builder.WriteString(" mysql table foreign key\n")
+			builder.WriteString(" oracle and mysql table foreign key\n")
+
+			t := table.NewWriter()
+			t.SetStyle(table.StyleLight)
+			t.AppendHeader(table.Row{"TABLE", "FOREIGN KEY", "SUGGEST"})
+			t.AppendRows([]table.Row{
+				{d.TableName, "Oracle And Mysql Different", "Run SQL"},
+			})
+			builder.WriteString(fmt.Sprintf("%v\n", t.Render()))
+
 			builder.WriteString("*/\n")
 
 			for _, fk := range addDiffFK {
@@ -265,8 +328,16 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 			addDiffCK, _, isOK := utils.DiffStructArray(oracleTable.CheckConstraints, mysqlTable.CheckConstraints)
 			if len(addDiffCK) != 0 && !isOK {
 				builder.WriteString("/*\n")
-				builder.WriteString(" oracle table check key\n")
-				builder.WriteString(" mysql table check key\n")
+				builder.WriteString(" oracle and mysql table check key\n")
+
+				t := table.NewWriter()
+				t.SetStyle(table.StyleLight)
+				t.AppendHeader(table.Row{"TABLE", "CHECK KEY", "SUGGEST"})
+				t.AppendRows([]table.Row{
+					{d.TableName, "Oracle And Mysql Different", "Run SQL"},
+				})
+				builder.WriteString(fmt.Sprintf("%v\n", t.Render()))
+
 				builder.WriteString("*/\n")
 				for _, ck := range addDiffCK {
 					value, ok := ck.(ConstraintCheck)
@@ -338,8 +409,16 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 
 	if len(createIndexSQL) != 0 {
 		builder.WriteString("/*\n")
-		builder.WriteString(" oracle table indexes\n")
-		builder.WriteString(" mysql table indexes\n")
+		builder.WriteString(" oracle and mysql table indexes\n")
+
+		t := table.NewWriter()
+		t.SetStyle(table.StyleLight)
+		t.AppendHeader(table.Row{"TABLE", "INDEXES", "SUGGEST"})
+		t.AppendRows([]table.Row{
+			{d.TableName, "Oracle And Mysql Different", "Run SQL"},
+		})
+		builder.WriteString(fmt.Sprintf("%v\n", t.Render()))
+
 		builder.WriteString("*/\n")
 		for _, indexSQL := range createIndexSQL {
 			builder.WriteString(indexSQL)
@@ -355,8 +434,16 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 		addDiffParts, _, isOK := utils.DiffStructArray(oracleTable.Partitions, mysqlTable.Partitions)
 		if len(addDiffParts) != 0 && !isOK {
 			builder.WriteString("/*\n")
-			builder.WriteString(" oracle table partitions\n")
-			builder.WriteString(" mysql table partitions\n")
+			builder.WriteString(" oracle and mysql table partitions\n")
+
+			t := table.NewWriter()
+			t.SetStyle(table.StyleLight)
+			t.AppendHeader(table.Row{"TABLE", "PARTITIONS", "SUGGEST"})
+			t.AppendRows([]table.Row{
+				{d.TableName, "Oracle And Mysql Different", "Manual Modify"},
+			})
+			builder.WriteString(fmt.Sprintf("%v\n", t.Render()))
+
 			builder.WriteString("*/\n")
 			builder.WriteString("-- oracle partition info exist, mysql partition isn't exist, please manual modify\n")
 
@@ -463,7 +550,7 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 
 	// diff 记录不为空
 	if builder.String() != "" {
-		builder.WriteString(fmt.Sprintf("-- the above info comes from oracle table [%s.%s]\n", d.SourceSchemaName, d.TableName))
+		builder.WriteString(fmt.Sprintf("\n-- the above info comes from oracle table [%s.%s]\n", d.SourceSchemaName, d.TableName))
 		builder.WriteString(fmt.Sprintf("-- the above info comes from mysql table [%s.%s]\n", d.TargetSchemaName, d.TableName))
 		if _, err := fmt.Fprintln(d.FileMW, builder.String()); err != nil {
 			return err
