@@ -11,7 +11,7 @@ transferdb 用于异构数据库迁移（ Oracle 数据库 -> MySQL 数据库）
    1. 排除基于函数的索引或者位图索引创建(日志输出打印，可以搜索 WARN 日志以及 FUNCTION-BASED NORMAL、BITMAP 关键筛选过滤)
    2. 下游若遇到同名索引，则进行索引名 _ping 以 _ping 为后缀重创建
 3. 支持非空约束、外键约束、检查约束、主键约束、唯一约束创建，生效与否取决于下游数据库
-4. 支持 Oracle -> MySQL/TiDB 表结构对比，并输出不一致详情以及相关修复 SQL 语句
+4. 支持 Oracle -> MySQL/TiDB 表结构对比(以 Oracle 为基准)，并输出不一致详情以及相关修复 SQL 语句
 5. 支持收集现有 Oracle 数据库内表、索引、分区表、字段长度等信息用于评估迁移至 MySQL/TiDB 成本
 6. 数据同步【数据同步需要存在主键或者唯一键】
    1. 数据同步无论 FULL / ALL 模式需要注意时间格式，ORACLE date 格式复杂，同步前可先简单验证下迁移时间格式是否存在问题，transferdb timezone PICK 数据库操作系统的时区
