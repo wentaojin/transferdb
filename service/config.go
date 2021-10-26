@@ -24,13 +24,13 @@ import (
 
 // 程序配置文件
 type CfgFile struct {
-	AppConfig       AppConfig       `toml:"app" json:"app"`
-	FullConfig      FullConfig      `toml:"full" json:"full"`
-	IncrementConfig IncrementConfig `toml:"increment" json:"increment"`
-	AllConfig       AllConfig       `toml:"all" json:"all"`
-	SourceConfig    SourceConfig    `toml:"source" json:"source"`
-	TargetConfig    TargetConfig    `toml:"target" json:"target"`
-	LogConfig       LogConfig       `toml:"log" json:"log"`
+	AppConfig    AppConfig    `toml:"app" json:"app"`
+	FullConfig   FullConfig   `toml:"full" json:"full"`
+	DiffConfig   DiffConfig   `toml:"diff" json:"diff"`
+	AllConfig    AllConfig    `toml:"all" json:"all"`
+	SourceConfig SourceConfig `toml:"source" json:"source"`
+	TargetConfig TargetConfig `toml:"target" json:"target"`
+	LogConfig    LogConfig    `toml:"log" json:"log"`
 }
 
 type AppConfig struct {
@@ -46,11 +46,13 @@ type FullConfig struct {
 	EnableCheckpoint bool `toml:"enable-checkpoint" json:"enable-checkpoint"`
 }
 
-// TODO: NOT SUPPORT
-type IncrementConfig struct {
-	GlobalSCN     int `toml:"global-scn" json:"global-scn"`
-	WorkerThreads int `toml:"worker-threads" json:"worker-threads"`
-	WorkerQueue   int `toml:"worker-queue" json:"worker-queue"`
+type DiffConfig struct {
+	ChunkSize     int    `toml:"chunk-size" json:"chunk-size"`
+	CheckThreads  int    `toml:"check-threads" json:"check-threads"`
+	UseChecksum   bool   `toml:"use-checksum" json:"use-checksum"`
+	UseCheckpoint bool   `toml:"use-checkpoint" json:"use-checkpoint"`
+	FixSQLFile    string `toml:"fix-sql-file" json:"fix-sql-file"`
+	Range         string `toml:"range" json:"range"`
 }
 
 type AllConfig struct {

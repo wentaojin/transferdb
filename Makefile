@@ -8,7 +8,7 @@ REPO    := github.com/wentaojin/transferdb
 
 GOOS    := $(if $(GOOS),$(GOOS),$(shell go env GOOS))
 GOARCH  := $(if $(GOARCH),$(GOARCH),$(shell go env GOARCH))
-GOENV   := GO111MODULE=on CGO_ENABLED=1 GOOS=$(GOOS) GOARCH=$(GOARCH) 
+GOENV   := GO111MODULE=on CGO_ENABLED=1 GOOS=$(GOOS) GOARCH=$(GOARCH)
 GO      := $(GOENV) go
 GOBUILD := $(GO) build
 GORUN   := $(GO) run
@@ -21,10 +21,10 @@ GITREF  := $(shell git rev-parse --abbrev-ref HEAD)
 
 
 LDFLAGS := -w -s
-LDFLAGS += -X "$(REPO)/pkg/config.Version=$(COMMIT)"
-LDFLAGS += -X "$(REPO)/pkg/config.BuildTS=$(BUILDTS)"
-LDFLAGS += -X "$(REPO)/pkg/config.GitHash=$(GITHASH)"
-LDFLAGS += -X "$(REPO)/pkg/config.GitBranch=$(GITREF)"
+LDFLAGS += -X "$(REPO)/pkg/service.Version=$(COMMIT)"
+LDFLAGS += -X "$(REPO)/pkg/service.BuildTS=$(BUILDTS)"
+LDFLAGS += -X "$(REPO)/pkg/service.GitHash=$(GITHASH)"
+LDFLAGS += -X "$(REPO)/pkg/service.GitBranch=$(GITREF)"
 
 
 build: clean gotool
