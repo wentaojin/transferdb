@@ -21,10 +21,10 @@ GITREF  := $(shell git rev-parse --abbrev-ref HEAD)
 
 
 LDFLAGS := -w -s
-LDFLAGS += -X "$(REPO)/pkg/service.Version=$(COMMIT)"
-LDFLAGS += -X "$(REPO)/pkg/service.BuildTS=$(BUILDTS)"
-LDFLAGS += -X "$(REPO)/pkg/service.GitHash=$(GITHASH)"
-LDFLAGS += -X "$(REPO)/pkg/service.GitBranch=$(GITREF)"
+LDFLAGS += -X "$(REPO)/service.Version=$(COMMIT)"
+LDFLAGS += -X "$(REPO)/service.BuildTS=$(BUILDTS)"
+LDFLAGS += -X "$(REPO)/service.GitHash=$(GITHASH)"
+LDFLAGS += -X "$(REPO)/service.GitBranch=$(GITREF)"
 
 
 build: clean gotool
