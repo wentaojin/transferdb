@@ -45,10 +45,10 @@ $ ./transferdb --config config.toml --mode reverse
 表 custom_schema_column_type_maps 用于数据库内字段类型转换规则 -》库级别
 表 custom_table_column_type_maps  用于表级别字段类型转换规则，表级别优先级高于库级别 -》表级别
 
-5、表结构检查(独立于表结构转换，可单独运行，校验规则使用内置规则), 输出示例见 conf/check_table_data.sql
+5、表结构检查(独立于表结构转换，可单独运行，校验规则使用内置规则, 输出示例见 conf/check_table_data.sql
 $ ./transferdb --config config.toml --mode check
 
-6、收集现有 Oracle 数据库内表、索引、分区表、字段长度等信息用于评估迁移成本
+6、收集现有 Oracle 数据库内表、索引、分区表、字段长度等信息用于评估迁移成本, 输出示例见 conf/transferdb_cost.txt 【内部检查无输出自动屏蔽显示】
 $ ./transferdb --config config.toml --mode gather
 
 7、数据全量抽数
