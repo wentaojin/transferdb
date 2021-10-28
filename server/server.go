@@ -38,11 +38,11 @@ func Run(cfg *service.CfgFile, mode string) error {
 	switch strings.ToLower(strings.TrimSpace(mode)) {
 	case "gather":
 		// 收集评估改造成本
-		engine, err := NewEngineDB(cfg)
+		engine, err := NewOracleDBEngine(cfg.SourceConfig)
 		if err != nil {
 			return err
 		}
-		if err := cost.OracleMigrateMySQLCostEvaluate(engine, cfg); err != nil {
+		if err := cost.OracleMigrateMySQLCostEvaluate(&service.Engine{OracleDB: engine}, cfg); err != nil {
 			return err
 		}
 	case "prepare":
@@ -68,11 +68,11 @@ func Run(cfg *service.CfgFile, mode string) error {
 		}
 	case "check":
 		// 表结构校验 - 上下游
-		engine, err := NewEngineDB(cfg)
+		engine, err := NewOracleDBEngine(cfg.SourceConfig)
 		if err != nil {
 			return err
 		}
-		if err := check.OracleTableToMySQLMappingCheck(engine, cfg); err != nil {
+		if err := check.OracleTableToMySQLMappingCheck(&service.Engine{OracleDB: engine}, cfg); err != nil {
 			return err
 		}
 	case "full":
