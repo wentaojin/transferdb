@@ -93,10 +93,14 @@ func OracleMigrateMySQLCostEvaluate(engine *service.Engine, cfg *service.CfgFile
 	if err != nil {
 		return err
 	}
+
+	if len(usernameMapArray) == 0 {
+		return fmt.Errorf("oracle schema [%v] not exist", strings.ToUpper(cfg.SourceConfig.SchemaName))
+	}
+
 	for _, usernameMap := range usernameMapArray {
 		usernameArray = append(usernameArray, fmt.Sprintf("'%s'", usernameMap["USERNAME"]))
 	}
-
 	var builder strings.Builder
 
 	service.Logger.Info("gather database schema array", zap.Strings("schema", usernameArray))
