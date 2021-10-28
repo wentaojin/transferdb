@@ -347,12 +347,15 @@ ORDER BY GB DESC
 		if err != nil {
 			return vals, err
 		}
-		vals = append(vals, map[string]string{
-			"SCHEMA":       strings.ToUpper(val["USERNAME"]),
-			"SEGMENT_NAME": tableRes[0]["SEGMENT_NAME"],
-			"SEGMENT_TYPE": tableRes[0]["SEGMENT_TYPE"],
-			"TABLE_SIZE":   tableRes[0]["GB"],
-		})
+		for _, res := range tableRes {
+			vals = append(vals, map[string]string{
+				"SCHEMA":       strings.ToUpper(val["USERNAME"]),
+				"SEGMENT_NAME": res["SEGMENT_NAME"],
+				"SEGMENT_TYPE": res["SEGMENT_TYPE"],
+				"TABLE_SIZE":   res["GB"],
+			})
+		}
+
 	}
 	return vals, err
 }

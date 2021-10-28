@@ -147,7 +147,7 @@ func GatherOracleSchemaTableRowsTOP(schemaName []string, engine *service.Engine)
 		{Number: 1, AutoMerge: true},
 	})
 
-	t.SetCaption("The schema table data top 10 overview.\n")
+	t.SetCaption("The schema table data size top 10 overview.\n")
 
 	return t.Render(), nil
 }
