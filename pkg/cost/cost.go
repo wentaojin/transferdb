@@ -101,6 +101,8 @@ func OracleMigrateMySQLCostEvaluate(engine *service.Engine, cfg *service.CfgFile
 
 	service.Logger.Info("gather database schema array", zap.Strings("schema", usernameArray))
 
+	service.Logger.Info("gather database overview", zap.Strings("schema", usernameArray))
+
 	overviewOracle, err := GatherOracleOverview(usernameArray, engine)
 	if err != nil {
 		return err
@@ -110,6 +112,8 @@ func OracleMigrateMySQLCostEvaluate(engine *service.Engine, cfg *service.CfgFile
 		builder.WriteString(overviewOracle)
 	}
 
+	service.Logger.Info("gather database type", zap.Strings("schema", usernameArray))
+
 	typeOracle, err := GatherOracleType(usernameArray, engine)
 	if err != nil {
 		return err
@@ -118,6 +122,7 @@ func OracleMigrateMySQLCostEvaluate(engine *service.Engine, cfg *service.CfgFile
 		builder.WriteString(typeOracle)
 	}
 
+	service.Logger.Info("gather database check", zap.Strings("schema", usernameArray))
 	checkOracle, err := GatherOracleCheck(usernameArray, engine)
 	if err != nil {
 		return err
@@ -138,7 +143,7 @@ func OracleMigrateMySQLCostEvaluate(engine *service.Engine, cfg *service.CfgFile
 		}
 		defer file.Close()
 
-		service.Logger.Info("cost", zap.String("output", filepath.Join(pwdDir, "transferdb_cost.sql")))
+		service.Logger.Info("cost", zap.String("output", filepath.Join(pwdDir, "transferdb_cost.txt")))
 
 		_, err = file.WriteString(builder.String())
 		if err != nil {
