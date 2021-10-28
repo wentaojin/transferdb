@@ -113,7 +113,7 @@ func GatherOracleSchemaOverview(schemaName []string, engine *service.Engine) (st
 	}
 	t.AppendRows(tableRows)
 
-	t.SetCaption("The database schema overview.\n")
+	t.SetCaption("The database schema table/partition/subpartition size overview.\n")
 
 	return t.Render(), nil
 }
@@ -555,9 +555,9 @@ func GatherOracleTableIndexRowLengthCheck(schemaName []string, engine *service.E
 	t.SetStyle(table.StyleLight)
 	t.Style().Title.Align = text.AlignCenter
 	t.Style().Options.SeparateRows = true
-	t.AppendHeader(table.Row{"Index Row Length Over 3072", "Index Row Length Over 3072", "Index Row Length Over 3072", "Index Row Length Over 3072"}, table.RowConfig{AutoMerge: true})
+	t.AppendHeader(table.Row{"Index Column Length Over 3072", "Index Column Length Over 3072", "Index Column Length Over 3072", "Index Column Length Over 3072"}, table.RowConfig{AutoMerge: true})
 
-	t.AppendHeader(table.Row{"Schema", "Table Name", "Index Name", "Counts"})
+	t.AppendHeader(table.Row{"Schema", "Table Name", "Index Name", "Column Length"})
 
 	var tableRows []table.Row
 	for _, ow := range synonymInfo {
@@ -571,7 +571,7 @@ func GatherOracleTableIndexRowLengthCheck(schemaName []string, engine *service.E
 		{Number: 1, AutoMerge: true},
 	})
 
-	t.SetCaption("The database schema table index row length over 3072 overview.\n")
+	t.SetCaption("The database schema table index column length over 3072 overview.\n")
 
 	return t.Render(), nil
 }

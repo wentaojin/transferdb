@@ -181,14 +181,7 @@ func (e *Engine) GetOracleSchemaOverview(schemaName []string) ([]map[string]stri
 
 	for _, val := range res {
 		owner := fmt.Sprintf("'%s'", strings.ToUpper(val["USERNAME"]))
-		_, tableRes, err := Query(e.OracleDB, fmt.Sprintf(`SELECT DECODE(
-		TRUNC ( ROUND(SUM( bytes )/ 1024 / 1024 / 1024 ,2)),
-		0,
-		REPLACE (
-			TO_CHAR (ROUND(SUM( bytes )/ 1024 / 1024 / 1024 ,2) ),
-			'.',
-			'0.' 
-		)) GB 
+		_, tableRes, err := Query(e.OracleDB, fmt.Sprintf(`SELECT ROUND(SUM( bytes )/ 1024 / 1024 / 1024 ,2) GB 
 FROM
 	dba_segments 
 WHERE
@@ -198,14 +191,7 @@ WHERE
 			return vals, err
 		}
 
-		_, indexRes, err := Query(e.OracleDB, fmt.Sprintf(`SELECT DECODE(
-		TRUNC ( ROUND(SUM( bytes )/ 1024 / 1024 / 1024 ,2)),
-		0,
-		REPLACE (
-			TO_CHAR (ROUND(SUM( bytes )/ 1024 / 1024 / 1024 ,2) ),
-			'.',
-			'0.' 
-		)) GB 
+		_, indexRes, err := Query(e.OracleDB, fmt.Sprintf(`SELECT ROUND(SUM( bytes )/ 1024 / 1024 / 1024 ,2) GB
 FROM
 	dba_indexes i,
 	dba_segments s 
@@ -218,14 +204,7 @@ WHERE
 			return vals, err
 		}
 
-		_, lobTable, err := Query(e.OracleDB, fmt.Sprintf(`SELECT DECODE(
-		TRUNC ( ROUND(SUM( bytes )/ 1024 / 1024 / 1024 ,2)),
-		0,
-		REPLACE (
-			TO_CHAR (ROUND(SUM( bytes )/ 1024 / 1024 / 1024 ,2) ),
-			'.',
-			'0.' 
-		)) GB 
+		_, lobTable, err := Query(e.OracleDB, fmt.Sprintf(`SELECT ROUND(SUM( bytes )/ 1024 / 1024 / 1024 ,2) GB 
 FROM
 	dba_lobs l,
 	dba_segments s 
@@ -237,14 +216,7 @@ WHERE
 		if err != nil {
 			return vals, err
 		}
-		_, lobIndex, err := Query(e.OracleDB, fmt.Sprintf(`SELECT DECODE(
-		TRUNC ( ROUND(SUM( bytes )/ 1024 / 1024 / 1024 ,2)),
-		0,
-		REPLACE (
-			TO_CHAR (ROUND(SUM( bytes )/ 1024 / 1024 / 1024 ,2) ),
-			'.',
-			'0.' 
-		)) GB 
+		_, lobIndex, err := Query(e.OracleDB, fmt.Sprintf(`SELECT ROUND(SUM( bytes )/ 1024 / 1024 / 1024 ,2) GB
 FROM
 	dba_lobs l,
 	dba_segments s 
@@ -359,14 +331,7 @@ SELECT
 OWNER,
 SEGMENT_NAME,
 SEGMENT_TYPE,
-	DECODE(
-		TRUNC ( ROUND(SUM( bytes )/ 1024 / 1024 / 1024 ,2)),
-		0,
-		REPLACE (
-			TO_CHAR (ROUND(SUM( bytes )/ 1024 / 1024 / 1024 ,2) ),
-			'.',
-			'0.' 
-		)) GB 
+ROUND(SUM( bytes )/ 1024 / 1024 / 1024 ,2) GB
 	FROM
 		dba_segments 
 	WHERE
