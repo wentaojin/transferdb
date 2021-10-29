@@ -272,7 +272,7 @@ func GatherOracleSchemaTableAvgRowLength(schemaName []string, engine *service.En
 	t.SetStyle(table.StyleLight)
 	t.Style().Title.Align = text.AlignCenter
 	t.Style().Options.SeparateRows = true
-	t.AppendHeader(table.Row{"Avg Row Length/By Statistics", "Avg Row Length/By Statistics", "Avg Row Length/By Statistics"}, table.RowConfig{AutoMerge: true})
+	t.AppendHeader(table.Row{"Avg Row Length TOP 10/By Statistics", "Avg Row Length TOP 10/By Statistics", "Avg Row Length TOP 10 /By Statistics"}, table.RowConfig{AutoMerge: true})
 
 	t.AppendHeader(table.Row{"Schema", "Table Name", "Avg Row Length/Bytes"})
 
@@ -288,7 +288,7 @@ func GatherOracleSchemaTableAvgRowLength(schemaName []string, engine *service.En
 		{Number: 1, AutoMerge: true},
 	})
 
-	t.SetCaption("The database schema table avg row length overview.\n")
+	t.SetCaption("The database schema table avg row length top 10 overview.\n")
 
 	return t.Render(), nil
 }
@@ -449,14 +449,14 @@ func GatherOracleSchemaSynonymType(schemaName []string, engine *service.Engine) 
 	t.SetStyle(table.StyleLight)
 	t.Style().Title.Align = text.AlignCenter
 	t.Style().Options.SeparateRows = true
-	t.AppendHeader(table.Row{"Synonym Object Type", "Synonym Object Type"}, table.RowConfig{AutoMerge: true})
+	t.AppendHeader(table.Row{"Synonym Object Type", "Synonym Object Type", "Synonym Object Type"}, table.RowConfig{AutoMerge: true})
 
-	t.AppendHeader(table.Row{"Schema", "COunt"})
+	t.AppendHeader(table.Row{"Owner", "Table_Owner", "Count"})
 
 	var tableRows []table.Row
 	for _, ow := range synonymInfo {
 		tableRows = append(tableRows, table.Row{
-			ow["OWNER"], ow["COUNT"],
+			ow["OWNER"], ow["TABLE_OWNER"], ow["COUNT"],
 		})
 	}
 	t.AppendRows(tableRows)
