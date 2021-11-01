@@ -105,7 +105,7 @@ func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 	)
 	tableMetas = append(tableMetas, columnMetaSlice...)
 	tableMetas = append(tableMetas, normalKeyMetaSlice...)
-	tableMeta := strings.Join(tableMetas, ",")
+	tableMeta := strings.Join(tableMetas, ",\n")
 
 	tableComment := tablesMap[0]["COMMENTS"]
 	// 创建表初始语句 SQL
