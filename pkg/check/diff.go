@@ -94,26 +94,60 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 
 		t := table.NewWriter()
 		t.SetStyle(table.StyleLight)
-		t.AppendHeader(table.Row{"#", "ORACLE", "MYSQL", "SUGGEST"})
-		t.AppendRows([]table.Row{
-			{"TABLE", d.TableName, "", "CREATE TABLE"},
-		})
+		t.AppendHeader(table.Row{"#", "ORACLE", "MYSQL", "IS PARTITION", "SUGGEST"})
 
-		builder.WriteString(fmt.Sprintf("%v\n", t.Render()))
-		builder.WriteString("*/\n")
-		builder.WriteString(fmt.Sprintf("-- program would auto generate and create mysql table [%s.%s]\n", d.TargetSchemaName, d.TableName))
-		reverseTables, err := reverser.GenerateOracleToMySQLTables(d.Engine, []string{d.TableName}, d.SourceSchemaName, d.TargetSchemaName, false)
+		reverseTables, partitionTableList, err := reverser.GenerateOracleToMySQLTables(d.Engine, []string{d.TableName}, d.SourceSchemaName, d.TargetSchemaName, false)
 		if err != nil {
 			return err
 		}
+		if len(partitionTableList) > 0 {
+			if len(partitionTableList) != 1 {
+				return fmt.Errorf("oracle partition table list should only be one, can't be exist more [%v]", partitionTableList)
+			}
+			builder.WriteString(fmt.Sprintf(" oracle partition table maybe mysql has compatibility, will convert to normal table, please manual adjust\n"))
+			t.AppendRows([]table.Row{
+				{"TABLE", fmt.Sprintf("%s.%s", d.SourceSchemaName, partitionTableList[0]), fmt.Sprintf("%s.%s", d.TargetSchemaName, partitionTableList[0]), "True", "Manual Create And Adjust TABLE"},
+			})
+		} else {
+			t.AppendRows([]table.Row{
+				{"TABLE", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName), fmt.Sprintf("%s.%s", d.TargetSchemaName, d.TableName), "False", "Manual Create And Adjust TABLE"},
+			})
+		}
+		builder.WriteString(fmt.Sprintf("%v\n", t.Render()))
+		builder.WriteString("*/\n")
+
+		var (
+			createSQLS, compatibilitySQLS []string
+		)
 		for _, tbl := range reverseTables {
-			if err := tbl.GenerateAndExecMySQLCreateTableSQL(); err != nil {
+			createSQL, compatibilitySQL, err := tbl.GenerateAndExecMySQLCreateSQL()
+			if err != nil {
 				return err
 			}
-			if err := tbl.GenerateAndExecMySQLCreateIndexSQL(); err != nil {
-				return err
+			if createSQL != "" {
+				createSQLS = append(createSQLS, createSQL)
+			}
+			if compatibilitySQL != "" {
+				compatibilitySQLS = append(compatibilitySQLS, compatibilitySQL)
 			}
 		}
+
+		// 输出创建表以及索引语句
+		if len(createSQLS) != 0 {
+			builder.WriteString("-- create table and index sql")
+			for _, sql := range createSQLS {
+				builder.WriteString(fmt.Sprintf("%s\n", sql))
+			}
+		}
+
+		// 输出表创建过程可能存在不兼容的语句对象（外键、检查约束）
+		if len(compatibilitySQLS) != 0 {
+			builder.WriteString("-- maybe exist compatibility sql")
+			for _, sql := range compatibilitySQLS {
+				builder.WriteString(fmt.Sprintf("%s\n", sql))
+			}
+		}
+
 		builder.WriteString(fmt.Sprintf("\n-- the above info comes from oracle table [%s.%s]\n", d.SourceSchemaName, d.TableName))
 		builder.WriteString(fmt.Sprintf("-- the above info comes from mysql table [%s.%s]\n", d.TargetSchemaName, d.TableName))
 		if _, err := fmt.Fprintln(d.FileMW, builder.String()); err != nil {

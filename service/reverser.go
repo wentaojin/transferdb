@@ -254,16 +254,21 @@ FROM
 		LISTAGG ( T.COLUMN_NAME, ',' ) WITHIN GROUP ( ORDER BY T.COLUMN_POSITION ) AS column_list 
 	FROM
 		ALL_IND_COLUMNS T,
-		ALL_INDEXES I,
-		ALL_CONSTRAINTS C 
-	WHERE
-		T.INDEX_NAME = I.INDEX_NAME 
-		AND T.INDEX_NAME = C.CONSTRAINT_NAME ( + ) 
+		ALL_INDEXES I 
+	WHERE t.table_owner=i.table_owner 
+		and t.table_name=i.table_name
+		and t.index_name=i.index_name
+		and i.uniqueness='NONUNIQUE'
 		-- AND I.INDEX_TYPE != 'FUNCTION-BASED NORMAL' --排除基于函数的索引
 		-- AND I.INDEX_TYPE != 'BITMAP' --排除位图索引
-		AND C.CONSTRAINT_TYPE IS NULL --排除主键、唯一约束索引
-		AND T.TABLE_NAME = upper( '%s' ) 
+		-- AND C.CONSTRAINT_TYPE IS NULL --排除主键、唯一约束索引
+	  AND T.TABLE_NAME = upper( '%s' ) 
 		AND T.TABLE_OWNER = upper( '%s' ) 
+		and not exists (
+		select 1 from ALL_CONSTRAINTS C where 
+		c.owner=i.table_owner 
+		and c.table_name=i.table_name
+		and c.index_name=i.index_name)
 	GROUP BY
 		T.TABLE_OWNER,
 		T.TABLE_NAME,

@@ -17,9 +17,16 @@ package reverser
 
 import (
 	"fmt"
-	"regexp"
+	"io"
 	"strconv"
 	"strings"
+	"sync"
+
+	"github.com/jedib0t/go-pretty/v6/table"
+
+	"github.com/wentaojin/transferdb/utils"
+
+	"github.com/wentaojin/transferdb/pkg/check"
 
 	"github.com/wentaojin/transferdb/service"
 
@@ -51,13 +58,24 @@ type ColumnType struct {
 	TargetColumnType string
 }
 
-func (t Table) GenerateAndExecMySQLCreateTableSQL() error {
+type FileMW struct {
+	Mutex  sync.Mutex
+	Writer io.Writer
+}
+
+func (d *FileMW) Write(b []byte) (n int, err error) {
+	d.Mutex.Lock()
+	defer d.Mutex.Unlock()
+	return d.Writer.Write(b)
+}
+
+func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 	tablesMap, err := t.Engine.GetOracleTableComment(t.SourceSchemaName, t.SourceTableName)
 	if err != nil {
-		return err
+		return "", "", err
 	}
 	if len(tablesMap) > 1 {
-		return fmt.Errorf("oracle schema [%s] table [%s] comments exist multiple values: [%v]", t.SourceSchemaName, t.SourceTableName, tablesMap)
+		return "", "", fmt.Errorf("oracle schema [%s] table [%s] comments exist multiple values: [%v]", t.SourceSchemaName, t.SourceTableName, tablesMap)
 	}
 	service.Logger.Info("get oracle table comment",
 		zap.String("schema", t.SourceSchemaName),
@@ -66,28 +84,29 @@ func (t Table) GenerateAndExecMySQLCreateTableSQL() error {
 
 	columnMetaSlice, err := t.reverserOracleTableColumnToMySQL()
 	if err != nil {
-		return err
+		return "", "", err
 	}
 	service.Logger.Info("reverse oracle table column",
 		zap.String("schema", t.SourceSchemaName),
 		zap.String("table", t.SourceTableName),
 		zap.Strings("columns", columnMetaSlice))
 
-	keyMetaSlice, err := t.reverserOracleTableKeyToMySQL()
+	normalKeyMetaSlice, err := t.reverserOracleTablePKAndUKToMySQL()
 	if err != nil {
-		return err
+		return "", "", err
 	}
 	service.Logger.Info("reverse oracle table column",
 		zap.String("schema", t.SourceSchemaName),
 		zap.String("table", t.SourceTableName),
-		zap.Strings("keys", keyMetaSlice))
+		zap.Strings("pk and uk", normalKeyMetaSlice))
 
 	var (
 		tableMetas     []string
+		sqls           strings.Builder
 		createTableSQL string
 	)
 	tableMetas = append(tableMetas, columnMetaSlice...)
-	tableMetas = append(tableMetas, keyMetaSlice...)
+	tableMetas = append(tableMetas, normalKeyMetaSlice...)
 	tableMeta := strings.Join(tableMetas, ",")
 
 	tableComment := tablesMap[0]["COMMENTS"]
@@ -104,138 +123,219 @@ func (t Table) GenerateAndExecMySQLCreateTableSQL() error {
 	service.Logger.Info("reverse",
 		zap.String("schema", t.TargetSchemaName),
 		zap.String("table", modifyTableName),
-		zap.String("sql", createTableSQL))
+		zap.String("create sql", createTableSQL))
 
-	_, _, err = service.Query(t.Engine.MysqlDB, createTableSQL)
+	// 表语句
+	sqls.WriteString("/*\n")
+	sqls.WriteString(fmt.Sprintf(" oracle table reverse sql \n"))
+
+	sw := table.NewWriter()
+	sw.SetStyle(table.StyleLight)
+	sw.AppendHeader(table.Row{"#", "ORACLE", "MYSQL", "SUGGEST"})
+	sw.AppendRows([]table.Row{
+		{"TABLE", fmt.Sprintf("%s.%s", t.SourceTableName, t.SourceTableName), fmt.Sprintf("%s.%s", t.TargetSchemaName, modifyTableName), "Manual"},
+	})
+	sqls.WriteString(fmt.Sprintf("%v\n", sw.Render()))
+	sqls.WriteString("*/\n")
+	sqls.WriteString(createTableSQL + "\n")
+
+	// 索引语句
+	createIndexSQL, compatibilityIndexSQL, err := t.generateAndExecMySQLCreateIndexSQL(modifyTableName)
 	if err != nil {
-		return err
+		return "", "", err
 	}
-	return nil
+	if createIndexSQL != "" {
+		sqls.WriteString(createIndexSQL + "\n")
+	}
+
+	// 判断外键以及检查约束
+	version, err := t.Engine.GetMySQLDBVersion()
+	if err != nil {
+		return "", "", err
+	}
+	// 是否 TiDB 版本
+	isTiDB := false
+	if strings.Contains(version, "TiDB") {
+		isTiDB = true
+	}
+
+	var (
+		builder   strings.Builder
+		dbVersion string
+	)
+	if strings.Contains(version, check.MySQLVersionDelimiter) {
+		dbVersion = strings.Split(version, check.MySQLVersionDelimiter)[0]
+	} else {
+		dbVersion = version
+	}
+
+	ckMetas, err := t.reverserOracleTableCKToMySQL()
+	if err != nil {
+		return "", "", err
+	}
+	fkMetas, err := t.reverserOracleTableFKToMySQL()
+	if err != nil {
+		return "", "", err
+	}
+
+	if !isTiDB {
+		if utils.VersionOrdinal(dbVersion) > utils.VersionOrdinal(check.MySQLCheckConsVersion) && len(ckMetas) > 0 {
+			for _, ck := range ckMetas {
+				ckSQL := fmt.Sprintf("ALTER TABLE %s.%s ADD %s;", t.TargetSchemaName, modifyTableName, ck)
+				service.Logger.Info("reverse",
+					zap.String("schema", t.TargetSchemaName),
+					zap.String("table", modifyTableName),
+					zap.String("ck sql", ckSQL))
+
+				sqls.WriteString(ckSQL + "\n")
+			}
+		} else {
+			if len(fkMetas) > 0 {
+				for _, fk := range fkMetas {
+					addFkSQL := fmt.Sprintf("ALTER TABLE %s.%s ADD %s;", t.TargetSchemaName, modifyTableName, fk)
+					service.Logger.Info("reverse",
+						zap.String("schema", t.TargetSchemaName),
+						zap.String("table", modifyTableName),
+						zap.String("fk sql", addFkSQL))
+
+					sqls.WriteString(addFkSQL + "\n")
+				}
+			}
+			if len(ckMetas) > 0 {
+				builder.WriteString("/*\n")
+				builder.WriteString(fmt.Sprintf(" oracle table check consrtaint maybe mysql has compatibility, skip\n"))
+				tw := table.NewWriter()
+				tw.SetStyle(table.StyleLight)
+				tw.AppendHeader(table.Row{"#", "ORACLE", "MYSQL", "SUGGEST"})
+				tw.AppendRows([]table.Row{
+					{"TABLE", fmt.Sprintf("%s.%s", t.SourceTableName, t.SourceTableName), fmt.Sprintf("%s.%s", t.TargetSchemaName, modifyTableName), "Manual Create"},
+				})
+				builder.WriteString(fmt.Sprintf("%v\n", tw.Render()))
+				builder.WriteString("*/\n")
+
+				for _, ck := range ckMetas {
+					ckSQL := fmt.Sprintf("ALTER TABLE %s.%s ADD %s;", t.TargetSchemaName, modifyTableName, ck)
+					builder.WriteString(ckSQL + "\n")
+				}
+				// 增加不兼容的索引语句
+				builder.WriteString(compatibilityIndexSQL + "\n")
+			}
+		}
+		// 记录不为空
+		if builder.String() != "" {
+			builder.WriteString(fmt.Sprintf("\n-- the above info comes from oracle table [%s.%s]\n", t.SourceSchemaName, t.SourceTableName))
+			builder.WriteString(fmt.Sprintf("-- the above info comes from mysql table [%s.%s]\n", t.TargetSchemaName, modifyTableName))
+		}
+
+		if sqls.String() != "" {
+			sqls.WriteString(fmt.Sprintf("-- the above info create mysql table sql [%s.%s]\n", t.TargetSchemaName, modifyTableName))
+		}
+		return sqls.String(), builder.String(), nil
+	}
+
+	if len(fkMetas) > 0 || len(ckMetas) > 0 {
+		builder.WriteString("/*\n")
+		builder.WriteString(fmt.Sprintf(" oracle table check consrtaint maybe mysql has compatibility, skip\n"))
+		tw := table.NewWriter()
+		tw.SetStyle(table.StyleLight)
+		tw.AppendHeader(table.Row{"#", "ORACLE", "MYSQL", "SUGGEST"})
+		tw.AppendRows([]table.Row{
+			{"TABLE", fmt.Sprintf("%s.%s", t.SourceTableName, t.SourceTableName), fmt.Sprintf("%s.%s", t.TargetSchemaName, modifyTableName), "Manual Create"}})
+		builder.WriteString(fmt.Sprintf("%v\n", tw.Render()))
+		builder.WriteString("*/\n")
+
+		for _, fk := range fkMetas {
+			fkSQL := fmt.Sprintf("ALTER TABLE %s.%s ADD %s;\n", t.TargetSchemaName, modifyTableName, fk)
+			builder.WriteString(fkSQL + "\n")
+		}
+
+		for _, ck := range ckMetas {
+			ckSQL := fmt.Sprintf("ALTER TABLE %s.%s ADD %s;\n", t.TargetSchemaName, modifyTableName, ck)
+			builder.WriteString(ckSQL + "\n")
+		}
+
+		builder.WriteString(compatibilityIndexSQL + "\n")
+	}
+
+	// 记录不为空
+	if builder.String() != "" {
+		builder.WriteString(fmt.Sprintf("\n-- the above info comes from oracle table [%s.%s]\n", t.SourceSchemaName, t.SourceTableName))
+		builder.WriteString(fmt.Sprintf("-- the above info comes from mysql table [%s.%s]\n", t.TargetSchemaName, modifyTableName))
+	}
+
+	if sqls.String() != "" {
+		sqls.WriteString(fmt.Sprintf("-- the above info create mysql table sql [%s.%s]\n", t.TargetSchemaName, modifyTableName))
+	}
+
+	return sqls.String(), builder.String(), nil
 }
 
-func (t Table) GenerateAndExecMySQLCreateIndexSQL() error {
+func (t Table) generateAndExecMySQLCreateIndexSQL(modifyTableName string) (string, string, error) {
 	var (
-		createIndexSQL string
+		createIndexSQL        string
+		compatibilityIndexSQL string
 	)
 	indexesMap, err := t.Engine.GetOracleTableIndex(t.SourceSchemaName, t.SourceTableName)
 	if err != nil {
-		return err
+		return createIndexSQL, compatibilityIndexSQL, err
 	}
 	for _, idxMeta := range indexesMap {
 		if idxMeta["TABLE_NAME"] != "" {
-			ok := t.Engine.IsExistMysqlIndex(t.TargetSchemaName, t.TargetTableName, strings.ToLower(idxMeta["INDEX_NAME"]))
-			if !ok {
-				// 索引创建
-				if idxMeta["UNIQUENESS"] == "NONUNIQUE" {
-					switch idxMeta["INDEX_TYPE"] {
-					case "NORMAL":
-						createIndexSQL = fmt.Sprintf("CREATE INDEX `%s` ON `%s`.`%s`(%s)",
-							strings.ToLower(idxMeta["INDEX_NAME"]), t.TargetSchemaName, t.TargetTableName, strings.ToLower(idxMeta["COLUMN_LIST"]))
-						_, _, err = service.Query(t.Engine.MysqlDB, createIndexSQL)
-						if err != nil {
-							return err
-						}
-						return nil
-					case "FUNCTION-BASED NORMAL":
-						service.Logger.Warn("reverse",
-							zap.String("schema", t.TargetTableName),
-							zap.String("table", t.TargetTableName),
-							zap.String("indexName", idxMeta["INDEX_NAME"]),
-							zap.String("indexType", "FUNCTION-BASED NORMAL"),
-							zap.String("indexExpression", idxMeta["COLUMN_EXPRESSION"]),
-							zap.String("error", "MySQL Not Support"))
-						return nil
-					case "BITMAP":
-						service.Logger.Warn("reverse",
-							zap.String("schema", t.TargetTableName),
-							zap.String("table", t.TargetTableName),
-							zap.String("indexName", idxMeta["INDEX_NAME"]),
-							zap.String("indexType", "BITMAP"),
-							zap.String("indexColumn", idxMeta["COLUMN_LIST"]),
-							zap.String("error", "MySQL Not Support"))
-						return nil
-					default:
-						return fmt.Errorf("oracle schema [%s] table [%s] index [%s] isn't mysql support index type [%v]",
-							t.SourceSchemaName, t.SourceTableName, idxMeta["INDEX_NAME"], idxMeta["INDEX_TYPE"])
-					}
-				} else {
-					if idxMeta["INDEX_TYPE"] == "NORMAL" {
-						createIndexSQL = fmt.Sprintf("CREATE UNIQUE INDEX `%s` ON `%s`.`%s`(%s)",
-							strings.ToLower(idxMeta["INDEX_NAME"]), t.TargetSchemaName, t.TargetTableName, strings.ToLower(idxMeta["COLUMN_LIST"]))
-						_, _, err = service.Query(t.Engine.MysqlDB, createIndexSQL)
-						if err != nil {
-							return err
-						}
-						return nil
-					}
-					return fmt.Errorf("oracle schema [%s] table [%s] index [%s] isn't mysql support index type [%v]",
+			if idxMeta["UNIQUENESS"] == "NONUNIQUE" {
+				switch idxMeta["INDEX_TYPE"] {
+				case "NORMAL":
+					createIndexSQL = fmt.Sprintf("CREATE INDEX `%s` ON `%s`.`%s`(%s)",
+						strings.ToLower(idxMeta["INDEX_NAME"]), t.TargetSchemaName, modifyTableName, idxMeta["COLUMN_LIST"])
+
+					return createIndexSQL, compatibilityIndexSQL, err
+
+				case "FUNCTION-BASED NORMAL":
+					service.Logger.Warn("reverse",
+						zap.String("schema", t.TargetTableName),
+						zap.String("table", modifyTableName),
+						zap.String("indexName", idxMeta["INDEX_NAME"]),
+						zap.String("indexType", "FUNCTION-BASED NORMAL"),
+						zap.String("indexExpression", idxMeta["COLUMN_EXPRESSION"]),
+						zap.String("error", "MySQL Not Support"))
+
+					compatibilityIndexSQL = fmt.Sprintf("CREATE INDEX `%s` ON `%s`.`%s`(%s)",
+						strings.ToLower(idxMeta["INDEX_NAME"]), t.TargetSchemaName, modifyTableName, idxMeta["COLUMN_EXPRESSION"])
+
+					return createIndexSQL, compatibilityIndexSQL, err
+
+				case "BITMAP":
+					service.Logger.Warn("reverse",
+						zap.String("schema", t.TargetTableName),
+						zap.String("table", modifyTableName),
+						zap.String("indexName", idxMeta["INDEX_NAME"]),
+						zap.String("indexType", "BITMAP"),
+						zap.String("indexColumn", idxMeta["COLUMN_LIST"]),
+						zap.String("error", "MySQL Not Support"))
+
+					compatibilityIndexSQL = fmt.Sprintf("CREATE BITMAP INDEX `%s` ON `%s`.`%s`(%s)",
+						strings.ToLower(idxMeta["INDEX_NAME"]), t.TargetSchemaName, modifyTableName, idxMeta["COLUMN_LIST"])
+
+					return createIndexSQL, compatibilityIndexSQL, err
+
+				default:
+					return createIndexSQL, compatibilityIndexSQL, fmt.Errorf("oracle schema [%s] table [%s] index [%s] isn't mysql support index type [%v]",
 						t.SourceSchemaName, t.SourceTableName, idxMeta["INDEX_NAME"], idxMeta["INDEX_TYPE"])
 				}
 			} else {
-				// 跳过原索引名，重命名索引添加后缀 _ping 创建
-				service.Logger.Warn("Appear Warning",
-					zap.String("schema", t.TargetSchemaName),
-					zap.String("table", t.TargetTableName),
-					zap.String("index", strings.ToLower(idxMeta["INDEX_NAME"])),
-					zap.String("warn", fmt.Sprintf("table index is exist, skip created and rename index created")))
+				if idxMeta["INDEX_TYPE"] == "NORMAL" {
+					createIndexSQL = fmt.Sprintf("CREATE UNIQUE INDEX `%s` ON `%s`.`%s`(%s)",
+						strings.ToLower(idxMeta["INDEX_NAME"]), t.TargetSchemaName, modifyTableName, strings.ToLower(idxMeta["COLUMN_LIST"]))
 
-				if idxMeta["UNIQUENESS"] == "NONUNIQUE" {
-					switch idxMeta["INDEX_TYPE"] {
-					case "NORMAL":
-						createIndexSQL = fmt.Sprintf("CREATE INDEX `%s_ping` ON `%s`.`%s`(%s)",
-							strings.ToLower(idxMeta["INDEX_NAME"]), t.TargetSchemaName, t.TargetTableName, strings.ToLower(idxMeta["COLUMN_LIST"]))
-						_, _, err = service.Query(t.Engine.MysqlDB, createIndexSQL)
-						if err != nil {
-							return err
-						}
-						service.Logger.Warn("reverse",
-							zap.String("schema", t.TargetTableName),
-							zap.String("table", t.TargetTableName),
-							zap.String("sql", createIndexSQL))
-						return nil
-					case "FUNCTION-BASED NORMAL":
-						service.Logger.Warn("reverse",
-							zap.String("schema", t.TargetTableName),
-							zap.String("table", t.TargetTableName),
-							zap.String("indexName", idxMeta["INDEX_NAME"]),
-							zap.String("indexType", "FUNCTION-BASED NORMAL"),
-							zap.String("indexExpression", idxMeta["COLUMN_EXPRESSION"]),
-							zap.String("error", "MySQL Not Support"))
-						return nil
-					case "BITMAP":
-						service.Logger.Warn("reverse",
-							zap.String("schema", t.TargetTableName),
-							zap.String("table", t.TargetTableName),
-							zap.String("indexName", idxMeta["INDEX_NAME"]),
-							zap.String("indexType", "BITMAP"),
-							zap.String("indexColumn", idxMeta["COLUMN_LIST"]),
-							zap.String("error", "MySQL Not Support"))
-						return nil
-					default:
-						return fmt.Errorf("oracle schema [%s] table [%s] index [%s] isn't mysql support index type [%v]",
-							t.SourceSchemaName, t.SourceTableName, idxMeta["INDEX_NAME"], idxMeta["INDEX_TYPE"])
-					}
-				} else {
-					if idxMeta["INDEX_TYPE"] == "NORMAL" {
-						createIndexSQL = fmt.Sprintf("CREATE UNIQUE INDEX `%s_ping` ON `%s`.`%s`(%s)",
-							strings.ToLower(idxMeta["INDEX_NAME"]), t.TargetSchemaName, t.TargetTableName, strings.ToLower(idxMeta["COLUMN_LIST"]))
-						_, _, err = service.Query(t.Engine.MysqlDB, createIndexSQL)
-						if err != nil {
-							return err
-						}
-						service.Logger.Warn("reverse",
-							zap.String("schema", t.TargetTableName),
-							zap.String("table", t.TargetTableName),
-							zap.String("sql", createIndexSQL))
-						return nil
-					}
-					return fmt.Errorf("oracle schema [%s] table [%s] index [%s] isn't mysql support index type [%v]",
-						t.SourceSchemaName, t.SourceTableName, idxMeta["INDEX_NAME"], idxMeta["INDEX_TYPE"])
+					return createIndexSQL, compatibilityIndexSQL, err
 				}
+				return createIndexSQL, compatibilityIndexSQL, fmt.Errorf("oracle schema [%s] table [%s] index [%s] isn't mysql support index type [%v]",
+					t.SourceSchemaName, t.SourceTableName, idxMeta["INDEX_NAME"], idxMeta["INDEX_TYPE"])
 			}
+
 		}
 	}
-	return nil
+
+	return createIndexSQL, compatibilityIndexSQL, err
 }
 
 func (t Table) reverserOracleTableColumnToMySQL() ([]string, error) {
@@ -275,21 +375,13 @@ func (t Table) reverserOracleTableColumnToMySQL() ([]string, error) {
 	return columnMetas, nil
 }
 
-func (t Table) reverserOracleTableKeyToMySQL() ([]string, error) {
+func (t Table) reverserOracleTablePKAndUKToMySQL() ([]string, error) {
 	var keysMeta []string
 	primaryKeyMap, err := t.Engine.GetOracleTablePrimaryKey(t.SourceSchemaName, t.SourceTableName)
 	if err != nil {
 		return keysMeta, err
 	}
 	uniqueKeyMap, err := t.Engine.GetOracleTableUniqueKey(t.SourceSchemaName, t.SourceTableName)
-	if err != nil {
-		return keysMeta, err
-	}
-	foreignKeyMap, err := t.Engine.GetOracleTableForeignKey(t.SourceSchemaName, t.SourceTableName)
-	if err != nil {
-		return keysMeta, err
-	}
-	checkKeyMap, err := t.Engine.GetOracleTableCheckKey(t.SourceSchemaName, t.SourceTableName)
 	if err != nil {
 		return keysMeta, err
 	}
@@ -306,6 +398,16 @@ func (t Table) reverserOracleTableKeyToMySQL() ([]string, error) {
 			keysMeta = append(keysMeta, uk)
 		}
 	}
+	return keysMeta, nil
+}
+
+func (t Table) reverserOracleTableFKToMySQL() ([]string, error) {
+	var keysMeta []string
+	foreignKeyMap, err := t.Engine.GetOracleTableForeignKey(t.SourceSchemaName, t.SourceTableName)
+	if err != nil {
+		return keysMeta, err
+	}
+
 	if len(foreignKeyMap) > 0 {
 		for _, rowFKCol := range foreignKeyMap {
 			if rowFKCol["DELETE_RULE"] == "" || rowFKCol["DELETE_RULE"] == "NO ACTION" {
@@ -337,22 +439,25 @@ func (t Table) reverserOracleTableKeyToMySQL() ([]string, error) {
 			}
 		}
 	}
+
+	return keysMeta, nil
+}
+
+func (t Table) reverserOracleTableCKToMySQL() ([]string, error) {
+	var keysMeta []string
+	checkKeyMap, err := t.Engine.GetOracleTableCheckKey(t.SourceSchemaName, t.SourceTableName)
+	if err != nil {
+		return keysMeta, err
+	}
 	if len(checkKeyMap) > 0 {
 		for _, rowCKCol := range checkKeyMap {
-			// 排除非空约束检查
-			match, err := regexp.MatchString(`(^.*)(?i:IS NOT NULL)`, rowCKCol["SEARCH_CONDITION"])
-			if err != nil {
-				return keysMeta, fmt.Errorf("check constraint remove not null failed: %v", err)
-			}
-			if !match {
-				ck := fmt.Sprintf("CONSTRAINT `%s` CHECK (%s)",
-					strings.ToLower(rowCKCol["CONSTRAINT_NAME"]),
-					strings.ToLower(rowCKCol["SEARCH_CONDITION"]))
-				keysMeta = append(keysMeta, ck)
-			}
+			ck := fmt.Sprintf("CONSTRAINT `%s` CHECK (%s)",
+				strings.ToLower(rowCKCol["CONSTRAINT_NAME"]),
+				strings.ToLower(rowCKCol["SEARCH_CONDITION"]))
+			keysMeta = append(keysMeta, ck)
 		}
-
 	}
+
 	return keysMeta, nil
 }
 

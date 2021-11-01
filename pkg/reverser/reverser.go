@@ -17,8 +17,13 @@ package reverser
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
+	"sync"
 	"time"
+
+	"github.com/jedib0t/go-pretty/v6/table"
 
 	"github.com/wentaojin/transferdb/utils"
 
@@ -33,9 +38,10 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 	service.Logger.Info("reverse table oracle to mysql start",
 		zap.String("schema", cfg.SourceConfig.SchemaName))
 
-	if err := reverseOracleToMySQLTableInspect(engine, cfg); err != nil {
-		return err
-	}
+	// 只提供表结构转换文本输出，不提供直写下游，故注释下游检查项
+	//if err := reverseOracleToMySQLTableInspect(engine, cfg); err != nil {
+	//	return err
+	//}
 
 	// 获取待转换表
 	service.Logger.Info("get oracle to mysql all tables")
@@ -45,9 +51,56 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 		return err
 	}
 
-	tables, err := GenerateOracleToMySQLTables(engine, exporterTableSlice, cfg.SourceConfig.SchemaName, cfg.TargetConfig.SchemaName, cfg.TargetConfig.Overwrite)
+	tables, partitionTableList, err := GenerateOracleToMySQLTables(engine, exporterTableSlice, cfg.SourceConfig.SchemaName, cfg.TargetConfig.SchemaName, cfg.TargetConfig.Overwrite)
 	if err != nil {
 		return err
+	}
+
+	pwdDir, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	fileReverse, err := os.OpenFile(filepath.Join(pwdDir, "transferdb_reverse.sql"), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		return err
+	}
+	defer fileReverse.Close()
+
+	fileCompatibility, err := os.OpenFile(filepath.Join(pwdDir, "transferdb_compatibility.sql"), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		return err
+	}
+	defer fileReverse.Close()
+
+	service.Logger.Info("reverse", zap.String("create table and index output", filepath.Join(pwdDir, "transferdb_reverse.sql")))
+	service.Logger.Info("compatibility", zap.String("maybe exist compatibility output", filepath.Join(pwdDir, "transferdb_compatibility.sql")))
+
+	wrReverse := &FileMW{sync.Mutex{}, fileReverse}
+	wrCompatibility := &FileMW{sync.Mutex{}, fileCompatibility}
+
+	if len(partitionTableList) > 0 {
+		var builder strings.Builder
+		builder.WriteString("/*\n")
+		builder.WriteString(fmt.Sprintf(" oracle partition table maybe mysql has compatibility, will convert to normal table, please manual adjust\n"))
+		t := table.NewWriter()
+		t.SetStyle(table.StyleLight)
+		t.AppendHeader(table.Row{"Schema", "ORACLE PARTITION LIST", "SUGGEST"})
+
+		for _, part := range partitionTableList {
+			t.AppendRows([]table.Row{
+				{cfg.SourceConfig.SchemaName, part, "Manual Create And Adjust TABLE"},
+			})
+		}
+		t.SetColumnConfigs([]table.ColumnConfig{
+			{Number: 1, AutoMerge: true},
+			{Number: 3, AutoMerge: true},
+		})
+
+		builder.WriteString(t.Render() + "\n")
+		builder.WriteString("*/\n")
+		if _, err := fmt.Fprintln(wrCompatibility, builder.String()); err != nil {
+			return err
+		}
 	}
 
 	// 设置工作池
@@ -57,12 +110,23 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 	for _, table := range tables {
 		// 变量替换，直接使用原变量会导致并发输出有问题
 		tbl := table
+		fileMW := wrReverse
+		compatibilityMW := wrCompatibility
 		wp.Do(func() error {
-			if err := tbl.GenerateAndExecMySQLCreateTableSQL(); err != nil {
+			createSQL, compatibilitySQL, err := tbl.GenerateAndExecMySQLCreateSQL()
+			if err != nil {
 				return err
 			}
-			if err := tbl.GenerateAndExecMySQLCreateIndexSQL(); err != nil {
-				return err
+			if createSQL != "" {
+				if _, err := fmt.Fprintln(fileMW, createSQL); err != nil {
+					return err
+				}
+			}
+
+			if compatibilitySQL != "" {
+				if _, err := fmt.Fprintln(compatibilityMW, compatibilitySQL); err != nil {
+					return err
+				}
 			}
 			return nil
 		})
@@ -141,12 +205,12 @@ func reverseOracleToMySQLTableInspect(engine *service.Engine, cfg *service.CfgFi
 	return nil
 }
 
-// 转换表生成
-func GenerateOracleToMySQLTables(engine *service.Engine, exporterTableSlice []string, sourceSchema, targetSchema string, overwrite bool) ([]Table, error) {
+// 获取表列表
+func GenerateOracleToMySQLTables(engine *service.Engine, exporterTableSlice []string, sourceSchema, targetSchema string, overwrite bool) ([]Table, []string, error) {
 	// 筛选过滤分区表并打印警告
 	partitionTables, err := engine.FilterOraclePartitionTable(sourceSchema, exporterTableSlice)
 	if err != nil {
-		return []Table{}, err
+		return []Table{}, partitionTables, err
 	}
 
 	if len(partitionTables) != 0 {
@@ -154,6 +218,7 @@ func GenerateOracleToMySQLTables(engine *service.Engine, exporterTableSlice []st
 			zap.String("schema", sourceSchema),
 			zap.String("partition table list", fmt.Sprintf("%v", partitionTables)),
 			zap.String("suggest", "if necessary, please manually convert and process the tables in the above list"))
+		return []Table{}, partitionTables, err
 	}
 
 	// 数据库查询获取自定义表结构转换规则
@@ -205,11 +270,11 @@ func GenerateOracleToMySQLTables(engine *service.Engine, exporterTableSlice []st
 
 	customSchemaColumnTypeSlice, err := engine.GetCustomSchemaColumnTypeMap(sourceSchema)
 	if err != nil {
-		return []Table{}, err
+		return []Table{}, partitionTables, err
 	}
 	customTableColumnTypeSlice, err := engine.GetCustomTableColumnTypeMap(sourceSchema)
 	if err != nil {
-		return []Table{}, err
+		return []Table{}, partitionTables, err
 	}
 
 	// 加载字段类型转换规则
@@ -311,5 +376,5 @@ func GenerateOracleToMySQLTables(engine *service.Engine, exporterTableSlice []st
 		table.Overwrite = overwrite
 		tables = append(tables, table)
 	}
-	return tables, nil
+	return tables, partitionTables, nil
 }
