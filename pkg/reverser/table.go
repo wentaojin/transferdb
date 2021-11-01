@@ -39,6 +39,8 @@ type Table struct {
 	ColumnTypes      []ColumnType
 	Engine           *service.Engine
 	TableName
+	Compatibility *FileMW
+	Reverse       *FileMW
 }
 
 type TableName struct {
