@@ -120,7 +120,7 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 			createSQLS, compatibilitySQLS []string
 		)
 		for _, tbl := range reverseTables {
-			createSQL, compatibilitySQL, err := reverser.GenerateAndExecMySQLCreateSQL(tbl)
+			createSQL, compatibilitySQL, err := tbl.GenerateAndExecMySQLCreateSQL()
 			if err != nil {
 				return err
 			}
