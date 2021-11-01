@@ -201,11 +201,11 @@ func reverseOracleToMySQLTableInspect(engine *service.Engine, cfg *service.CfgFi
 }
 
 // 获取表列表
-func GenerateOracleToMySQLTables(engine *service.Engine, exporterTableSlice []string, sourceSchema, targetSchema string, overwrite bool) ([]Table, []string, error) {
+func GenerateOracleToMySQLTables(engine *service.Engine, exporterTableSlice []string, sourceSchema, targetSchema string, overwrite bool) ([]*Table, []string, error) {
 	// 筛选过滤分区表并打印警告
 	partitionTables, err := engine.FilterOraclePartitionTable(sourceSchema, exporterTableSlice)
 	if err != nil {
-		return []Table{}, partitionTables, err
+		return []*Table{}, partitionTables, err
 	}
 
 	if len(partitionTables) != 0 {
@@ -213,12 +213,12 @@ func GenerateOracleToMySQLTables(engine *service.Engine, exporterTableSlice []st
 			zap.String("schema", sourceSchema),
 			zap.String("partition table list", fmt.Sprintf("%v", partitionTables)),
 			zap.String("suggest", "if necessary, please manually convert and process the tables in the above list"))
-		return []Table{}, partitionTables, err
+		return []*Table{}, partitionTables, err
 	}
 
 	// 数据库查询获取自定义表结构转换规则
 	var (
-		tables []Table
+		tables []*Table
 		// 表名转换
 		tableNameSlice []map[string]TableName
 		// 表字段类型转换
@@ -229,7 +229,7 @@ func GenerateOracleToMySQLTables(engine *service.Engine, exporterTableSlice []st
 	// todo: 自定义表名适配删除 - 数据同步不支持表名不一致
 	//customTableNameSlice, err := engine.GetCustomTableNameMap(cfg.SourceConfig.SchemaName)
 	//if err != nil {
-	//	return []Table{}, err
+	//	return []*Table{}, err
 	//}
 
 	for _, tbl := range exporterTableSlice {
@@ -265,11 +265,11 @@ func GenerateOracleToMySQLTables(engine *service.Engine, exporterTableSlice []st
 
 	customSchemaColumnTypeSlice, err := engine.GetCustomSchemaColumnTypeMap(sourceSchema)
 	if err != nil {
-		return []Table{}, partitionTables, err
+		return []*Table{}, partitionTables, err
 	}
 	customTableColumnTypeSlice, err := engine.GetCustomTableColumnTypeMap(sourceSchema)
 	if err != nil {
-		return []Table{}, partitionTables, err
+		return []*Table{}, partitionTables, err
 	}
 
 	// 加载字段类型转换规则
@@ -351,7 +351,7 @@ func GenerateOracleToMySQLTables(engine *service.Engine, exporterTableSlice []st
 
 	// 返回需要转换 schema table
 	for _, tbl := range exporterTableSlice {
-		var table Table
+		var table *Table
 		table.SourceSchemaName = sourceSchema
 		table.TargetSchemaName = targetSchema
 		// 表名规则
