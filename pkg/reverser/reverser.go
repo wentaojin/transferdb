@@ -23,8 +23,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jedib0t/go-pretty/v6/table"
-
 	"github.com/wentaojin/transferdb/utils"
 
 	"github.com/wentaojin/transferdb/service"
@@ -79,28 +77,29 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 	wrCompatibility := &FileMW{sync.Mutex{}, fileCompatibility}
 
 	if len(partitionTableList) > 0 {
-		var builder strings.Builder
-		builder.WriteString("/*\n")
-		builder.WriteString(fmt.Sprintf(" oracle partition table maybe mysql has compatibility, will convert to normal table, please manual adjust\n"))
-		t := table.NewWriter()
-		t.SetStyle(table.StyleLight)
-		t.AppendHeader(table.Row{"SCHEMA", "ORACLE PARTITION LIST", "SUGGEST"})
-
-		for _, part := range partitionTableList {
-			t.AppendRows([]table.Row{
-				{cfg.SourceConfig.SchemaName, part, "Manual Create And Adjust Table"},
-			})
-		}
-		t.SetColumnConfigs([]table.ColumnConfig{
-			{Number: 1, AutoMerge: true},
-			{Number: 3, AutoMerge: true},
-		})
-
-		builder.WriteString(t.Render() + "\n")
-		builder.WriteString("*/\n")
-		if _, err := fmt.Fprintln(wrCompatibility, builder.String()); err != nil {
-			return err
-		}
+		//var builder strings.Builder
+		//builder.WriteString("/*\n")
+		//builder.WriteString(fmt.Sprintf(" oracle partition table maybe mysql has compatibility, will convert to normal table, please manual adjust\n"))
+		//t := table.NewWriter()
+		//t.SetStyle(table.StyleLight)
+		//t.AppendHeader(table.Row{"SCHEMA", "ORACLE PARTITION LIST", "SUGGEST"})
+		//
+		//for _, part := range partitionTableList {
+		//	t.AppendRows([]table.Row{
+		//		{cfg.SourceConfig.SchemaName, part, "Manual Create And Adjust Table"},
+		//	})
+		//}
+		//t.SetColumnConfigs([]table.ColumnConfig{
+		//	{Number: 1, AutoMerge: true},
+		//	{Number: 3, AutoMerge: true},
+		//})
+		//
+		//builder.WriteString(t.Render() + "\n")
+		//builder.WriteString("*/\n")
+		//if _, err := fmt.Fprintln(wrCompatibility, builder.String()); err != nil {
+		//	return err
+		//}
+		fmt.Println(partitionTableList)
 	}
 
 	// 设置工作池
