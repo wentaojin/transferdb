@@ -23,6 +23,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jedib0t/go-pretty/v6/table"
+
 	"github.com/wentaojin/transferdb/utils"
 
 	"github.com/wentaojin/transferdb/service"
@@ -75,31 +77,31 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 
 	wrReverse := &FileMW{sync.Mutex{}, fileReverse}
 	wrCompatibility := &FileMW{sync.Mutex{}, fileCompatibility}
+	wrCompatibility1 := &FileMW{sync.Mutex{}, fileCompatibility}
 
 	if len(partitionTableList) > 0 {
-		//var builder strings.Builder
-		//builder.WriteString("/*\n")
-		//builder.WriteString(fmt.Sprintf(" oracle partition table maybe mysql has compatibility, will convert to normal table, please manual adjust\n"))
-		//t := table.NewWriter()
-		//t.SetStyle(table.StyleLight)
-		//t.AppendHeader(table.Row{"SCHEMA", "ORACLE PARTITION LIST", "SUGGEST"})
-		//
-		//for _, part := range partitionTableList {
-		//	t.AppendRows([]table.Row{
-		//		{cfg.SourceConfig.SchemaName, part, "Manual Create And Adjust Table"},
-		//	})
-		//}
-		//t.SetColumnConfigs([]table.ColumnConfig{
-		//	{Number: 1, AutoMerge: true},
-		//	{Number: 3, AutoMerge: true},
-		//})
-		//
-		//builder.WriteString(t.Render() + "\n")
-		//builder.WriteString("*/\n")
-		//if _, err := fmt.Fprintln(wrCompatibility, builder.String()); err != nil {
-		//	return err
-		//}
-		fmt.Println(partitionTableList)
+		var builder strings.Builder
+		builder.WriteString("/*\n")
+		builder.WriteString(fmt.Sprintf(" oracle partition table maybe mysql has compatibility, will convert to normal table, please manual adjust\n"))
+		t := table.NewWriter()
+		t.SetStyle(table.StyleLight)
+		t.AppendHeader(table.Row{"SCHEMA", "ORACLE PARTITION LIST", "SUGGEST"})
+
+		for _, part := range partitionTableList {
+			t.AppendRows([]table.Row{
+				{cfg.SourceConfig.SchemaName, part, "Manual Create And Adjust Table"},
+			})
+		}
+		t.SetColumnConfigs([]table.ColumnConfig{
+			{Number: 1, AutoMerge: true},
+			{Number: 3, AutoMerge: true},
+		})
+
+		builder.WriteString(t.Render() + "\n")
+		builder.WriteString("*/\n")
+		if _, err := fmt.Fprintln(wrCompatibility, builder.String()); err != nil {
+			return err
+		}
 	}
 
 	// 设置工作池
@@ -110,7 +112,7 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 		// 变量替换，直接使用原变量会导致并发输出有问题
 		tbl := table
 		wrMR := wrReverse
-		cmMR := wrCompatibility
+		cmMR := wrCompatibility1
 		wp.Do(func() error {
 			createSQL, compatibilitySQL, err := tbl.GenerateAndExecMySQLCreateSQL()
 			if err != nil {
