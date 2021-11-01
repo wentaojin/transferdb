@@ -28,7 +28,6 @@ import (
 
 	"github.com/wentaojin/transferdb/service"
 
-	"github.com/xxjwxc/gowp/workpool"
 	"go.uber.org/zap"
 )
 
@@ -77,7 +76,7 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 	defer fileCompatibility.Close()
 
 	service.Logger.Info("reverse", zap.String("create table and index output", filepath.Join(pwdDir, "reverse.sql")))
-	service.Logger.Info("partition", zap.String("maybe exist partition output", filepath.Join(pwdDir, "partition.sql")))
+	service.Logger.Info("compatibility", zap.String("maybe exist compatibility output", filepath.Join(pwdDir, "compatibility.sql")))
 
 	if len(partitionTableList) > 0 {
 		var builder strings.Builder
@@ -104,38 +103,21 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 		}
 	}
 
-	// 设置工作池
-	// 设置 goroutine 数
-
-	wp := workpool.New(cfg.AppConfig.Threads)
-
 	for _, table := range tables {
-		// 变量替换，直接使用原变量会导致并发输出有问题
-		tbl := table
-		wp.Do(func() error {
-			createSQL, compatibilitySQL, errMSg := GenerateAndExecMySQLCreateSQL(tbl)
-			if errMSg != nil {
-				return errMSg
-			}
-			//if _, errMSg = fmt.Fprintln(wrMR, fmt.Sprintf("%s\n%s", createSQL, compatibilitySQL)); errMSg != nil {
-			//	return err
-			//}
-			fmt.Println(fmt.Sprintf("%s\n%s", createSQL, compatibilitySQL))
-			return nil
-		})
-	}
-	if err = wp.Wait(); err != nil {
-		return err
+		createSQL, compatibilitySQL, errMSg := table.GenerateAndExecMySQLCreateSQL()
+		if errMSg != nil {
+			return errMSg
+		}
+		if _, err = fileReverse.WriteString(createSQL); err != nil {
+			return err
+		}
+		if _, err = fileCompatibility.WriteString(compatibilitySQL); err != nil {
+			return err
+		}
+
 	}
 
 	endTime := time.Now()
-	if !wp.IsDone() {
-		service.Logger.Error("reverse table oracle to mysql failed",
-			zap.String("cost", endTime.Sub(startTime).String()),
-			zap.Error(fmt.Errorf("reverse table task failed, please clear and rerunning")),
-			zap.Error(err))
-		return fmt.Errorf("reverse table task failed, please clear and rerunning, error: %v", err)
-	}
 	service.Logger.Info("reverse table oracle to mysql finished",
 		zap.String("cost", endTime.Sub(startTime).String()))
 	return nil
