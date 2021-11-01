@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jedib0t/go-pretty/v6/table"
@@ -28,6 +29,7 @@ import (
 
 	"github.com/wentaojin/transferdb/service"
 
+	"github.com/xxjwxc/gowp/workpool"
 	"go.uber.org/zap"
 )
 
@@ -76,7 +78,7 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 	defer fileCompatibility.Close()
 
 	service.Logger.Info("reverse", zap.String("create table and index output", filepath.Join(pwdDir, "reverse.sql")))
-	service.Logger.Info("compatibility", zap.String("maybe exist compatibility output", filepath.Join(pwdDir, "compatibility.sql")))
+	service.Logger.Info("partition", zap.String("maybe exist partition output", filepath.Join(pwdDir, "partition.sql")))
 
 	if len(partitionTableList) > 0 {
 		var builder strings.Builder
@@ -103,21 +105,39 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 		}
 	}
 
-	for _, table := range tables {
-		createSQL, compatibilitySQL, errMSg := table.GenerateAndExecMySQLCreateSQL()
-		if errMSg != nil {
-			return errMSg
-		}
-		if _, err = fileReverse.WriteString(createSQL); err != nil {
-			return err
-		}
-		if _, err = fileCompatibility.WriteString(compatibilitySQL); err != nil {
-			return err
-		}
+	// 设置工作池
+	// 设置 goroutine 数
+	wr := &FileMW{sync.Mutex{}, fileReverse}
 
+	wp := workpool.New(cfg.AppConfig.Threads)
+
+	for _, table := range tables {
+		// 变量替换，直接使用原变量会导致并发输出有问题
+		tbl := table
+		wrMR := wr
+		wp.Do(func() error {
+			createSQL, compatibilitySQL, errMSg := tbl.GenerateAndExecMySQLCreateSQL()
+			if errMSg != nil {
+				return errMSg
+			}
+			if _, errMSg = fmt.Fprintln(wrMR, fmt.Sprintf("%s\n%s", createSQL, compatibilitySQL)); errMSg != nil {
+				return err
+			}
+			return nil
+		})
+	}
+	if err = wp.Wait(); err != nil {
+		return err
 	}
 
 	endTime := time.Now()
+	if !wp.IsDone() {
+		service.Logger.Error("reverse table oracle to mysql failed",
+			zap.String("cost", endTime.Sub(startTime).String()),
+			zap.Error(fmt.Errorf("reverse table task failed, please clear and rerunning")),
+			zap.Error(err))
+		return fmt.Errorf("reverse table task failed, please clear and rerunning, error: %v", err)
+	}
 	service.Logger.Info("reverse table oracle to mysql finished",
 		zap.String("cost", endTime.Sub(startTime).String()))
 	return nil
@@ -193,7 +213,6 @@ func GenerateOracleToMySQLTables(engine *service.Engine, exporterTableSlice []st
 			zap.String("schema", sourceSchema),
 			zap.String("partition table list", fmt.Sprintf("%v", partitionTables)),
 			zap.String("suggest", "if necessary, please manually convert and process the tables in the above list"))
-		return []*Table{}, partitionTables, err
 	}
 
 	// 数据库查询获取自定义表结构转换规则
