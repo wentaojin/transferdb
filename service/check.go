@@ -303,7 +303,7 @@ func (e *Engine) IsExistMySQLTable(schemaName, tableName string) (bool, error) {
 		return false, err
 	}
 	if res[0]["COUNT"] == "0" {
-		return false, err
+		return false, nil
 	}
-	return true, err
+	return true, nil
 }

@@ -65,23 +65,20 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 		return err
 	}
 
-	fileReverse, err = os.OpenFile(filepath.Join(pwdDir, "reverse.sql"), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
+	fileReverse, err = os.OpenFile(filepath.Join(pwdDir, "reverse.sql"), os.O_WRONLY|os.O_CREATE|os.O_APPEND|os.O_TRUNC, 0666)
 	if err != nil {
 		return err
 	}
 	defer fileReverse.Close()
 
-	fileCompatibility, err = os.OpenFile(filepath.Join(pwdDir, "compatibility.sql"), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
+	fileCompatibility, err = os.OpenFile(filepath.Join(pwdDir, "partition.sql"), os.O_WRONLY|os.O_CREATE|os.O_APPEND|os.O_TRUNC, 0666)
 	if err != nil {
 		return err
 	}
 	defer fileCompatibility.Close()
 
 	service.Logger.Info("reverse", zap.String("create table and index output", filepath.Join(pwdDir, "reverse.sql")))
-	service.Logger.Info("compatibility", zap.String("maybe exist compatibility output", filepath.Join(pwdDir, "compatibility.sql")))
-
-	wrReverse := &TableFileMW{sync.Mutex{}, fileReverse}
-	wrCompatibility := &TableFileMW{sync.Mutex{}, fileCompatibility}
+	service.Logger.Info("partition", zap.String("maybe exist partition output", filepath.Join(pwdDir, "partition.sql")))
 
 	if len(partitionTableList) > 0 {
 		var builder strings.Builder
@@ -103,35 +100,28 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 
 		builder.WriteString(t.Render() + "\n")
 		builder.WriteString("*/\n")
-		if _, err = fmt.Fprintln(wrCompatibility, builder.String()); err != nil {
+		if _, err = fileCompatibility.WriteString(builder.String()); err != nil {
 			return err
 		}
 	}
 
 	// 设置工作池
 	// 设置 goroutine 数
+	wr := &FileMW{sync.Mutex{}, fileReverse}
+
 	wp := workpool.New(cfg.AppConfig.Threads)
 
 	for _, table := range tables {
 		// 变量替换，直接使用原变量会导致并发输出有问题
 		tbl := table
-		wrMR := wrReverse
-		cmMR := wrCompatibility
+		wrMR := wr
 		wp.Do(func() error {
-			createSQL, compatibilitySQL, errMsg := tbl.GenerateAndExecMySQLCreateSQL()
-			if errMsg != nil {
-				return errMsg
+			createSQL, compatibilitySQL, err := tbl.GenerateAndExecMySQLCreateSQL()
+			if err != nil {
+				return err
 			}
-			if createSQL != "" {
-				if _, errCreate := fmt.Fprintln(wrMR, createSQL); errCreate != nil {
-					return errCreate
-				}
-			}
-
-			if compatibilitySQL != "" {
-				if _, errComp := fmt.Fprintln(cmMR, compatibilitySQL); errComp != nil {
-					return errComp
-				}
+			if _, err := fmt.Fprintln(wrMR, fmt.Sprintf("%s\n%s", createSQL, compatibilitySQL)); err != nil {
+				return err
 			}
 			return nil
 		})

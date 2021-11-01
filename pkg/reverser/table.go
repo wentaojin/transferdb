@@ -56,12 +56,12 @@ type ColumnType struct {
 	TargetColumnType string
 }
 
-type TableFileMW struct {
+type FileMW struct {
 	Mutex  sync.Mutex
 	Writer io.Writer
 }
 
-func (d *TableFileMW) Write(b []byte) (n int, err error) {
+func (d *FileMW) Write(b []byte) (n int, err error) {
 	d.Mutex.Lock()
 	defer d.Mutex.Unlock()
 	return d.Writer.Write(b)
