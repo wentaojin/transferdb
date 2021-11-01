@@ -118,19 +118,19 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 		wrMR := wrReverse
 		cmMR := wrCompatibility
 		wp.Do(func() error {
-			createSQL, compatibilitySQL, errMSg := tbl.GenerateAndExecMySQLCreateSQL()
-			if errMSg != nil {
-				return errMSg
+			createSQL, compatibilitySQL, errMsg := tbl.GenerateAndExecMySQLCreateSQL()
+			if errMsg != nil {
+				return errMsg
 			}
 			if createSQL != "" {
-				if _, errMSg := fmt.Fprintln(wrMR, createSQL); errMSg != nil {
-					return errMSg
+				if _, errCreate := fmt.Fprintln(wrMR, createSQL); errCreate != nil {
+					return errCreate
 				}
 			}
 
 			if compatibilitySQL != "" {
-				if _, errMSg := fmt.Fprintln(cmMR, compatibilitySQL); errMSg != nil {
-					return errMSg
+				if _, errComp := fmt.Fprintln(cmMR, compatibilitySQL); errComp != nil {
+					return errComp
 				}
 			}
 			return nil
