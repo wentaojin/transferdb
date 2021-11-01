@@ -96,7 +96,7 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 		t.SetStyle(table.StyleLight)
 		t.AppendHeader(table.Row{"#", "ORACLE", "MYSQL", "IS PARTITION", "SUGGEST"})
 
-		reverseTables, partitionTableList, err := reverser.GenerateOracleToMySQLTables(d.Engine, nil, nil, []string{d.TableName}, d.SourceSchemaName, d.TargetSchemaName, false)
+		reverseTables, partitionTableList, err := reverser.GenerateOracleToMySQLTables(d.Engine, []string{d.TableName}, d.SourceSchemaName, d.TargetSchemaName, false)
 		if err != nil {
 			return err
 		}

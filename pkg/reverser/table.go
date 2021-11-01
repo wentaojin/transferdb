@@ -39,8 +39,6 @@ type Table struct {
 	ColumnTypes      []ColumnType
 	Engine           *service.Engine
 	TableName
-	Compatibility *FileMW
-	Reverse       *FileMW
 }
 
 type TableName struct {
@@ -58,12 +56,12 @@ type ColumnType struct {
 	TargetColumnType string
 }
 
-type FileMW struct {
+type TableFileMW struct {
 	Mutex  sync.Mutex
 	Writer io.Writer
 }
 
-func (d *FileMW) Write(b []byte) (n int, err error) {
+func (d *TableFileMW) Write(b []byte) (n int, err error) {
 	d.Mutex.Lock()
 	defer d.Mutex.Unlock()
 	return d.Writer.Write(b)
