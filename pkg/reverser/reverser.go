@@ -78,7 +78,7 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 	defer fileCompatibility.Close()
 
 	service.Logger.Info("reverse", zap.String("create table and index output", filepath.Join(pwdDir, "reverse.sql")))
-	service.Logger.Info("partition", zap.String("maybe exist partition output", filepath.Join(pwdDir, "partition.sql")))
+	service.Logger.Info("compatibility", zap.String("maybe exist compatibility output", filepath.Join(pwdDir, "compatibility.sql")))
 
 	if len(partitionTableList) > 0 {
 		var builder strings.Builder
@@ -107,20 +107,25 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 
 	// 设置工作池
 	// 设置 goroutine 数
-	wr := &FileMW{sync.Mutex{}, fileReverse}
+	wrReverse := &FileMW{sync.Mutex{}, fileReverse}
+	wrComp := &FileMW{sync.Mutex{}, fileCompatibility}
 
 	wp := workpool.New(cfg.AppConfig.Threads)
 
 	for _, table := range tables {
 		// 变量替换，直接使用原变量会导致并发输出有问题
 		tbl := table
-		wrMR := wr
+		wrMR := wrReverse
+		wrCMP := wrComp
 		wp.Do(func() error {
 			createSQL, compatibilitySQL, errMSg := tbl.GenerateAndExecMySQLCreateSQL()
 			if errMSg != nil {
 				return errMSg
 			}
-			if _, errMSg = fmt.Fprintln(wrMR, fmt.Sprintf("%s\n%s", createSQL, compatibilitySQL)); errMSg != nil {
+			if _, errMSg = fmt.Fprintln(wrMR, createSQL); errMSg != nil {
+				return err
+			}
+			if _, errMSg = fmt.Fprintln(wrCMP, compatibilitySQL); errMSg != nil {
 				return err
 			}
 			return nil

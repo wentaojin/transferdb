@@ -105,7 +105,7 @@ func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 	)
 	tableMetas = append(tableMetas, columnMetaSlice...)
 	tableMetas = append(tableMetas, normalKeyMetaSlice...)
-	tableMeta := strings.Join(tableMetas, ",")
+	tableMeta := strings.Join(tableMetas, ",\n")
 
 	tableComment := tablesMap[0]["COMMENTS"]
 	// 创建表初始语句 SQL
@@ -226,7 +226,7 @@ func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 		}
 
 		if sqls.String() != "" {
-			sqls.WriteString(fmt.Sprintf("-- the above info create mysql table sql [%s.%s]\n", t.TargetSchemaName, modifyTableName))
+			sqls.WriteString(fmt.Sprintf("\n-- the above info create mysql table sql [%s.%s]\n", t.TargetSchemaName, modifyTableName))
 		}
 		return sqls.String(), builder.String(), nil
 	}
