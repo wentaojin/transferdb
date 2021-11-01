@@ -110,21 +110,19 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 	for _, table := range tables {
 		// 变量替换，直接使用原变量会导致并发输出有问题
 		tbl := table
-		fileMW := wrReverse
-		compatibilityMW := wrCompatibility
-		wp.DoWait(func() error {
+		wp.Do(func() error {
 			createSQL, compatibilitySQL, err := tbl.GenerateAndExecMySQLCreateSQL()
 			if err != nil {
 				return err
 			}
 			if createSQL != "" {
-				if _, err := fmt.Fprintln(fileMW, createSQL); err != nil {
+				if _, err := fmt.Fprintln(wrReverse, createSQL); err != nil {
 					return err
 				}
 			}
 
 			if compatibilitySQL != "" {
-				if _, err := fmt.Fprintln(compatibilityMW, compatibilitySQL); err != nil {
+				if _, err := fmt.Fprintln(wrCompatibility, compatibilitySQL); err != nil {
 					return err
 				}
 			}
