@@ -3,20 +3,18 @@
 transferdb 用于异构数据库迁移（ Oracle 数据库 -> MySQL 数据库），现阶段支持的功能（原 transferdb 版本被重构）：
 
 1. 支持表结构定义转换
-   1. 兼容性对象输出 transferdb_reverse.sql 文件，不兼容性对象输出 transferdb_compatibility.sql 文件
-      1. 考虑 Oracle 分区表特殊且 MySQL 数据库复杂分区可能不支持，分区表统一视为普通表转换，日志中会打印警告【partition tables】且输出到 transferdb_compatibility.sql 文件，若有要求，建议 reverse 手工转换
+   1. 表定义输出 reverse.sql 文件，外键、检查约束、分区表、索引不兼容性对象输出 compatibility.sql 文件
+      1. 考虑 Oracle 分区表特殊且 MySQL 数据库复杂分区可能不支持，分区表统一视为普通表转换，日志中会打印警告【partition tables】且输出到 compatibility.sql 文件，若有要求，建议 reverse 手工转换
    2. 支持自定义配置表字段类型规则转换(table -> schema -> 内置)
    3. 支持默认配置规则转换
-2. 支持表索引转换
-   1. 兼容性对象输出 transferdb_reverse.sql 文件，不兼容性对象输出 transferdb_compatibility.sql 文件(比如：基于函数的索引或者位图索引)
+   4. 支持表索引转换 
       1. 提供日志输出打印，可以搜索 WARN 日志以及 FUNCTION-BASED NORMAL、BITMAP 关键筛选过滤
-3. 支持表非空约束、外键约束、检查约束、主键约束、唯一约束转换
-   1. 兼容性对象输出 transferdb_reverse.sql 文件，不兼容性对象输出 transferdb_compatibility.sql 文件(比如：基于函数的索引或者位图索引)
-4. 支持 Oracle -> MySQL/TiDB 表结构对比(以 Oracle 为基准)，并输出不一致详情以及相关修复 SQL 语句
-   1. 修复语句输出 transferdb_check.sql 文件
-5. 支持收集现有 Oracle 数据库内表、索引、分区表、字段长度等信息用于评估迁移至 MySQL/TiDB 成本
-   1. 收集信息输出 transferdb_cost.txt 文件
-6. 数据同步【数据同步需要存在主键或者唯一键】
+   5. 支持表非空约束、外键约束、检查约束、主键约束、唯一约束转换
+2. 支持表结构对比(以 Oracle 为基准)，并输出不一致详情以及相关修复 SQL 语句（Oracle -> MySQL/TiDB）
+   1. 修复语句输出 check.sql 文件
+3. 支持收集现有 Oracle 数据库内表、索引、分区表、字段长度等信息用于评估迁移至 MySQL/TiDB 成本
+   1. 收集信息输出 cost.txt 文件
+4. 数据同步【数据同步需要存在主键或者唯一键】
    1. 数据同步无论 FULL / ALL 模式需要注意时间格式，ORACLE date 格式复杂，同步前可先简单验证下迁移时间格式是否存在问题，transferdb timezone PICK 数据库操作系统的时区
    2. FULL 模式【全量数据导出导入】
       1. 数据同步导出导入要求表存在主键或者唯一键，否则因异常错误退出或者手工中断退出，断点续传【replace into】无法替换，数据可能会导致重复【除非手工清理下游重新导入】
