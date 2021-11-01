@@ -116,11 +116,11 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 		tbl := table
 		wrMR := wr
 		wp.Do(func() error {
-			createSQL, compatibilitySQL, err := tbl.GenerateAndExecMySQLCreateSQL()
-			if err != nil {
-				return err
+			createSQL, compatibilitySQL, errMSg := tbl.GenerateAndExecMySQLCreateSQL()
+			if errMSg != nil {
+				return errMSg
 			}
-			if _, err := fmt.Fprintln(wrMR, fmt.Sprintf("%s\n%s", createSQL, compatibilitySQL)); err != nil {
+			if _, errMSg = fmt.Fprintln(wrMR, fmt.Sprintf("%s\n%s", createSQL, compatibilitySQL)); errMSg != nil {
 				return err
 			}
 			return nil
