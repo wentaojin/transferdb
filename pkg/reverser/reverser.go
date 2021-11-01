@@ -56,17 +56,22 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 		return err
 	}
 
-	pwdDir, err := os.Getwd()
+	var (
+		pwdDir                         string
+		fileReverse, fileCompatibility *os.File
+	)
+	pwdDir, err = os.Getwd()
 	if err != nil {
 		return err
 	}
-	fileReverse, err := os.OpenFile(filepath.Join(pwdDir, "transferdb_reverse.sql"), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
+
+	fileReverse, err = os.OpenFile(filepath.Join(pwdDir, "transferdb_reverse.sql"), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
 		return err
 	}
 	defer fileReverse.Close()
 
-	fileCompatibility, err := os.OpenFile(filepath.Join(pwdDir, "transferdb_compatibility.sql"), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
+	fileCompatibility, err = os.OpenFile(filepath.Join(pwdDir, "transferdb_compatibility.sql"), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
 		return err
 	}
@@ -77,7 +82,6 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 
 	wrReverse := &FileMW{sync.Mutex{}, fileReverse}
 	wrCompatibility := &FileMW{sync.Mutex{}, fileCompatibility}
-	wrCompatibility1 := &FileMW{sync.Mutex{}, fileCompatibility}
 
 	if len(partitionTableList) > 0 {
 		var builder strings.Builder
@@ -99,7 +103,7 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 
 		builder.WriteString(t.Render() + "\n")
 		builder.WriteString("*/\n")
-		if _, err := fmt.Fprintln(wrCompatibility, builder.String()); err != nil {
+		if _, err = fmt.Fprintln(wrCompatibility, builder.String()); err != nil {
 			return err
 		}
 	}
@@ -112,21 +116,21 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 		// 变量替换，直接使用原变量会导致并发输出有问题
 		tbl := table
 		wrMR := wrReverse
-		cmMR := wrCompatibility1
+		cmMR := wrCompatibility
 		wp.Do(func() error {
-			createSQL, compatibilitySQL, err := tbl.GenerateAndExecMySQLCreateSQL()
-			if err != nil {
-				return err
+			createSQL, compatibilitySQL, errMSg := tbl.GenerateAndExecMySQLCreateSQL()
+			if errMSg != nil {
+				return errMSg
 			}
 			if createSQL != "" {
-				if _, err := fmt.Fprintln(wrMR, createSQL); err != nil {
-					return err
+				if _, errMSg := fmt.Fprintln(wrMR, createSQL); errMSg != nil {
+					return errMSg
 				}
 			}
 
 			if compatibilitySQL != "" {
-				if _, err := fmt.Fprintln(cmMR, compatibilitySQL); err != nil {
-					return err
+				if _, errMSg := fmt.Fprintln(cmMR, compatibilitySQL); errMSg != nil {
+					return errMSg
 				}
 			}
 			return nil
