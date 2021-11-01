@@ -67,7 +67,7 @@ func (d *FileMW) Write(b []byte) (n int, err error) {
 	return d.Writer.Write(b)
 }
 
-func (t *Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
+func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 	tablesMap, err := t.Engine.GetOracleTableComment(t.SourceSchemaName, t.SourceTableName)
 	if err != nil {
 		return "", "", err
@@ -268,7 +268,7 @@ func (t *Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 	return sqls.String(), builder.String(), nil
 }
 
-func (t *Table) generateAndExecMySQLCreateIndexSQL(modifyTableName string) (string, string, error) {
+func (t Table) generateAndExecMySQLCreateIndexSQL(modifyTableName string) (string, string, error) {
 	var (
 		createIndexSQL        string
 		compatibilityIndexSQL string
@@ -336,7 +336,7 @@ func (t *Table) generateAndExecMySQLCreateIndexSQL(modifyTableName string) (stri
 	return createIndexSQL, compatibilityIndexSQL, err
 }
 
-func (t *Table) reverserOracleTableColumnToMySQL() ([]string, error) {
+func (t Table) reverserOracleTableColumnToMySQL() ([]string, error) {
 	var (
 		// 字段元数据组
 		columnMetas []string
@@ -373,7 +373,7 @@ func (t *Table) reverserOracleTableColumnToMySQL() ([]string, error) {
 	return columnMetas, nil
 }
 
-func (t *Table) reverserOracleTablePKAndUKToMySQL() ([]string, error) {
+func (t Table) reverserOracleTablePKAndUKToMySQL() ([]string, error) {
 	var keysMeta []string
 	primaryKeyMap, err := t.Engine.GetOracleTablePrimaryKey(t.SourceSchemaName, t.SourceTableName)
 	if err != nil {
@@ -399,7 +399,7 @@ func (t *Table) reverserOracleTablePKAndUKToMySQL() ([]string, error) {
 	return keysMeta, nil
 }
 
-func (t *Table) reverserOracleTableFKToMySQL() ([]string, error) {
+func (t Table) reverserOracleTableFKToMySQL() ([]string, error) {
 	var keysMeta []string
 	foreignKeyMap, err := t.Engine.GetOracleTableForeignKey(t.SourceSchemaName, t.SourceTableName)
 	if err != nil {
@@ -441,7 +441,7 @@ func (t *Table) reverserOracleTableFKToMySQL() ([]string, error) {
 	return keysMeta, nil
 }
 
-func (t *Table) reverserOracleTableCKToMySQL() ([]string, error) {
+func (t Table) reverserOracleTableCKToMySQL() ([]string, error) {
 	var keysMeta []string
 	checkKeyMap, err := t.Engine.GetOracleTableCheckKey(t.SourceSchemaName, t.SourceTableName)
 	if err != nil {
