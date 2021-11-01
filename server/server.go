@@ -68,11 +68,11 @@ func Run(cfg *service.CfgFile, mode string) error {
 		}
 	case "check":
 		// 表结构校验 - 上下游
-		engine, err := NewOracleDBEngine(cfg.SourceConfig)
+		engine, err := NewEngineDB(cfg)
 		if err != nil {
 			return err
 		}
-		if err := check.OracleTableToMySQLMappingCheck(&service.Engine{OracleDB: engine}, cfg); err != nil {
+		if err := check.OracleTableToMySQLMappingCheck(engine, cfg); err != nil {
 			return err
 		}
 	case "full":
