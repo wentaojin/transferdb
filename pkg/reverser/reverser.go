@@ -20,7 +20,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/jedib0t/go-pretty/v6/table"
@@ -107,22 +106,21 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 
 	// 设置工作池
 	// 设置 goroutine 数
-	wr := &FileMW{sync.Mutex{}, fileReverse}
 
 	wp := workpool.New(cfg.AppConfig.Threads)
 
 	for _, table := range tables {
 		// 变量替换，直接使用原变量会导致并发输出有问题
 		tbl := table
-		wrMR := wr
 		wp.Do(func() error {
 			createSQL, compatibilitySQL, errMSg := tbl.GenerateAndExecMySQLCreateSQL()
 			if errMSg != nil {
 				return errMSg
 			}
-			if _, errMSg = fmt.Fprintln(wrMR, fmt.Sprintf("%s\n%s", createSQL, compatibilitySQL)); errMSg != nil {
-				return err
-			}
+			//if _, errMSg = fmt.Fprintln(wrMR, fmt.Sprintf("%s\n%s", createSQL, compatibilitySQL)); errMSg != nil {
+			//	return err
+			//}
+			fmt.Println(fmt.Sprintf("%s\n%s", createSQL, compatibilitySQL))
 			return nil
 		})
 	}
