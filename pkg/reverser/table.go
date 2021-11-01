@@ -103,19 +103,18 @@ func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 		sqls           strings.Builder
 		createTableSQL string
 	)
-	tableMetas = append(tableMetas, "\n")
 	tableMetas = append(tableMetas, columnMetaSlice...)
 	tableMetas = append(tableMetas, normalKeyMetaSlice...)
-	tableMeta := strings.Join(tableMetas, ",\n")
+	tableMeta := strings.Join(tableMetas, ",")
 
 	tableComment := tablesMap[0]["COMMENTS"]
 	// 创建表初始语句 SQL
 	modifyTableName := changeOracleTableName(t.SourceTableName, t.TargetTableName)
 	if tableComment != "" {
-		createTableSQL = fmt.Sprintf("CREATE TABLE `%s`.`%s` (%s) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin  COMMENT='%s'",
+		createTableSQL = fmt.Sprintf("CREATE TABLE `%s`.`%s` (\n%s\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin  COMMENT='%s'",
 			t.TargetSchemaName, modifyTableName, tableMeta, tableComment)
 	} else {
-		createTableSQL = fmt.Sprintf("CREATE TABLE `%s`.`%s` (%s) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin",
+		createTableSQL = fmt.Sprintf("CREATE TABLE `%s`.`%s` (\n%s\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin",
 			t.TargetSchemaName, modifyTableName, tableMeta)
 	}
 
@@ -217,7 +216,9 @@ func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 					builder.WriteString(ckSQL + "\n")
 				}
 				// 增加不兼容的索引语句
-				builder.WriteString(compatibilityIndexSQL + ";\n")
+				if compatibilityIndexSQL != "" {
+					builder.WriteString(compatibilityIndexSQL + ";\n")
+				}
 			}
 		}
 		// 记录不为空
@@ -252,8 +253,9 @@ func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 			ckSQL := fmt.Sprintf("ALTER TABLE %s.%s ADD %s;", t.TargetSchemaName, modifyTableName, ck)
 			builder.WriteString(ckSQL + "\n")
 		}
-
-		builder.WriteString(compatibilityIndexSQL + ";\n")
+		if compatibilityIndexSQL != "" {
+			builder.WriteString(compatibilityIndexSQL + ";\n")
+		}
 	}
 
 	// 记录不为空
