@@ -113,7 +113,7 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 		// 变量替换，直接使用原变量会导致并发输出有问题
 		tbl := table
 		wp.Do(func() error {
-			createSQL, compatibilitySQL, errMSg := tbl.GenerateAndExecMySQLCreateSQL()
+			createSQL, compatibilitySQL, errMSg := GenerateAndExecMySQLCreateSQL(tbl)
 			if errMSg != nil {
 				return errMSg
 			}

@@ -67,7 +67,7 @@ func (d *FileMW) Write(b []byte) (n int, err error) {
 	return d.Writer.Write(b)
 }
 
-func (t *Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
+func GenerateAndExecMySQLCreateSQL(t *Table) (string, string, error) {
 	tablesMap, err := t.Engine.GetOracleTableComment(t.SourceSchemaName, t.SourceTableName)
 	if err != nil {
 		return "", "", err
