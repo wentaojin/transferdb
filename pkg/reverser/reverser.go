@@ -57,8 +57,8 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 	}
 
 	var (
-		pwdDir                         string
-		fileReverse, fileCompatibility *os.File
+		pwdDir                     string
+		fileReverse, filePartition *os.File
 	)
 	pwdDir, err = os.Getwd()
 	if err != nil {
@@ -71,17 +71,17 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 	}
 	defer fileReverse.Close()
 
-	fileCompatibility, err = os.OpenFile(filepath.Join(pwdDir, "transferdb_compatibility.sql"), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
+	filePartition, err = os.OpenFile(filepath.Join(pwdDir, "transferdb_partition.sql"), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
 		return err
 	}
-	defer fileCompatibility.Close()
+	defer filePartition.Close()
 
 	service.Logger.Info("reverse", zap.String("create table and index output", filepath.Join(pwdDir, "transferdb_reverse.sql")))
-	service.Logger.Info("compatibility", zap.String("maybe exist compatibility output", filepath.Join(pwdDir, "transferdb_compatibility.sql")))
+	service.Logger.Info("partition", zap.String("oracle partition output", filepath.Join(pwdDir, "transferdb_partition.sql")))
 
 	wrReverse := &FileMW{sync.Mutex{}, fileReverse}
-	wrCompatibility := &FileMW{sync.Mutex{}, fileCompatibility}
+	wrPartition := &FileMW{sync.Mutex{}, filePartition}
 
 	if len(partitionTableList) > 0 {
 		var builder strings.Builder
@@ -103,7 +103,7 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 
 		builder.WriteString(t.Render() + "\n")
 		builder.WriteString("*/\n")
-		if _, err = fmt.Fprintln(wrCompatibility, builder.String()); err != nil {
+		if _, err = fmt.Fprintln(wrPartition, builder.String()); err != nil {
 			return err
 		}
 	}
@@ -116,21 +116,15 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 		// 变量替换，直接使用原变量会导致并发输出有问题
 		tbl := table
 		wrMR := wrReverse
-		cmMR := wrCompatibility
 		wp.Do(func() error {
 			createSQL, compatibilitySQL, errMsg := tbl.GenerateAndExecMySQLCreateSQL()
 			if errMsg != nil {
 				return errMsg
 			}
+			sql := fmt.Sprintf("%s\n%s", createSQL, compatibilitySQL)
 			if createSQL != "" {
-				if _, errCreate := fmt.Fprintln(wrMR, createSQL); errCreate != nil {
+				if _, errCreate := fmt.Fprintln(wrMR, sql); errCreate != nil {
 					return errCreate
-				}
-			}
-
-			if compatibilitySQL != "" {
-				if _, errComp := fmt.Fprintln(cmMR, compatibilitySQL); errComp != nil {
-					return errComp
 				}
 			}
 			return nil
