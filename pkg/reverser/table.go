@@ -26,8 +26,6 @@ import (
 
 	"github.com/wentaojin/transferdb/utils"
 
-	"github.com/wentaojin/transferdb/pkg/check"
-
 	"github.com/wentaojin/transferdb/service"
 
 	"go.uber.org/zap"
@@ -163,8 +161,8 @@ func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 		builder   strings.Builder
 		dbVersion string
 	)
-	if strings.Contains(version, check.MySQLVersionDelimiter) {
-		dbVersion = strings.Split(version, check.MySQLVersionDelimiter)[0]
+	if strings.Contains(version, utils.MySQLVersionDelimiter) {
+		dbVersion = strings.Split(version, utils.MySQLVersionDelimiter)[0]
 	} else {
 		dbVersion = version
 	}
@@ -179,7 +177,7 @@ func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 	}
 
 	if !isTiDB {
-		if utils.VersionOrdinal(dbVersion) > utils.VersionOrdinal(check.MySQLCheckConsVersion) && len(ckMetas) > 0 {
+		if utils.VersionOrdinal(dbVersion) > utils.VersionOrdinal(utils.MySQLCheckConsVersion) && len(ckMetas) > 0 {
 			for _, ck := range ckMetas {
 				ckSQL := fmt.Sprintf("ALTER TABLE %s.%s ADD %s;", t.TargetSchemaName, modifyTableName, ck)
 				service.Logger.Info("reverse",
