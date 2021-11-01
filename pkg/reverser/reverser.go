@@ -71,7 +71,7 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 	}
 	defer fileReverse.Close()
 
-	fileCompatibility, err = os.OpenFile(filepath.Join(pwdDir, "partition.sql"), os.O_WRONLY|os.O_CREATE|os.O_APPEND|os.O_TRUNC, 0666)
+	fileCompatibility, err = os.OpenFile(filepath.Join(pwdDir, "compatibility.sql"), os.O_WRONLY|os.O_CREATE|os.O_APPEND|os.O_TRUNC, 0666)
 	if err != nil {
 		return err
 	}

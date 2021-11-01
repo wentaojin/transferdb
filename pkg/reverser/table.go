@@ -103,6 +103,7 @@ func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 		sqls           strings.Builder
 		createTableSQL string
 	)
+	tableMetas = append(tableMetas, "\n")
 	tableMetas = append(tableMetas, columnMetaSlice...)
 	tableMetas = append(tableMetas, normalKeyMetaSlice...)
 	tableMeta := strings.Join(tableMetas, ",\n")
@@ -135,7 +136,7 @@ func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 	})
 	sqls.WriteString(fmt.Sprintf("%v\n", sw.Render()))
 	sqls.WriteString("*/\n")
-	sqls.WriteString(createTableSQL + "\n")
+	sqls.WriteString(createTableSQL + ";\n")
 
 	// 索引语句
 	createIndexSQL, compatibilityIndexSQL, err := t.generateAndExecMySQLCreateIndexSQL(modifyTableName)
@@ -143,7 +144,7 @@ func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 		return "", "", err
 	}
 	if createIndexSQL != "" {
-		sqls.WriteString(createIndexSQL + "\n")
+		sqls.WriteString(createIndexSQL + ";\n")
 	}
 
 	// 判断外键以及检查约束
@@ -216,7 +217,7 @@ func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 					builder.WriteString(ckSQL + "\n")
 				}
 				// 增加不兼容的索引语句
-				builder.WriteString(compatibilityIndexSQL + "\n")
+				builder.WriteString(compatibilityIndexSQL + ";\n")
 			}
 		}
 		// 记录不为空
@@ -243,16 +244,16 @@ func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 		builder.WriteString("*/\n")
 
 		for _, fk := range fkMetas {
-			fkSQL := fmt.Sprintf("ALTER TABLE %s.%s ADD %s;\n", t.TargetSchemaName, modifyTableName, fk)
+			fkSQL := fmt.Sprintf("ALTER TABLE %s.%s ADD %s;", t.TargetSchemaName, modifyTableName, fk)
 			builder.WriteString(fkSQL + "\n")
 		}
 
 		for _, ck := range ckMetas {
-			ckSQL := fmt.Sprintf("ALTER TABLE %s.%s ADD %s;\n", t.TargetSchemaName, modifyTableName, ck)
+			ckSQL := fmt.Sprintf("ALTER TABLE %s.%s ADD %s;", t.TargetSchemaName, modifyTableName, ck)
 			builder.WriteString(ckSQL + "\n")
 		}
 
-		builder.WriteString(compatibilityIndexSQL + "\n")
+		builder.WriteString(compatibilityIndexSQL + ";\n")
 	}
 
 	// 记录不为空
@@ -262,7 +263,7 @@ func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 	}
 
 	if sqls.String() != "" {
-		sqls.WriteString(fmt.Sprintf("-- the above info create mysql table sql [%s.%s]\n", t.TargetSchemaName, modifyTableName))
+		sqls.WriteString(fmt.Sprintf("\n-- the above info create mysql table sql [%s.%s]\n", t.TargetSchemaName, modifyTableName))
 	}
 
 	return sqls.String(), builder.String(), nil
