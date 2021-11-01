@@ -230,7 +230,7 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 	service.Logger.Info("check table",
 		zap.String("table character set and collation check", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)))
 
-	if !strings.Contains(mysqlTable.TableCharacterSet, OracleUTF8CharacterSet) || !strings.Contains(mysqlTable.TableCollation, OracleCollationBin) {
+	if !strings.Contains(mysqlTable.TableCharacterSet, utils.OracleUTF8CharacterSet) || !strings.Contains(mysqlTable.TableCollation, utils.OracleCollationBin) {
 		builder.WriteString("/*\n")
 		builder.WriteString(fmt.Sprintf(" oracle and mysql table character set and collation\n"))
 
@@ -246,7 +246,7 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 		builder.WriteString(fmt.Sprintf("%v\n", t.Render()))
 
 		builder.WriteString("*/\n")
-		builder.WriteString(fmt.Sprintf("ALTER TABLE %s.%s CHARACTER SET = %s, COLLATE = %s;\n", d.TargetSchemaName, d.TableName, MySQLCharacterSet, MySQLCollation))
+		builder.WriteString(fmt.Sprintf("ALTER TABLE %s.%s CHARACTER SET = %s, COLLATE = %s;\n", d.TargetSchemaName, d.TableName, utils.MySQLCharacterSet, utils.MySQLCollation))
 	}
 
 	// 表字段级别字符集以及排序规则校验 -> 基于原表字段类型以及字符集、排序规则
@@ -255,7 +255,7 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 
 	for mysqlColName, mysqlColInfo := range mysqlTable.Columns {
 		if mysqlColInfo.CharacterSet != "UNKNOWN" || mysqlColInfo.Collation != "UNKNOWN" {
-			if mysqlColInfo.CharacterSet != strings.ToUpper(MySQLCharacterSet) || mysqlColInfo.Collation != strings.ToUpper(MySQLCollation) {
+			if mysqlColInfo.CharacterSet != strings.ToUpper(utils.MySQLCharacterSet) || mysqlColInfo.Collation != strings.ToUpper(utils.MySQLCollation) {
 				builder.WriteString("/*\n")
 				builder.WriteString(fmt.Sprintf(" mysql column character set and collation check, generate created sql\n"))
 
@@ -271,7 +271,7 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 
 				builder.WriteString("*/\n")
 				builder.WriteString(fmt.Sprintf("ALTER TABLE %s.%s MODIFY %s %s(%s) CHARACTER SET %s COLLATE %s;\n",
-					d.TargetSchemaName, d.TableName, mysqlColName, mysqlColInfo.DataType, mysqlColInfo.DataLength, MySQLCharacterSet, MySQLCollation))
+					d.TargetSchemaName, d.TableName, mysqlColName, mysqlColInfo.DataType, mysqlColInfo.DataLength, utils.MySQLCharacterSet, utils.MySQLCollation))
 			}
 		}
 	}
@@ -279,8 +279,8 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 	// 表约束、索引以及分区检查
 	service.Logger.Info("check table",
 		zap.String("table pk and uk constraint check", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)),
-		zap.String("oracle struct", oracleTable.String(PUConstraintJSON)),
-		zap.String("mysql struct", mysqlTable.String(PUConstraintJSON)))
+		zap.String("oracle struct", oracleTable.String(utils.PUConstraintJSON)),
+		zap.String("mysql struct", mysqlTable.String(utils.PUConstraintJSON)))
 
 	// 函数 utils.DiffStructArray 都忽略 structA 空，但 structB 存在情况
 	addDiffPU, _, isOK := utils.DiffStructArray(oracleTable.PUConstraints, mysqlTable.PUConstraints)
@@ -319,8 +319,8 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 	if !isTiDB {
 		service.Logger.Info("check table",
 			zap.String("table fk constraint check", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)),
-			zap.String("oracle struct", oracleTable.String(FKConstraintJSON)),
-			zap.String("mysql struct", mysqlTable.String(FKConstraintJSON)))
+			zap.String("oracle struct", oracleTable.String(utils.FKConstraintJSON)),
+			zap.String("mysql struct", mysqlTable.String(utils.FKConstraintJSON)))
 
 		addDiffFK, _, isOK := utils.DiffStructArray(oracleTable.ForeignConstraints, mysqlTable.ForeignConstraints)
 		if len(addDiffFK) != 0 && !isOK {
@@ -348,16 +348,16 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 		}
 
 		var dbVersion string
-		if strings.Contains(mysqlVersion, MySQLVersionDelimiter) {
-			dbVersion = strings.Split(mysqlVersion, MySQLVersionDelimiter)[0]
+		if strings.Contains(mysqlVersion, utils.MySQLVersionDelimiter) {
+			dbVersion = strings.Split(mysqlVersion, utils.MySQLVersionDelimiter)[0]
 		} else {
 			dbVersion = mysqlVersion
 		}
-		if utils.VersionOrdinal(dbVersion) > utils.VersionOrdinal(MySQLCheckConsVersion) {
+		if utils.VersionOrdinal(dbVersion) > utils.VersionOrdinal(utils.MySQLCheckConsVersion) {
 			service.Logger.Info("check table",
 				zap.String("table ck constraint check", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)),
-				zap.String("oracle struct", oracleTable.String(CKConstraintJSON)),
-				zap.String("mysql struct", mysqlTable.String(CKConstraintJSON)))
+				zap.String("oracle struct", oracleTable.String(utils.CKConstraintJSON)),
+				zap.String("mysql struct", mysqlTable.String(utils.CKConstraintJSON)))
 
 			addDiffCK, _, isOK := utils.DiffStructArray(oracleTable.CheckConstraints, mysqlTable.CheckConstraints)
 			if len(addDiffCK) != 0 && !isOK {
@@ -388,8 +388,8 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 
 	service.Logger.Info("check table",
 		zap.String("table indexes check", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)),
-		zap.String("oracle struct", oracleTable.String(IndexJSON)),
-		zap.String("mysql struct", mysqlTable.String(IndexJSON)))
+		zap.String("oracle struct", oracleTable.String(utils.IndexJSON)),
+		zap.String("mysql struct", mysqlTable.String(utils.IndexJSON)))
 
 	var createIndexSQL []string
 
@@ -462,8 +462,8 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 	if mysqlTable.IsPartition && oracleTable.IsPartition {
 		service.Logger.Info("check table",
 			zap.String("table partition check", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)),
-			zap.String("oracle struct", oracleTable.String(PartitionJSON)),
-			zap.String("mysql struct", mysqlTable.String(PartitionJSON)))
+			zap.String("oracle struct", oracleTable.String(utils.PartitionJSON)),
+			zap.String("mysql struct", mysqlTable.String(utils.PartitionJSON)))
 
 		addDiffParts, _, isOK := utils.DiffStructArray(oracleTable.Partitions, mysqlTable.Partitions)
 		if len(addDiffParts) != 0 && !isOK {
@@ -549,8 +549,8 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 	if len(tableRowArray) != 0 && len(diffColumnMsgs) != 0 {
 		service.Logger.Info("check table",
 			zap.String("table column info check, generate fixed sql", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)),
-			zap.String("oracle struct", oracleTable.String(ColumnsJSON)),
-			zap.String("mysql struct", mysqlTable.String(ColumnsJSON)))
+			zap.String("oracle struct", oracleTable.String(utils.ColumnsJSON)),
+			zap.String("mysql struct", mysqlTable.String(utils.ColumnsJSON)))
 
 		textTable := table.NewWriter()
 		textTable.SetStyle(table.StyleLight)
@@ -570,8 +570,8 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 	if len(createColumnMetas) != 0 {
 		service.Logger.Info("check table",
 			zap.String("table column info check, generate created sql", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)),
-			zap.String("oracle struct", oracleTable.String(ColumnsJSON)),
-			zap.String("mysql struct", mysqlTable.String(ColumnsJSON)))
+			zap.String("oracle struct", oracleTable.String(utils.ColumnsJSON)),
+			zap.String("mysql struct", mysqlTable.String(utils.ColumnsJSON)))
 
 		builder.WriteString("/*\n")
 		builder.WriteString(fmt.Sprintf(" oracle table columns info isn't exist in mysql, generate created sql\n"))

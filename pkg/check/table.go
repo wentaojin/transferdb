@@ -25,28 +25,6 @@ import (
 	"github.com/wentaojin/transferdb/service"
 )
 
-const (
-	OracleGBKCharacterSet  = "GBK"
-	OracleUTF8CharacterSet = "UTF8"
-	// oracle collation 默认大小写敏感，a != A
-	OracleCollationBin = "BIN"
-	// MySQL 支持 check 约束版本 > 8.0.15
-	MySQLCheckConsVersion = "8.0.15"
-	// MySQL 版本分隔符号
-	MySQLVersionDelimiter = "-"
-	// MySQL 字符集/排序规则
-	MySQLCharacterSet = "utf8mb4"
-	MySQLCollation    = "utf8mb4_bin"
-
-	// JSON 格式化某字段
-	ColumnsJSON      = "column"
-	IndexJSON        = "index"
-	PUConstraintJSON = "puk"
-	FKConstraintJSON = "fk"
-	CKConstraintJSON = "ck"
-	PartitionJSON    = "partition"
-)
-
 type Table struct {
 	SchemaName         string
 	TableName          string
@@ -122,17 +100,17 @@ type Partition struct {
 func (t *Table) String(jsonType string) string {
 	var jsonStr []byte
 	switch jsonType {
-	case ColumnsJSON:
+	case utils.ColumnsJSON:
 		jsonStr, _ = json.Marshal(t.Columns)
-	case PUConstraintJSON:
+	case utils.PUConstraintJSON:
 		jsonStr, _ = json.Marshal(t.PUConstraints)
-	case FKConstraintJSON:
+	case utils.FKConstraintJSON:
 		jsonStr, _ = json.Marshal(t.ForeignConstraints)
-	case CKConstraintJSON:
+	case utils.CKConstraintJSON:
 		jsonStr, _ = json.Marshal(t.CheckConstraints)
-	case IndexJSON:
+	case utils.IndexJSON:
 		jsonStr, _ = json.Marshal(t.Indexes)
-	case PartitionJSON:
+	case utils.PartitionJSON:
 		jsonStr, _ = json.Marshal(t.Partitions)
 	}
 	return string(jsonStr)
@@ -167,9 +145,9 @@ func NewOracleTableINFO(schemaName, tableName string, engine *service.Engine) (*
 
 	for _, rowCol := range columnInfo {
 		if isGBKCharacterSet {
-			OracleCharacterSet = OracleUTF8CharacterSet
+			OracleCharacterSet = utils.OracleUTF8CharacterSet
 		} else {
-			OracleCharacterSet = OracleGBKCharacterSet
+			OracleCharacterSet = utils.OracleGBKCharacterSet
 		}
 		var (
 			nullable    string
@@ -205,7 +183,7 @@ func NewOracleTableINFO(schemaName, tableName string, engine *service.Engine) (*
 				Comment:           strings.ToUpper(rowCol["COMMENTS"]),
 			},
 			CharacterSet:            strings.ToUpper(OracleCharacterSet),
-			Collation:               strings.ToUpper(OracleCollationBin),
+			Collation:               strings.ToUpper(utils.OracleCollationBin),
 			OracleOriginDataDefault: strings.TrimSpace(rowCol["DATA_DEFAULT"]),
 			MySQLOriginDataDefault:  "", // only mysql
 		}
@@ -295,7 +273,7 @@ func NewOracleTableINFO(schemaName, tableName string, engine *service.Engine) (*
 		}
 	}
 	oraTable.TableCharacterSet = strings.ToUpper(OracleCharacterSet)
-	oraTable.TableCollation = OracleCollationBin
+	oraTable.TableCollation = utils.OracleCollationBin
 	oraTable.Columns = columns
 	oraTable.Indexes = indexes
 	oraTable.PUConstraints = puConstraints
@@ -473,12 +451,12 @@ func NewMySQLTableINFO(schemaName, tableName string, engine *service.Engine) (*T
 		}
 
 		var dbVersion string
-		if strings.Contains(version, MySQLVersionDelimiter) {
-			dbVersion = strings.Split(version, MySQLVersionDelimiter)[0]
+		if strings.Contains(version, utils.MySQLVersionDelimiter) {
+			dbVersion = strings.Split(version, utils.MySQLVersionDelimiter)[0]
 		} else {
 			dbVersion = version
 		}
-		if utils.VersionOrdinal(dbVersion) > utils.VersionOrdinal(MySQLCheckConsVersion) {
+		if utils.VersionOrdinal(dbVersion) > utils.VersionOrdinal(utils.MySQLCheckConsVersion) {
 			ckInfo, err := engine.GetMySQLTableCheckKey(schemaName, tableName)
 			if err != nil {
 				return mysqlTable, version, err

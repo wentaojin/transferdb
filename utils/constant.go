@@ -31,3 +31,25 @@ const (
 // 当值 == 0 启用 filterOracleRedoGreaterOrEqualRecordByTable 大于或者等于
 // 当值 == 1 启用 filterOracleRedoGreaterOrEqualRecordByTable 大于，避免已被消费得日志一直被重复消费
 var CurrentResetFlag = 0
+
+const (
+	OracleGBKCharacterSet  = "GBK"
+	OracleUTF8CharacterSet = "UTF8"
+	// oracle collation 默认大小写敏感，a != A
+	OracleCollationBin = "BIN"
+	// MySQL 支持 check 约束版本 > 8.0.15
+	MySQLCheckConsVersion = "8.0.15"
+	// MySQL 版本分隔符号
+	MySQLVersionDelimiter = "-"
+	// MySQL 字符集/排序规则
+	MySQLCharacterSet = "utf8mb4"
+	MySQLCollation    = "utf8mb4_bin"
+
+	// JSON 格式化某字段
+	ColumnsJSON      = "column"
+	IndexJSON        = "index"
+	PUConstraintJSON = "puk"
+	FKConstraintJSON = "fk"
+	CKConstraintJSON = "ck"
+	PartitionJSON    = "partition"
+)
