@@ -84,11 +84,11 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 		builder.WriteString(fmt.Sprintf(" oracle partition table maybe mysql has compatibility, will convert to normal table, please manual adjust\n"))
 		t := table.NewWriter()
 		t.SetStyle(table.StyleLight)
-		t.AppendHeader(table.Row{"Schema", "ORACLE PARTITION LIST", "SUGGEST"})
+		t.AppendHeader(table.Row{"SCHEMA", "ORACLE PARTITION LIST", "SUGGEST"})
 
 		for _, part := range partitionTableList {
 			t.AppendRows([]table.Row{
-				{cfg.SourceConfig.SchemaName, part, "Manual Create And Adjust TABLE"},
+				{cfg.SourceConfig.SchemaName, part, "Manual Create And Adjust Table"},
 			})
 		}
 		t.SetColumnConfigs([]table.ColumnConfig{
@@ -112,7 +112,7 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 		tbl := table
 		fileMW := wrReverse
 		compatibilityMW := wrCompatibility
-		wp.Do(func() error {
+		wp.DoWait(func() error {
 			createSQL, compatibilitySQL, err := tbl.GenerateAndExecMySQLCreateSQL()
 			if err != nil {
 				return err
