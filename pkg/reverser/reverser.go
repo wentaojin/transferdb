@@ -46,6 +46,7 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 	var (
 		pwdDir                         string
 		fileReverse, fileCompatibility *os.File
+		err                            error
 	)
 	pwdDir, err = os.Getwd()
 	if err != nil {
