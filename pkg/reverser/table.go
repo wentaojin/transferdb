@@ -228,6 +228,28 @@ func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 
 				sqls.WriteString(ckSQL + "\n")
 			}
+			if len(fkMetas) > 0 {
+				for _, fk := range fkMetas {
+					addFkSQL := fmt.Sprintf("ALTER TABLE %s.%s ADD %s;", t.TargetSchemaName, modifyTableName, fk)
+					service.Logger.Info("reverse",
+						zap.String("schema", t.TargetSchemaName),
+						zap.String("table", modifyTableName),
+						zap.String("fk sql", addFkSQL))
+
+					sqls.WriteString(addFkSQL + "\n")
+				}
+			}
+			// 增加不兼容的索引语句
+			if len(compatibilityIndexSQL) > 0 {
+				for _, compSQL := range compatibilityIndexSQL {
+					service.Logger.Info("reverse",
+						zap.String("schema", t.TargetSchemaName),
+						zap.String("table", modifyTableName),
+						zap.String("maybe compatibility sql", compSQL))
+
+					builder.WriteString(compSQL + ";\n")
+				}
+			}
 		} else {
 			if len(fkMetas) > 0 {
 				for _, fk := range fkMetas {
@@ -256,16 +278,16 @@ func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 					ckSQL := fmt.Sprintf("ALTER TABLE %s.%s ADD %s;", t.TargetSchemaName, modifyTableName, ck)
 					builder.WriteString(ckSQL + "\n")
 				}
-				// 增加不兼容的索引语句
-				if len(compatibilityIndexSQL) > 0 {
-					for _, compSQL := range compatibilityIndexSQL {
-						service.Logger.Info("reverse",
-							zap.String("schema", t.TargetSchemaName),
-							zap.String("table", modifyTableName),
-							zap.String("maybe compatibility sql", compSQL))
+			}
+			// 增加不兼容的索引语句
+			if len(compatibilityIndexSQL) > 0 {
+				for _, compSQL := range compatibilityIndexSQL {
+					service.Logger.Info("reverse",
+						zap.String("schema", t.TargetSchemaName),
+						zap.String("table", modifyTableName),
+						zap.String("maybe compatibility sql", compSQL))
 
-						builder.WriteString(compSQL + ";\n")
-					}
+					builder.WriteString(compSQL + ";\n")
 				}
 			}
 		}
@@ -292,14 +314,18 @@ func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 		builder.WriteString(fmt.Sprintf("%v\n", tw.Render()))
 		builder.WriteString("*/\n")
 
-		for _, fk := range fkMetas {
-			fkSQL := fmt.Sprintf("ALTER TABLE %s.%s ADD %s;", t.TargetSchemaName, modifyTableName, fk)
-			builder.WriteString(fkSQL + "\n")
+		if len(fkMetas) > 0 {
+			for _, fk := range fkMetas {
+				fkSQL := fmt.Sprintf("ALTER TABLE %s.%s ADD %s;", t.TargetSchemaName, modifyTableName, fk)
+				builder.WriteString(fkSQL + "\n")
+			}
 		}
 
-		for _, ck := range ckMetas {
-			ckSQL := fmt.Sprintf("ALTER TABLE %s.%s ADD %s;", t.TargetSchemaName, modifyTableName, ck)
-			builder.WriteString(ckSQL + "\n")
+		if len(ckMetas) > 0 {
+			for _, ck := range ckMetas {
+				ckSQL := fmt.Sprintf("ALTER TABLE %s.%s ADD %s;", t.TargetSchemaName, modifyTableName, ck)
+				builder.WriteString(ckSQL + "\n")
+			}
 		}
 		// 可能不兼容 SQL
 		if len(compatibilityIndexSQL) > 0 {
