@@ -148,6 +148,7 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 			}
 		}
 
+		builder.WriteString(fmt.Sprintf("-- the above info comes from oracle table [%s.%s]\n", d.SourceSchemaName, d.TableName))
 		if _, err := fmt.Fprintln(d.FileMW, builder.String()); err != nil {
 			return err
 		}

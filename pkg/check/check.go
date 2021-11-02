@@ -62,7 +62,7 @@ func OracleTableToMySQLMappingCheck(engine *service.Engine, cfg *service.CfgFile
 		tableName := table
 		e := engine
 		fileMW := wr
-		wp.Do(func() error {
+		wp.DoWait(func() error {
 			if err := NewDiffWriter(sourceSchemaName, targetSchemaName, tableName, e, fileMW).DiffOracleAndMySQLTable(); err != nil {
 				return err
 			}
