@@ -134,7 +134,7 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 
 		// 输出创建表以及索引语句
 		if len(createSQLS) != 0 {
-			builder.WriteString("-- create table and index sql")
+			builder.WriteString("-- create table and index sql\n")
 			for _, sql := range createSQLS {
 				builder.WriteString(fmt.Sprintf("%s\n", sql))
 			}
@@ -142,14 +142,12 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 
 		// 输出表创建过程可能存在不兼容的语句对象（外键、检查约束）
 		if len(compatibilitySQLS) != 0 {
-			builder.WriteString("-- maybe exist compatibility sql")
+			builder.WriteString("-- maybe exist compatibility sql\n")
 			for _, sql := range compatibilitySQLS {
 				builder.WriteString(fmt.Sprintf("%s\n", sql))
 			}
 		}
 
-		builder.WriteString(fmt.Sprintf("\n-- the above info comes from oracle table [%s.%s]\n", d.SourceSchemaName, d.TableName))
-		builder.WriteString(fmt.Sprintf("-- the above info comes from mysql table [%s.%s]\n", d.TargetSchemaName, d.TableName))
 		if _, err := fmt.Fprintln(d.FileMW, builder.String()); err != nil {
 			return err
 		}
