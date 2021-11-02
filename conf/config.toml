@@ -21,25 +21,6 @@ slowlog-threshold = 300
 # 任务并发 -- 只用于 reverse/check 模式阶段
 threads = 8
 
-[diff]
-# 数据对比以 oracle 为基准
-# 划分 chunk，用于每次数据对比大小
-chunk-size = 1000
-# 数据对比并发数，每个并发处理 chunk-size
-check-threads = 4
-# 是否使用 checksum 对比
-# 设置 true，表示使用 checksum 输出数据不一致表以及修复 SQL
-# 设置 false，表示使用 count 对比，只输出数据不一致表
-use-checksum = true
-# 是否从上次断点继续检查
-# 元数据库名 target.meta-schema 控制
-use-checkpoint = true
-# 修复 SQL 文件
-fix-sql-file = "fix.sql"
-# 检查数据范围
-# 只用于表存在指定字段 age 的范围对比，若 oracle 表上不存在该字段则报错
-range = "age > 10 AND age < 20"
-
 [full]
 # 按照表级别操作导出导入
 # 任务 batch 数
