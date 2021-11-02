@@ -253,27 +253,36 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 	service.Logger.Info("check table",
 		zap.String("table column character set and collation check", fmt.Sprintf("%s.%s", d.TargetSchemaName, d.TableName)))
 
+	tableColumnsMap := make(map[string]Column)
 	for mysqlColName, mysqlColInfo := range mysqlTable.Columns {
 		if mysqlColInfo.CharacterSet != "UNKNOWN" || mysqlColInfo.Collation != "UNKNOWN" {
 			if mysqlColInfo.CharacterSet != strings.ToUpper(utils.MySQLCharacterSet) || mysqlColInfo.Collation != strings.ToUpper(utils.MySQLCollation) {
-				builder.WriteString("/*\n")
-				builder.WriteString(fmt.Sprintf(" mysql column character set and collation check, generate created sql\n"))
-
-				t := table.NewWriter()
-				t.SetStyle(table.StyleLight)
-				t.AppendHeader(table.Row{"TABLE", "COLUMN", "MYSQL", "SUGGEST"})
-				t.AppendRows([]table.Row{
-					{d.TableName, mysqlColName,
-						fmt.Sprintf("%s(%s)", mysqlColInfo.DataType, mysqlColInfo.DataLength),
-						"Run SQL"},
-				})
-				builder.WriteString(fmt.Sprintf("%v\n", t.Render()))
-
-				builder.WriteString("*/\n")
-				builder.WriteString(fmt.Sprintf("ALTER TABLE %s.%s MODIFY %s %s(%s) CHARACTER SET %s COLLATE %s;\n",
-					d.TargetSchemaName, d.TableName, mysqlColName, mysqlColInfo.DataType, mysqlColInfo.DataLength, utils.MySQLCharacterSet, utils.MySQLCollation))
+				tableColumnsMap[mysqlColName] = mysqlColInfo
 			}
 		}
+	}
+
+	if len(tableColumnsMap) != 0 {
+		builder.WriteString("/*\n")
+		builder.WriteString(fmt.Sprintf(" mysql column character set and collation check, generate created sql\n"))
+
+		t := table.NewWriter()
+		t.SetStyle(table.StyleLight)
+		t.AppendHeader(table.Row{"TABLE", "COLUMN", "MYSQL", "SUGGEST"})
+
+		var sqlStrings []string
+		for mysqlColName, mysqlColInfo := range tableColumnsMap {
+			t.AppendRows([]table.Row{
+				{d.TableName, mysqlColName,
+					fmt.Sprintf("%s(%s)", mysqlColInfo.DataType, mysqlColInfo.DataLength), "Run SQL"},
+			})
+			sqlStrings = append(sqlStrings, fmt.Sprintf("ALTER TABLE %s.%s MODIFY %s %s(%s) CHARACTER SET %s COLLATE %s;",
+				d.TargetSchemaName, d.TableName, mysqlColName, mysqlColInfo.DataType, mysqlColInfo.DataLength, utils.MySQLCharacterSet, utils.MySQLCollation))
+		}
+
+		builder.WriteString(fmt.Sprintf("%v\n", t.Render()))
+		builder.WriteString("*/\n")
+		builder.WriteString(strings.Join(sqlStrings, "\n"))
 	}
 
 	// 表约束、索引以及分区检查
@@ -573,9 +582,7 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 			zap.String("oracle struct", oracleTable.String(utils.ColumnsJSON)),
 			zap.String("mysql struct", mysqlTable.String(utils.ColumnsJSON)))
 
-		builder.WriteString("/*\n")
-		builder.WriteString(fmt.Sprintf(" oracle table columns info isn't exist in mysql, generate created sql\n"))
-		builder.WriteString("*/\n")
+		builder.WriteString(fmt.Sprintf("-- oracle table columns info isn't exist in mysql, generate created sql\n"))
 		for _, columnMeta := range createColumnMetas {
 			builder.WriteString(fmt.Sprintf("ALTER TABLE %s.%s ADD COLUMN %s;\n",
 				d.TargetSchemaName, d.TableName, columnMeta))
