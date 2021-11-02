@@ -89,14 +89,14 @@ func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 		zap.String("table", t.SourceTableName),
 		zap.Strings("columns", columnMetaSlice))
 
-	normalKeyMetaSlice, err := t.reverserOracleTablePKAndUKToMySQL()
+	primaryKeyMetaSlice, err := t.reverserOracleTablePKToMySQL()
 	if err != nil {
 		return "", "", err
 	}
 	service.Logger.Info("reverse oracle table column",
 		zap.String("schema", t.SourceSchemaName),
 		zap.String("table", t.SourceTableName),
-		zap.Strings("pk and uk", normalKeyMetaSlice))
+		zap.Strings("pk", primaryKeyMetaSlice))
 
 	var (
 		tableMetas     []string
@@ -104,10 +104,11 @@ func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 		createTableSQL string
 	)
 	tableMetas = append(tableMetas, columnMetaSlice...)
-	tableMetas = append(tableMetas, normalKeyMetaSlice...)
+	tableMetas = append(tableMetas, primaryKeyMetaSlice...)
 	tableMeta := strings.Join(tableMetas, ",\n")
 
 	tableComment := tablesMap[0]["COMMENTS"]
+
 	// 创建表初始语句 SQL
 	modifyTableName := changeOracleTableName(t.SourceTableName, t.TargetTableName)
 	if tableComment != "" {
@@ -135,15 +136,39 @@ func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 	})
 	sqls.WriteString(fmt.Sprintf("%v\n", sw.Render()))
 	sqls.WriteString("*/\n")
-	sqls.WriteString(createTableSQL + ";\n")
+	sqls.WriteString(createTableSQL + ";\n\n")
 
 	// 索引语句
 	createIndexSQL, compatibilityIndexSQL, err := t.generateAndExecMySQLCreateIndexSQL(modifyTableName)
 	if err != nil {
 		return "", "", err
 	}
-	if createIndexSQL != "" {
-		sqls.WriteString(createIndexSQL + ";\n")
+	if len(createIndexSQL) > 0 {
+		for _, indexSQL := range createIndexSQL {
+			service.Logger.Info("reverse",
+				zap.String("schema", t.TargetSchemaName),
+				zap.String("table", modifyTableName),
+				zap.String("create index", indexSQL))
+
+			sqls.WriteString(indexSQL + ";\n")
+		}
+	}
+
+	// 判断唯一约束
+	ukMetas, err := t.reverserOracleTableUKToMySQL()
+	if err != nil {
+		return "", "", err
+	}
+	if len(ukMetas) > 0 {
+		for _, ukMeta := range ukMetas {
+			ukSQL := fmt.Sprintf("ALTER TABLE %s.%s %s;", t.TargetSchemaName, modifyTableName, ukMeta)
+			service.Logger.Info("reverse",
+				zap.String("schema", t.TargetSchemaName),
+				zap.String("table", modifyTableName),
+				zap.String("create uk", ukSQL))
+
+			sqls.WriteString(ukSQL + ";\n")
+		}
 	}
 
 	// 判断外键以及检查约束
@@ -216,8 +241,15 @@ func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 					builder.WriteString(ckSQL + "\n")
 				}
 				// 增加不兼容的索引语句
-				if compatibilityIndexSQL != "" {
-					builder.WriteString(compatibilityIndexSQL + ";\n")
+				if len(compatibilityIndexSQL) > 0 {
+					for _, compSQL := range compatibilityIndexSQL {
+						service.Logger.Info("reverse",
+							zap.String("schema", t.TargetSchemaName),
+							zap.String("table", modifyTableName),
+							zap.String("maybe compatibility sql", compSQL))
+
+						builder.WriteString(compSQL + ";\n")
+					}
 				}
 			}
 		}
@@ -253,8 +285,16 @@ func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 			ckSQL := fmt.Sprintf("ALTER TABLE %s.%s ADD %s;", t.TargetSchemaName, modifyTableName, ck)
 			builder.WriteString(ckSQL + "\n")
 		}
-		if compatibilityIndexSQL != "" {
-			builder.WriteString(compatibilityIndexSQL + ";\n")
+		// 可能不兼容 SQL
+		if len(compatibilityIndexSQL) > 0 {
+			for _, compSQL := range compatibilityIndexSQL {
+				service.Logger.Info("reverse",
+					zap.String("schema", t.TargetSchemaName),
+					zap.String("table", modifyTableName),
+					zap.String("maybe compatibility sql", compSQL))
+
+				builder.WriteString(compSQL + ";\n")
+			}
 		}
 	}
 
@@ -271,10 +311,10 @@ func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 	return sqls.String(), builder.String(), nil
 }
 
-func (t Table) generateAndExecMySQLCreateIndexSQL(modifyTableName string) (string, string, error) {
+func (t Table) generateAndExecMySQLCreateIndexSQL(modifyTableName string) ([]string, []string, error) {
 	var (
-		createIndexSQL        string
-		compatibilityIndexSQL string
+		createIndexSQL        []string
+		compatibilityIndexSQL []string
 	)
 	indexesMap, err := t.Engine.GetOracleTableIndex(t.SourceSchemaName, t.SourceTableName)
 	if err != nil {
@@ -285,8 +325,8 @@ func (t Table) generateAndExecMySQLCreateIndexSQL(modifyTableName string) (strin
 			if idxMeta["UNIQUENESS"] == "NONUNIQUE" {
 				switch idxMeta["INDEX_TYPE"] {
 				case "NORMAL":
-					createIndexSQL = fmt.Sprintf("CREATE INDEX `%s` ON `%s`.`%s`(%s)",
-						strings.ToLower(idxMeta["INDEX_NAME"]), t.TargetSchemaName, modifyTableName, idxMeta["COLUMN_LIST"])
+					createIndexSQL = append(createIndexSQL, fmt.Sprintf("CREATE INDEX `%s` ON `%s`.`%s`(%s)",
+						strings.ToLower(idxMeta["INDEX_NAME"]), t.TargetSchemaName, modifyTableName, idxMeta["COLUMN_LIST"]))
 
 					return createIndexSQL, compatibilityIndexSQL, err
 
@@ -299,8 +339,8 @@ func (t Table) generateAndExecMySQLCreateIndexSQL(modifyTableName string) (strin
 						zap.String("indexExpression", idxMeta["COLUMN_EXPRESSION"]),
 						zap.String("error", "MySQL Not Support"))
 
-					compatibilityIndexSQL = fmt.Sprintf("CREATE INDEX `%s` ON `%s`.`%s`(%s)",
-						strings.ToLower(idxMeta["INDEX_NAME"]), t.TargetSchemaName, modifyTableName, idxMeta["COLUMN_EXPRESSION"])
+					compatibilityIndexSQL = append(compatibilityIndexSQL, fmt.Sprintf("CREATE INDEX `%s` ON `%s`.`%s`(%s)",
+						strings.ToLower(idxMeta["INDEX_NAME"]), t.TargetSchemaName, modifyTableName, idxMeta["COLUMN_EXPRESSION"]))
 
 					return createIndexSQL, compatibilityIndexSQL, err
 
@@ -313,8 +353,8 @@ func (t Table) generateAndExecMySQLCreateIndexSQL(modifyTableName string) (strin
 						zap.String("indexColumn", idxMeta["COLUMN_LIST"]),
 						zap.String("error", "MySQL Not Support"))
 
-					compatibilityIndexSQL = fmt.Sprintf("CREATE BITMAP INDEX `%s` ON `%s`.`%s`(%s)",
-						strings.ToLower(idxMeta["INDEX_NAME"]), t.TargetSchemaName, modifyTableName, idxMeta["COLUMN_LIST"])
+					compatibilityIndexSQL = append(compatibilityIndexSQL, fmt.Sprintf("CREATE BITMAP INDEX `%s` ON `%s`.`%s`(%s)",
+						strings.ToLower(idxMeta["INDEX_NAME"]), t.TargetSchemaName, modifyTableName, idxMeta["COLUMN_LIST"]))
 
 					return createIndexSQL, compatibilityIndexSQL, err
 
@@ -324,8 +364,8 @@ func (t Table) generateAndExecMySQLCreateIndexSQL(modifyTableName string) (strin
 				}
 			} else {
 				if idxMeta["INDEX_TYPE"] == "NORMAL" {
-					createIndexSQL = fmt.Sprintf("CREATE UNIQUE INDEX `%s` ON `%s`.`%s`(%s)",
-						strings.ToLower(idxMeta["INDEX_NAME"]), t.TargetSchemaName, modifyTableName, strings.ToLower(idxMeta["COLUMN_LIST"]))
+					createIndexSQL = append(createIndexSQL, fmt.Sprintf("CREATE UNIQUE INDEX `%s` ON `%s`.`%s`(%s)",
+						strings.ToLower(idxMeta["INDEX_NAME"]), t.TargetSchemaName, modifyTableName, strings.ToLower(idxMeta["COLUMN_LIST"])))
 
 					return createIndexSQL, compatibilityIndexSQL, err
 				}
@@ -376,16 +416,13 @@ func (t Table) reverserOracleTableColumnToMySQL() ([]string, error) {
 	return columnMetas, nil
 }
 
-func (t Table) reverserOracleTablePKAndUKToMySQL() ([]string, error) {
+func (t Table) reverserOracleTablePKToMySQL() ([]string, error) {
 	var keysMeta []string
 	primaryKeyMap, err := t.Engine.GetOracleTablePrimaryKey(t.SourceSchemaName, t.SourceTableName)
 	if err != nil {
 		return keysMeta, err
 	}
-	uniqueKeyMap, err := t.Engine.GetOracleTableUniqueKey(t.SourceSchemaName, t.SourceTableName)
-	if err != nil {
-		return keysMeta, err
-	}
+
 	if len(primaryKeyMap) > 1 {
 		return keysMeta, fmt.Errorf("oracle schema [%s] table [%s] primary key exist multiple values: [%v]", t.SourceSchemaName, t.SourceTableName, primaryKeyMap)
 	}
@@ -393,9 +430,18 @@ func (t Table) reverserOracleTablePKAndUKToMySQL() ([]string, error) {
 		pk := fmt.Sprintf("PRIMARY KEY (%s)", strings.ToLower(primaryKeyMap[0]["COLUMN_LIST"]))
 		keysMeta = append(keysMeta, pk)
 	}
+	return keysMeta, nil
+}
+
+func (t Table) reverserOracleTableUKToMySQL() ([]string, error) {
+	var keysMeta []string
+	uniqueKeyMap, err := t.Engine.GetOracleTableUniqueKey(t.SourceSchemaName, t.SourceTableName)
+	if err != nil {
+		return keysMeta, err
+	}
 	if len(uniqueKeyMap) > 0 {
 		for _, rowUKCol := range uniqueKeyMap {
-			uk := fmt.Sprintf("UNIQUE KEY `%s` (%s)", strings.ToLower(rowUKCol["CONSTRAINT_NAME"]), strings.ToLower(rowUKCol["COLUMN_LIST"]))
+			uk := fmt.Sprintf("ADD UNIQUE `%s` (%s)", strings.ToLower(rowUKCol["CONSTRAINT_NAME"]), strings.ToLower(rowUKCol["COLUMN_LIST"]))
 			keysMeta = append(keysMeta, uk)
 		}
 	}
