@@ -152,15 +152,17 @@ func (e *Engine) GetOracleTablePrimaryKey(schemaName string, tableName string) (
 }
 
 func (e *Engine) GetOracleTableUniqueKey(schemaName string, tableName string) ([]map[string]string, error) {
-	querySQL := fmt.Sprintf(`select cu.constraint_name,
+	querySQL := fmt.Sprintf(`select cu.constraint_name,au.index_name,
        LISTAGG(cu.column_name, ',') WITHIN GROUP(ORDER BY cu.POSITION) AS column_list
   from all_cons_columns cu, all_constraints au
  where cu.constraint_name = au.constraint_name
+   and cu.owner = au.owner
+   and cu.table_name = au.table_name
    and au.constraint_type = 'U'
    and au.STATUS = 'ENABLED'
    and upper(au.table_name) = upper('%s')
    and upper(cu.owner) = upper('%s')
- group by cu.constraint_name`,
+ group by cu.constraint_name,au.index_name`,
 		strings.ToUpper(tableName),
 		strings.ToUpper(schemaName))
 	_, res, err := Query(e.OracleDB, querySQL)
@@ -234,7 +236,57 @@ select x.constraint_name,
 	return res, nil
 }
 
-func (e *Engine) GetOracleTableIndex(schemaName string, tableName string) ([]map[string]string, error) {
+func (e *Engine) GetOracleTableUniqueIndex(schemaName string, tableName string) ([]map[string]string, error) {
+	querySQL := fmt.Sprintf(`SELECT
+	temp.TABLE_NAME,
+	temp.UNIQUENESS,--是否唯一索引
+	temp.INDEX_NAME,
+	temp.INDEX_TYPE,
+	temp.column_list,
+	E.COLUMN_EXPRESSION 
+FROM
+	(
+	SELECT
+		T.TABLE_OWNER,
+		T.TABLE_NAME,
+		I.UNIQUENESS,--是否唯一索引
+		T.INDEX_NAME,
+		I.INDEX_TYPE,
+--T.COLUMN_POSITION,
+		LISTAGG ( T.COLUMN_NAME, ',' ) WITHIN GROUP ( ORDER BY T.COLUMN_POSITION ) AS column_list 
+	FROM
+		ALL_IND_COLUMNS T,
+		ALL_INDEXES I,
+		ALL_CONSTRAINTS C 
+	WHERE
+		T.INDEX_NAME = I.INDEX_NAME
+		AND I.UNIQUENESS = 'UNIQUE'
+		AND T.INDEX_NAME = C.CONSTRAINT_NAME ( + ) 
+		-- AND I.INDEX_TYPE != 'FUNCTION-BASED NORMAL' --排除基于函数的索引
+		-- AND I.INDEX_TYPE != 'BITMAP' --排除位图索引
+		AND C.CONSTRAINT_TYPE IS NULL --排除主键、唯一约束索引
+		AND T.TABLE_NAME = upper( '%s' ) 
+		AND T.TABLE_OWNER = upper( '%s' ) 
+	GROUP BY
+		T.TABLE_OWNER,
+		T.TABLE_NAME,
+		I.UNIQUENESS,--是否唯一索引
+		T.INDEX_NAME,
+		I.INDEX_TYPE 
+	) temp
+	LEFT JOIN ALL_IND_EXPRESSIONS E ON temp.TABLE_NAME = E.TABLE_NAME 
+AND temp.TABLE_OWNER = E.TABLE_OWNER 
+	AND temp.INDEX_NAME = E.INDEX_NAME`,
+		strings.ToUpper(tableName),
+		strings.ToUpper(schemaName))
+	_, res, err := Query(e.OracleDB, querySQL)
+	if err != nil {
+		return res, err
+	}
+	return res, nil
+}
+
+func (e *Engine) GetOracleTableNormalIndex(schemaName string, tableName string) ([]map[string]string, error) {
 	querySQL := fmt.Sprintf(`SELECT
 	temp.TABLE_NAME,
 	temp.UNIQUENESS,--是否唯一索引

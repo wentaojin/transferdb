@@ -189,11 +189,27 @@ func NewOracleTableINFO(schemaName, tableName string, engine *service.Engine) (*
 		}
 	}
 
-	indexInfo, err := engine.GetOracleTableIndex(schemaName, tableName)
+	var indexes []Index
+
+	indexInfo, err := engine.GetOracleTableNormalIndex(schemaName, tableName)
 	if err != nil {
 		return oraTable, err
 	}
-	var indexes []Index
+	for _, indexCol := range indexInfo {
+		indexes = append(indexes, Index{
+			IndexInfo: IndexInfo{
+				Uniqueness:  strings.ToUpper(indexCol["UNIQUENESS"]),
+				IndexColumn: strings.ToUpper(indexCol["COLUMN_LIST"]),
+			},
+			IndexType:     strings.ToUpper(indexCol["INDEX_TYPE"]),
+			ColumnExpress: strings.ToUpper(indexCol["COLUMN_EXPRESSION"]),
+		})
+	}
+
+	indexInfo, err = engine.GetOracleTableUniqueIndex(schemaName, tableName)
+	if err != nil {
+		return oraTable, err
+	}
 	for _, indexCol := range indexInfo {
 		indexes = append(indexes, Index{
 			IndexInfo: IndexInfo{
