@@ -140,6 +140,9 @@ func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 
 	// 索引语句、普通索引、函数索引、位图索引
 	createIndexSQL, compatibilityIndexSQL, err := t.reverserOracleTableNormalIndexToMySQL(modifyTableName)
+
+	fmt.Printf("test: %v\n", compatibilityIndexSQL)
+
 	if err != nil {
 		return "", "", err
 	}
