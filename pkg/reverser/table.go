@@ -100,7 +100,8 @@ func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 
 	var (
 		tableMetas     []string
-		sqls           strings.Builder
+		sqls           strings.Builder // reverse.sql
+		builder        strings.Builder // compatibility.sql
 		createTableSQL string
 	)
 	tableMetas = append(tableMetas, columnMetaSlice...)
@@ -140,9 +141,6 @@ func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 
 	// 索引语句、普通索引、函数索引、位图索引
 	createIndexSQL, compatibilityIndexSQL, err := t.reverserOracleTableNormalIndexToMySQL(modifyTableName)
-
-	fmt.Printf("test: %v\n", compatibilityIndexSQL)
-
 	if err != nil {
 		return "", "", err
 	}
@@ -201,10 +199,8 @@ func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 		isTiDB = true
 	}
 
-	var (
-		builder   strings.Builder
-		dbVersion string
-	)
+	var dbVersion string
+
 	if strings.Contains(version, utils.MySQLVersionDelimiter) {
 		dbVersion = strings.Split(version, utils.MySQLVersionDelimiter)[0]
 	} else {
@@ -221,16 +217,30 @@ func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 	}
 
 	if !isTiDB {
-		if utils.VersionOrdinal(dbVersion) > utils.VersionOrdinal(utils.MySQLCheckConsVersion) && len(ckMetas) > 0 {
-			for _, ck := range ckMetas {
-				ckSQL := fmt.Sprintf("ALTER TABLE %s.%s ADD %s;", t.TargetSchemaName, modifyTableName, ck)
-				service.Logger.Info("reverse",
-					zap.String("schema", t.TargetSchemaName),
-					zap.String("table", modifyTableName),
-					zap.String("ck sql", ckSQL))
-
-				sqls.WriteString(ckSQL + "\n")
+		if utils.VersionOrdinal(dbVersion) > utils.VersionOrdinal(utils.MySQLCheckConsVersion) {
+			if len(fkMetas) > 0 || len(ckMetas) > 0 {
+				builder.WriteString("/*\n")
+				builder.WriteString(fmt.Sprintf(" oracle table check consrtaint maybe mysql has compatibility, skip\n"))
+				tw := table.NewWriter()
+				tw.SetStyle(table.StyleLight)
+				tw.AppendHeader(table.Row{"#", "ORACLE", "MYSQL", "SUGGEST"})
+				tw.AppendRows([]table.Row{
+					{"TABLE", fmt.Sprintf("%s.%s", t.SourceTableName, t.SourceTableName), fmt.Sprintf("%s.%s", t.TargetSchemaName, modifyTableName), "Manual Create"}})
+				builder.WriteString(fmt.Sprintf("%v\n", tw.Render()))
+				builder.WriteString("*/\n")
 			}
+			if len(ckMetas) > 0 {
+				for _, ck := range ckMetas {
+					ckSQL := fmt.Sprintf("ALTER TABLE %s.%s ADD %s;", t.TargetSchemaName, modifyTableName, ck)
+					service.Logger.Info("reverse",
+						zap.String("schema", t.TargetSchemaName),
+						zap.String("table", modifyTableName),
+						zap.String("ck sql", ckSQL))
+
+					sqls.WriteString(ckSQL + "\n")
+				}
+			}
+
 			if len(fkMetas) > 0 {
 				for _, fk := range fkMetas {
 					addFkSQL := fmt.Sprintf("ALTER TABLE %s.%s ADD %s;", t.TargetSchemaName, modifyTableName, fk)
@@ -316,30 +326,29 @@ func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 			{"TABLE", fmt.Sprintf("%s.%s", t.SourceTableName, t.SourceTableName), fmt.Sprintf("%s.%s", t.TargetSchemaName, modifyTableName), "Manual Create"}})
 		builder.WriteString(fmt.Sprintf("%v\n", tw.Render()))
 		builder.WriteString("*/\n")
+	}
 
-		if len(fkMetas) > 0 {
-			for _, fk := range fkMetas {
-				fkSQL := fmt.Sprintf("ALTER TABLE %s.%s ADD %s;", t.TargetSchemaName, modifyTableName, fk)
-				builder.WriteString(fkSQL + "\n")
-			}
+	if len(fkMetas) > 0 {
+		for _, fk := range fkMetas {
+			fkSQL := fmt.Sprintf("ALTER TABLE %s.%s ADD %s;", t.TargetSchemaName, modifyTableName, fk)
+			builder.WriteString(fkSQL + "\n")
 		}
+	}
 
-		if len(ckMetas) > 0 {
-			for _, ck := range ckMetas {
-				ckSQL := fmt.Sprintf("ALTER TABLE %s.%s ADD %s;", t.TargetSchemaName, modifyTableName, ck)
-				builder.WriteString(ckSQL + "\n")
-			}
+	if len(ckMetas) > 0 {
+		for _, ck := range ckMetas {
+			ckSQL := fmt.Sprintf("ALTER TABLE %s.%s ADD %s;", t.TargetSchemaName, modifyTableName, ck)
+			builder.WriteString(ckSQL + "\n")
 		}
-		// 可能不兼容 SQL
-		if len(compatibilityIndexSQL) > 0 {
-			for _, compSQL := range compatibilityIndexSQL {
-				service.Logger.Info("reverse",
-					zap.String("schema", t.TargetSchemaName),
-					zap.String("table", modifyTableName),
-					zap.String("maybe compatibility sql", compSQL))
-
-				builder.WriteString(compSQL + ";\n")
-			}
+	}
+	// 可能不兼容 SQL
+	if len(compatibilityIndexSQL) > 0 {
+		for _, compSQL := range compatibilityIndexSQL {
+			service.Logger.Info("reverse",
+				zap.String("schema", t.TargetSchemaName),
+				zap.String("table", modifyTableName),
+				zap.String("maybe compatibility sql", compSQL))
+			builder.WriteString(compSQL + ";\n")
 		}
 	}
 
