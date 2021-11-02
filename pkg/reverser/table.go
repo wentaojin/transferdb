@@ -374,6 +374,9 @@ func (t Table) reverserOracleTableNormalIndexToMySQL(modifyTableName string) ([]
 						return createIndexSQL, compatibilityIndexSQL, err
 
 					case "FUNCTION-BASED NORMAL":
+						compatibilityIndexSQL = append(compatibilityIndexSQL, fmt.Sprintf("CREATE INDEX `%s` ON `%s`.`%s`(%s)",
+							strings.ToLower(idxMeta["INDEX_NAME"]), t.TargetSchemaName, modifyTableName, idxMeta["COLUMN_EXPRESSION"]))
+
 						service.Logger.Warn("reverse",
 							zap.String("schema", t.TargetTableName),
 							zap.String("table", modifyTableName),
@@ -382,12 +385,12 @@ func (t Table) reverserOracleTableNormalIndexToMySQL(modifyTableName string) ([]
 							zap.String("indexExpression", idxMeta["COLUMN_EXPRESSION"]),
 							zap.String("error", "MySQL Not Support"))
 
-						compatibilityIndexSQL = append(compatibilityIndexSQL, fmt.Sprintf("CREATE INDEX `%s` ON `%s`.`%s`(%s)",
-							strings.ToLower(idxMeta["INDEX_NAME"]), t.TargetSchemaName, modifyTableName, idxMeta["COLUMN_EXPRESSION"]))
-
 						return createIndexSQL, compatibilityIndexSQL, err
 
 					case "BITMAP":
+						compatibilityIndexSQL = append(compatibilityIndexSQL, fmt.Sprintf("CREATE BITMAP INDEX `%s` ON `%s`.`%s`(%s)",
+							strings.ToLower(idxMeta["INDEX_NAME"]), t.TargetSchemaName, modifyTableName, idxMeta["COLUMN_LIST"]))
+
 						service.Logger.Warn("reverse",
 							zap.String("schema", t.TargetTableName),
 							zap.String("table", modifyTableName),
@@ -396,26 +399,15 @@ func (t Table) reverserOracleTableNormalIndexToMySQL(modifyTableName string) ([]
 							zap.String("indexColumn", idxMeta["COLUMN_LIST"]),
 							zap.String("error", "MySQL Not Support"))
 
-						compatibilityIndexSQL = append(compatibilityIndexSQL, fmt.Sprintf("CREATE BITMAP INDEX `%s` ON `%s`.`%s`(%s)",
-							strings.ToLower(idxMeta["INDEX_NAME"]), t.TargetSchemaName, modifyTableName, idxMeta["COLUMN_LIST"]))
-
 						return createIndexSQL, compatibilityIndexSQL, err
 
 					default:
 						return createIndexSQL, compatibilityIndexSQL, fmt.Errorf("oracle schema [%s] table [%s] index [%s] isn't mysql support index type [%v]",
 							t.SourceSchemaName, t.SourceTableName, idxMeta["INDEX_NAME"], idxMeta["INDEX_TYPE"])
 					}
-				} else {
-					if idxMeta["INDEX_TYPE"] == "NORMAL" {
-						createIndexSQL = append(createIndexSQL, fmt.Sprintf("CREATE UNIQUE INDEX `%s` ON `%s`.`%s`(%s)",
-							strings.ToLower(idxMeta["INDEX_NAME"]), t.TargetSchemaName, modifyTableName, strings.ToLower(idxMeta["COLUMN_LIST"])))
-
-						return createIndexSQL, compatibilityIndexSQL, err
-					}
-					return createIndexSQL, compatibilityIndexSQL, fmt.Errorf("oracle schema [%s] table [%s] index [%s] isn't mysql support index type [%v]",
-						t.SourceSchemaName, t.SourceTableName, idxMeta["INDEX_NAME"], idxMeta["INDEX_TYPE"])
 				}
-
+				return createIndexSQL, compatibilityIndexSQL, fmt.Errorf("oracle schema [%s] table [%s] index [%s] isn't mysql support index type [%v]",
+					t.SourceSchemaName, t.SourceTableName, idxMeta["INDEX_NAME"], idxMeta["INDEX_TYPE"])
 			}
 		}
 	}
