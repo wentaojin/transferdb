@@ -122,12 +122,17 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 			if errMSg != nil {
 				return errMSg
 			}
-			if _, errMSg = fmt.Fprintln(wrMR, createSQL); errMSg != nil {
-				return err
+			if createSQL != "" {
+				if _, errMSg = fmt.Fprintln(wrMR, createSQL); errMSg != nil {
+					return err
+				}
 			}
-			if _, errMSg = fmt.Fprintln(wrCMP, compatibilitySQL); errMSg != nil {
-				return err
+			if compatibilitySQL != "" {
+				if _, errMSg = fmt.Fprintln(wrCMP, compatibilitySQL); errMSg != nil {
+					return err
+				}
 			}
+
 			return nil
 		})
 	}
