@@ -574,6 +574,7 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 		for _, diffColMsg := range diffColumnMsgs {
 			builder.WriteString(diffColMsg)
 		}
+		builder.WriteString("\n")
 	}
 
 	if len(createColumnMetas) != 0 {
