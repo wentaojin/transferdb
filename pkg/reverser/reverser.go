@@ -123,12 +123,16 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 				return errMSg
 			}
 			if createSQL != "" {
-				if _, errMSg = fmt.Fprintln(wrMR, createSQL); errMSg != nil {
+				createString := fmt.Sprintf("%s\n-- the above info comes from oracle table [%s.%s]\n-- the above info comes from mysql table [%s.%s]\n", createSQL, tbl.SourceSchemaName, tbl.SourceTableName, tbl.TargetSchemaName, tbl.TargetTableName)
+
+				if _, errMSg = fmt.Fprintln(wrMR, createString); errMSg != nil {
 					return err
 				}
 			}
 			if compatibilitySQL != "" {
-				if _, errMSg = fmt.Fprintln(wrCMP, compatibilitySQL); errMSg != nil {
+				compatibilityString := fmt.Sprintf("%s\n-- the above info comes from oracle table [%s.%s]\n-- the above info create mysql table sql [%s.%s]\n", compatibilitySQL, tbl.SourceSchemaName, tbl.SourceTableName, tbl.TargetSchemaName, tbl.TargetTableName)
+
+				if _, errMSg = fmt.Fprintln(wrCMP, compatibilityString); errMSg != nil {
 					return err
 				}
 			}

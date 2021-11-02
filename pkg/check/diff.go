@@ -104,7 +104,6 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 			if len(partitionTableList) != 1 {
 				return fmt.Errorf("oracle partition table list should only be one, can't be exist more [%v]", partitionTableList)
 			}
-			builder.WriteString(fmt.Sprintf(" oracle partition table maybe mysql has compatibility, will convert to normal table, please manual adjust\n"))
 			t.AppendRows([]table.Row{
 				{"TABLE", fmt.Sprintf("%s.%s", d.SourceSchemaName, partitionTableList[0]), fmt.Sprintf("%s.%s", d.TargetSchemaName, partitionTableList[0]), "True", "Manual Create And Adjust TABLE"},
 			})
@@ -149,6 +148,8 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 		}
 
 		builder.WriteString(fmt.Sprintf("-- the above info comes from oracle table [%s.%s]\n", d.SourceSchemaName, d.TableName))
+		builder.WriteString(fmt.Sprintf("-- the above info comes from mysql table [%s.%s]\n", d.TargetSchemaName, d.TableName))
+
 		if _, err := fmt.Fprintln(d.FileMW, builder.String()); err != nil {
 			return err
 		}
