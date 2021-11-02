@@ -216,19 +216,21 @@ func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 		return "", "", err
 	}
 
+	if len(fkMetas) > 0 || len(ckMetas) > 0 || len(compatibilityIndexSQL) > 0 {
+		builder.WriteString("/*\n")
+		builder.WriteString(fmt.Sprintf(" oracle table check consrtaint maybe mysql has compatibility, skip\n"))
+		tw := table.NewWriter()
+		tw.SetStyle(table.StyleLight)
+		tw.AppendHeader(table.Row{"#", "ORACLE", "MYSQL", "SUGGEST"})
+		tw.AppendRows([]table.Row{
+			{"TABLE", fmt.Sprintf("%s.%s", t.SourceTableName, t.SourceTableName), fmt.Sprintf("%s.%s", t.TargetSchemaName, modifyTableName), "Manual Create"}}):q
+		
+		builder.WriteString(fmt.Sprintf("%v\n", tw.Render()))
+		builder.WriteString("*/\n")
+	}
+
 	if !isTiDB {
 		if utils.VersionOrdinal(dbVersion) > utils.VersionOrdinal(utils.MySQLCheckConsVersion) {
-			if len(fkMetas) > 0 || len(ckMetas) > 0 {
-				builder.WriteString("/*\n")
-				builder.WriteString(fmt.Sprintf(" oracle table check consrtaint maybe mysql has compatibility, skip\n"))
-				tw := table.NewWriter()
-				tw.SetStyle(table.StyleLight)
-				tw.AppendHeader(table.Row{"#", "ORACLE", "MYSQL", "SUGGEST"})
-				tw.AppendRows([]table.Row{
-					{"TABLE", fmt.Sprintf("%s.%s", t.SourceTableName, t.SourceTableName), fmt.Sprintf("%s.%s", t.TargetSchemaName, modifyTableName), "Manual Create"}})
-				builder.WriteString(fmt.Sprintf("%v\n", tw.Render()))
-				builder.WriteString("*/\n")
-			}
 			if len(ckMetas) > 0 {
 				for _, ck := range ckMetas {
 					ckSQL := fmt.Sprintf("ALTER TABLE %s.%s ADD %s;", t.TargetSchemaName, modifyTableName, ck)
@@ -314,18 +316,6 @@ func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 			sqls.WriteString(fmt.Sprintf("\n-- the above info create mysql table sql [%s.%s]\n", t.TargetSchemaName, modifyTableName))
 		}
 		return sqls.String(), builder.String(), nil
-	}
-
-	if len(fkMetas) > 0 || len(ckMetas) > 0 {
-		builder.WriteString("/*\n")
-		builder.WriteString(fmt.Sprintf(" oracle table check consrtaint maybe mysql has compatibility, skip\n"))
-		tw := table.NewWriter()
-		tw.SetStyle(table.StyleLight)
-		tw.AppendHeader(table.Row{"#", "ORACLE", "MYSQL", "SUGGEST"})
-		tw.AppendRows([]table.Row{
-			{"TABLE", fmt.Sprintf("%s.%s", t.SourceTableName, t.SourceTableName), fmt.Sprintf("%s.%s", t.TargetSchemaName, modifyTableName), "Manual Create"}})
-		builder.WriteString(fmt.Sprintf("%v\n", tw.Render()))
-		builder.WriteString("*/\n")
 	}
 
 	if len(fkMetas) > 0 {
