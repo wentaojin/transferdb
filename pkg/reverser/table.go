@@ -223,8 +223,8 @@ func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 		tw.SetStyle(table.StyleLight)
 		tw.AppendHeader(table.Row{"#", "ORACLE", "MYSQL", "SUGGEST"})
 		tw.AppendRows([]table.Row{
-			{"TABLE", fmt.Sprintf("%s.%s", t.SourceTableName, t.SourceTableName), fmt.Sprintf("%s.%s", t.TargetSchemaName, modifyTableName), "Manual Create"}}):q
-		
+			{"TABLE", fmt.Sprintf("%s.%s", t.SourceTableName, t.SourceTableName), fmt.Sprintf("%s.%s", t.TargetSchemaName, modifyTableName), "Manual Create"}})
+
 		builder.WriteString(fmt.Sprintf("%v\n", tw.Render()))
 		builder.WriteString("*/\n")
 	}
