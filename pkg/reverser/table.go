@@ -333,16 +333,6 @@ func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 		}
 	}
 
-	// 记录不为空
-	if builder.String() != "" {
-		builder.WriteString(fmt.Sprintf("\n-- the above info comes from oracle table [%s.%s]\n", t.SourceSchemaName, t.SourceTableName))
-		builder.WriteString(fmt.Sprintf("-- the above info comes from mysql table [%s.%s]\n", t.TargetSchemaName, modifyTableName))
-	}
-
-	if sqls.String() != "" {
-		sqls.WriteString(fmt.Sprintf("\n-- the above info create mysql table sql [%s.%s]\n", t.TargetSchemaName, modifyTableName))
-	}
-
 	return sqls.String(), builder.String(), nil
 }
 
