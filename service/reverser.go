@@ -109,7 +109,11 @@ func (e *Engine) GetOracleTableColumn(schemaName string, tableName string) ([]ma
 	     NVL(t.DATA_LENGTH,0) AS DATA_LENGTH,
 	     NVL(t.DATA_PRECISION,0) AS DATA_PRECISION,
 	     NVL(t.DATA_SCALE,0) AS DATA_SCALE,
-	     t.NULLABLE,
+		decode(t.NULLABLE,'N','N','Y',(select decode(count(1),0,'Y','N') from dba_constraints con 
+			 where con.owner=t.owner 
+			 and con.table_name=t.table_name 
+			 and replace(replace(upper(con.search_condition_vc),' ',''),'"','') like '%%'||upper(t.column_name)||'ISNOTNULL'||'%%')
+			 ) NULLABLE,
 	     t.DATA_DEFAULT,
 	     c.COMMENTS
 	from all_tab_columns t, all_col_comments c

@@ -18,6 +18,7 @@ package reverser
 import (
 	"fmt"
 	"io"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -211,6 +212,7 @@ func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 	if err != nil {
 		return "", "", err
 	}
+
 	fkMetas, err := t.reverserOracleTableFKToMySQL()
 	if err != nil {
 		return "", "", err
@@ -565,10 +567,17 @@ func (t Table) reverserOracleTableCKToMySQL() ([]string, error) {
 	}
 	if len(checkKeyMap) > 0 {
 		for _, rowCKCol := range checkKeyMap {
-			ck := fmt.Sprintf("CONSTRAINT `%s` CHECK (%s)",
-				strings.ToLower(rowCKCol["CONSTRAINT_NAME"]),
-				strings.ToLower(rowCKCol["SEARCH_CONDITION"]))
-			keysMeta = append(keysMeta, ck)
+			// 排除非空约束检查
+			match, err := regexp.MatchString(`(^.*)(?i:IS NOT NULL)`, rowCKCol["SEARCH_CONDITION"])
+			if err != nil {
+				return keysMeta, fmt.Errorf("check constraint remove not null failed: %v", err)
+			}
+			if !match {
+				ck := fmt.Sprintf("CONSTRAINT `%s` CHECK (%s)",
+					strings.ToLower(rowCKCol["CONSTRAINT_NAME"]),
+					strings.ToLower(rowCKCol["SEARCH_CONDITION"]))
+				keysMeta = append(keysMeta, ck)
+			}
 		}
 	}
 
