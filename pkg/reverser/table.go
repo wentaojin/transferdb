@@ -567,16 +567,76 @@ func (t Table) reverserOracleTableCKToMySQL() ([]string, error) {
 	}
 	if len(checkKeyMap) > 0 {
 		for _, rowCKCol := range checkKeyMap {
-			// 排除非空约束检查
-			match, err := regexp.MatchString(`(^.*)(?i:IS NOT NULL)`, rowCKCol["SEARCH_CONDITION"])
+			// 多个检查约束匹配
+			// 比如："LOC" IS noT nUll and loc in ('a','b','c')
+			r, err := regexp.Compile(`\s+(?i:AND)\s+|\s+(?i:OR)\s+`)
 			if err != nil {
-				return keysMeta, fmt.Errorf("check constraint remove not null failed: %v", err)
+				return keysMeta, fmt.Errorf("check constraint regexp and/or failed: %v", err)
 			}
-			if !match {
-				ck := fmt.Sprintf("CONSTRAINT `%s` CHECK (%s)",
+
+			// 排除非空约束检查
+			s := strings.TrimSpace(rowCKCol["SEARCH_CONDITION"])
+
+			if !r.MatchString(s) {
+				matchNull, err := regexp.MatchString(`(^.*)(?i:IS NOT NULL)`, s)
+				if err != nil {
+					return keysMeta, fmt.Errorf("check constraint remove not null failed: %v", err)
+				}
+				if !matchNull {
+					keysMeta = append(keysMeta, fmt.Sprintf("CONSTRAINT `%s` CHECK (%s)",
+						strings.ToLower(rowCKCol["CONSTRAINT_NAME"]),
+						rowCKCol["SEARCH_CONDITION"]))
+				}
+			} else {
+
+				strArray := strings.Fields(s)
+
+				var (
+					idxArray        []int
+					checkArray      []string
+					constraintArray []string
+				)
+				for idx, val := range strArray {
+					if strings.EqualFold(val, "AND") || strings.EqualFold(val, "OR") {
+						idxArray = append(idxArray, idx)
+					}
+				}
+
+				idxArray = append(idxArray, len(strArray))
+
+				for idx, val := range idxArray {
+					if idx == 0 {
+						checkArray = append(checkArray, strings.Join(strArray[0:val], " "))
+					} else {
+						checkArray = append(checkArray, strings.Join(strArray[idxArray[idx-1]:val], " "))
+					}
+				}
+
+				for _, val := range checkArray {
+					v := strings.TrimSpace(val)
+					matchNull, err := regexp.MatchString(`(.*)(?i:IS NOT NULL)`, v)
+					if err != nil {
+						fmt.Printf("check constraint remove not null failed: %v", err)
+					}
+
+					if !matchNull {
+						constraintArray = append(constraintArray, v)
+					}
+				}
+
+				sd := strings.Join(constraintArray, " ")
+				d := strings.Fields(sd)
+
+				if strings.EqualFold(d[0], "AND") || strings.EqualFold(d[0], "OR") {
+					d = d[1:]
+				}
+				if strings.EqualFold(d[len(d)-1], "AND") || strings.EqualFold(d[len(d)-1], "OR") {
+					d = d[:len(d)-1]
+				}
+
+				keysMeta = append(keysMeta, fmt.Sprintf("CONSTRAINT `%s` CHECK (%s)",
 					strings.ToLower(rowCKCol["CONSTRAINT_NAME"]),
-					strings.ToLower(rowCKCol["SEARCH_CONDITION"]))
-				keysMeta = append(keysMeta, ck)
+					strings.Join(d, " ")))
 			}
 		}
 	}

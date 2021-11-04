@@ -105,6 +105,23 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 		}
 	}
 
+	// 创建数据库
+	var builder strings.Builder
+	builder.WriteString("/*\n")
+	builder.WriteString(fmt.Sprintf(" oracle schema reverse mysql database\n"))
+	t := table.NewWriter()
+	t.SetStyle(table.StyleLight)
+	t.AppendHeader(table.Row{"#", "ORACLE", "MYSQL", "SUGGEST"})
+	t.AppendRows([]table.Row{
+		{"Schema", cfg.SourceConfig.SchemaName, cfg.TargetConfig.SchemaName, "Manual Create Schema"},
+	})
+	builder.WriteString(t.Render() + "\n")
+	builder.WriteString("*/\n")
+	builder.WriteString(fmt.Sprintf("CREATE DATABASE %s;\n", cfg.TargetConfig.SchemaName))
+	if _, err = fileReverse.WriteString(builder.String()); err != nil {
+		return err
+	}
+
 	// 设置工作池
 	// 设置 goroutine 数
 	wrReverse := &FileMW{sync.Mutex{}, fileReverse}
