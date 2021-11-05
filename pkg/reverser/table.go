@@ -449,10 +449,7 @@ func (t Table) reverserOracleTableColumnToMySQL() ([]string, error) {
 		return columnMetas, err
 	}
 
-	// oracle build-in data type(20c), backward compatible
-	// https://docs.oracle.com/en/database/oracle/oracle-database/20/sqlrf/Data-Types.html#GUID-A3C0D836-BADB-44E5-A5D4-265BA5968483
-	// oracle convert mysql data type map https://www.convert-in.com/docs/ora2sql/types-mapping.htm
-	// https://docs.oracle.com/cd/E12151_01/doc.150/e12155/oracle_mysql_compared.htm#BABHHAJC
+	// Oracle 表字段数据类型内置映射 MySQL/TiDB 规则转换
 	for _, rowCol := range columnsMap {
 		columnMeta, err := ReverseOracleTableColumnMapRule(
 			t.SourceSchemaName,
@@ -680,9 +677,7 @@ func ReverseOracleTableColumnMapRule(
 			switch {
 			case dataPrecision == 0 && dataScale == 0:
 				originColumnType = "NUMBER"
-				//MySQL column type  NUMERIC would convert to DECIMAL(11,0)
-				//buildInColumnType = "NUMERIC"
-				buildInColumnType = "DECIMAL(11,0)"
+				buildInColumnType = "DECIMAL(65,30)"
 			case dataPrecision >= 1 && dataPrecision < 3:
 				originColumnType = fmt.Sprintf("NUMBER(%d)", dataPrecision)
 				buildInColumnType = "TINYINT"
@@ -888,10 +883,18 @@ func ReverseOracleTableColumnMapRule(
 			buildInColumnType = "VARCHAR(30)"
 		} else if strings.Contains(dataType, "TIMESTAMP") {
 			originColumnType = dataType
-			if dataScale == 0 {
-				buildInColumnType = "TIMESTAMP"
+			if strings.Contains(dataType, "WITH TIME ZONE") || strings.Contains(dataType, "WITH LOCAL TIME ZONE") {
+				if dataPrecision <= 6 {
+					buildInColumnType = fmt.Sprintf("DATETIME(%d)", dataPrecision)
+				} else {
+					buildInColumnType = fmt.Sprintf("DATETIME(%d)", 6)
+				}
 			} else {
-				buildInColumnType = fmt.Sprintf("TIMESTAMP(%d)", dataScale)
+				if dataPrecision <= 6 {
+					buildInColumnType = fmt.Sprintf("TIMESTAMP(%d)", dataPrecision)
+				} else {
+					buildInColumnType = fmt.Sprintf("TIMESTAMP(%d)", 6)
+				}
 			}
 		} else {
 			originColumnType = dataType
