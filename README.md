@@ -1,28 +1,42 @@
 ### Transferdb
 
-transferdb 用于异构数据库迁移（ Oracle 数据库 -> MySQL 数据库），现阶段支持的功能（原 transferdb 版本被重构）：
+transferdb 用于异构数据库迁移（ ORACLE 数据库 -> MySQL/TiDB 数据库），现阶段支持的功能（原 transferdb 版本被重构）：
 
 1. 支持表结构定义转换
-   1. 表定义输出 reverse.sql 文件，外键、检查约束、分区表、索引不兼容性对象输出 compatibility.sql 文件
-      1. 考虑 Oracle 分区表特殊且 MySQL 数据库复杂分区可能不支持，分区表统一视为普通表转换，日志中会打印警告【partition tables】且输出到 compatibility.sql 文件，若有要求，建议 reverse 手工转换
-   2. 支持自定义配置表字段类型规则转换(table -> schema -> 内置)
-   3. 支持默认配置规则转换
-   4. 支持表索引转换 
-      1. 提供日志输出打印，可以搜索 WARN 日志以及 FUNCTION-BASED NORMAL、BITMAP 关键筛选过滤
-   5. 支持表非空约束、外键约束、检查约束、主键约束、唯一约束转换
-2. 支持表结构对比(以 Oracle 为基准)，并输出不一致详情以及相关修复 SQL 语句（Oracle -> MySQL/TiDB）
-   1. 修复语句输出 check.sql 文件
-3. 支持收集现有 Oracle 数据库内表、索引、分区表、字段长度等信息用于评估迁移至 MySQL/TiDB 成本
-   1. 收集信息输出 cost.txt 文件
-4. 数据同步【数据同步需要存在主键或者唯一键】
-   1. 数据同步无论 FULL / ALL 模式需要注意时间格式，ORACLE date 格式复杂，同步前可先简单验证下迁移时间格式是否存在问题，transferdb timezone PICK 数据库操作系统的时区
-   2. FULL 模式【全量数据导出导入】
+   1. 表定义 reverse.sql 文件，外键、检查约束、分区表、索引不兼容性对象 compatibility.sql 文件
+   2. 自定义配置表字段类型规则映射【table -> schema -> 内置】
+   3. 内置数据类型规则映射，[内置数据类型映射规则](conf/buildin_reverse_rule.md)
+   4. 表索引转换 
+   5. 表非空约束、外键约束、检查约束、主键约束、唯一约束转换
+   6. 注意事项
+      1. 考虑 Oracle 分区表特殊且 MySQL 数据库复杂分区可能不支持，分区表统一视为普通表转换，对象输出到 compatibility.sql 文件并提供 WARN 日志【partition tables】关键字筛选打印，若有要求，建议 reverse 手工转换
+      2. ORACLE 唯一约束基于唯一索引的字段，下游只会创建唯一索引 
+      3. ORACLE 字段函数默认值保持上游值，若是下游不支持的默认值，则当手工执行表创建脚本报错
+      4. ORACLE FUNCTION-BASED NORMAL、BITMAP 不兼容性索引对象输出到 compatibility.sql 文件，并提供 WARN 日志关键字筛选打印
+
+2. 支持表结构对比【以 ORACLE 为基准】
+   1. 不一致详情以及相关修复 SQL 语句输出 check.sql 文件 
+   2. 注意事项 
+      1. 表结构字段对比以 ORACLE 表结构为基准，若下游表结构字段多会被忽视 
+      2. 索引对比会忽略索引名对比，依据索引类型直接对比索引字段是否存在，解决上下游不同索引名，同个索引字段检查不一致问题 
+      3. 表数据类型对比以 TransferDB 内置转换规则为基准，若下游表数据类型与基准不符则输出 
+      4. ORACLE 字符数据类型 Char / Bytes ，默认 Bytes，MySQL/TiDB 是字符长度，TransferDB 只有当 Scale 数值不一致时才输出不一致 
+      5. 表级别字符集检查，采用内置字符集 utf8mb4 检查，若下游表字符集非 utf8mb4 会被检查输出 
+      6. 上游表结构存在，下游不存在，自动生成相关表结构语句输出到 check.sql 文件
+      
+3. 支持对象信息收集
+   1. 收集现有 ORACLE 数据库内表、索引、分区表、字段长度等信息输出 cost.txt 文件，用于评估迁移至 MySQL/TiDB 成本【检查项无输出自动屏蔽显示】
+
+4. 支持数据同步
+   1. 数据同步需要存在主键或者唯一键 
+   2. 数据同步无论 FULL / ALL 模式需要注意时间格式，ORACLE date 格式复杂，同步前可先简单验证下迁移时间格式是否存在问题，transferdb timezone PICK 数据库操作系统的时区 
+   3. FULL 模式【全量数据导出导入】
       1. 数据同步导出导入要求表存在主键或者唯一键，否则因异常错误退出或者手工中断退出，断点续传【replace into】无法替换，数据可能会导致重复【除非手工清理下游重新导入】
       2. 并发导出导入环境下，断点续传不一定百分百可行，若断点续传失败，可通过配置 enable-checkpoint 控制重新导出导入
-   3. ALL 模式【全量导出导入 + 增量数据同步】
+   4. ALL 模式【全量导出导入 + 增量数据同步】
       1. 增量基于 logminer 日志数据同步，存在 logminer 同等限制，且只同步 INSERT/DELETE/UPDATE 以及 DROP TABLE/TRUNCATE TABLE DDL，执行过 TRUNCATE TABLE/ DROP TABLE 可能需要重新增加表附加日志
       2. 基于 logminer 日志数据同步，挖掘速率取决于重做日志磁盘+归档日志磁盘【若在归档日志中】以及 PGA 内存
-      3. 具体 ALL 模式同步权限以及要求详情见下 【ALL 模式同步】
+      3. 具体 ALL 模式同步权限以及要求详情见下【ALL 模式同步】
 
 使用事项
 
@@ -36,21 +50,21 @@ transferdb 用于异构数据库迁移（ Oracle 数据库 -> MySQL 数据库）
 export LD_LIBRARY_PATH=/data1/soft/client/instantclient_19_8
 echo $LD_LIBRARY_PATH
 
-3、transferdb 配置文件 config.toml 样例位于 conf 目录下,详情请见说明以及配置
+3、transferdb 配置文件 config.toml 样例位于 conf 目录下，[详情说明](conf/config.toml)
 
-4、表结构转换
+4、表结构转换，[输出示例](conf/reverse.sql 以及 conf/compatibility.sql)
 $ ./transferdb --config config.toml --mode prepare
 $ ./transferdb --config config.toml --mode reverse
 
-元数据库[默认 db_meta]自定义转换规则，prepare 阶段后，reverse 阶段前设置，参见 conf/reverse.sql、conf/compatibility.sql 
+元数据库[默认 db_meta]自定义转换规则，规则优先级【表 -> 库 -> 内置】
 文件自定义规则示例：
 表 custom_schema_column_type_maps 用于数据库内字段类型转换规则 -》库级别
 表 custom_table_column_type_maps  用于表级别字段类型转换规则，表级别优先级高于库级别 -》表级别
 
-5、表结构检查(独立于表结构转换，可单独运行，校验规则使用内置规则, 输出示例见 conf/check.sql
+5、表结构检查(独立于表结构转换，可单独运行，校验规则使用内置规则，[输出示例](conf/check.sql)
 $ ./transferdb --config config.toml --mode check
 
-6、收集现有 Oracle 数据库内表、索引、分区表、字段长度等信息用于评估迁移成本, 输出示例见 conf/cost.txt 【内部检查无输出自动屏蔽显示】
+6、收集现有 Oracle 数据库内表、索引、分区表、字段长度等信息用于评估迁移成本，[输出示例](conf/cost.txt)
 $ ./transferdb --config config.toml --mode gather
 
 7、数据全量抽数
