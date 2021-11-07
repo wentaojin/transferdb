@@ -26,7 +26,6 @@ import (
 type CfgFile struct {
 	AppConfig    AppConfig    `toml:"app" json:"app"`
 	FullConfig   FullConfig   `toml:"full" json:"full"`
-	DiffConfig   DiffConfig   `toml:"diff" json:"diff"`
 	AllConfig    AllConfig    `toml:"all" json:"all"`
 	SourceConfig SourceConfig `toml:"source" json:"source"`
 	TargetConfig TargetConfig `toml:"target" json:"target"`
@@ -44,15 +43,6 @@ type FullConfig struct {
 	WorkerThreads    int  `toml:"worker-threads" json:"worker-threads"`
 	TableThreads     int  `toml:"table-threads" json:"table-threads"`
 	EnableCheckpoint bool `toml:"enable-checkpoint" json:"enable-checkpoint"`
-}
-
-type DiffConfig struct {
-	ChunkSize     int    `toml:"chunk-size" json:"chunk-size"`
-	CheckThreads  int    `toml:"check-threads" json:"check-threads"`
-	UseChecksum   bool   `toml:"use-checksum" json:"use-checksum"`
-	UseCheckpoint bool   `toml:"use-checkpoint" json:"use-checkpoint"`
-	FixSQLFile    string `toml:"fix-sql-file" json:"fix-sql-file"`
-	Range         string `toml:"range" json:"range"`
 }
 
 type AllConfig struct {
