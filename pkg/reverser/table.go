@@ -157,7 +157,7 @@ func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 	}
 
 	// 唯一索引
-	createUniqueIndexSQL, uniqueIndexColumnsMap, err := t.reverserOracleTableUniqueIndexToMySQL(modifyTableName)
+	createUniqueIndexSQL, compatibilityUniqueIndexSQL, uniqueIndexColumnsMap, err := t.reverserOracleTableUniqueIndexToMySQL(modifyTableName)
 	if err != nil {
 		return "", "", err
 	}
@@ -218,7 +218,7 @@ func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 		return "", "", err
 	}
 
-	if len(fkMetas) > 0 || len(ckMetas) > 0 || len(compatibilityIndexSQL) > 0 {
+	if len(fkMetas) > 0 || len(ckMetas) > 0 || len(compatibilityIndexSQL) > 0 || len(compatibilityUniqueIndexSQL) > 0 {
 		builder.WriteString("/*\n")
 		builder.WriteString(fmt.Sprintf(" oracle table check consrtaint maybe mysql has compatibility, skip\n"))
 		tw := table.NewWriter()
@@ -257,6 +257,16 @@ func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 				}
 			}
 			// 增加不兼容的索引语句
+			if len(compatibilityUniqueIndexSQL) > 0 {
+				for _, compSQL := range compatibilityUniqueIndexSQL {
+					service.Logger.Info("reverse",
+						zap.String("schema", t.TargetSchemaName),
+						zap.String("table", modifyTableName),
+						zap.String("maybe compatibility sql", compSQL))
+
+					builder.WriteString(compSQL + ";\n")
+				}
+			}
 			if len(compatibilityIndexSQL) > 0 {
 				for _, compSQL := range compatibilityIndexSQL {
 					service.Logger.Info("reverse",
@@ -297,6 +307,16 @@ func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 				}
 			}
 			// 增加不兼容的索引语句
+			if len(compatibilityUniqueIndexSQL) > 0 {
+				for _, compSQL := range compatibilityUniqueIndexSQL {
+					service.Logger.Info("reverse",
+						zap.String("schema", t.TargetSchemaName),
+						zap.String("table", modifyTableName),
+						zap.String("maybe compatibility sql", compSQL))
+
+					builder.WriteString(compSQL + ";\n")
+				}
+			}
 			if len(compatibilityIndexSQL) > 0 {
 				for _, compSQL := range compatibilityIndexSQL {
 					service.Logger.Info("reverse",
@@ -325,6 +345,16 @@ func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 		}
 	}
 	// 可能不兼容 SQL
+	if len(compatibilityUniqueIndexSQL) > 0 {
+		for _, compSQL := range compatibilityUniqueIndexSQL {
+			service.Logger.Info("reverse",
+				zap.String("schema", t.TargetSchemaName),
+				zap.String("table", modifyTableName),
+				zap.String("maybe compatibility sql", compSQL))
+
+			builder.WriteString(compSQL + ";\n")
+		}
+	}
 	if len(compatibilityIndexSQL) > 0 {
 		for _, compSQL := range compatibilityIndexSQL {
 			service.Logger.Info("reverse",
@@ -401,43 +431,73 @@ func (t Table) reverserOracleTableNormalIndexToMySQL(modifyTableName string) ([]
 	return createIndexSQL, compatibilityIndexSQL, err
 }
 
-func (t Table) reverserOracleTableUniqueIndexToMySQL(modifyTableName string) ([]string, map[string]string, error) {
+func (t Table) reverserOracleTableUniqueIndexToMySQL(modifyTableName string) ([]string, []string, map[string]string, error) {
 	var (
-		createIndexSQL []string
+		createIndexSQL        []string
+		compatibilityIndexSQL []string
 	)
 	keysMap := make(map[string]string)
 
 	indexesMap, err := t.Engine.GetOracleTableUniqueIndex(t.SourceSchemaName, t.SourceTableName)
 	if err != nil {
-		return createIndexSQL, keysMap, err
+		return createIndexSQL, compatibilityIndexSQL, keysMap, err
 	}
 
 	if len(indexesMap) > 0 {
 		for _, idxMeta := range indexesMap {
 			if idxMeta["TABLE_NAME"] != "" {
 				if idxMeta["UNIQUENESS"] == "NONUNIQUE" {
-					return createIndexSQL, keysMap, fmt.Errorf("[UNIQUE KEY] oracle schema [%s] table [%s] index [%s] isn't mysql support index type [%v]",
+					return createIndexSQL, compatibilityIndexSQL, keysMap, fmt.Errorf("[UNIQUE KEY] oracle schema [%s] table [%s] index [%s] isn't mysql support index type [%v]",
 						t.SourceSchemaName, t.SourceTableName, idxMeta["INDEX_NAME"], idxMeta["INDEX_TYPE"])
 
 				} else {
-					if idxMeta["INDEX_TYPE"] == "NORMAL" {
+					switch idxMeta["INDEX_TYPE"] {
+					case "NORMAL":
 						createIndexSQL = append(createIndexSQL, fmt.Sprintf("CREATE UNIQUE INDEX `%s` ON `%s`.`%s`(%s)",
 							strings.ToUpper(idxMeta["INDEX_NAME"]), t.TargetSchemaName, modifyTableName, strings.ToUpper(idxMeta["COLUMN_LIST"])))
 
 						keysMap[strings.ToUpper(idxMeta["INDEX_NAME"])] = strings.ToUpper(idxMeta["COLUMN_LIST"])
 
-						return createIndexSQL, keysMap, err
-					} else {
-						return createIndexSQL, keysMap, fmt.Errorf("[NONORMAl] oracle schema [%s] table [%s] index [%s] isn't mysql support index type [%v]",
+						return createIndexSQL, compatibilityIndexSQL, keysMap, err
+
+					case "FUNCTION-BASED NORMAL":
+						compatibilityIndexSQL = append(compatibilityIndexSQL, fmt.Sprintf("CREATE UNIQUE INDEX `%s` ON `%s`.`%s`(%s)",
+							strings.ToLower(idxMeta["INDEX_NAME"]), t.TargetSchemaName, modifyTableName, idxMeta["COLUMN_EXPRESSION"]))
+
+						service.Logger.Warn("reverse",
+							zap.String("schema", t.TargetTableName),
+							zap.String("table", modifyTableName),
+							zap.String("indexName", idxMeta["INDEX_NAME"]),
+							zap.String("indexType", "UNIQUE [FUNCTION-BASED NORMAL]"),
+							zap.String("indexExpression", idxMeta["COLUMN_EXPRESSION"]),
+							zap.String("error", "MySQL Not Support"))
+
+						return createIndexSQL, compatibilityIndexSQL, keysMap, err
+
+					case "BITMAP":
+						compatibilityIndexSQL = append(compatibilityIndexSQL, fmt.Sprintf("CREATE BITMAP INDEX `%s` ON `%s`.`%s`(%s)",
+							strings.ToLower(idxMeta["INDEX_NAME"]), t.TargetSchemaName, modifyTableName, idxMeta["COLUMN_LIST"]))
+
+						service.Logger.Warn("reverse",
+							zap.String("schema", t.TargetTableName),
+							zap.String("table", modifyTableName),
+							zap.String("indexName", idxMeta["INDEX_NAME"]),
+							zap.String("indexType", "UNIQUE [BITMAP]"),
+							zap.String("indexColumn", idxMeta["COLUMN_LIST"]),
+							zap.String("error", "MySQL Not Support"))
+
+						return createIndexSQL, compatibilityIndexSQL, keysMap, err
+
+					default:
+						return createIndexSQL, compatibilityIndexSQL, keysMap, fmt.Errorf("[UNIQUE KEY OTHER] oracle schema [%s] table [%s] index [%s] isn't mysql support index type [%v]",
 							t.SourceSchemaName, t.SourceTableName, idxMeta["INDEX_NAME"], idxMeta["INDEX_TYPE"])
 					}
 				}
-
 			}
 		}
 	}
 
-	return createIndexSQL, keysMap, err
+	return createIndexSQL, compatibilityIndexSQL, keysMap, err
 }
 
 func (t Table) reverserOracleTableColumnToMySQL() ([]string, error) {
