@@ -387,12 +387,13 @@ func (t Table) reverserOracleTableNormalIndexToMySQL(modifyTableName string) ([]
 						return createIndexSQL, compatibilityIndexSQL, err
 
 					default:
-						return createIndexSQL, compatibilityIndexSQL, fmt.Errorf("oracle schema [%s] table [%s] index [%s] isn't mysql support index type [%v]",
+						return createIndexSQL, compatibilityIndexSQL, fmt.Errorf("[NONUNIQUE] oracle schema [%s] table [%s] index [%s] isn't mysql support index type [%v]",
 							t.SourceSchemaName, t.SourceTableName, idxMeta["INDEX_NAME"], idxMeta["INDEX_TYPE"])
 					}
+				} else {
+					return createIndexSQL, compatibilityIndexSQL, fmt.Errorf("[UNIQUE] oracle schema [%s] table [%s] index [%s] isn't mysql support index type [%v]",
+						t.SourceSchemaName, t.SourceTableName, idxMeta["INDEX_NAME"], idxMeta["INDEX_TYPE"])
 				}
-				return createIndexSQL, compatibilityIndexSQL, fmt.Errorf("oracle schema [%s] table [%s] index [%s] isn't mysql support index type [%v]",
-					t.SourceSchemaName, t.SourceTableName, idxMeta["INDEX_NAME"], idxMeta["INDEX_TYPE"])
 			}
 		}
 	}
@@ -415,7 +416,7 @@ func (t Table) reverserOracleTableUniqueIndexToMySQL(modifyTableName string) ([]
 		for _, idxMeta := range indexesMap {
 			if idxMeta["TABLE_NAME"] != "" {
 				if idxMeta["UNIQUENESS"] == "NONUNIQUE" {
-					return createIndexSQL, keysMap, fmt.Errorf("oracle schema [%s] table [%s] index [%s] isn't mysql support index type [%v]",
+					return createIndexSQL, keysMap, fmt.Errorf("[UNIQUE KEY] oracle schema [%s] table [%s] index [%s] isn't mysql support index type [%v]",
 						t.SourceSchemaName, t.SourceTableName, idxMeta["INDEX_NAME"], idxMeta["INDEX_TYPE"])
 
 				} else {
@@ -426,9 +427,10 @@ func (t Table) reverserOracleTableUniqueIndexToMySQL(modifyTableName string) ([]
 						keysMap[strings.ToUpper(idxMeta["INDEX_NAME"])] = strings.ToUpper(idxMeta["COLUMN_LIST"])
 
 						return createIndexSQL, keysMap, err
+					} else {
+						return createIndexSQL, keysMap, fmt.Errorf("[NONORMAl] oracle schema [%s] table [%s] index [%s] isn't mysql support index type [%v]",
+							t.SourceSchemaName, t.SourceTableName, idxMeta["INDEX_NAME"], idxMeta["INDEX_TYPE"])
 					}
-					return createIndexSQL, keysMap, fmt.Errorf("oracle schema [%s] table [%s] index [%s] isn't mysql support index type [%v]",
-						t.SourceSchemaName, t.SourceTableName, idxMeta["INDEX_NAME"], idxMeta["INDEX_TYPE"])
 				}
 
 			}
