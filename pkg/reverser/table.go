@@ -1008,28 +1008,41 @@ func generateOracleTableColumnMetaByType(columnName, columnType, dataNullable, c
 		nullable = "NOT NULL"
 	}
 
+	var comment string
+	if comments != "" {
+		if strings.Contains(comments, "\"") {
+			comments = strings.Replace(comments, "\"", "'", -1)
+		}
+		match, _ := regexp.MatchString("'(.*)'", comments)
+		if match {
+			comment = fmt.Sprintf("\"%s\"", comments)
+		} else {
+			comment = fmt.Sprintf("'%s'", comments)
+		}
+	}
+
 	if nullable == "NULL" {
 		switch {
-		case comments != "" && dataDefault != "":
-			colMeta = fmt.Sprintf("`%s` %s DEFAULT %s COMMENT '%s'", columnName, columnType, dataDefault, comments)
-		case comments != "" && dataDefault == "":
-			colMeta = fmt.Sprintf("`%s` %s COMMENT '%s'", columnName, columnType, comments)
-		case comments == "" && dataDefault != "":
+		case comment != "" && dataDefault != "":
+			colMeta = fmt.Sprintf("`%s` %s DEFAULT %s COMMENT %s", columnName, columnType, dataDefault, comment)
+		case comment != "" && dataDefault == "":
+			colMeta = fmt.Sprintf("`%s` %s COMMENT %s", columnName, columnType, comment)
+		case comment == "" && dataDefault != "":
 			colMeta = fmt.Sprintf("`%s` %s DEFAULT %s", columnName, columnType, dataDefault)
-		case comments == "" && dataDefault == "":
+		case comment == "" && dataDefault == "":
 			colMeta = fmt.Sprintf("`%s` %s", columnName, columnType)
 		}
 	} else {
 		switch {
-		case comments != "" && dataDefault != "":
-			colMeta = fmt.Sprintf("`%s` %s %s DEFAULT %s COMMENT '%s'", columnName, columnType, nullable, dataDefault, comments)
+		case comment != "" && dataDefault != "":
+			colMeta = fmt.Sprintf("`%s` %s %s DEFAULT %s COMMENT %s", columnName, columnType, nullable, dataDefault, comment)
 			return colMeta
-		case comments != "" && dataDefault == "":
-			colMeta = fmt.Sprintf("`%s` %s %s COMMENT '%s'", columnName, columnType, nullable, comments)
-		case comments == "" && dataDefault != "":
+		case comment != "" && dataDefault == "":
+			colMeta = fmt.Sprintf("`%s` %s %s COMMENT %s", columnName, columnType, nullable, comment)
+		case comment == "" && dataDefault != "":
 			colMeta = fmt.Sprintf("`%s` %s %s DEFAULT %s", columnName, columnType, nullable, dataDefault)
 			return colMeta
-		case comments == "" && dataDefault == "":
+		case comment == "" && dataDefault == "":
 			colMeta = fmt.Sprintf("`%s` %s %s", columnName, columnType, nullable)
 		}
 	}
