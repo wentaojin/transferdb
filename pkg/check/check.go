@@ -44,13 +44,14 @@ func OracleTableToMySQLMappingCheck(engine *service.Engine, cfg *service.CfgFile
 	if err != nil {
 		return err
 	}
-	file, err := os.OpenFile(filepath.Join(pwdDir, "check.sql"), os.O_WRONLY|os.O_CREATE|os.O_APPEND|os.O_TRUNC, 0666)
+	file, err := os.OpenFile(filepath.Join(pwdDir,
+		fmt.Sprintf("check_%s.sql", startTime.Format("20060102150405"))), os.O_WRONLY|os.O_CREATE|os.O_APPEND|os.O_TRUNC, 0666)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
 
-	service.Logger.Info("check", zap.String("output", filepath.Join(pwdDir, "check.sql")))
+	service.Logger.Info("check", zap.String("output", filepath.Join(pwdDir, fmt.Sprintf("check_%s.sql", startTime.Format("20060102150405")))))
 
 	wr := &FileMW{sync.Mutex{}, file}
 

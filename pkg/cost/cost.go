@@ -141,13 +141,15 @@ func OracleMigrateMySQLCostEvaluate(engine *service.Engine, cfg *service.CfgFile
 		if err != nil {
 			return err
 		}
-		file, err := os.OpenFile(filepath.Join(pwdDir, "cost.txt"), os.O_WRONLY|os.O_CREATE|os.O_APPEND|os.O_TRUNC, 0666)
+		file, err := os.OpenFile(filepath.Join(pwdDir,
+			fmt.Sprintf("cost_%s.txt", startTime.Format("20060102150405"))),
+			os.O_WRONLY|os.O_CREATE|os.O_APPEND|os.O_TRUNC, 0666)
 		if err != nil {
 			return err
 		}
 		defer file.Close()
 
-		service.Logger.Info("cost", zap.String("output", filepath.Join(pwdDir, "cost.txt")))
+		service.Logger.Info("cost", zap.String("output", filepath.Join(pwdDir, fmt.Sprintf("cost_%s.txt", startTime.Format("20060102150405")))))
 
 		_, err = file.WriteString(builder.String())
 		if err != nil {

@@ -65,20 +65,22 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 		return err
 	}
 
-	fileReverse, err = os.OpenFile(filepath.Join(pwdDir, "reverse.sql"), os.O_WRONLY|os.O_CREATE|os.O_APPEND|os.O_TRUNC, 0666)
+	fileReverse, err = os.OpenFile(filepath.Join(pwdDir, fmt.Sprintf("reverse_%s.sql", startTime.Format("20060102150405"))), os.O_WRONLY|os.O_CREATE|os.O_APPEND|os.O_TRUNC, 0666)
 	if err != nil {
 		return err
 	}
 	defer fileReverse.Close()
 
-	fileCompatibility, err = os.OpenFile(filepath.Join(pwdDir, "compatibility.sql"), os.O_WRONLY|os.O_CREATE|os.O_APPEND|os.O_TRUNC, 0666)
+	fileCompatibility, err = os.OpenFile(filepath.Join(pwdDir, fmt.Sprintf("compatibility_%s.sql", startTime.Format("20060102150405"))), os.O_WRONLY|os.O_CREATE|os.O_APPEND|os.O_TRUNC, 0666)
 	if err != nil {
 		return err
 	}
 	defer fileCompatibility.Close()
 
-	service.Logger.Info("reverse", zap.String("create table and index output", filepath.Join(pwdDir, "reverse.sql")))
-	service.Logger.Info("compatibility", zap.String("maybe exist compatibility output", filepath.Join(pwdDir, "compatibility.sql")))
+	service.Logger.Info("reverse", zap.String("create table and index output", filepath.Join(pwdDir,
+		fmt.Sprintf("reverse_%s.sql", startTime.Format("20060102150405")))))
+	service.Logger.Info("compatibility", zap.String("maybe exist compatibility output", filepath.Join(pwdDir,
+		fmt.Sprintf("compatibility_%s.sql", startTime.Format("20060102150405")))))
 
 	if len(partitionTableList) > 0 {
 		var builder strings.Builder
