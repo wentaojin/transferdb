@@ -384,13 +384,25 @@ func (t Table) reverserOracleTableNormalIndexToMySQL(modifyTableName string) ([]
 				if idxMeta["UNIQUENESS"] == "NONUNIQUE" {
 					switch idxMeta["INDEX_TYPE"] {
 					case "NORMAL":
+						var normalIndex []string
+						for _, col := range strings.Split(idxMeta["COLUMN_LIST"], ",") {
+							normalIndex = append(normalIndex, fmt.Sprintf("`%s`", col))
+						}
 						createIndexSQL = append(createIndexSQL, fmt.Sprintf("CREATE INDEX `%s` ON `%s`.`%s`(%s)",
-							strings.ToLower(idxMeta["INDEX_NAME"]), t.TargetSchemaName, modifyTableName, idxMeta["COLUMN_LIST"]))
+							strings.ToLower(idxMeta["INDEX_NAME"]), t.TargetSchemaName, modifyTableName,
+							strings.ToLower(strings.Join(normalIndex, ","))))
+
 						continue
 
 					case "FUNCTION-BASED NORMAL":
+						var normalIndex []string
+						for _, col := range strings.Split(idxMeta["COLUMN_EXPRESSION"], ",") {
+							normalIndex = append(normalIndex, fmt.Sprintf("`%s`", col))
+						}
+
 						compatibilityIndexSQL = append(compatibilityIndexSQL, fmt.Sprintf("CREATE INDEX `%s` ON `%s`.`%s`(%s)",
-							strings.ToLower(idxMeta["INDEX_NAME"]), t.TargetSchemaName, modifyTableName, idxMeta["COLUMN_EXPRESSION"]))
+							strings.ToLower(idxMeta["INDEX_NAME"]), t.TargetSchemaName, modifyTableName,
+							strings.ToLower(strings.Join(normalIndex, ","))))
 
 						service.Logger.Warn("reverse normal index",
 							zap.String("schema", t.TargetTableName),
@@ -403,8 +415,13 @@ func (t Table) reverserOracleTableNormalIndexToMySQL(modifyTableName string) ([]
 						continue
 
 					case "BITMAP":
+						var normalIndex []string
+						for _, col := range strings.Split(idxMeta["COLUMN_LIST"], ",") {
+							normalIndex = append(normalIndex, fmt.Sprintf("`%s`", col))
+						}
 						compatibilityIndexSQL = append(compatibilityIndexSQL, fmt.Sprintf("CREATE BITMAP INDEX `%s` ON `%s`.`%s`(%s)",
-							strings.ToLower(idxMeta["INDEX_NAME"]), t.TargetSchemaName, modifyTableName, idxMeta["COLUMN_LIST"]))
+							strings.ToLower(idxMeta["INDEX_NAME"]), t.TargetSchemaName, modifyTableName,
+							strings.ToLower(strings.Join(normalIndex, ","))))
 
 						service.Logger.Warn("reverse normal index",
 							zap.String("schema", t.TargetTableName),
@@ -491,15 +508,27 @@ func (t Table) reverserOracleTableUniqueIndexToMySQL(modifyTableName string) ([]
 				} else {
 					switch idxMeta["INDEX_TYPE"] {
 					case "NORMAL":
+						var uniqueIndex []string
+						for _, col := range strings.Split(idxMeta["COLUMN_LIST"], ",") {
+							uniqueIndex = append(uniqueIndex, fmt.Sprintf(`%s`, col))
+						}
+
 						createIndexSQL = append(createIndexSQL, fmt.Sprintf("CREATE UNIQUE INDEX `%s` ON `%s`.`%s`(%s)",
-							strings.ToUpper(idxMeta["INDEX_NAME"]),
+							strings.ToLower(idxMeta["INDEX_NAME"]),
 							t.TargetSchemaName, modifyTableName,
-							strings.ToUpper(idxMeta["COLUMN_LIST"])))
+							strings.ToLower(strings.Join(uniqueIndex, ","))))
 						continue
 
 					case "FUNCTION-BASED NORMAL":
+						var uniqueIndex []string
+						for _, col := range strings.Split(idxMeta["COLUMN_EXPRESSION"], ",") {
+							uniqueIndex = append(uniqueIndex, fmt.Sprintf(`%s`, col))
+						}
+
 						compatibilityIndexSQL = append(compatibilityIndexSQL, fmt.Sprintf("CREATE UNIQUE INDEX `%s` ON `%s`.`%s`(%s)",
-							strings.ToLower(idxMeta["INDEX_NAME"]), t.TargetSchemaName, modifyTableName, idxMeta["COLUMN_EXPRESSION"]))
+							strings.ToLower(idxMeta["INDEX_NAME"]), t.TargetSchemaName, modifyTableName,
+							strings.ToLower(strings.Join(uniqueIndex, ","))))
+
 						service.Logger.Warn("reverse unique key",
 							zap.String("schema", t.TargetTableName),
 							zap.String("table", modifyTableName),
@@ -511,8 +540,14 @@ func (t Table) reverserOracleTableUniqueIndexToMySQL(modifyTableName string) ([]
 						continue
 
 					case "BITMAP":
+						var uniqueIndex []string
+						for _, col := range strings.Split(idxMeta["COLUMN_LIST"], ",") {
+							uniqueIndex = append(uniqueIndex, fmt.Sprintf(`%s`, col))
+						}
+
 						compatibilityIndexSQL = append(compatibilityIndexSQL, fmt.Sprintf("CREATE BITMAP INDEX `%s` ON `%s`.`%s`(%s)",
-							strings.ToLower(idxMeta["INDEX_NAME"]), t.TargetSchemaName, modifyTableName, idxMeta["COLUMN_LIST"]))
+							strings.ToLower(idxMeta["INDEX_NAME"]), t.TargetSchemaName, modifyTableName,
+							strings.ToLower(strings.Join(uniqueIndex, ","))))
 
 						service.Logger.Warn("reverse unique key",
 							zap.String("schema", t.TargetTableName),
@@ -601,7 +636,11 @@ func (t Table) reverserOracleTablePKToMySQL() ([]string, error) {
 		return keysMeta, fmt.Errorf("oracle schema [%s] table [%s] primary key exist multiple values: [%v]", t.SourceSchemaName, t.SourceTableName, primaryKeyMap)
 	}
 	if len(primaryKeyMap) > 0 {
-		pk := fmt.Sprintf("PRIMARY KEY (%s)", strings.ToLower(primaryKeyMap[0]["COLUMN_LIST"]))
+		var pkArr []string
+		for _, col := range strings.Split(primaryKeyMap[0]["COLUMN_LIST"], ",") {
+			pkArr = append(pkArr, fmt.Sprintf("`%s`", col))
+		}
+		pk := fmt.Sprintf("PRIMARY KEY (%s)", strings.ToLower(strings.Join(pkArr, ",")))
 		keysMeta = append(keysMeta, pk)
 	}
 	return keysMeta, nil
@@ -615,8 +654,12 @@ func (t Table) reverserOracleTableUKToMySQL() ([]string, error) {
 	}
 	if len(uniqueKeyMap) > 0 {
 		for _, rowUKCol := range uniqueKeyMap {
+			var ukArr []string
+			for _, col := range strings.Split(rowUKCol["COLUMN_LIST"], ",") {
+				ukArr = append(ukArr, fmt.Sprintf("`%s`", col))
+			}
 			uk := fmt.Sprintf("ADD UNIQUE `%s` (%s)",
-				strings.ToUpper(rowUKCol["CONSTRAINT_NAME"]), strings.ToUpper(rowUKCol["COLUMN_LIST"]))
+				strings.ToLower(rowUKCol["CONSTRAINT_NAME"]), strings.ToLower(strings.Join(ukArr, ",")))
 
 			keysMeta = append(keysMeta, uk)
 		}
