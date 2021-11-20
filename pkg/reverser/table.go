@@ -147,7 +147,7 @@ func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 	}
 	if len(ukMetas) > 0 {
 		for _, ukMeta := range ukMetas {
-			ukSQL := fmt.Sprintf("ALTER TABLE %s.%s %s", t.TargetSchemaName, modifyTableName, ukMeta)
+			ukSQL := fmt.Sprintf("ALTER TABLE `%s`.`%s` %s", t.TargetSchemaName, modifyTableName, ukMeta)
 			service.Logger.Info("reverse",
 				zap.String("schema", t.TargetSchemaName),
 				zap.String("table", modifyTableName),
@@ -236,7 +236,7 @@ func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 		if utils.VersionOrdinal(dbVersion) > utils.VersionOrdinal(utils.MySQLCheckConsVersion) {
 			if len(ckMetas) > 0 {
 				for _, ck := range ckMetas {
-					ckSQL := fmt.Sprintf("ALTER TABLE %s.%s ADD %s;", t.TargetSchemaName, modifyTableName, ck)
+					ckSQL := fmt.Sprintf("ALTER TABLE `%s`.`%s` ADD %s;", t.TargetSchemaName, modifyTableName, ck)
 					service.Logger.Info("reverse",
 						zap.String("schema", t.TargetSchemaName),
 						zap.String("table", modifyTableName),
@@ -248,7 +248,7 @@ func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 
 			if len(fkMetas) > 0 {
 				for _, fk := range fkMetas {
-					addFkSQL := fmt.Sprintf("ALTER TABLE %s.%s ADD %s;", t.TargetSchemaName, modifyTableName, fk)
+					addFkSQL := fmt.Sprintf("ALTER TABLE `%s`.`%s` ADD %s;", t.TargetSchemaName, modifyTableName, fk)
 					service.Logger.Info("reverse",
 						zap.String("schema", t.TargetSchemaName),
 						zap.String("table", modifyTableName),
@@ -281,7 +281,7 @@ func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 		} else {
 			if len(fkMetas) > 0 {
 				for _, fk := range fkMetas {
-					addFkSQL := fmt.Sprintf("ALTER TABLE %s.%s ADD %s;", t.TargetSchemaName, modifyTableName, fk)
+					addFkSQL := fmt.Sprintf("ALTER TABLE `%s`.`%s` ADD %s;", t.TargetSchemaName, modifyTableName, fk)
 					service.Logger.Info("reverse",
 						zap.String("schema", t.TargetSchemaName),
 						zap.String("table", modifyTableName),
@@ -303,7 +303,7 @@ func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 				builder.WriteString("*/\n")
 
 				for _, ck := range ckMetas {
-					ckSQL := fmt.Sprintf("ALTER TABLE %s.%s ADD %s;", t.TargetSchemaName, modifyTableName, ck)
+					ckSQL := fmt.Sprintf("ALTER TABLE `%s`.`%s` ADD %s;", t.TargetSchemaName, modifyTableName, ck)
 					builder.WriteString(ckSQL + "\n")
 				}
 			}
@@ -334,14 +334,14 @@ func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 
 	if len(fkMetas) > 0 {
 		for _, fk := range fkMetas {
-			fkSQL := fmt.Sprintf("ALTER TABLE %s.%s ADD %s;", t.TargetSchemaName, modifyTableName, fk)
+			fkSQL := fmt.Sprintf("ALTER TABLE `%s`.`%s` ADD %s;", t.TargetSchemaName, modifyTableName, fk)
 			builder.WriteString(fkSQL + "\n")
 		}
 	}
 
 	if len(ckMetas) > 0 {
 		for _, ck := range ckMetas {
-			ckSQL := fmt.Sprintf("ALTER TABLE %s.%s ADD %s;", t.TargetSchemaName, modifyTableName, ck)
+			ckSQL := fmt.Sprintf("ALTER TABLE `%s`.`%s` ADD %s;", t.TargetSchemaName, modifyTableName, ck)
 			builder.WriteString(ckSQL + "\n")
 		}
 	}
