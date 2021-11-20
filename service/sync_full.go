@@ -31,59 +31,58 @@ import (
 // 该函数只应用于全量同步模式或者 ALL 同步模式
 // 1、断点续传判断，判断是否可进行断点续传
 // 2、判断是否存在未初始化元信息的表
-func (e *Engine) AdjustFullStageMySQLTableMetaRecord(schemaName string, tableMetas []TableMeta) (bool, []string, []string, error) {
-	var (
-		panicTblFullSlice []string
-		tblFullSlice      []string
-	)
+func (e *Engine) JudgingCheckpointResume(schemaName string, tableMetas []WaitSyncMeta) ([]string, error) {
+	var panicTblFullSlice []string
 
-	tfm := &TableFullMeta{}
+	tfm := &FullSyncMeta{}
 	for _, table := range tableMetas {
-		tfmRecordCounts, err := tfm.GetTableFullMetaRecordCounts(schemaName, table.SourceTableName, e)
+		fullRecordCounts, err := tfm.GetFullSyncMetaRecordCounts(schemaName, table.SourceTableName, e)
 		if err != nil {
-			return false, tblFullSlice, panicTblFullSlice, err
+			return panicTblFullSlice, err
 		}
 
-		// 首次运行待初始化表
-		if tfmRecordCounts == 0 && table.FullSplitTimes == -1 {
-			tblFullSlice = append(tblFullSlice, table.SourceTableName)
-		} else {
-			// 异常表
-			if tfmRecordCounts != table.FullSplitTimes {
-				panicTblFullSlice = append(panicTblFullSlice, table.SourceTableName)
-			}
+		if fullRecordCounts != table.FullSplitTimes {
+			panicTblFullSlice = append(panicTblFullSlice, table.SourceTableName)
 		}
 	}
-	if len(panicTblFullSlice) != 0 {
-		return false, tblFullSlice, panicTblFullSlice, nil
-	}
-	return true, tblFullSlice, panicTblFullSlice, nil
+	return panicTblFullSlice, nil
 }
 
-func (e *Engine) IsNotExistMySQLTableIncrementMetaRecord() (bool, error) {
-	tim := &TableIncrementMeta{}
-	count, err := tim.GetTableIncrementMetaRowCounts(e)
-	if err != nil {
-		return false, err
+func (e *Engine) IsExistIncrementSyncMetaRecord(schemaName string, transferTableSlice []string) ([]string, []string, error) {
+	var (
+		notExistRecords []string
+		existRecords    []string
+	)
+	for _, tbl := range transferTableSlice {
+		tim := &IncrementSyncMeta{}
+		counts, err := tim.GetIncrementSyncMetaRecordCounts(schemaName, tbl, e)
+		if err != nil {
+			return existRecords, notExistRecords, err
+		}
+
+		// 表不存在或者表数异常
+		if counts == 0 || counts > 1 {
+			notExistRecords = append(notExistRecords, tbl)
+		}
+		if counts == 1 {
+			existRecords = append(existRecords, tbl)
+		}
 	}
-	if count == 0 {
-		return true, nil
-	}
-	return false, nil
+	return existRecords, notExistRecords, nil
 }
 
 // 清理并更新同步任务元数据表
 // 1、全量每成功同步一张表记录，再清理记录
 // 2、更新同步数据表元信息
-func (e *Engine) ModifyMySQLTableMetaRecord(metaSchemaName, sourceSchemaName, sourceTableName, rowidSQL string) error {
+func (e *Engine) ModifyWaitAndFullSyncTableMetaRecord(metaSchemaName, sourceSchemaName, sourceTableName, rowidSQL, syncMode string) error {
 	if err := e.GormDB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(TableFullMeta{}).
+		if err := tx.Model(FullSyncMeta{}).
 			Where(`source_schema_name = ? AND source_table_name= ? AND upper(rowid_sql)= ?`,
 				strings.ToUpper(sourceSchemaName),
 				strings.ToUpper(sourceTableName),
-				strings.ToUpper(rowidSQL)).Delete(&TableFullMeta{}).Error; err != nil {
+				strings.ToUpper(rowidSQL)).Delete(&FullSyncMeta{}).Error; err != nil {
 			return fmt.Errorf(
-				`clear mysql meta schema [%s] table [table_full_meta] reocrd with source table [%s] failed: %v`,
+				`clear mysql meta schema [%s] table [full_sync_meta] reocrd with source table [%s] failed: %v`,
 				metaSchemaName, sourceTableName, err.Error())
 		}
 		Logger.Info("clear mysql meta",
@@ -92,10 +91,11 @@ func (e *Engine) ModifyMySQLTableMetaRecord(metaSchemaName, sourceSchemaName, so
 			zap.String("sql", rowidSQL),
 			zap.String("status", "success"))
 
-		if err := tx.Model(&TableMeta{}).
-			Where(`source_schema_name = ? AND source_table_name= ?`,
+		if err := tx.Model(&WaitSyncMeta{}).
+			Where(`source_schema_name = ? AND source_table_name= ? AND sync_mode = ?`,
 				strings.ToUpper(sourceSchemaName),
-				strings.ToUpper(sourceTableName)).
+				strings.ToUpper(sourceTableName),
+				syncMode).
 			Update("full_split_times", gorm.Expr("full_split_times - 1")).Error; err != nil {
 			return err
 
@@ -109,64 +109,46 @@ func (e *Engine) ModifyMySQLTableMetaRecord(metaSchemaName, sourceSchemaName, so
 }
 
 // 清理全量同步任务元数据表
-func (e *Engine) TruncateMySQLTableFullMetaRecord(metaSchemaName string) error {
-	if err := e.GormDB.Exec(fmt.Sprintf("TRUNCATE TABLE %s.table_full_meta", metaSchemaName)).Error; err != nil {
-		return fmt.Errorf("truncate mysql meta schema table [table_full_meta] reocrd failed: %v", err.Error())
+func (e *Engine) TruncateFullSyncTableMetaRecord(metaSchemaName string) error {
+	if err := e.GormDB.Exec(fmt.Sprintf("TRUNCATE TABLE %s.full_sync_meta", metaSchemaName)).Error; err != nil {
+		return fmt.Errorf("truncate mysql meta schema table [full_sync_meta] reocrd failed: %v", err.Error())
 	}
 
 	Logger.Info("truncate table full meta record",
 		zap.String("schema", metaSchemaName),
-		zap.String("table", "table_full_meta"),
+		zap.String("table", "full_sync_meta"),
 		zap.String("status", "success"))
 	return nil
 }
 
-func (e *Engine) ClearMySQLTableMetaRecord(metaSchemaName, sourceSchemaName string) error {
-	if err := e.GormDB.Model(&TableMeta{}).
-		Where("source_schema_name = ?",
-			strings.ToUpper(sourceSchemaName)).
-		Updates(TableMeta{
-			FullGlobalSCN:  -1,
-			FullSplitTimes: -1,
-		}).Error; err != nil {
+func (e *Engine) DeleteWaitSyncTableMetaRecord(metaSchemaName, sourceSchemaName, sourceTableName, syncMode string) error {
+	if err := e.GormDB.Where("source_schema_name = ? AND source_table_name = ? AND sync_mode = ?",
+		strings.ToUpper(sourceSchemaName),
+		strings.ToUpper(sourceTableName),
+		syncMode).Delete(&WaitSyncMeta{}).Error; err != nil {
 		return err
 	}
-	Logger.Info("modify table meta record",
+	Logger.Info("delete table record",
 		zap.String("schema", metaSchemaName),
-		zap.String("table", "table_meta"),
+		zap.String("table", "wait_sync_meta"),
+		zap.String("record", fmt.Sprintf("%s.%s", sourceSchemaName, sourceTableName)),
 		zap.String("status", "success"))
 	return nil
 }
 
-func (e *Engine) TruncateMySQLTableRecord(targetSchemaName string, tableMetas []TableMeta) error {
-	for _, table := range tableMetas {
-		if err := e.GormDB.Exec(fmt.Sprintf("TRUNCATE TABLE %s.%s", targetSchemaName, table.SourceTableName)).Error; err != nil {
-			return fmt.Errorf("truncate mysql meta schema table [%v] reocrd failed: %v", table.SourceTableName, err.Error())
-		}
-		Logger.Info("truncate table record",
-			zap.String("schema", targetSchemaName),
-			zap.String("table", table.SourceTableName),
-			zap.String("status", "success"))
+func (e *Engine) TruncateMySQLTableRecord(targetSchemaName string, tableName string) error {
+	if err := e.GormDB.Exec(fmt.Sprintf("TRUNCATE TABLE %s.%s", targetSchemaName, tableName)).Error; err != nil {
+		return fmt.Errorf("truncate mysql meta schema table [%v] reocrd failed: %v", tableName, err.Error())
 	}
+	Logger.Info("truncate table",
+		zap.String("schema", targetSchemaName),
+		zap.String("table", tableName),
+		zap.String("status", "success"))
 
 	return nil
 }
 
-func (e *Engine) GetOracleCurrentSnapshotSCN() (int, error) {
-	// 获取当前 SCN 号
-	_, res, err := Query(e.OracleDB, "select min(current_scn) CURRENT_SCN from gv$database")
-	var globalSCN int
-	if err != nil {
-		return globalSCN, err
-	}
-	globalSCN, err = strconv.Atoi(res[0]["CURRENT_SCN"])
-	if err != nil {
-		return globalSCN, err
-	}
-	return globalSCN, nil
-}
-
-func (e *Engine) InitMySQLTableFullMeta(schemaName, tableName string, globalSCN int, extractorBatch, insertBatchSize int) error {
+func (e *Engine) InitWaitAndFullSyncMetaRecord(schemaName, tableName string, globalSCN int, extractorBatch, insertBatchSize int, syncMode string) error {
 	tableRows, err := e.getOracleTableRowsByStatistics(schemaName, tableName)
 	if err != nil {
 		return err
@@ -183,19 +165,19 @@ func (e *Engine) InitMySQLTableFullMeta(schemaName, tableName string, globalSCN 
 
 	// Oracle 表数据切分数根据 sum(数据块数) / parallel
 	if tableRows > extractorBatch {
-		rowCounts, err := e.getAndInitOracleNormalTableTableFullMetaByRowID(schemaName, tableName, globalSCN, int(parallel), insertBatchSize)
+		rowCounts, err := e.getAndInitOracleNormalTableFullSyncMetaUsingRowID(schemaName, tableName, globalSCN, int(parallel), insertBatchSize)
 		if err != nil {
 			return err
 		}
-		if err := e.UpdateMySQLTableMetaRecord(schemaName, tableName, rowCounts, globalSCN); err != nil {
+		if err := e.UpdateWaitSyncMetaTableRecord(schemaName, tableName, rowCounts, globalSCN, syncMode); err != nil {
 			return err
 		}
 	} else {
-		rowCounts, err := e.getAndInitOracleNormalTableTableFullMetaByRowID(schemaName, tableName, globalSCN, 1, insertBatchSize)
+		rowCounts, err := e.getAndInitOracleNormalTableFullSyncMetaUsingRowID(schemaName, tableName, globalSCN, 1, insertBatchSize)
 		if err != nil {
 			return err
 		}
-		if err := e.UpdateMySQLTableMetaRecord(schemaName, tableName, rowCounts, globalSCN); err != nil {
+		if err := e.UpdateWaitSyncMetaTableRecord(schemaName, tableName, rowCounts, globalSCN, syncMode); err != nil {
 			return err
 		}
 	}
@@ -203,13 +185,14 @@ func (e *Engine) InitMySQLTableFullMeta(schemaName, tableName string, globalSCN 
 	return nil
 }
 
-func (e *Engine) InitMySQLTableMetaRecord(schemaName string, tableName []string) error {
+func (e *Engine) InitWaitSyncTableMetaRecord(schemaName string, tableName []string, syncMode string) error {
 	// 初始同步表全量任务为 -1 表示未进行全量初始化，初始化完成会变更
 	// 全量同步完成，增量阶段，值预期都是 0
 	for _, table := range tableName {
-		if err := e.GormDB.Create(&TableMeta{
+		if err := e.GormDB.Create(&WaitSyncMeta{
 			SourceSchemaName: strings.ToUpper(schemaName),
 			SourceTableName:  strings.ToUpper(table),
+			SyncMode:         syncMode,
 			FullGlobalSCN:    -1,
 			FullSplitTimes:   -1,
 		}).Error; err != nil {
@@ -219,12 +202,13 @@ func (e *Engine) InitMySQLTableMetaRecord(schemaName string, tableName []string)
 	return nil
 }
 
-func (e *Engine) UpdateMySQLTableMetaRecord(schemaName, tableName string, rowCounts, globalSCN int) error {
-	if err := e.GormDB.Model(&TableMeta{}).
-		Where("source_schema_name = ? AND source_table_name = ?",
+func (e *Engine) UpdateWaitSyncMetaTableRecord(schemaName, tableName string, rowCounts, globalSCN int, syncMode string) error {
+	if err := e.GormDB.Model(&WaitSyncMeta{}).
+		Where("source_schema_name = ? AND source_table_name = ? AND sync_mode = ?",
 			strings.ToUpper(schemaName),
-			strings.ToUpper(tableName)).
-		Updates(TableMeta{
+			strings.ToUpper(tableName),
+			syncMode).
+		Updates(WaitSyncMeta{
 			FullGlobalSCN:  globalSCN,
 			FullSplitTimes: rowCounts,
 		}).Error; err != nil {
@@ -233,8 +217,8 @@ func (e *Engine) UpdateMySQLTableMetaRecord(schemaName, tableName string, rowCou
 	return nil
 }
 
-func (e *Engine) InitMySQLTableIncrementMeta(schemaName, tableName string, globalSCN int) error {
-	if err := e.GormDB.Create(&TableIncrementMeta{
+func (e *Engine) InitIncrementSyncMetaRecord(schemaName, tableName string, globalSCN int) error {
+	if err := e.GormDB.Create(&IncrementSyncMeta{
 		GlobalSCN:        globalSCN,
 		SourceSchemaName: strings.ToUpper(schemaName),
 		SourceTableName:  strings.ToUpper(tableName),
@@ -245,13 +229,13 @@ func (e *Engine) InitMySQLTableIncrementMeta(schemaName, tableName string, globa
 	return nil
 }
 
-func (e *Engine) GetMySQLTableMetaRecord(schemaName string) ([]TableMeta, []string, error) {
+func (e *Engine) GetWaitSyncTableMetaRecord(schemaName string, syncMode string) ([]WaitSyncMeta, []string, error) {
 	var (
-		tableMetas []TableMeta
+		tableMetas []WaitSyncMeta
 		tables     []string
 	)
-	if err := e.GormDB.Where("source_schema_name = ?",
-		strings.ToUpper(schemaName)).Find(&tableMetas).Error; err != nil {
+	if err := e.GormDB.Where("source_schema_name = ? AND full_global_scn = -1 AND full_split_times = -1 and sync_mode = ?",
+		strings.ToUpper(schemaName), syncMode).Find(&tableMetas).Error; err != nil {
 		return tableMetas, tables, err
 	}
 	if len(tableMetas) > 0 {
@@ -262,22 +246,80 @@ func (e *Engine) GetMySQLTableMetaRecord(schemaName string) ([]TableMeta, []stri
 	return tableMetas, tables, nil
 }
 
-func (e *Engine) GetMySQLTableFullMetaSchemaTableRecord(schemaName string) ([]string, error) {
-	var schemaTables []string
-	if err := e.GormDB.Model(&TableFullMeta{}).
-		Distinct().
-		Pluck("source_table_name", &schemaTables).
-		Where("upper(source_schema_name) = ?",
-			strings.ToUpper(schemaName)).Error; err != nil {
-		return []string{}, err
+func (e *Engine) GetFinishFullSyncMetaRecord(schemaName string, syncMode string) ([]WaitSyncMeta, []string, error) {
+	var (
+		tableMetas []WaitSyncMeta
+		tables     []string
+	)
+	if err := e.GormDB.Where("source_schema_name = ? AND full_global_scn > -1 AND full_split_times = 0 and sync_mode = ?",
+		strings.ToUpper(schemaName),
+		syncMode).Find(&tableMetas).Error; err != nil {
+		return tableMetas, tables, err
 	}
-	return schemaTables, nil
+	if len(tableMetas) > 0 {
+		for _, table := range tableMetas {
+			tables = append(tables, strings.ToUpper(table.SourceTableName))
+		}
+	}
+	return tableMetas, tables, nil
 }
 
-func (e *Engine) GetMySQLTableFullMetaRowIDRecord(schemaName, tableName string) ([]string, error) {
+func (e *Engine) IsFinishFullSyncMetaRecord(schemaName string, transferTableSlice []string, syncMode string) ([]string, error) {
+	var (
+		panicTables []string
+		tableMetas  []WaitSyncMeta
+	)
+	for _, tbl := range transferTableSlice {
+		if err := e.GormDB.Where("source_schema_name = ? AND source_table_name = ? AND full_global_scn > -1 AND full_split_times = 0 and sync_mode = ?",
+			strings.ToUpper(schemaName),
+			strings.ToUpper(tbl),
+			syncMode).Find(&tableMetas).Error; err != nil {
+			return panicTables, err
+		}
+		if len(tableMetas) == 0 {
+			panicTables = append(panicTables, tbl)
+		}
+	}
+	return panicTables, nil
+}
+
+func (e *Engine) GetPartSyncTableMetaRecord(schemaName, syncMode string) ([]WaitSyncMeta, []string, error) {
+	var (
+		tableMetas []WaitSyncMeta
+		tables     []string
+	)
+	if err := e.GormDB.Where("source_schema_name = ? AND full_global_scn > -1 AND full_split_times > 0 and sync_mode = ?",
+		strings.ToUpper(schemaName),
+		syncMode).Find(&tableMetas).Error; err != nil {
+		return tableMetas, tables, err
+	}
+	if len(tableMetas) > 0 {
+		for _, table := range tableMetas {
+			tables = append(tables, strings.ToUpper(table.SourceTableName))
+		}
+	}
+	return tableMetas, tables, nil
+}
+
+func (e *Engine) IsExistWaitSyncTableMetaRecord(schemaName string, tableName, syncMode string) (bool, error) {
+	var tableMetas []WaitSyncMeta
+
+	if err := e.GormDB.Where("source_schema_name = ? AND source_table_name = ? AND sync_mode = ?",
+		strings.ToUpper(schemaName),
+		strings.ToUpper(tableName),
+		syncMode).Find(&tableMetas).Error; err != nil {
+		return false, err
+	}
+	if len(tableMetas) > 0 {
+		return true, nil
+	}
+	return false, nil
+}
+
+func (e *Engine) GetFullSyncMetaRowIDRecord(schemaName, tableName string) ([]string, error) {
 	var (
 		rowID          []string
-		tableFullMetas []TableFullMeta
+		tableFullMetas []FullSyncMeta
 	)
 	if err := e.GormDB.
 		Where("source_schema_name = ? AND source_table_name = ?",
@@ -290,6 +332,20 @@ func (e *Engine) GetMySQLTableFullMetaRowIDRecord(schemaName, tableName string) 
 	return rowID, nil
 }
 
+func (e *Engine) GetOracleCurrentSnapshotSCN() (int, error) {
+	// 获取当前 SCN 号
+	_, res, err := Query(e.OracleDB, "select min(current_scn) CURRENT_SCN from gv$database")
+	var globalSCN int
+	if err != nil {
+		return globalSCN, err
+	}
+	globalSCN, err = strconv.Atoi(res[0]["CURRENT_SCN"])
+	if err != nil {
+		return globalSCN, err
+	}
+	return globalSCN, nil
+}
+
 func (e *Engine) GetOracleTableRecordByRowIDSQL(sql string) ([]string, []string, error) {
 	Logger.Info("exec sql",
 		zap.String("sql", sql))
@@ -300,7 +356,7 @@ func (e *Engine) GetOracleTableRecordByRowIDSQL(sql string) ([]string, []string,
 	return cols, res, nil
 }
 
-func (e *Engine) getAndInitOracleNormalTableTableFullMetaByRowID(
+func (e *Engine) getAndInitOracleNormalTableFullSyncMetaUsingRowID(
 	schemaName,
 	tableName string,
 	globalSCN int, parallel, insertBatchSize int) (int, error) {
@@ -353,11 +409,11 @@ func (e *Engine) getAndInitOracleNormalTableTableFullMetaByRowID(
 	}
 
 	var (
-		fullMetas   []TableFullMeta
+		fullMetas   []FullSyncMeta
 		fullMetaIdx []int
 	)
 	for idx, r := range res {
-		fullMetas = append(fullMetas, TableFullMeta{
+		fullMetas = append(fullMetas, FullSyncMeta{
 			SourceSchemaName: strings.ToUpper(schemaName),
 			SourceTableName:  strings.ToUpper(tableName),
 			RowidSQL:         r["DATA"],
@@ -373,7 +429,7 @@ func (e *Engine) getAndInitOracleNormalTableTableFullMetaByRowID(
 			return len(res), fmt.Errorf("gorm create table [%s.%s] table_full_meta failed: %v", schemaName, tableName, err)
 		}
 	} else {
-		var fullMetaBatch []TableFullMeta
+		var fullMetaBatch []FullSyncMeta
 		splitNums := len(fullMetas) / insertBatchSize
 		splitMetaIdxSlice := utils.SplitIntSlice(fullMetaIdx, int64(splitNums))
 		for _, ms := range splitMetaIdxSlice {

@@ -26,10 +26,11 @@ import (
 )
 
 // 同步元数据表
-type TableMeta struct {
+type WaitSyncMeta struct {
 	ID               uint       `gorm:"primary_key;autoIncrement;comment:'自增编号'" json:"id"`
 	SourceSchemaName string     `gorm:"not null;index:idx_schema_table,unique;comment:'源端 schema'" json:"source_schema_name"`
 	SourceTableName  string     `gorm:"not null;index:idx_schema_table,unique;comment:'源端表名'" json:"source_table_name"`
+	SyncMode         string     `gorm:"not null;index:idx_sync_mode;comment:'同步模式'" json:"sync_mode"`
 	FullGlobalSCN    int        `gorm:"comment:'全量全局 SCN'" json:"full_global_scn"`
 	FullSplitTimes   int        `gorm:"comment:'全量任务切分 SQL 次数'" json:"full_split_times"`
 	CreatedAt        *time.Time `gorm:"type:timestamp;not null;default:current_timestamp;comment:'创建时间'" json:"createdAt"`
@@ -37,7 +38,7 @@ type TableMeta struct {
 }
 
 // 全量同步元数据表
-type TableFullMeta struct {
+type FullSyncMeta struct {
 	ID               uint       `gorm:"primary_key;autoIncrement;comment:'自增编号'" json:"id"`
 	SourceSchemaName string     `gorm:"not null;index:idx_schema_table_rowid;comment:'源端 schema'" json:"source_schema_name"`
 	SourceTableName  string     `gorm:"not null;index:idx_schema_table_rowid;comment:'源端表名'" json:"source_table_name"`
@@ -49,7 +50,7 @@ type TableFullMeta struct {
 }
 
 // 增量同步元数据表
-type TableIncrementMeta struct {
+type IncrementSyncMeta struct {
 	ID               uint       `gorm:"primary_key;autoIncrement;comment:'自增编号'" json:"id"`
 	GlobalSCN        int        `gorm:"comment:'全局 SCN'" json:"global_scn"`
 	SourceSchemaName string     `gorm:"not null;index:unique_schema_table,unique;comment:'源端 schema'" json:"source_schema_name"`
@@ -59,23 +60,26 @@ type TableIncrementMeta struct {
 	UpdatedAt        *time.Time `gorm:"type:timestamp;not null on update current_timestamp;default:current_timestamp;comment:'更新时间'" json:"updatedAt"`
 }
 
-func (f *TableFullMeta) GetTableFullMetaRecordCounts(schemaName, tableName string, engine *Engine) (int, error) {
+func (f *FullSyncMeta) GetFullSyncMetaRecordCounts(schemaName, tableName string, engine *Engine) (int, error) {
 	var count int64
-	if err := engine.GormDB.Model(&TableFullMeta{}).
+	if err := engine.GormDB.Model(&FullSyncMeta{}).
 		Where("source_schema_name = ? and source_table_name = ?",
 			strings.ToUpper(schemaName),
 			strings.ToUpper(tableName)).
 		Count(&count).Error; err != nil {
-		return int(count), fmt.Errorf("meta schema table [table_full_meta] query record count failed: %v", err)
+		return int(count), fmt.Errorf("meta schema table [full_sync_meta] query record count failed: %v", err)
 	}
 	return int(count), nil
 }
 
-func (i *TableIncrementMeta) GetTableIncrementMetaRowCounts(engine *Engine) (int, error) {
+func (f *IncrementSyncMeta) GetIncrementSyncMetaRecordCounts(schemaName, tableName string, engine *Engine) (int, error) {
 	var count int64
-	if err := engine.GormDB.Model(&TableIncrementMeta{}).
+	if err := engine.GormDB.Model(&IncrementSyncMeta{}).
+		Where("source_schema_name = ? and source_table_name = ?",
+			strings.ToUpper(schemaName),
+			strings.ToUpper(tableName)).
 		Count(&count).Error; err != nil {
-		return int(count), fmt.Errorf("meta schema table [table_increment_meta] query row count failed: %v", err)
+		return int(count), fmt.Errorf("meta schema table [increment_sync_meta] query record count failed: %v", err)
 	}
 	return int(count), nil
 }
@@ -86,14 +90,14 @@ func (e *Engine) UpdateTableIncrementMetaALLSCNRecord(sourceSchemaName, sourceTa
 			if err := tx.Where("source_schema_name = ? and source_table_name = ?",
 				strings.ToUpper(sourceSchemaName),
 				strings.ToUpper(sourceTableName)).
-				Delete(&TableIncrementMeta{}).Error; err != nil {
+				Delete(&IncrementSyncMeta{}).Error; err != nil {
 				return err
 			}
 
 			if err := tx.Where("source_schema_name = ? and source_table_name = ?",
 				strings.ToUpper(sourceSchemaName),
 				strings.ToUpper(sourceTableName)).
-				Delete(&TableMeta{}).Error; err != nil {
+				Delete(&WaitSyncMeta{}).Error; err != nil {
 				return err
 			}
 			return nil
@@ -102,10 +106,10 @@ func (e *Engine) UpdateTableIncrementMetaALLSCNRecord(sourceSchemaName, sourceTa
 		}
 		return nil
 	}
-	if err := e.GormDB.Model(TableIncrementMeta{}).Where("source_schema_name = ? and source_table_name = ?",
+	if err := e.GormDB.Model(IncrementSyncMeta{}).Where("source_schema_name = ? and source_table_name = ?",
 		strings.ToUpper(sourceSchemaName),
 		strings.ToUpper(sourceTableName)).
-		Updates(TableIncrementMeta{GlobalSCN: globalSCN, SourceTableSCN: sourceTableSCN}).Error; err != nil {
+		Updates(IncrementSyncMeta{GlobalSCN: globalSCN, SourceTableSCN: sourceTableSCN}).Error; err != nil {
 		return err
 	}
 	return nil
@@ -120,8 +124,8 @@ func (e *Engine) UpdateSingleTableIncrementMetaSCNByCurrentRedo(
 		logFileSCN = logFileEndSCN
 	}
 
-	var tableIncrMeta []TableIncrementMeta
-	if err := e.GormDB.Model(TableIncrementMeta{}).Where(
+	var tableIncrMeta []IncrementSyncMeta
+	if err := e.GormDB.Model(IncrementSyncMeta{}).Where(
 		"source_schema_name = ?",
 		strings.ToUpper(sourceSchemaName)).Find(&tableIncrMeta).Error; err != nil {
 		return err
@@ -129,11 +133,11 @@ func (e *Engine) UpdateSingleTableIncrementMetaSCNByCurrentRedo(
 
 	for _, table := range tableIncrMeta {
 		if table.GlobalSCN < logFileSCN {
-			if err := e.GormDB.Model(TableIncrementMeta{}).Where(
+			if err := e.GormDB.Model(IncrementSyncMeta{}).Where(
 				"source_schema_name = ? and source_table_name = ?",
 				strings.ToUpper(sourceSchemaName),
 				strings.ToUpper(table.SourceTableName)).
-				Updates(TableIncrementMeta{
+				Updates(IncrementSyncMeta{
 					GlobalSCN: logFileSCN,
 				}).Error; err != nil {
 				return err
@@ -153,11 +157,11 @@ func (e *Engine) UpdateSingleTableIncrementMetaSCNByNonCurrentRedo(
 	}
 
 	for _, table := range transferTableSlice {
-		if err := e.GormDB.Model(TableIncrementMeta{}).Where(
+		if err := e.GormDB.Model(IncrementSyncMeta{}).Where(
 			"source_schema_name = ? and source_table_name = ?",
 			strings.ToUpper(sourceSchemaName),
 			strings.ToUpper(table)).
-			Updates(TableIncrementMeta{
+			Updates(IncrementSyncMeta{
 				GlobalSCN: logFileSCN,
 			}).Error; err != nil {
 			return err
@@ -169,11 +173,11 @@ func (e *Engine) UpdateSingleTableIncrementMetaSCNByNonCurrentRedo(
 func (e *Engine) UpdateSingleTableIncrementMetaSCNByArchivedLog(
 	sourceSchemaName string, logFileEndSCN int, transferTableSlice []string) error {
 	for _, table := range transferTableSlice {
-		if err := e.GormDB.Model(TableIncrementMeta{}).Where(
+		if err := e.GormDB.Model(IncrementSyncMeta{}).Where(
 			"source_schema_name = ? and source_table_name = ?",
 			strings.ToUpper(sourceSchemaName),
 			strings.ToUpper(table)).
-			Updates(TableIncrementMeta{
+			Updates(IncrementSyncMeta{
 				GlobalSCN:      logFileEndSCN,
 				SourceTableSCN: logFileEndSCN,
 			}).Error; err != nil {

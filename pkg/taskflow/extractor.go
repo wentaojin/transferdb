@@ -172,7 +172,7 @@ func filterOracleRedoGreaterOrEqualRecordByTable(
 
 // 1、根据当前表的 SCN 初始化元数据据表
 // 2、根据元数据表记录全量导出导入
-func loaderTableFullTaskBySCN(cfg *service.CfgFile, engine *service.Engine, fullTblSlice []string) error {
+func syncFullTableTaskUsingSCN(cfg *service.CfgFile, engine *service.Engine, fullTblSlice []string, syncMode string) error {
 	wp := workpool.New(cfg.FullConfig.WorkerThreads)
 	for _, table := range fullTblSlice {
 		// 变量替换，直接使用原变量会导致并发输出有问题
@@ -186,10 +186,11 @@ func loaderTableFullTaskBySCN(cfg *service.CfgFile, engine *service.Engine, full
 			if err != nil {
 				return err
 			}
-			if err := engine.InitMySQLTableFullMeta(sourceSchemaName, tbl, globalSCN, workerBatch, insertBatchSize); err != nil {
+			if err := engine.InitWaitAndFullSyncMetaRecord(sourceSchemaName,
+				tbl, globalSCN, workerBatch, insertBatchSize, syncMode); err != nil {
 				return err
 			}
-			if err := loaderOracleSingleTableTask(cfg, engine, tbl); err != nil {
+			if err := syncOracleSingleTableTask(cfg, engine, tbl, syncMode); err != nil {
 				return err
 			}
 			return nil
@@ -199,19 +200,20 @@ func loaderTableFullTaskBySCN(cfg *service.CfgFile, engine *service.Engine, full
 		return err
 	}
 	if !wp.IsDone() {
-		return fmt.Errorf("loaderTableFullTaskBySCN concurrency table meet error")
+		return fmt.Errorf("syncFullTableTaskUsingSCN concurrency table meet error")
 	}
 	return nil
 }
 
 // 1、根据元数据表记录全量导出导入
-func loaderTableFullTaskByCheckpoint(cfg *service.CfgFile, engine *service.Engine, transferTables []string) error {
+func syncFullTableTaskUsingCheckpoint(cfg *service.CfgFile, engine *service.Engine, transferTables []string, syncMode string) error {
 	wp := workpool.New(cfg.FullConfig.WorkerThreads)
 	for _, table := range transferTables {
 		// 变量替换，直接使用原变量会导致并发输出有问题
 		tbl := table
+		mode := syncMode
 		wp.DoWait(func() error {
-			if err := loaderOracleSingleTableTask(cfg, engine, tbl); err != nil {
+			if err := syncOracleSingleTableTask(cfg, engine, tbl, mode); err != nil {
 				return err
 			}
 			return nil
@@ -221,23 +223,24 @@ func loaderTableFullTaskByCheckpoint(cfg *service.CfgFile, engine *service.Engin
 		return err
 	}
 	if !wp.IsDone() {
-		return fmt.Errorf("loaderTableFullTaskByCheckpoint concurrency table meet error")
+		return fmt.Errorf("syncFullTableTaskUsingCheckpoint concurrency table meet error")
 	}
 	return nil
 }
 
-func loaderOracleSingleTableTask(cfg *service.CfgFile, engine *service.Engine, table string) error {
+func syncOracleSingleTableTask(cfg *service.CfgFile, engine *service.Engine, table, syncMode string) error {
 	startTime := time.Now()
 	service.Logger.Info("single full table data loader start",
 		zap.String("schema", cfg.SourceConfig.SchemaName))
 
-	oraRowIDSQL, err := engine.GetMySQLTableFullMetaRowIDRecord(cfg.SourceConfig.SchemaName, table)
+	oraRowIDSQL, err := engine.GetFullSyncMetaRowIDRecord(cfg.SourceConfig.SchemaName, table)
 	if err != nil {
 		return err
 	}
 	wp := workpool.New(cfg.FullConfig.TableThreads)
 	for _, rowidSQL := range oraRowIDSQL {
 		sql := rowidSQL
+		mode := syncMode
 		wp.Do(func() error {
 			// 抽取 Oracle 数据
 			columns, rowsResult, err := extractorTableFullRecord(engine, cfg.SourceConfig.SchemaName, table, sql)
@@ -251,9 +254,9 @@ func loaderOracleSingleTableTask(cfg *service.CfgFile, engine *service.Engine, t
 					zap.String("table", table),
 					zap.String("sql", sql))
 				// 清理记录以及更新记录
-				if err := engine.ModifyMySQLTableMetaRecord(
+				if err := engine.ModifyWaitAndFullSyncTableMetaRecord(
 					cfg.TargetConfig.MetaSchema,
-					cfg.SourceConfig.SchemaName, table, sql); err != nil {
+					cfg.SourceConfig.SchemaName, table, sql, mode); err != nil {
 					return err
 				}
 				return nil
@@ -280,9 +283,9 @@ func loaderOracleSingleTableTask(cfg *service.CfgFile, engine *service.Engine, t
 			}
 
 			// 清理记录以及更新记录
-			if err := engine.ModifyMySQLTableMetaRecord(
+			if err := engine.ModifyWaitAndFullSyncTableMetaRecord(
 				cfg.TargetConfig.MetaSchema,
-				cfg.SourceConfig.SchemaName, table, sql); err != nil {
+				cfg.SourceConfig.SchemaName, table, sql, mode); err != nil {
 				return err
 			}
 			return nil
@@ -308,15 +311,15 @@ func loaderOracleSingleTableTask(cfg *service.CfgFile, engine *service.Engine, t
 	return nil
 }
 
-// 根据配置文件以及起始 SCN 生成同步表元数据 [table_increment_meta]
-func generateTableIncrementTaskCheckpointMeta(sourceSchemaName string, engine *service.Engine) error {
-	tableMeta, _, err := engine.GetMySQLTableMetaRecord(sourceSchemaName)
+// 根据配置文件以及起始 SCN 生成同步表元数据 [increment_sync_meta]
+func generateTableIncrementTaskCheckpointMeta(sourceSchemaName string, engine *service.Engine, syncMode string) error {
+	tableMeta, _, err := engine.GetFinishFullSyncMetaRecord(sourceSchemaName, syncMode)
 	if err != nil {
 		return err
 	}
 
 	for _, tm := range tableMeta {
-		if err := engine.InitMySQLTableIncrementMeta(tm.SourceSchemaName, tm.SourceTableName, tm.FullGlobalSCN); err != nil {
+		if err := engine.InitIncrementSyncMetaRecord(tm.SourceSchemaName, tm.SourceTableName, tm.FullGlobalSCN); err != nil {
 			return err
 		}
 	}

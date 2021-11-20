@@ -81,7 +81,7 @@ func Run(cfg *service.CfgFile, mode string) error {
 		if err != nil {
 			return err
 		}
-		if err := taskflow.LoaderOracleTableFullRecordToMySQLByFullMode(cfg, engine); err != nil {
+		if err := taskflow.FullSyncOracleTableRecordToMySQL(cfg, engine); err != nil {
 			return err
 		}
 	case "all":
@@ -90,7 +90,7 @@ func Run(cfg *service.CfgFile, mode string) error {
 		if err != nil {
 			return err
 		}
-		if err := taskflow.SyncOracleTableAllRecordToMySQLByAllMode(cfg, engine); err != nil {
+		if err := taskflow.IncrementSyncOracleTableRecordToMySQL(cfg, engine); err != nil {
 			return err
 		}
 	default:

@@ -57,7 +57,7 @@ worker-threads = 3
 username = "marvin"
 password = "marvin"
 # 配置 oracle 连接字符串，样例：主机地址:数据库端口/服务名?参数
-connect-string = "172.16.4.184:8066/orcl?connect_timeout=2"
+connect-string = "172.16.4.182:1521/orcl?connect_timeout=2"
 # 配置 oracle 连接会话 session 变量,
 session-params = ["alter session set nls_date_format = 'yyyy-mm-dd hh24:mi:ss'"]
 # 配置 oracle 连接时区

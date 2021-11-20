@@ -7,7 +7,7 @@ transferdb 用于异构数据库迁移（ ORACLE 数据库 -> MySQL/TiDB 数据�
    2. 自定义配置表字段类型规则映射【table -> schema -> 内置】
    3. 内置数据类型规则映射，[内置数据类型映射规则](conf/buildin_reverse_rule.md)
    4. 表索引转换 
-   5. 表非空约束、外键约束、检查约束、主键约束、唯一约束转换
+   5. 表非空约束、外键约束、检查约束、主键约束、唯一约束转换，主键、唯一、检查、外键等约束 ORACLE ENABLED 状态才会被创建，其他状态忽略创建
    6. 注意事项
       1. 考虑 Oracle 分区表特殊且 MySQL 数据库复杂分区可能不支持，分区表统一视为普通表转换，对象输出到 compatibility.sql 文件并提供 WARN 日志【partition tables】关键字筛选打印，若有要求，建议 reverse 手工转换
       2. ORACLE 唯一约束基于唯一索引的字段，下游只会创建唯一索引 

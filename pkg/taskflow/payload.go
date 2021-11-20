@@ -27,13 +27,18 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	FullSyncMode      = "full"
+	IncrementSyncMode = "increment"
+)
+
 /*
 	全量同步任务
 */
 // 全量数据导出导入
-func LoaderOracleTableFullRecordToMySQLByFullMode(cfg *service.CfgFile, engine *service.Engine) error {
+func FullSyncOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service.Engine) error {
 	startTime := time.Now()
-	service.Logger.Info("all full table data loader start",
+	service.Logger.Info("all full table data sync start",
 		zap.String("schema", cfg.SourceConfig.SchemaName))
 
 	// 获取配置文件待同步表列表
@@ -42,61 +47,72 @@ func LoaderOracleTableFullRecordToMySQLByFullMode(cfg *service.CfgFile, engine *
 		return err
 	}
 
-	_, tableMetaList, err := engine.GetMySQLTableMetaRecord(cfg.SourceConfig.SchemaName)
-	if err != nil {
-		return err
-	}
-	if len(tableMetaList) == 0 {
-		// 初始化同步表
-		if err := engine.InitMySQLTableMetaRecord(cfg.SourceConfig.SchemaName, transferTableSlice); err != nil {
+	// 判断并记录待同步表列表
+	for _, tableName := range transferTableSlice {
+		isExist, err := engine.IsExistWaitSyncTableMetaRecord(cfg.SourceConfig.SchemaName, tableName, FullSyncMode)
+		if err != nil {
 			return err
+		}
+		if !isExist {
+			if err := engine.InitWaitSyncTableMetaRecord(cfg.SourceConfig.SchemaName, []string{tableName}, FullSyncMode); err != nil {
+				return err
+			}
 		}
 	}
 
 	// 关于全量断点恢复
 	//  - 若想断点恢复，设置 enable-checkpoint true,首次一旦运行则 batch 数不能调整，
-	//  - 若不想断点恢复或者重新调整 batch 数，设置 enable-checkpoint false,清理元数据表 [table_full_meta],重新运行全量任务
+	//  - 若不想断点恢复或者重新调整 batch 数，设置 enable-checkpoint false,清理元数据表 [wait_sync_meta],重新运行全量任务
 	if !cfg.FullConfig.EnableCheckpoint {
-		if err := engine.TruncateMySQLTableFullMetaRecord(cfg.TargetConfig.MetaSchema); err != nil {
+		if err := engine.TruncateFullSyncTableMetaRecord(cfg.TargetConfig.MetaSchema); err != nil {
 			return err
 		}
-		if err := engine.ClearMySQLTableMetaRecord(cfg.TargetConfig.MetaSchema, cfg.SourceConfig.SchemaName); err != nil {
-			return err
-		}
-		tableMetas, _, err := engine.GetMySQLTableMetaRecord(cfg.SourceConfig.SchemaName)
-		if err != nil {
-			return err
-		}
-		if len(tableMetas) == 0 {
-			return fmt.Errorf("mysql meta schema [%v] table [%v] can't null, meet panic",
-				cfg.TargetConfig.MetaSchema,
-				"table_meta")
-		}
-		if err := engine.TruncateMySQLTableRecord(cfg.TargetConfig.SchemaName, tableMetas); err != nil {
-			return err
+		for _, tableName := range transferTableSlice {
+			if err := engine.DeleteWaitSyncTableMetaRecord(cfg.TargetConfig.MetaSchema, cfg.SourceConfig.SchemaName, tableName, FullSyncMode); err != nil {
+				return err
+			}
+
+			if err := engine.TruncateMySQLTableRecord(cfg.TargetConfig.SchemaName, tableName); err != nil {
+				return err
+			}
 		}
 	}
 
-	tableMetas, transferTableList, err := engine.GetMySQLTableMetaRecord(cfg.SourceConfig.SchemaName)
+	// 获取等待同步以及未同步完成的表列表
+	waitSyncTableMetas, waitSyncTableNameList, err := engine.GetWaitSyncTableMetaRecord(cfg.SourceConfig.SchemaName, FullSyncMode)
 	if err != nil {
 		return err
 	}
-	if len(tableMetas) == 0 {
-		return fmt.Errorf("mysql meta schema [%v] table [%v] can't null, meet panic",
-			cfg.TargetConfig.MetaSchema,
-			"table_meta")
-	}
 
-	isOK, waitInitTableList, panicTableList, err := engine.AdjustFullStageMySQLTableMetaRecord(cfg.SourceConfig.SchemaName, tableMetas)
+	partSyncTableMetas, partSyncTableNameList, err := engine.GetPartSyncTableMetaRecord(cfg.SourceConfig.SchemaName, FullSyncMode)
 	if err != nil {
 		return err
 	}
-	if !isOK {
-		return fmt.Errorf("meet panic table list [%v] case, can't breakpoint resume, need set enable-checkpoint = false ,and reruning again", panicTableList)
+	if len(waitSyncTableMetas) == 0 && len(partSyncTableMetas) == 0 {
+		endTime := time.Now()
+		service.Logger.Info("all full table data loader finished",
+			zap.String("schema", cfg.SourceConfig.SchemaName),
+			zap.String("cost", endTime.Sub(startTime).String()))
+		return nil
 	}
 
-	// 表同步任务
-	if err = loaderOracleTableTask(cfg, engine, transferTableList, waitInitTableList); err != nil {
+	// 判断能否断点续传
+	panicCheckpointTables, err := engine.JudgingCheckpointResume(cfg.SourceConfig.SchemaName, partSyncTableMetas)
+	if err != nil {
+		return err
+	}
+	if len(panicCheckpointTables) != 0 {
+		endTime := time.Now()
+		service.Logger.Error("all full table data loader error",
+			zap.String("schema", cfg.SourceConfig.SchemaName),
+			zap.String("cost", endTime.Sub(startTime).String()),
+			zap.Strings("panic tables", panicCheckpointTables))
+
+		return fmt.Errorf("checkpoint isn't consistent, please reruning [enable-checkpoint = fase]")
+	}
+
+	// 启动全量同步任务
+	if err = syncOracleTableTaskFlow(cfg, engine, waitSyncTableNameList, partSyncTableNameList, FullSyncMode); err != nil {
 		return err
 	}
 
@@ -107,116 +123,18 @@ func LoaderOracleTableFullRecordToMySQLByFullMode(cfg *service.CfgFile, engine *
 	return nil
 }
 
-func loaderOracleTableFullRecordToMySQLByAllMode(cfg *service.CfgFile, engine *service.Engine) error {
-	startTime := time.Now()
-	service.Logger.Info("all full table data loader start",
-		zap.String("schema", cfg.SourceConfig.SchemaName))
-
-	// 获取配置文件待同步表列表
-	transferTableSlice, err := getTransferTableSliceByCfg(cfg, engine)
-	if err != nil {
-		return err
-	}
-
-	_, tableMetaList, err := engine.GetMySQLTableMetaRecord(cfg.SourceConfig.SchemaName)
-	if err != nil {
-		return err
-	}
-	if len(tableMetaList) == 0 {
-		// 初始化同步表
-		if err := engine.InitMySQLTableMetaRecord(cfg.SourceConfig.SchemaName, transferTableSlice); err != nil {
+func syncOracleTableTaskFlow(cfg *service.CfgFile, engine *service.Engine, waitSyncTableNameList, partSyncTableNameList []string, syncMode string) error {
+	if len(partSyncTableNameList) > 0 {
+		if err := syncFullTableTaskUsingCheckpoint(cfg, engine, partSyncTableNameList, syncMode); err != nil {
 			return err
 		}
 	}
-
-	// 关于全量断点恢复
-	//  - 若想断点恢复，设置 enable-checkpoint true,首次一旦运行则 batch 数不能调整，
-	//  - 若不想断点恢复或者重新调整 batch 数，设置 enable-checkpoint false,清理元数据表 [table_full_meta],重新运行全量任务
-	if !cfg.FullConfig.EnableCheckpoint {
-		if err := engine.TruncateMySQLTableFullMetaRecord(cfg.TargetConfig.MetaSchema); err != nil {
-			return err
-		}
-		if err := engine.ClearMySQLTableMetaRecord(cfg.TargetConfig.MetaSchema, cfg.SourceConfig.SchemaName); err != nil {
-			return err
-		}
-		tableMetas, _, err := engine.GetMySQLTableMetaRecord(cfg.SourceConfig.SchemaName)
-		if err != nil {
-			return err
-		}
-		if len(tableMetas) == 0 {
-			return fmt.Errorf("mysql meta schema [%v] table [%v] can't null, meet panic",
-				cfg.TargetConfig.MetaSchema,
-				"table_meta")
-		}
-		if err := engine.TruncateMySQLTableRecord(cfg.TargetConfig.SchemaName, tableMetas); err != nil {
+	if len(waitSyncTableNameList) > 0 {
+		if err := syncFullTableTaskUsingSCN(cfg, engine, waitSyncTableNameList, syncMode); err != nil {
 			return err
 		}
 	}
-
-	tableMetas, transferTableList, err := engine.GetMySQLTableMetaRecord(cfg.SourceConfig.SchemaName)
-	if err != nil {
-		return err
-	}
-	if len(tableMetas) == 0 {
-		return fmt.Errorf("mysql meta schema [%v] table [%v] can't null, meet panic",
-			cfg.TargetConfig.MetaSchema,
-			"table_meta")
-	}
-
-	isOK, waitInitTableList, panicTableList, err := engine.AdjustFullStageMySQLTableMetaRecord(cfg.SourceConfig.SchemaName, tableMetas)
-	if err != nil {
-		return err
-	}
-	if !isOK {
-		return fmt.Errorf("meet panic table list [%v] case, can't breakpoint resume, need set enable-checkpoint = false ,and reruning again", panicTableList)
-	}
-
-	// 表同步任务
-	if err = loaderOracleTableTask(cfg, engine, transferTableList, waitInitTableList); err != nil {
-		return err
-	}
-
-	// 全量任务结束，写入增量源数据表起始 SCN 号
-	//根据配置文件生成同步表元数据 [table_increment_meta]
-	if err = generateTableIncrementTaskCheckpointMeta(cfg.SourceConfig.SchemaName, engine); err != nil {
-		return err
-	}
-
-	endTime := time.Now()
-	service.Logger.Info("all full table data loader finished",
-		zap.String("schema", cfg.SourceConfig.SchemaName),
-		zap.String("cost", endTime.Sub(startTime).String()))
 	return nil
-}
-
-func loaderOracleTableTask(cfg *service.CfgFile, engine *service.Engine, transferTableList, waitInitTableList []string) error {
-	if len(waitInitTableList) > 0 {
-		if len(waitInitTableList) == len(transferTableList) {
-			if err := loaderTableFullTaskBySCN(cfg, engine, waitInitTableList); err != nil {
-				return err
-			}
-			return nil
-		}
-		diffTableSlice := utils.FilterDifferenceStringItems(transferTableList, waitInitTableList)
-		if len(diffTableSlice) > 0 {
-			if err := loaderTableFullTaskByCheckpoint(cfg, engine, diffTableSlice); err != nil {
-				return err
-			}
-		}
-		if err := loaderTableFullTaskBySCN(cfg, engine, waitInitTableList); err != nil {
-			return err
-		}
-		return nil
-	} else {
-		transferTables, err := engine.GetMySQLTableFullMetaSchemaTableRecord(cfg.SourceConfig.SchemaName)
-		if err != nil {
-			return err
-		}
-		if err := loaderTableFullTaskByCheckpoint(cfg, engine, transferTables); err != nil {
-			return err
-		}
-		return nil
-	}
 }
 
 // 从配置文件获取需要迁移同步的表列表
@@ -257,32 +175,150 @@ func getTransferTableSliceByCfg(cfg *service.CfgFile, engine *service.Engine) ([
 /*
 	增量同步任务
 */
-func SyncOracleTableAllRecordToMySQLByAllMode(cfg *service.CfgFile, engine *service.Engine) error {
+func IncrementSyncOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service.Engine) error {
 	service.Logger.Info("oracle to mysql increment sync table data start", zap.String("schema", cfg.SourceConfig.SchemaName))
 
-	// 全量数据导出导入，初始化全量元数据表以及导入完成初始化增量元数据表
-	// 如果下游数据库增量元数据表 table_increment_meta 存在记录，说明进行过全量，则跳过全量步骤，直接增量数据同步
-	// 如果下游数据库增量元数据表 table_increment_meta 不存在记录，说明未进行过数据同步，则进行全量 + 增量数据同步
-	isNotExist, err := engine.IsNotExistMySQLTableIncrementMetaRecord()
+	// 获取配置文件待同步表列表
+	transferTableSlice, err := getTransferTableSliceByCfg(cfg, engine)
 	if err != nil {
 		return err
 	}
-	if isNotExist {
-		if err := loaderOracleTableFullRecordToMySQLByAllMode(cfg, engine); err != nil {
+
+	// 全量数据导出导入，初始化全量元数据表以及导入完成初始化增量元数据表
+	existTableList, isNotExistTableList, err := engine.IsExistIncrementSyncMetaRecord(cfg.SourceConfig.SchemaName, transferTableSlice)
+	if err != nil {
+		return err
+	}
+
+	// 如果下游数据库增量元数据表 increment_sync_meta 存在迁移表记录
+	if len(existTableList) > 0 {
+		// 配置文件获取表列表等于元数据库表列表，直接增量数据同步
+		if len(existTableList) == len(transferTableSlice) {
+			// 判断表全量是否完成
+			panicTables, err := engine.IsFinishFullSyncMetaRecord(cfg.SourceConfig.SchemaName, transferTableSlice, IncrementSyncMode)
+			if err != nil {
+				return err
+			}
+			if len(panicTables) != 0 {
+				return fmt.Errorf("table list [%s] can't incremently sync, because table full sync isn't finished", panicTables)
+			}
+			// 增量数据同步
+			for range time.Tick(300 * time.Millisecond) {
+				if err := syncOracleTableIncrementRecordToMySQLUsingAllMode(cfg, engine); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+
+		// 配置文件获取的表列表不等于 increment_sync_meta 表列表数，不能直接增量同步，需要手工调整
+		return fmt.Errorf("there is a migration table record for increment_sync_meta, but the configuration table list is not equal to the number of increment_sync_meta table lists, and it cannot be directly incrementally synchronized, please manually adjust to a list of meta-database tables [%v]", existTableList)
+	}
+
+	// 如果下游数据库增量元数据表 increment_sync_meta 不存在任何记录，说明未进行过数据同步，则进行全量 + 增量数据同步
+	if len(existTableList) == 0 && len(isNotExistTableList) == len(transferTableSlice) {
+		if err := syncOracleFullTableRecordToMySQLUsingAllMode(cfg, engine, transferTableSlice, IncrementSyncMode); err != nil {
 			return err
+		}
+		// 增量数据同步
+		for range time.Tick(300 * time.Millisecond) {
+			if err := syncOracleTableIncrementRecordToMySQLUsingAllMode(cfg, engine); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	return fmt.Errorf("increment sync taskflow condition isn't match, can't sync")
+}
+
+func syncOracleFullTableRecordToMySQLUsingAllMode(cfg *service.CfgFile, engine *service.Engine, transferTableSlice []string, syncMode string) error {
+	startTime := time.Now()
+	service.Logger.Info("all full table data loader start",
+		zap.String("schema", cfg.SourceConfig.SchemaName))
+
+	// 判断并记录待同步表列表
+	for _, tableName := range transferTableSlice {
+		isExist, err := engine.IsExistWaitSyncTableMetaRecord(cfg.SourceConfig.SchemaName, tableName, syncMode)
+		if err != nil {
+			return err
+		}
+		if !isExist {
+			if err := engine.InitWaitSyncTableMetaRecord(cfg.SourceConfig.SchemaName, []string{tableName}, syncMode); err != nil {
+				return err
+			}
 		}
 	}
 
-	// 增量数据同步
-	for range time.Tick(300 * time.Millisecond) {
-		if err := syncOracleTableIncrementRecordToMySQLByAllMode(cfg, engine); err != nil {
+	// 关于全量断点恢复
+	//  - 若想断点恢复，设置 enable-checkpoint true,首次一旦运行则 batch 数不能调整，
+	//  - 若不想断点恢复或者重新调整 batch 数，设置 enable-checkpoint false,清理元数据表 [wait_sync_meta],重新运行全量任务
+	if !cfg.FullConfig.EnableCheckpoint {
+		if err := engine.TruncateFullSyncTableMetaRecord(cfg.TargetConfig.MetaSchema); err != nil {
 			return err
 		}
+		for _, tableName := range transferTableSlice {
+			if err := engine.DeleteWaitSyncTableMetaRecord(cfg.TargetConfig.MetaSchema, cfg.SourceConfig.SchemaName, tableName, syncMode); err != nil {
+				return err
+			}
+
+			if err := engine.TruncateMySQLTableRecord(cfg.TargetConfig.SchemaName, tableName); err != nil {
+				return err
+			}
+		}
 	}
+
+	// 获取等待同步以及未同步完成的表列表
+	waitSyncTableMetas, waitSyncTableNameList, err := engine.GetWaitSyncTableMetaRecord(cfg.SourceConfig.SchemaName, syncMode)
+	if err != nil {
+		return err
+	}
+
+	partSyncTableMetas, partSyncTableNameList, err := engine.GetPartSyncTableMetaRecord(cfg.SourceConfig.SchemaName, syncMode)
+	if err != nil {
+		return err
+	}
+	if len(waitSyncTableMetas) == 0 && len(partSyncTableMetas) == 0 {
+		endTime := time.Now()
+		service.Logger.Info("all full table data loader finished",
+			zap.String("schema", cfg.SourceConfig.SchemaName),
+			zap.String("cost", endTime.Sub(startTime).String()))
+		return nil
+	}
+
+	// 判断能否断点续传
+	panicCheckpointTables, err := engine.JudgingCheckpointResume(cfg.SourceConfig.SchemaName, partSyncTableMetas)
+	if err != nil {
+		return err
+	}
+	if len(panicCheckpointTables) != 0 {
+		endTime := time.Now()
+		service.Logger.Error("all full table data loader error",
+			zap.String("schema", cfg.SourceConfig.SchemaName),
+			zap.String("cost", endTime.Sub(startTime).String()),
+			zap.Strings("panic tables", panicCheckpointTables))
+
+		return fmt.Errorf("checkpoint isn't consistent, please reruning [enable-checkpoint = fase]")
+	}
+
+	// 启动全量同步任务
+	if err = syncOracleTableTaskFlow(cfg, engine, waitSyncTableNameList, partSyncTableNameList, syncMode); err != nil {
+		return err
+	}
+
+	// 全量任务结束，写入增量源数据表起始 SCN 号
+	//根据配置文件生成同步表元数据 [increment_sync_meta]
+	if err = generateTableIncrementTaskCheckpointMeta(cfg.SourceConfig.SchemaName, engine, syncMode); err != nil {
+		return err
+	}
+
+	endTime := time.Now()
+	service.Logger.Info("all full table data loader finished",
+		zap.String("schema", cfg.SourceConfig.SchemaName),
+		zap.String("cost", endTime.Sub(startTime).String()))
 	return nil
 }
 
-func syncOracleTableIncrementRecordToMySQLByAllMode(cfg *service.CfgFile, engine *service.Engine) error {
+func syncOracleTableIncrementRecordToMySQLUsingAllMode(cfg *service.CfgFile, engine *service.Engine) error {
 	// 获取增量所需得日志文件
 	logFiles, err := getOracleTableIncrementRecordLogFile(engine, cfg.SourceConfig.SchemaName)
 	if err != nil {

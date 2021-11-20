@@ -95,11 +95,11 @@ func (e *Engine) InitMysqlEngineDB() error {
 	if err := e.GormDB.AutoMigrate(
 		// todo: 自定义表名适配删除 - 数据同步不支持表名不一致
 		//&CustomTableNameMap{},
-		&TableMeta{},
+		&WaitSyncMeta{},
 		&CustomTableColumnTypeMap{},
 		&CustomSchemaColumnTypeMap{},
-		&TableFullMeta{},
-		&TableIncrementMeta{},
+		&FullSyncMeta{},
+		&IncrementSyncMeta{},
 	); err != nil {
 		return fmt.Errorf("init mysql engine db data failed: %v", err)
 	}

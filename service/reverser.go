@@ -243,53 +243,51 @@ select x.constraint_name,
 func (e *Engine) GetOracleTableUniqueIndex(schemaName string, tableName string) ([]map[string]string, error) {
 	querySQL := fmt.Sprintf(`SELECT
 	temp.TABLE_NAME,
-	temp.UNIQUENESS,--是否唯一索引 temp.INDEX_NAME,
+	temp.UNIQUENESS,--是否唯一索引
+	temp.INDEX_NAME,
 	temp.INDEX_TYPE,
 	temp.column_list,
 	E.COLUMN_EXPRESSION 
 FROM
 	(
-
 SELECT
-		TW.TABLE_OWNER,
-		TW.TABLE_NAME,
-		TW.UNIQUENESS,--是否唯一索引 
-		TW.INDEX_NAME,
-		TW.INDEX_TYPE,
-		--T.COLUMN_POSITION,
-		LISTAGG ( TW.COLUMN_NAME, ',' ) WITHIN GROUP ( ORDER BY TW.COLUMN_POSITION ) AS column_list 
+	I.TABLE_OWNER,
+	I.TABLE_NAME,
+	I.UNIQUENESS,--是否唯一索引
+	I.INDEX_NAME,
+	I.INDEX_TYPE,
+	LISTAGG ( T.COLUMN_NAME, ',' ) WITHIN GROUP ( ORDER BY T.COLUMN_POSITION ) AS COLUMN_LIST 
 FROM
-(
+	ALL_INDEXES I,
+	ALL_IND_COLUMNS T 
+WHERE
+	I.INDEX_NAME = T.INDEX_NAME 
+	AND I.TABLE_OWNER = T.TABLE_OWNER 
+	AND I.TABLE_NAME = T.TABLE_NAME 
+	AND I.UNIQUENESS = 'UNIQUE' 
+	AND UPPER( I.TABLE_NAME ) = upper( '%s' ) 
+	AND UPPER( I.TABLE_OWNER ) = upper( '%s' ) 
+	-- 排除主键、唯一约束索引
+	AND NOT EXISTS (
 	SELECT
-		T.TABLE_OWNER,
-		T.TABLE_NAME,
-		I.UNIQUENESS,--是否唯一索引
-		T.INDEX_NAME,
-		I.INDEX_TYPE,
-		T.COLUMN_POSITION,
-		T.COLUMN_NAME
+		1 
 	FROM
-		ALL_IND_COLUMNS T,
-		ALL_INDEXES I,
 		ALL_CONSTRAINTS C 
 	WHERE
-		T.INDEX_NAME = I.INDEX_NAME 
-		AND I.UNIQUENESS = 'UNIQUE' 
-		AND T.INDEX_NAME = C.CONSTRAINT_NAME ( + ) 
-		-- AND I.INDEX_TYPE != 'FUNCTION-BASED NORMAL' --排除基于函数的索引
-		-- AND I.INDEX_TYPE != 'BITMAP' --排除位图索引
-		AND C.CONSTRAINT_TYPE IS NULL --排除主键、唯一约束索引 
-		AND T.TABLE_NAME = upper( '%s' ) 
-		AND T.TABLE_OWNER = upper( '%s' ) 
-) TW GROUP BY
-		TW.TABLE_OWNER,
-		TW.TABLE_NAME,
-		TW.UNIQUENESS,--是否唯一索引 
-		TW.INDEX_NAME,
-		TW.INDEX_TYPE
-	) temp
+		I.INDEX_NAME = C.INDEX_NAME 
+		AND I.TABLE_OWNER = C.OWNER 
+		AND I.TABLE_NAME = C.TABLE_NAME 
+		AND C.CONSTRAINT_TYPE IN ('P','U')
+	) 
+GROUP BY
+	I.TABLE_OWNER,
+	I.TABLE_NAME,
+	I.UNIQUENESS,--是否唯一索引
+	I.INDEX_NAME,
+	I.INDEX_TYPE
+) temp
 	LEFT JOIN ALL_IND_EXPRESSIONS E ON temp.TABLE_NAME = E.TABLE_NAME 
-	AND temp.TABLE_OWNER = E.TABLE_OWNER 
+AND temp.TABLE_OWNER = E.TABLE_OWNER 
 	AND temp.INDEX_NAME = E.INDEX_NAME`,
 		strings.ToUpper(tableName),
 		strings.ToUpper(schemaName))
@@ -316,7 +314,6 @@ FROM
 		I.UNIQUENESS,--是否唯一索引
 		T.INDEX_NAME,
 		I.INDEX_TYPE,
---T.COLUMN_POSITION,
 		LISTAGG ( T.COLUMN_NAME, ',' ) WITHIN GROUP ( ORDER BY T.COLUMN_POSITION ) AS column_list 
 	FROM
 		ALL_IND_COLUMNS T,
@@ -327,7 +324,6 @@ FROM
 		and i.uniqueness='NONUNIQUE'
 		-- AND I.INDEX_TYPE != 'FUNCTION-BASED NORMAL' --排除基于函数的索引
 		-- AND I.INDEX_TYPE != 'BITMAP' --排除位图索引
-		-- AND C.CONSTRAINT_TYPE IS NULL --排除主键、唯一约束索引
 	  AND T.TABLE_NAME = upper( '%s' ) 
 		AND T.TABLE_OWNER = upper( '%s' ) 
 		and not exists (

@@ -149,7 +149,7 @@ func (e *Engine) GetOracleALLRedoLogFile() ([]string, error) {
 
 func (e *Engine) GetMySQLTableIncrementMetaMinGlobalSCNTime(sourceSchemaName string) (int, error) {
 	var globalSCN int
-	if err := e.GormDB.Model(&TableIncrementMeta{}).Where("source_schema_name = ?",
+	if err := e.GormDB.Model(&IncrementSyncMeta{}).Where("source_schema_name = ?",
 		strings.ToUpper(sourceSchemaName)).
 		Distinct().
 		Order("global_scn ASC").Limit(1).Pluck("global_scn", &globalSCN).Error; err != nil {
@@ -160,7 +160,7 @@ func (e *Engine) GetMySQLTableIncrementMetaMinGlobalSCNTime(sourceSchemaName str
 
 func (e *Engine) GetMySQLTableIncrementMetaMinSourceTableSCNTime(sourceSchemaName string) (int, error) {
 	var sourceTableSCN int
-	if err := e.GormDB.Model(&TableIncrementMeta{}).Where("source_schema_name = ?",
+	if err := e.GormDB.Model(&IncrementSyncMeta{}).Where("source_schema_name = ?",
 		strings.ToUpper(sourceSchemaName)).
 		Distinct().
 		Order("source_table_scn ASC").Limit(1).Pluck("source_table_scn", &sourceTableSCN).Error; err != nil {
@@ -171,7 +171,7 @@ func (e *Engine) GetMySQLTableIncrementMetaMinSourceTableSCNTime(sourceSchemaNam
 
 func (e *Engine) GetMySQLTableIncrementMetaRecord(sourceSchemaName string) ([]string, map[string]int, error) {
 	var (
-		incrementMeta      []TableIncrementMeta
+		incrementMeta      []IncrementSyncMeta
 		tableMetas         map[string]int
 		transferTableSlice []string
 	)
