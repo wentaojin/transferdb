@@ -191,7 +191,14 @@ func (e *Engine) QueryFormatOracleRows(querySQL string) ([]string, []string, err
 				case ok && columnTypes[i] != "string":
 					result[i] = string(raw)
 				default:
-					result[i] = utils.StringsBuilder("'", string(raw), "'")
+					// 数据特殊字符处理
+					if strings.Contains(string(raw), "'") && !strings.Contains(string(raw), "\"") {
+						result[i] = utils.StringsBuilder("\"", string(raw), "\"")
+					} else if strings.Contains(string(raw), "'") && strings.Contains(string(raw), "\"") {
+						result[i] = utils.StringsBuilder("'", strings.Replace(string(raw), "'", "\\'", -1), "'")
+					} else {
+						result[i] = utils.StringsBuilder("'", string(raw), "'")
+					}
 				}
 
 			}
