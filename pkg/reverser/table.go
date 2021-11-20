@@ -510,7 +510,7 @@ func (t Table) reverserOracleTableUniqueIndexToMySQL(modifyTableName string) ([]
 					case "NORMAL":
 						var uniqueIndex []string
 						for _, col := range strings.Split(idxMeta["COLUMN_LIST"], ",") {
-							uniqueIndex = append(uniqueIndex, fmt.Sprintf(`%s`, col))
+							uniqueIndex = append(uniqueIndex, fmt.Sprintf("`%s`", col))
 						}
 
 						createIndexSQL = append(createIndexSQL, fmt.Sprintf("CREATE UNIQUE INDEX `%s` ON `%s`.`%s`(%s)",
@@ -522,7 +522,7 @@ func (t Table) reverserOracleTableUniqueIndexToMySQL(modifyTableName string) ([]
 					case "FUNCTION-BASED NORMAL":
 						var uniqueIndex []string
 						for _, col := range strings.Split(idxMeta["COLUMN_EXPRESSION"], ",") {
-							uniqueIndex = append(uniqueIndex, fmt.Sprintf(`%s`, col))
+							uniqueIndex = append(uniqueIndex, fmt.Sprintf("`%s`", col))
 						}
 
 						compatibilityIndexSQL = append(compatibilityIndexSQL, fmt.Sprintf("CREATE UNIQUE INDEX `%s` ON `%s`.`%s`(%s)",
@@ -542,7 +542,7 @@ func (t Table) reverserOracleTableUniqueIndexToMySQL(modifyTableName string) ([]
 					case "BITMAP":
 						var uniqueIndex []string
 						for _, col := range strings.Split(idxMeta["COLUMN_LIST"], ",") {
-							uniqueIndex = append(uniqueIndex, fmt.Sprintf(`%s`, col))
+							uniqueIndex = append(uniqueIndex, fmt.Sprintf("`%s`", col))
 						}
 
 						compatibilityIndexSQL = append(compatibilityIndexSQL, fmt.Sprintf("CREATE BITMAP INDEX `%s` ON `%s`.`%s`(%s)",
