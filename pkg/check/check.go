@@ -45,13 +45,11 @@ func OracleTableToMySQLMappingCheck(engine *service.Engine, cfg *service.CfgFile
 		return err
 	}
 	file, err := os.OpenFile(filepath.Join(pwdDir,
-		fmt.Sprintf("check_%s.sql", startTime.Format("20060102150405"))), os.O_WRONLY|os.O_CREATE|os.O_APPEND|os.O_TRUNC, 0666)
+		fmt.Sprintf("check_%s.sql", cfg.SourceConfig.SchemaName)), os.O_WRONLY|os.O_CREATE|os.O_APPEND|os.O_TRUNC, 0666)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
-
-	service.Logger.Info("check", zap.String("output", filepath.Join(pwdDir, fmt.Sprintf("check_%s.sql", startTime.Format("20060102150405")))))
 
 	wr := &FileMW{sync.Mutex{}, file}
 
@@ -82,6 +80,8 @@ func OracleTableToMySQLMappingCheck(engine *service.Engine, cfg *service.CfgFile
 			zap.Error(err))
 		return fmt.Errorf("check table task failed, please rerunning, error: %v", err)
 	}
+
+	service.Logger.Info("check", zap.String("output", filepath.Join(pwdDir, fmt.Sprintf("check_%s.sql", cfg.SourceConfig.SchemaName))))
 	service.Logger.Info("check table oracle to mysql finished",
 		zap.String("cost", endTime.Sub(startTime).String()))
 	return nil
