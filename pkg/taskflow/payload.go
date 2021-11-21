@@ -75,6 +75,16 @@ func FullSyncOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service.Engi
 			if err := engine.TruncateMySQLTableRecord(cfg.TargetConfig.SchemaName, tableName); err != nil {
 				return err
 			}
+			// 判断并记录待同步表列表
+			isExist, err := engine.IsExistWaitSyncTableMetaRecord(cfg.SourceConfig.SchemaName, tableName, FullSyncMode)
+			if err != nil {
+				return err
+			}
+			if !isExist {
+				if err := engine.InitWaitSyncTableMetaRecord(cfg.SourceConfig.SchemaName, []string{tableName}, FullSyncMode); err != nil {
+					return err
+				}
+			}
 		}
 	}
 
@@ -217,6 +227,7 @@ func IncrementSyncOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service
 
 	// 如果下游数据库增量元数据表 increment_sync_meta 不存在任何记录，说明未进行过数据同步，则进行全量 + 增量数据同步
 	if len(existTableList) == 0 && len(isNotExistTableList) == len(transferTableSlice) {
+		// 全量同步
 		if err := syncOracleFullTableRecordToMySQLUsingAllMode(cfg, engine, transferTableSlice, IncrementSyncMode); err != nil {
 			return err
 		}
@@ -257,12 +268,23 @@ func syncOracleFullTableRecordToMySQLUsingAllMode(cfg *service.CfgFile, engine *
 			return err
 		}
 		for _, tableName := range transferTableSlice {
-			if err := engine.DeleteWaitSyncTableMetaRecord(cfg.TargetConfig.MetaSchema, cfg.SourceConfig.SchemaName, tableName, syncMode); err != nil {
+			if err := engine.DeleteWaitSyncTableMetaRecord(
+				cfg.TargetConfig.MetaSchema, cfg.SourceConfig.SchemaName, tableName, syncMode); err != nil {
 				return err
 			}
 
 			if err := engine.TruncateMySQLTableRecord(cfg.TargetConfig.SchemaName, tableName); err != nil {
 				return err
+			}
+			// 判断并记录待同步表列表
+			isExist, err := engine.IsExistWaitSyncTableMetaRecord(cfg.SourceConfig.SchemaName, tableName, FullSyncMode)
+			if err != nil {
+				return err
+			}
+			if !isExist {
+				if err := engine.InitWaitSyncTableMetaRecord(cfg.SourceConfig.SchemaName, []string{tableName}, FullSyncMode); err != nil {
+					return err
+				}
 			}
 		}
 	}

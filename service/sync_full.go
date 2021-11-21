@@ -154,6 +154,30 @@ func (e *Engine) InitWaitAndFullSyncMetaRecord(schemaName, tableName string, glo
 		return err
 	}
 
+	// 统计信息数据行数 0，直接全表扫
+	if tableRows == 0 {
+		sql := fmt.Sprintf("select * from %s.%s", strings.ToUpper(schemaName), strings.ToUpper(tableName))
+		Logger.Warn("get oracle table rows",
+			zap.String("schema", schemaName),
+			zap.String("table", tableName),
+			zap.String("sql", sql),
+			zap.Int("statistics rows", tableRows))
+
+		if err := e.GormDB.Create(&FullSyncMeta{
+			SourceSchemaName: strings.ToUpper(schemaName),
+			SourceTableName:  strings.ToUpper(tableName),
+			RowidSQL:         sql,
+			IsPartition:      "N",
+			GlobalSCN:        globalSCN,
+		}).Error; err != nil {
+			return fmt.Errorf("gorm create table [%s.%s] full_sync_meta failed [statistics rows = 0]: %v", schemaName, tableName, err)
+		}
+		if err := e.UpdateWaitSyncMetaTableRecord(schemaName, tableName, tableRows, globalSCN, syncMode); err != nil {
+			return err
+		}
+		return nil
+	}
+
 	// 用于判断是否需要切分
 	// 当行数少于 parallel*10000 则不切分
 	Logger.Info("get oracle table statistics rows",
@@ -203,17 +227,22 @@ func (e *Engine) InitWaitSyncTableMetaRecord(schemaName string, tableName []stri
 }
 
 func (e *Engine) UpdateWaitSyncMetaTableRecord(schemaName, tableName string, rowCounts, globalSCN int, syncMode string) error {
+	// 如果行数（切分次数）等于 0，full_sync_meta 自动生成全表读，额外更新处理 wait_sync_meta
+	if rowCounts == 0 {
+		rowCounts = 1
+	}
 	if err := e.GormDB.Model(&WaitSyncMeta{}).
 		Where("source_schema_name = ? AND source_table_name = ? AND sync_mode = ?",
 			strings.ToUpper(schemaName),
 			strings.ToUpper(tableName),
 			syncMode).
-		Updates(WaitSyncMeta{
-			FullGlobalSCN:  globalSCN,
-			FullSplitTimes: rowCounts,
+		Updates(map[string]interface{}{
+			"full_global_scn":  globalSCN,
+			"full_split_times": rowCounts,
 		}).Error; err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -403,8 +432,25 @@ func (e *Engine) getAndInitOracleNormalTableFullSyncMetaUsingRowID(
 		return rowCount, err
 	}
 
-	// 判断数据是否存在，不存在直接跳过
+	// 判断数据是否存在，跳过 full_sync_meta 记录，更新 wait_sync_meta 记录，无需同步
 	if len(res) == 0 {
+		sql := fmt.Sprintf("select * from %s.%s", strings.ToUpper(schemaName), strings.ToUpper(tableName))
+		Logger.Warn("get oracle table rowids rows",
+			zap.String("schema", schemaName),
+			zap.String("table", tableName),
+			zap.String("sql", sql),
+			zap.Int("rowids rows", len(res)))
+
+		if err := e.GormDB.Create(&FullSyncMeta{
+			SourceSchemaName: strings.ToUpper(schemaName),
+			SourceTableName:  strings.ToUpper(tableName),
+			RowidSQL:         sql,
+			IsPartition:      "N",
+			GlobalSCN:        globalSCN,
+		}).Error; err != nil {
+			return rowCount, fmt.Errorf("gorm create table [%s.%s] full_sync_meta failed [rowids rows = 0]: %v", schemaName, tableName, err)
+		}
+
 		return rowCount, nil
 	}
 
@@ -426,7 +472,7 @@ func (e *Engine) getAndInitOracleNormalTableFullSyncMetaUsingRowID(
 	// 划分 batch 数(500)
 	if len(fullMetas) <= insertBatchSize {
 		if err := e.GormDB.Create(&fullMetas).Error; err != nil {
-			return len(res), fmt.Errorf("gorm create table [%s.%s] table_full_meta failed: %v", schemaName, tableName, err)
+			return len(res), fmt.Errorf("gorm create table [%s.%s] full_sync_meta failed: %v", schemaName, tableName, err)
 		}
 	} else {
 		var fullMetaBatch []FullSyncMeta
@@ -437,7 +483,7 @@ func (e *Engine) getAndInitOracleNormalTableFullSyncMetaUsingRowID(
 				fullMetaBatch = append(fullMetaBatch, fullMetas[idx])
 			}
 			if err := e.GormDB.Create(&fullMetaBatch).Error; err != nil {
-				return len(res), fmt.Errorf("gorm create table [%s.%s] table_full_meta failed: %v", schemaName, tableName, err)
+				return len(res), fmt.Errorf("gorm create table [%s.%s] full_sync_meta failed: %v", schemaName, tableName, err)
 			}
 		}
 	}
