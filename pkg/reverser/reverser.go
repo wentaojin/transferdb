@@ -50,8 +50,8 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 		return err
 	}
 
-	// 加载表以及库数据类型映射规则
-	tables, partitionTableList, err := LoadOracleToMySQLMapRuleUsingTableAndSchema(engine, exporterTableSlice, cfg.SourceConfig.SchemaName, cfg.TargetConfig.SchemaName, cfg.TargetConfig.Overwrite)
+	// 加载表列表
+	tables, partitionTableList, err := LoadOracleToMySQLTableList(engine, exporterTableSlice, cfg.SourceConfig.SchemaName, cfg.TargetConfig.SchemaName, cfg.TargetConfig.Overwrite)
 	if err != nil {
 		return err
 	}

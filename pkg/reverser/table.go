@@ -36,21 +36,10 @@ import (
 type Table struct {
 	SourceSchemaName string
 	TargetSchemaName string
-	ColumnTypesMap   []ColumnTypeMap
+	SourceTableName  string
+	TargetTableName  string
 	Overwrite        bool
 	Engine           *service.Engine
-	TableNameMap
-	ColumnNameMap
-}
-
-type TableNameMap struct {
-	SourceTableName string
-	TargetTableName string
-}
-
-type ColumnNameMap struct {
-	SourceColumnName string
-	TargetColumnName string
 }
 
 type ColumnTypeMap struct {
@@ -604,12 +593,6 @@ func (t Table) reverserOracleTableColumnToMySQL() ([]string, error) {
 		return columnMetas, err
 	}
 
-	// 获取表字段列自定义规则
-	customColumnDataTypeMap, err := t.Engine.GetColumnDataTypeMap(t.SourceSchemaName, t.SourceTableName)
-	if err != nil {
-		return columnMetas, err
-	}
-
 	// Oracle 表字段数据类型内置映射 MySQL/TiDB 规则转换
 	for _, rowCol := range columnsMap {
 		columnMeta, err := ReverseOracleTableColumnMapRule(
@@ -623,8 +606,7 @@ func (t Table) reverserOracleTableColumnToMySQL() ([]string, error) {
 			rowCol["DATA_SCALE"],
 			rowCol["DATA_PRECISION"],
 			rowCol["DATA_LENGTH"],
-			t.ColumnTypesMap,
-			customColumnDataTypeMap,
+			t.Engine,
 		)
 		if err != nil {
 			return columnMetas, err
@@ -804,128 +786,40 @@ func (t Table) reverserOracleTableCKToMySQL() ([]string, error) {
 }
 
 func (t *Table) String() string {
-	jsonStr, _ := json.Marshal(t)
+	jsonStr, _ := json.Marshal(&t)
 	return string(jsonStr)
 }
 
-func changeOracleTableName(sourceTableName string, targetTableName string) string {
-	if targetTableName == "" {
-		return sourceTableName
-	}
-	if targetTableName != "" {
-		return targetTableName
-	}
-	return sourceTableName
-}
-
-func changeOracleTableColumnType(columnName string,
-	originColumnType string, planColumnTypes []ColumnTypeMap, buildInColumnType string,
-	customColumnDataTypeMap []service.ColumnDataTypeMap) string {
-	// 如果自定义字段列数据类型以及计划使用的字段类型为空，则使用默认内置数据类型规则转换
-	if len(customColumnDataTypeMap) == 0 && len(planColumnTypes) == 0 {
-		return buildInColumnType
+// 加载表列表
+func LoadOracleToMySQLTableList(engine *service.Engine, exporterTableSlice []string, sourceSchema, targetSchema string, overwrite bool) ([]Table, []string, error) {
+	// 筛选过滤分区表并打印警告
+	partitionTables, err := engine.FilterOraclePartitionTable(sourceSchema, exporterTableSlice)
+	if err != nil {
+		return []Table{}, partitionTables, err
 	}
 
-	// 优先自定义字段列规则映射
-	var (
-		customColDataType []string
-		planColDataType   []string
-	)
-
-	if len(customColumnDataTypeMap) > 0 {
-		for _, col := range customColumnDataTypeMap {
-			if strings.ToUpper(col.SourceColumnName) == strings.ToUpper(columnName) &&
-				strings.ToUpper(col.SourceColumnType) == strings.ToUpper(originColumnType) &&
-				col.TargetColumnType != "" {
-				customColDataType = append(customColDataType, col.TargetColumnType)
-			}
-		}
+	if len(partitionTables) != 0 {
+		service.Logger.Warn("partition tables",
+			zap.String("schema", sourceSchema),
+			zap.String("partition table list", fmt.Sprintf("%v", partitionTables)),
+			zap.String("suggest", "if necessary, please manually convert and process the tables in the above list"))
 	}
 
-	if len(planColumnTypes) > 0 {
-		for _, ct := range planColumnTypes {
-			if strings.ToUpper(ct.SourceColumnType) == strings.ToUpper(originColumnType) && ct.TargetColumnType != "" {
-				planColDataType = append(planColDataType, ct.TargetColumnType)
-			}
-		}
+	var tables []Table
+
+	// 返回需要转换 schema table
+	for _, tbl := range exporterTableSlice {
+		var table Table
+
+		// 库名、表名规则
+		table.SourceSchemaName = sourceSchema
+		table.TargetSchemaName = targetSchema
+		table.SourceTableName = tbl
+		table.TargetTableName = tbl
+
+		table.Engine = engine
+		table.Overwrite = overwrite
+		tables = append(tables, table)
 	}
-
-	if len(customColDataType) > 1 || len(planColDataType) > 1 {
-		err := fmt.Errorf(`[changeOracleTableColumnType] oracle table data type panic, customColumnDataTypeMap value [%v] OR planColumnTypes value [%v], Both of them shouldn't be greater than 1`, len(customColDataType), len(planColDataType))
-
-		service.Logger.Panic("reverse column data type",
-			zap.String("column name", columnName),
-			zap.String("origin column type", originColumnType),
-			zap.Strings("plan column type", planColDataType),
-			zap.Strings("custom column type", customColDataType),
-			zap.Error(err))
-		panic(err)
-	}
-
-	switch {
-	case len(customColDataType) == 0 && len(planColDataType) == 1:
-		return planColDataType[0]
-	case len(customColDataType) == 1 && len(planColDataType) == 0:
-		return customColDataType[0]
-	case len(customColDataType) == 1 && len(planColDataType) == 1:
-		return customColDataType[0]
-	default:
-		return buildInColumnType
-	}
-}
-
-func generateOracleTableColumnMetaByType(columnName, columnType, dataNullable, comments, dataDefault string) string {
-	var (
-		nullable string
-		colMeta  string
-	)
-
-	columnName = strings.ToLower(columnName)
-	columnType = strings.ToLower(columnType)
-
-	if dataNullable == "Y" {
-		nullable = "NULL"
-	} else {
-		nullable = "NOT NULL"
-	}
-
-	var comment string
-	if comments != "" {
-		if strings.Contains(comments, "\"") {
-			comments = strings.Replace(comments, "\"", "'", -1)
-		}
-		match, _ := regexp.MatchString("'(.*)'", comments)
-		if match {
-			comment = fmt.Sprintf("\"%s\"", comments)
-		} else {
-			comment = fmt.Sprintf("'%s'", comments)
-		}
-	}
-
-	if nullable == "NULL" {
-		switch {
-		case comment != "" && dataDefault != "":
-			colMeta = fmt.Sprintf("`%s` %s DEFAULT %s COMMENT %s", columnName, columnType, dataDefault, comment)
-		case comment != "" && dataDefault == "":
-			colMeta = fmt.Sprintf("`%s` %s COMMENT %s", columnName, columnType, comment)
-		case comment == "" && dataDefault != "":
-			colMeta = fmt.Sprintf("`%s` %s DEFAULT %s", columnName, columnType, dataDefault)
-		case comment == "" && dataDefault == "":
-			colMeta = fmt.Sprintf("`%s` %s", columnName, columnType)
-		}
-	} else {
-		switch {
-		case comment != "" && dataDefault != "":
-			colMeta = fmt.Sprintf("`%s` %s %s DEFAULT %s COMMENT %s", columnName, columnType, nullable, dataDefault, comment)
-			return colMeta
-		case comment != "" && dataDefault == "":
-			colMeta = fmt.Sprintf("`%s` %s %s COMMENT %s", columnName, columnType, nullable, comment)
-		case comment == "" && dataDefault != "":
-			colMeta = fmt.Sprintf("`%s` %s %s DEFAULT %s", columnName, columnType, nullable, dataDefault)
-			return colMeta
-		case comment == "" && dataDefault == "":
-			colMeta = fmt.Sprintf("`%s` %s %s", columnName, columnType, nullable)
-		}
-	}
-	return colMeta
+	return tables, partitionTables, nil
 }
