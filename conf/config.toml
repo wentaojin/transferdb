@@ -22,6 +22,8 @@ insert-batch-size = 500
 slowlog-threshold = 300
 # 任务并发 -- 只用于 reverse/check 模式阶段
 threads = 8
+# pprof 端口
+pprof-port = ":9696"
 
 [full]
 # 按照表级别操作导出导入

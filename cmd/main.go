@@ -38,12 +38,6 @@ var (
 
 func main() {
 	flag.Parse()
-	go func() {
-		if err := http.ListenAndServe(":9696", nil); err != nil {
-			log.Fatal(err)
-		}
-		os.Exit(0)
-	}()
 
 	// 获取程序版本
 	service.GetAppVersion(*version)
@@ -53,6 +47,14 @@ func main() {
 	if err != nil {
 		log.Fatalf("read config file [%s] failed: %v", *conf, err)
 	}
+
+	go func() {
+		if err := http.ListenAndServe(cfg.AppConfig.PprofPort, nil); err != nil {
+			log.Fatal(err)
+		}
+		os.Exit(0)
+	}()
+
 	// 初始化日志 logger
 	if err := service.NewZapLogger(cfg); err != nil {
 		log.Fatalf("create global zap logger failed: %v", err)

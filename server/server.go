@@ -76,7 +76,7 @@ func Run(cfg *service.CfgFile, mode string) error {
 			return err
 		}
 	case "full":
-		// 全量数据 ETL 非一致性抽取阶段
+		// 全量数据 ETL 非一致性（基于某个时间点，而是直接基于现有 SCN）抽取，离线环境提供与原库一致性
 		engine, err := NewEngineDB(cfg)
 		if err != nil {
 			return err

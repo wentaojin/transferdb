@@ -33,9 +33,10 @@ type CfgFile struct {
 }
 
 type AppConfig struct {
-	InsertBatchSize  int `toml:"insert-batch-size" json:"insert-batch-size"`
-	SlowlogThreshold int `toml:"slowlog-threshold" json:"slowlog-threshold"`
-	Threads          int `toml:"threads" json:"threads"`
+	InsertBatchSize  int    `toml:"insert-batch-size" json:"insert-batch-size"`
+	SlowlogThreshold int    `toml:"slowlog-threshold" json:"slowlog-threshold"`
+	Threads          int    `toml:"threads" json:"threads"`
+	PprofPort        string `toml:"pprof-port" json:"pprof-port"`
 }
 
 type FullConfig struct {
