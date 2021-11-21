@@ -96,7 +96,7 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 		t.SetStyle(table.StyleLight)
 		t.AppendHeader(table.Row{"#", "ORACLE", "MYSQL", "IS PARTITION", "SUGGEST"})
 
-		reverseTables, partitionTableList, err := reverser.GenerateOracleToMySQLTables(d.Engine, []string{d.TableName}, d.SourceSchemaName, d.TargetSchemaName, false)
+		reverseTables, partitionTableList, err := reverser.LoadOracleToMySQLMapRuleUsingTableAndSchema(d.Engine, []string{d.TableName}, d.SourceSchemaName, d.TargetSchemaName, false)
 		if err != nil {
 			return err
 		}
@@ -516,6 +516,17 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 	service.Logger.Info("check table",
 		zap.String("table column info check", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)))
 
+	// 获取表字段列自定义规则
+	customColumnDataTypeMap, err := d.Engine.GetColumnDataTypeMap(d.SourceSchemaName, d.TableName)
+	if err != nil {
+		return err
+	}
+	// 获取库、表字段列自定义规则
+	customSchemaOrTableDataTypeMap, err := reverser.LoadDataTypeSchemaOrTableMappingRule(d.SourceSchemaName, []string{d.TableName}, d.Engine)
+	if err != nil {
+		return err
+	}
+
 	for oracleColName, oracleColInfo := range oracleTable.Columns {
 		mysqlColInfo, ok := mysqlTable.Columns[oracleColName]
 		if ok {
@@ -546,7 +557,8 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 			oracleColInfo.DataScale,
 			oracleColInfo.DataPrecision,
 			oracleColInfo.DataLength,
-			[]reverser.ColumnType{})
+			customSchemaOrTableDataTypeMap[d.TableName],
+			customColumnDataTypeMap)
 		if err != nil {
 			return err
 		}

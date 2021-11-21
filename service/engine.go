@@ -93,11 +93,10 @@ func Query(db *sql.DB, querySQL string) ([]string, []map[string]string, error) {
 // 初始化同步表结构
 func (e *Engine) InitMysqlEngineDB() error {
 	if err := e.GormDB.AutoMigrate(
-		// todo: 自定义表名适配删除 - 数据同步不支持表名不一致
-		//&CustomTableNameMap{},
+		&ColumnDataTypeMap{},
+		&TableDataTypeMap{},
+		&SchemaDataTypeMap{},
 		&WaitSyncMeta{},
-		&CustomTableColumnTypeMap{},
-		&CustomSchemaColumnTypeMap{},
 		&FullSyncMeta{},
 		&IncrementSyncMeta{},
 	); err != nil {

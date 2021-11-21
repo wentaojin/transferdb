@@ -24,21 +24,21 @@ import (
 /*
 	上下游字段类型映射表
 */
-// 自定义表结构名称转换规则 - table 级别
-// 如果同步表未单独配置表结构名称转换规则 ，则采用源表默认
-type CustomTableNameMap struct {
+// 数据类型转换优先级： column > table > schema > build-in
+// 自定义列数据类型转换规则 - 字段列级别
+type ColumnDataTypeMap struct {
 	ID               uint       `gorm:"primary_key;autoIncrement;comment:'自增编号'" json:"id"`
-	SourceSchemaName string     `gorm:"not null;index:unique_schema_table,unique;comment:'源端库 schema'" json:"source_schema_name"`
-	SourceTableName  string     `gorm:"not null;index:unique_schema_table,unique;comment:'源端表名'" json:"source_table_name"`
-	TargetTableName  string     `gorm:"not null;index:unique_schema_table,unique;comment:'目标表名'" json:"target_table_name"`
+	SourceSchemaName string     `gorm:"not null;index:unique_schema_col,unique;comment:'源端库 schema'" json:"source_schema_name"`
+	SourceTableName  string     `gorm:"not null;index:unique_schema_col,unique;comment:'源端表名'" json:"source_table_name"`
+	SourceColumnName string     `gorm:"not null;index:unique_schema_col,unique;comment:'源端表字段列名'" json:"source_column_name"`
+	SourceColumnType string     `gorm:"not null;index:idx_source_col;comment:'源端表字段类型'" json:"source_column_type"`
+	TargetColumnType string     `gorm:"not null;index:idx_source_col;comment:'目标表字段类型'" json:"target_column_type"`
 	CreatedAt        *time.Time `gorm:"type:timestamp;not null;default:current_timestamp;comment:'创建时间'" json:"createdAt"`
 	UpdatedAt        *time.Time `gorm:"type:timestamp;not null on update current_timestamp;default:current_timestamp;comment:'更新时间'" json:"updatedAt"`
 }
 
-// 自定义表结构字段类型转换规则 - table 级别
-// 如果同步表未单独配置 table 级别字段类型映射规则，并且未单独配置 schema 级别字段类型映射规则，则采用程序内置规则转换
-// 优先级： table > schema > internal
-type CustomTableColumnTypeMap struct {
+// 自定义表数据类型转换规则 - table 级别
+type TableDataTypeMap struct {
 	ID               uint       `gorm:"primary_key;autoIncrement;comment:'自增编号'" json:"id"`
 	SourceSchemaName string     `gorm:"not null;index:unique_schema_table_col,unique;comment:'源端库 schema'" json:"source_schema_name"`
 	SourceTableName  string     `gorm:"not null;index:unique_schema_table_col,unique;comment:'源端表名'" json:"source_table_name"`
@@ -48,8 +48,8 @@ type CustomTableColumnTypeMap struct {
 	UpdatedAt        *time.Time `gorm:"type:timestamp;not null on update current_timestamp;default:current_timestamp;comment:'更新时间'" json:"updatedAt"`
 }
 
-// 自定义表结构字段类型转换规则 - schema 级别
-type CustomSchemaColumnTypeMap struct {
+// 自定义库数据类型转换规则 - schema 级别
+type SchemaDataTypeMap struct {
 	ID               uint       `gorm:"primary_key;autoIncrement;comment:'自增编号'" json:"id"`
 	SourceSchemaName string     `gorm:"not null;index:unique_schema_col,unique;comment:'源端库 schema'" json:"source_schema_name"`
 	SourceColumnType string     `gorm:"not null;index:unique_schema_col,unique;comment:'源端表字段类型'" json:"source_column_type"`
@@ -58,43 +58,44 @@ type CustomSchemaColumnTypeMap struct {
 	UpdatedAt        *time.Time `gorm:"type:timestamp;not null on update current_timestamp;default:current_timestamp;comment:'更新时间'" json:"updatedAt"`
 }
 
-func (e *Engine) GetCustomTableNameMap(schemaName string) ([]CustomTableNameMap, error) {
-	var c []CustomTableNameMap
-
-	if err := e.GormDB.Where("source_schema_name = ?", schemaName).Find(&c).Error; err != nil {
-		return c, fmt.Errorf("get custom table column name map by schema [%s] failed: %v", schemaName, err)
-	}
-
-	return c, nil
-}
-
-func (e *Engine) GetCustomTableColumnTypeMap(schemaName string) ([]CustomTableColumnTypeMap, error) {
-	var c []CustomTableColumnTypeMap
-	if err := e.GormDB.Where("source_schema_name = ?", schemaName).Find(&c).Error; err != nil {
-		return c, fmt.Errorf("get custom table column type map by schema [%s] table failed: %v", schemaName, err)
+func (e *Engine) GetColumnDataTypeMap(schemaName, tableName string) ([]ColumnDataTypeMap, error) {
+	var c []ColumnDataTypeMap
+	if err := e.GormDB.Where("source_schema_name = ? AND source_table_name = ?",
+		strings.ToUpper(schemaName), strings.ToUpper(tableName)).Find(&c).Error; err != nil {
+		return c, fmt.Errorf("get custom column data type map by schema [%s] failed: %v", schemaName, err)
 	}
 	return c, nil
 }
 
-func (e *Engine) GetCustomSchemaColumnTypeMap(schemaName string) ([]CustomSchemaColumnTypeMap, error) {
-	var c []CustomSchemaColumnTypeMap
+func (e *Engine) GetTableDataTypeMap(schemaName string) ([]TableDataTypeMap, error) {
+	var c []TableDataTypeMap
+	if err := e.GormDB.Where("source_schema_name = ?", schemaName).Find(&c).Error; err != nil {
+		return c, fmt.Errorf("get custom table data type map by schema [%s] table failed: %v", schemaName, err)
+	}
+	return c, nil
+}
+
+func (e *Engine) GetSchemaDataTypeMap(schemaName string) ([]SchemaDataTypeMap, error) {
+	var c []SchemaDataTypeMap
 	if err := e.GormDB.Where("source_schema_name = ? ", schemaName).Find(&c).Error; err != nil {
-		return c, fmt.Errorf("get custom schema column type map by schema [%s] failed: %v", schemaName, err)
+		return c, fmt.Errorf("get custom schema data type map by schema [%s] failed: %v", schemaName, err)
 	}
 	return c, nil
 }
 
-func (c *CustomSchemaColumnTypeMap) GetCustomSchemaColumnType() string {
+func (c *ColumnDataTypeMap) AdjustColumnDataType(tableName, columnName string) string {
 	var colType string
-	if c.TargetColumnType != "" {
-		colType = c.TargetColumnType
-	} else {
-		colType = c.SourceColumnType
+	if strings.ToUpper(tableName) == strings.ToUpper(c.SourceTableName) && strings.ToUpper(columnName) == strings.ToUpper(c.SourceColumnName) {
+		if c.TargetColumnType != "" {
+			colType = c.TargetColumnType
+		} else {
+			colType = c.SourceColumnType
+		}
 	}
 	return colType
 }
 
-func (c *CustomTableColumnTypeMap) GetCustomTableColumnType(tableName string) string {
+func (c *TableDataTypeMap) AdjustTableDataType(tableName string) string {
 	var colType string
 	if strings.ToUpper(tableName) == strings.ToUpper(c.SourceTableName) {
 		if c.TargetColumnType != "" {
@@ -102,6 +103,16 @@ func (c *CustomTableColumnTypeMap) GetCustomTableColumnType(tableName string) st
 		} else {
 			colType = c.SourceColumnType
 		}
+	}
+	return colType
+}
+
+func (c *SchemaDataTypeMap) AdjustSchemaDataType() string {
+	var colType string
+	if c.TargetColumnType != "" {
+		colType = c.TargetColumnType
+	} else {
+		colType = c.SourceColumnType
 	}
 	return colType
 }

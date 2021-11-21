@@ -25,8 +25,6 @@ import (
 
 	"github.com/jedib0t/go-pretty/v6/table"
 
-	"github.com/wentaojin/transferdb/utils"
-
 	"github.com/wentaojin/transferdb/service"
 
 	"github.com/xxjwxc/gowp/workpool"
@@ -38,6 +36,7 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 	service.Logger.Info("reverse table oracle to mysql start",
 		zap.String("schema", cfg.SourceConfig.SchemaName))
 
+	// 用于检查下游 MySQL/TiDB 环境检查
 	// 只提供表结构转换文本输出，不提供直写下游，故注释下游检查项
 	//if err := reverseOracleToMySQLTableInspect(engine, cfg); err != nil {
 	//	return err
@@ -51,7 +50,8 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 		return err
 	}
 
-	tables, partitionTableList, err := GenerateOracleToMySQLTables(engine, exporterTableSlice, cfg.SourceConfig.SchemaName, cfg.TargetConfig.SchemaName, cfg.TargetConfig.Overwrite)
+	// 加载表以及库数据类型映射规则
+	tables, partitionTableList, err := LoadOracleToMySQLMapRuleUsingTableAndSchema(engine, exporterTableSlice, cfg.SourceConfig.SchemaName, cfg.TargetConfig.SchemaName, cfg.TargetConfig.Overwrite)
 	if err != nil {
 		return err
 	}
@@ -231,177 +231,4 @@ func reverseOracleToMySQLTableInspect(engine *service.Engine, cfg *service.CfgFi
 		}
 	}
 	return nil
-}
-
-// 获取表列表
-func GenerateOracleToMySQLTables(engine *service.Engine, exporterTableSlice []string, sourceSchema, targetSchema string, overwrite bool) ([]Table, []string, error) {
-	// 筛选过滤分区表并打印警告
-	partitionTables, err := engine.FilterOraclePartitionTable(sourceSchema, exporterTableSlice)
-	if err != nil {
-		return []Table{}, partitionTables, err
-	}
-
-	if len(partitionTables) != 0 {
-		service.Logger.Warn("partition tables",
-			zap.String("schema", sourceSchema),
-			zap.String("partition table list", fmt.Sprintf("%v", partitionTables)),
-			zap.String("suggest", "if necessary, please manually convert and process the tables in the above list"))
-	}
-
-	// 数据库查询获取自定义表结构转换规则
-	var (
-		tables []Table
-		// 表名转换
-		tableNameSlice []map[string]TableName
-		// 表字段类型转换
-		columnTypesMap map[string][]ColumnType
-	)
-	columnTypesMap = make(map[string][]ColumnType)
-
-	// todo: 自定义表名适配删除 - 数据同步不支持表名不一致
-	//customTableNameSlice, err := engine.GetCustomTableNameMap(cfg.SourceConfig.SchemaName)
-	//if err != nil {
-	//	return []Table{}, err
-	//}
-
-	for _, tbl := range exporterTableSlice {
-		tableNameSlice = append(tableNameSlice, map[string]TableName{
-			tbl: {
-				SourceTableName: tbl,
-				TargetTableName: tbl,
-			},
-		})
-		// todo: 自定义表名适配删除 - 数据同步不支持表名不一致
-		//if len(customTableNameSlice) != 0 {
-		//	for _, tblName := range customTableNameSlice {
-		//		if strings.ToUpper(tbl) == strings.ToUpper(tblName.SourceTableName) {
-		//			if tblName.TargetTableName != "" {
-		//				tableNameSlice = append(tableNameSlice, map[string]TableName{
-		//					tbl: {
-		//						SourceTableName: tbl,
-		//						TargetTableName: tblName.TargetTableName,
-		//					},
-		//				})
-		//			}
-		//		}
-		//	}
-		//} else {
-		//	tableNameSlice = append(tableNameSlice, map[string]TableName{
-		//		tbl: {
-		//			SourceTableName: tbl,
-		//			TargetTableName: tbl,
-		//		},
-		//	})
-		//}
-	}
-
-	customSchemaColumnTypeSlice, err := engine.GetCustomSchemaColumnTypeMap(sourceSchema)
-	if err != nil {
-		return []Table{}, partitionTables, err
-	}
-	customTableColumnTypeSlice, err := engine.GetCustomTableColumnTypeMap(sourceSchema)
-	if err != nil {
-		return []Table{}, partitionTables, err
-	}
-
-	// 加载字段类型转换规则
-	// 字段类型转换规则判断，默认采用内置默认字段类型转换
-	switch {
-	case len(customSchemaColumnTypeSlice) != 0 && len(customTableColumnTypeSlice) == 0:
-		for _, tbl := range exporterTableSlice {
-			var colTypes []ColumnType
-			for _, tblName := range customSchemaColumnTypeSlice {
-				colTypes = append(colTypes, ColumnType{
-					SourceColumnType: tblName.SourceColumnType,
-					TargetColumnType: tblName.GetCustomSchemaColumnType(),
-				})
-			}
-			columnTypesMap[tbl] = colTypes
-		}
-	case len(customSchemaColumnTypeSlice) == 0 && len(customTableColumnTypeSlice) != 0:
-		for _, tbl := range exporterTableSlice {
-			var colTypes []ColumnType
-			for _, tblName := range customTableColumnTypeSlice {
-				colTypes = append(colTypes, ColumnType{
-					SourceColumnType: tblName.SourceColumnType,
-					TargetColumnType: tblName.GetCustomTableColumnType(tbl),
-				})
-			}
-			columnTypesMap[tbl] = colTypes
-		}
-	case len(customSchemaColumnTypeSlice) != 0 && len(customTableColumnTypeSlice) != 0:
-		// 表字段类型优先级 > 库级别
-		var customTableSlice []string
-		// 获取所有任务表库级别字段类型
-		for _, tbl := range exporterTableSlice {
-			var colTypes []ColumnType
-			for _, tblName := range customSchemaColumnTypeSlice {
-				colTypes = append(colTypes, ColumnType{
-					SourceColumnType: tblName.SourceColumnType,
-					TargetColumnType: tblName.GetCustomSchemaColumnType(),
-				})
-			}
-			columnTypesMap[tbl] = colTypes
-		}
-
-		// 加载获取自定义表字段类型转换规则
-		// 处理情况:
-		// - 自定义表字段类型规则不存在，而库字段类型存在的情况，则使用库字段类型转换规则
-		// - 自定义表字段类型规则存在，而库字段类型也存在的情况，则使用表字段类型转换规则
-		// - 两者都不存在，则不追加任何转换规则，字段类型转换时使用内置类型转换规则
-		for _, tblName := range customTableColumnTypeSlice {
-			if utils.IsContainString(exporterTableSlice, tblName.SourceTableName) {
-				tmpColTypes := columnTypesMap[tblName.SourceTableName]
-				for idx, col := range tmpColTypes {
-					if strings.ToUpper(tblName.SourceColumnType) == strings.ToUpper(col.SourceColumnType) {
-						columnTypesMap[tblName.SourceTableName][idx].TargetColumnType = tblName.GetCustomTableColumnType(tblName.SourceTableName)
-					} else {
-						columnTypesMap[tblName.SourceTableName] = append(columnTypesMap[tblName.SourceTableName], ColumnType{
-							SourceColumnType: tblName.SourceColumnType,
-							TargetColumnType: tblName.GetCustomTableColumnType(tblName.SourceTableName),
-						})
-					}
-				}
-				customTableSlice = append(customTableSlice, tblName.SourceTableName)
-			}
-		}
-
-		// 筛选过滤不属于自定义表字段类型规则的表并加载获取转换规则
-		notLayInCustomTableSlice := utils.FilterDifferenceStringItems(exporterTableSlice, customTableSlice)
-		for _, tbl := range notLayInCustomTableSlice {
-			var colTypes []ColumnType
-			for _, tblName := range customSchemaColumnTypeSlice {
-				colTypes = append(colTypes, ColumnType{
-					SourceColumnType: tblName.SourceColumnType,
-					TargetColumnType: tblName.GetCustomSchemaColumnType(),
-				})
-			}
-			columnTypesMap[tbl] = colTypes
-		}
-
-	}
-
-	// 返回需要转换 schema table
-	for _, tbl := range exporterTableSlice {
-		var table Table
-		table.SourceSchemaName = sourceSchema
-		table.TargetSchemaName = targetSchema
-		// 表名规则
-		for _, t := range tableNameSlice {
-			if _, ok := t[tbl]; ok {
-				table.SourceTableName = t[tbl].SourceTableName
-				table.TargetTableName = t[tbl].TargetTableName
-			} else {
-				table.SourceTableName = tbl
-			}
-		}
-		// 表字段类型规则
-		if _, ok := columnTypesMap[tbl]; ok {
-			table.ColumnTypes = columnTypesMap[tbl]
-		}
-		table.Engine = engine
-		table.Overwrite = overwrite
-		tables = append(tables, table)
-	}
-	return tables, partitionTables, nil
 }

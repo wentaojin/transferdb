@@ -4,7 +4,10 @@ transferdb 用于异构数据库迁移（ ORACLE 数据库 -> MySQL/TiDB 数据�
 
 1. 支持表结构定义转换
    1. 表定义 reverse_${sourcedb}.sql 文件，外键、检查约束、分区表、索引不兼容性对象 compatibility_${sourcedb}.sql 文件
-   2. 自定义配置表字段类型规则映射【table -> schema -> 内置】
+   2. 自定义配置表字段类型规则映射【column -> table -> schema -> 内置】
+      1. 库级别数据类型自定义
+      2. 表级别数据类型自定义
+      3. 字段级别数据类型自定义
    3. 内置数据类型规则映射，[内置数据类型映射规则](conf/buildin_reverse_rule.md)
    4. 表索引转换 
    5. 表非空约束、外键约束、检查约束、主键约束、唯一约束转换，主键、唯一、检查、外键等约束 ORACLE ENABLED 状态才会被创建，其他状态忽略创建
@@ -56,10 +59,11 @@ echo $LD_LIBRARY_PATH
 $ ./transferdb --config config.toml --mode prepare
 $ ./transferdb --config config.toml --mode reverse
 
-元数据库[默认 db_meta]自定义转换规则，规则优先级【表 -> 库 -> 内置】
+元数据库[默认 db_meta]自定义转换规则，规则优先级【字段 -> 表 -> 库 -> 内置】
 文件自定义规则示例：
-表 custom_schema_column_type_maps 用于数据库内字段类型转换规则 -》库级别
-表 custom_table_column_type_maps  用于表级别字段类型转换规则，表级别优先级高于库级别 -》表级别
+表 [schema_data_type_map] 用于库级别数据类型自定义转换规则，库级别优先级高于内置规则
+表 [table_data_type_map]  用于表级别数据类型自定义转换规则，表级别优先级高于库级别、高于内置规则
+表 [column_data_type_map] 用于字段级别数据类型自定义转换规则，字段级别优先级高于表级别、高于库级别、高于内置规则
 
 5、表结构检查(独立于表结构转换，可单独运行，校验规则使用内置规则，[输出示例](conf/check_${sourcedb}.sql)
 $ ./transferdb --config config.toml --mode check
