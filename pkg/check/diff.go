@@ -698,13 +698,13 @@ func OracleTableMapRuleCheck(
 				tableRows = table.Row{columnName,
 					fmt.Sprintf("NUMBER %s", oracleColMeta),
 					fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
-					fmt.Sprintf("DECIMAL(11,0) %s", oracleColMeta)}
+					fmt.Sprintf("DECIMAL(65,30) %s", oracleColMeta)}
 
 				fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 					targetSchema,
 					tableName,
 					columnName,
-					"DECIMAL(11,0)",
+					"DECIMAL(65,30)",
 					oracleColMeta,
 				)
 			case oracleDataPrecision >= 1 && oracleDataPrecision < 3:
