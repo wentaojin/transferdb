@@ -804,7 +804,7 @@ func (t Table) reverserOracleTableCKToMySQL() ([]string, error) {
 }
 
 func (t Table) String() string {
-	jsonStr, _ := json.Marshal(t)
+	jsonStr, _ := json.Marshal(&t)
 	return string(jsonStr)
 }
 
@@ -851,9 +851,9 @@ func changeOracleTableColumnType(columnName string,
 	}
 
 	if len(customColDataType) > 1 || len(planColDataType) > 1 {
-		err := fmt.Errorf(`[changeOracleTableColumnType] oracle table data type panic, customColumnDataTypeMap shouldn't be [%v] OR planColumnTypes shouldn't be [%v], Both of them should be 1`, len(customColDataType), len(planColDataType))
+		err := fmt.Errorf(`[changeOracleTableColumnType] oracle table data type panic, customColumnDataTypeMap value [%v] OR planColumnTypes value [%v], Both of them should be 1`, len(customColDataType), len(planColDataType))
 
-		service.Logger.DPanic("reverse column data type",
+		service.Logger.Panic("reverse column data type",
 			zap.String("column name", columnName),
 			zap.String("origin column type", originColumnType),
 			zap.Strings("plan column type", planColDataType),

@@ -232,13 +232,25 @@ CREATE TABLE marvin.marvin4 (
 
 alter table marvin.marvin4 add constraint cons_uk1 unique(name1);
 alter table marvin.marvin4 add constraint cons_uk2 unique(name3,loc);
-
 create unique index uniq_loc on marvin.marvin4(loc);
 create unique index uniq_loc_name on marvin.marvin4(loc,name2);
-
 create index idx_name_complex on marvin.marvin4(name2,name3);
 create index idx_name_sex_complex on marvin.marvin4(name3,sex);
-
 alter table marvin.marvin4 add constraint cons_uk3 unique(loc,name2);
 
+/*自定义规则配置*/
+INSERT INTO column_data_type_map
+( source_schema_name, source_table_name, source_column_name, source_column_type, target_column_type )
+VALUES
+    ( 'marvin', 'marvin4', 'other', 'blob', 'text' );
+
+INSERT INTO table_data_type_map
+( source_schema_name, source_table_name, source_column_type, target_column_type )
+VALUES
+    ( 'marvin', 'marvin4','varchar2(10)', 'varchar(100)' );
+
+INSERT INTO schema_data_type_map
+( source_schema_name, source_column_type, target_column_type )
+VALUES
+    ( 'marvin', 'number(10)', 'decimal(10)' );
 
