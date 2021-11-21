@@ -182,7 +182,7 @@ func loadDataTypeRuleUsingTableAndSchema(sourceSchema string, exporterTableSlice
 	// - 自定义表字段类型规则存在，而库字段类型也存在的情况，则使用表字段类型转换规则
 	// - 两者都不存在，则不追加任何转换规则，字段类型转换时使用内置类型转换规则
 	for _, tblName := range tableDataTypeMapSlice {
-		if utils.IsContainString(exporterTableSlice, tblName.SourceTableName) {
+		if utils.IsContainString(exporterTableSlice, strings.ToUpper(tblName.SourceTableName)) {
 			tmpColTypes := columnTypesMap[tblName.SourceTableName]
 			for idx, col := range tmpColTypes {
 				if strings.ToUpper(tblName.SourceColumnType) == strings.ToUpper(col.SourceColumnType) {
@@ -194,7 +194,7 @@ func loadDataTypeRuleUsingTableAndSchema(sourceSchema string, exporterTableSlice
 					})
 				}
 			}
-			customTableSlice = append(customTableSlice, tblName.SourceTableName)
+			customTableSlice = append(customTableSlice, strings.ToUpper(tblName.SourceTableName))
 		}
 	}
 

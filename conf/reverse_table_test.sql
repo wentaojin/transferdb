@@ -171,19 +171,6 @@ xt XMLTYPE
 
 create table test32( id int primary key,sex varchar(2) check(sex in ('man','woman')),age int, constraint CK_sage1 check(age >1 and age<10));
 
-
-
-/*自定义转换规则*/
-insert into  db_meta.custom_table_column_type_maps (source_schema_name,source_table_name,source_column_type,target_column_type) values('system','marvin1','number','bigint');
-
-insert into db_meta.custom_schema_column_type_maps (source_schema_name,source_column_type,target_column_type) values('system','number(2)','bigint(30)');
-
-insert into  db_meta.custom_table_column_type_maps (source_schema_name,source_table_name,source_column_type,target_column_type) values('system','marvin1','number(2)','int');
-
-insert into db_meta.custom_schema_column_type_maps (source_schema_name,source_column_type,target_column_type) values('system','varchar2(10)','varchar(300)');
-
-
-
 /*带检查约束表结构*/
 create table t_stu(
     stuid      number(10)   primary key,
@@ -228,3 +215,30 @@ COMMENT ON COLUMN  tablename.SPARE_FIELD_3
   IS '备用字段3';
 COMMENT ON COLUMN  tablename.UPDATE_TIME
   IS '数据更新时间';
+
+/*自定义转换规则*/
+CREATE TABLE marvin.marvin4 (
+  id NUMBER primary key,
+  name1 VARCHAR2 ( 10 ),
+  name2 VARCHAR2 ( 10 ),
+  name3 VARCHAR2 ( 10 ),
+  loc VARCHAR2 ( 10 ),
+  other blob,
+  address clob,
+  dt timestamp( 9 ),
+  d DATE,
+  sex NUMBER ( 10 )
+);
+
+alter table marvin.marvin4 add constraint cons_uk1 unique(name1);
+alter table marvin.marvin4 add constraint cons_uk2 unique(name3,loc);
+
+create unique index uniq_loc on marvin.marvin4(loc);
+create unique index uniq_loc_name on marvin.marvin4(loc,name2);
+
+create index idx_name_complex on marvin.marvin4(name2,name3);
+create index idx_name_sex_complex on marvin.marvin4(name3,sex);
+
+alter table marvin.marvin4 add constraint cons_uk3 unique(loc,name2);
+
+

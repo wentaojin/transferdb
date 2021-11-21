@@ -18,6 +18,7 @@ package service
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 )
@@ -104,8 +105,8 @@ func (c *CfgFile) configFromFile(file string) error {
 // 根据配置文件获取表列表
 func (c *CfgFile) GenerateTables(engine *Engine) ([]string, error) {
 	var (
-		exporterTableSlice []string
-		err                error
+		exporterTableSlice, upperTableSlice []string
+		err                                 error
 	)
 	switch {
 	case len(c.SourceConfig.IncludeTable) != 0 && len(c.SourceConfig.ExcludeTable) == 0:
@@ -130,7 +131,13 @@ func (c *CfgFile) GenerateTables(engine *Engine) ([]string, error) {
 	if len(exporterTableSlice) == 0 {
 		return exporterTableSlice, fmt.Errorf("exporter table slice can not null from reverse task")
 	}
-	return exporterTableSlice, nil
+
+	// 表名大写
+	for _, tbl := range exporterTableSlice {
+		upperTableSlice = append(upperTableSlice, strings.ToUpper(tbl))
+	}
+
+	return upperTableSlice, nil
 }
 
 func (c *CfgFile) String() string {
