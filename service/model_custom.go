@@ -43,7 +43,7 @@ type TableDataTypeMap struct {
 	SourceSchemaName string     `gorm:"not null;index:unique_schema_table_col,unique;comment:'源端库 schema'" json:"source_schema_name"`
 	SourceTableName  string     `gorm:"not null;index:unique_schema_table_col,unique;comment:'源端表名'" json:"source_table_name"`
 	SourceColumnType string     `gorm:"not null;index:unique_schema_table_col,unique;comment:'源端表字段类型'" json:"source_column_type"`
-	TargetColumnType string     `gorm:"not null;index:unique_schema_table_col,unique;comment:'目标表字段类型'" json:"target_column_type"`
+	TargetColumnType string     `gorm:"not null;index:idx_target_col;comment:'目标表字段类型'" json:"target_column_type"`
 	CreatedAt        *time.Time `gorm:"type:timestamp;not null;default:current_timestamp;comment:'创建时间'" json:"createdAt"`
 	UpdatedAt        *time.Time `gorm:"type:timestamp;not null on update current_timestamp;default:current_timestamp;comment:'更新时间'" json:"updatedAt"`
 }
@@ -53,7 +53,7 @@ type SchemaDataTypeMap struct {
 	ID               uint       `gorm:"primary_key;autoIncrement;comment:'自增编号'" json:"id"`
 	SourceSchemaName string     `gorm:"not null;index:unique_schema_col,unique;comment:'源端库 schema'" json:"source_schema_name"`
 	SourceColumnType string     `gorm:"not null;index:unique_schema_col,unique;comment:'源端表字段类型'" json:"source_column_type"`
-	TargetColumnType string     `gorm:"not null;index:unique_schema_col,unique;comment:'目标表字段类型'" json:"target_column_type"`
+	TargetColumnType string     `gorm:"not null;index:idx_target_col;comment:'目标表字段类型'" json:"target_column_type"`
 	CreatedAt        *time.Time `gorm:"type:timestamp;not null;default:current_timestamp;comment:'创建时间'" json:"createdAt"`
 	UpdatedAt        *time.Time `gorm:"type:timestamp;not null on update current_timestamp;default:current_timestamp;comment:'更新时间'" json:"updatedAt"`
 }

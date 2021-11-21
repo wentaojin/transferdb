@@ -452,15 +452,11 @@ func loadDataTypeRuleUsingTableAndSchema(sourceSchema string, exporterTableSlice
 		upperTblName := strings.ToUpper(tblName.SourceTableName)
 
 		if utils.IsContainString(exporterTableSlice, upperTblName) {
-			tmpColTypes := columnTypesMap[upperTblName]
-			for idx, col := range tmpColTypes {
-				if strings.ToUpper(tblName.SourceColumnType) == strings.ToUpper(col.SourceColumnType) {
-					columnTypesMap[upperTblName][idx].TargetColumnType = tblName.AdjustTableDataType(upperTblName)
-				} else {
-					columnTypesMap[upperTblName] = append(columnTypesMap[upperTblName], ColumnTypeMap{
-						SourceColumnType: tblName.SourceColumnType,
-						TargetColumnType: tblName.AdjustTableDataType(upperTblName),
-					})
+			if tmpColTypes, ok := columnTypesMap[upperTblName]; ok {
+				for idx, col := range tmpColTypes {
+					if strings.ToUpper(tblName.SourceColumnType) == strings.ToUpper(col.SourceColumnType) {
+						columnTypesMap[upperTblName][idx].TargetColumnType = tblName.AdjustTableDataType(upperTblName)
+					}
 				}
 			}
 			customTableSlice = append(customTableSlice, upperTblName)
