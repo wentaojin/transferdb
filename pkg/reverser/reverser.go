@@ -126,9 +126,12 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 
 	wp := workpool.New(cfg.AppConfig.Threads)
 
-	for _, table := range tables {
+	for _, tblName := range tables {
+		service.Logger.Info("reverse table rule",
+			zap.String("rule", tblName.String()))
+
 		// 变量替换，直接使用原变量会导致并发输出有问题
-		tbl := table
+		tbl := tblName
 		wrMR := wrReverse
 		wrCMP := wrComp
 		wp.DoWait(func() error {

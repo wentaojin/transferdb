@@ -69,7 +69,7 @@ func (e *Engine) GetColumnDataTypeMap(schemaName, tableName string) ([]ColumnDat
 
 func (e *Engine) GetTableDataTypeMap(schemaName string) ([]TableDataTypeMap, error) {
 	var c []TableDataTypeMap
-	if err := e.GormDB.Where("upper(source_schema_name) = ?", schemaName).Find(&c).Error; err != nil {
+	if err := e.GormDB.Where("upper(source_schema_name) = ?", strings.ToUpper(schemaName)).Find(&c).Error; err != nil {
 		return c, fmt.Errorf("get custom table data type map by schema [%s] table failed: %v", schemaName, err)
 	}
 	return c, nil
@@ -77,7 +77,7 @@ func (e *Engine) GetTableDataTypeMap(schemaName string) ([]TableDataTypeMap, err
 
 func (e *Engine) GetSchemaDataTypeMap(schemaName string) ([]SchemaDataTypeMap, error) {
 	var c []SchemaDataTypeMap
-	if err := e.GormDB.Where("upper(source_schema_name) = ? ", schemaName).Find(&c).Error; err != nil {
+	if err := e.GormDB.Where("upper(source_schema_name) = ? ", strings.ToUpper(schemaName)).Find(&c).Error; err != nil {
 		return c, fmt.Errorf("get custom schema data type map by schema [%s] failed: %v", schemaName, err)
 	}
 	return c, nil

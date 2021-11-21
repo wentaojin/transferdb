@@ -17,12 +17,279 @@ package reverser
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/wentaojin/transferdb/service"
 	"github.com/wentaojin/transferdb/utils"
 	"go.uber.org/zap"
 )
+
+// 表数据类型转换
+func ReverseOracleTableColumnMapRule(
+	sourceSchema, sourceTableName, columnName, dataType, dataNullable, comments, dataDefault string,
+	dataScaleValue, dataPrecisionValue, dataLengthValue string, planColumnTypes []ColumnTypeMap, customColumnDataTypeMap []service.ColumnDataTypeMap) (string, error) {
+	var (
+		// 字段元数据
+		columnMeta string
+		// oracle 表原始字段类型
+		originColumnType string
+		// 内置字段类型转换规则
+		buildInColumnType string
+		// 转换字段类型
+		modifyColumnType string
+	)
+	dataLength, err := strconv.Atoi(dataLengthValue)
+	if err != nil {
+		return columnMeta, fmt.Errorf("oracle schema [%s] table [%s] reverser column data_length string to int failed: %v", sourceSchema, sourceTableName, err)
+	}
+	dataPrecision, err := strconv.Atoi(dataPrecisionValue)
+	if err != nil {
+		return columnMeta, fmt.Errorf("oracle schema [%s] table [%s] reverser column data_precision string to int failed: %v", sourceSchema, sourceTableName, err)
+	}
+	dataScale, err := strconv.Atoi(dataScaleValue)
+	if err != nil {
+		return columnMeta, fmt.Errorf("oracle schema [%s] table [%s] reverser column data_scale string to int failed: %v", sourceSchema, sourceTableName, err)
+	}
+
+	switch strings.ToUpper(dataType) {
+	case "NUMBER":
+		switch {
+		case dataScale > 0:
+			originColumnType = fmt.Sprintf("NUMBER(%d,%d)", dataPrecision, dataScale)
+			buildInColumnType = fmt.Sprintf("DECIMAL(%d,%d)", dataPrecision, dataScale)
+		case dataScale == 0:
+			switch {
+			case dataPrecision == 0 && dataScale == 0:
+				originColumnType = "NUMBER"
+				buildInColumnType = "DECIMAL(65,30)"
+			case dataPrecision >= 1 && dataPrecision < 3:
+				originColumnType = fmt.Sprintf("NUMBER(%d)", dataPrecision)
+				buildInColumnType = "TINYINT"
+			case dataPrecision >= 3 && dataPrecision < 5:
+				originColumnType = fmt.Sprintf("NUMBER(%d)", dataPrecision)
+				buildInColumnType = "SMALLINT"
+			case dataPrecision >= 5 && dataPrecision < 9:
+				originColumnType = fmt.Sprintf("NUMBER(%d)", dataPrecision)
+				buildInColumnType = "INT"
+			case dataPrecision >= 9 && dataPrecision < 19:
+				originColumnType = fmt.Sprintf("NUMBER(%d)", dataPrecision)
+				buildInColumnType = "BIGINT"
+			case dataPrecision >= 19 && dataPrecision <= 38:
+				originColumnType = fmt.Sprintf("NUMBER(%d)", dataPrecision)
+				buildInColumnType = fmt.Sprintf("DECIMAL(%d)", dataPrecision)
+			default:
+				originColumnType = fmt.Sprintf("NUMBER(%d)", dataPrecision)
+				buildInColumnType = fmt.Sprintf("DECIMAL(%d,4)", dataPrecision)
+			}
+		}
+		modifyColumnType = changeOracleTableColumnType(columnName, originColumnType, planColumnTypes, buildInColumnType, customColumnDataTypeMap)
+		columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, dataNullable, comments, dataDefault)
+	case "BFILE":
+		originColumnType = "BFILE"
+		buildInColumnType = "VARCHAR(255)"
+		modifyColumnType = changeOracleTableColumnType(columnName, originColumnType, planColumnTypes, buildInColumnType, customColumnDataTypeMap)
+		columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, dataNullable, comments, dataDefault)
+	case "CHAR":
+		originColumnType = fmt.Sprintf("CHAR(%d)", dataLength)
+		if dataLength < 256 {
+			buildInColumnType = fmt.Sprintf("CHAR(%d)", dataLength)
+		} else {
+			buildInColumnType = fmt.Sprintf("VARCHAR(%d)", dataLength)
+		}
+		modifyColumnType = changeOracleTableColumnType(columnName, originColumnType, planColumnTypes, buildInColumnType, customColumnDataTypeMap)
+		columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, dataNullable, comments, dataDefault)
+	case "CHARACTER":
+		originColumnType = fmt.Sprintf("CHARACTER(%d)", dataLength)
+		if dataLength < 256 {
+			buildInColumnType = fmt.Sprintf("CHARACTER(%d)", dataLength)
+		} else {
+			buildInColumnType = fmt.Sprintf("VARCHAR(%d)", dataLength)
+		}
+		modifyColumnType = changeOracleTableColumnType(columnName, originColumnType, planColumnTypes, buildInColumnType, customColumnDataTypeMap)
+		columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, dataNullable, comments, dataDefault)
+	case "CLOB":
+		originColumnType = "CLOB"
+		buildInColumnType = "LONGTEXT"
+		modifyColumnType = changeOracleTableColumnType(columnName, originColumnType, planColumnTypes, buildInColumnType, customColumnDataTypeMap)
+		columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, dataNullable, comments, dataDefault)
+	case "BLOB":
+		originColumnType = "BLOB"
+		buildInColumnType = "BLOB"
+		modifyColumnType = changeOracleTableColumnType(columnName, originColumnType, planColumnTypes, buildInColumnType, customColumnDataTypeMap)
+		columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, dataNullable, comments, dataDefault)
+	case "DATE":
+		originColumnType = "DATE"
+		buildInColumnType = "DATETIME"
+		modifyColumnType = changeOracleTableColumnType(columnName, originColumnType, planColumnTypes, buildInColumnType, customColumnDataTypeMap)
+		columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, dataNullable, comments, dataDefault)
+	case "DECIMAL":
+		switch {
+		case dataScale == 0 && dataPrecision == 0:
+			originColumnType = "DECIMAL"
+			buildInColumnType = "DECIMAL"
+		default:
+			originColumnType = fmt.Sprintf("DECIMAL(%d,%d)", dataPrecision, dataScale)
+			buildInColumnType = fmt.Sprintf("DECIMAL(%d,%d)", dataPrecision, dataScale)
+		}
+		modifyColumnType = changeOracleTableColumnType(columnName, originColumnType, planColumnTypes, buildInColumnType, customColumnDataTypeMap)
+		columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, dataNullable, comments, dataDefault)
+	case "DEC":
+		switch {
+		case dataScale == 0 && dataPrecision == 0:
+			originColumnType = "DECIMAL"
+			buildInColumnType = "DECIMAL"
+		default:
+			originColumnType = fmt.Sprintf("DECIMAL(%d,%d)", dataPrecision, dataScale)
+			buildInColumnType = fmt.Sprintf("DECIMAL(%d,%d)", dataPrecision, dataScale)
+		}
+		modifyColumnType = changeOracleTableColumnType(columnName, originColumnType, planColumnTypes, buildInColumnType, customColumnDataTypeMap)
+		columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, dataNullable, comments, dataDefault)
+	case "DOUBLE PRECISION":
+		originColumnType = "DOUBLE PRECISION"
+		buildInColumnType = "DOUBLE PRECISION"
+		modifyColumnType = changeOracleTableColumnType(columnName, originColumnType, planColumnTypes, buildInColumnType, customColumnDataTypeMap)
+		columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, dataNullable, comments, dataDefault)
+	case "FLOAT":
+		originColumnType = "FLOAT"
+		if dataPrecision == 0 {
+			buildInColumnType = "FLOAT"
+		} else {
+			buildInColumnType = "DOUBLE"
+		}
+		modifyColumnType = changeOracleTableColumnType(columnName, originColumnType, planColumnTypes, buildInColumnType, customColumnDataTypeMap)
+		columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, dataNullable, comments, dataDefault)
+	case "INTEGER":
+		originColumnType = "INTEGER"
+		buildInColumnType = "INT"
+		modifyColumnType = changeOracleTableColumnType(columnName, originColumnType, planColumnTypes, buildInColumnType, customColumnDataTypeMap)
+		columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, dataNullable, comments, dataDefault)
+	case "INT":
+		originColumnType = "INTEGER"
+		buildInColumnType = "INT"
+		modifyColumnType = changeOracleTableColumnType(columnName, originColumnType, planColumnTypes, buildInColumnType, customColumnDataTypeMap)
+		columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, dataNullable, comments, dataDefault)
+	case "LONG":
+		originColumnType = "LONG"
+		buildInColumnType = "LONGTEXT"
+		modifyColumnType = changeOracleTableColumnType(columnName, originColumnType, planColumnTypes, buildInColumnType, customColumnDataTypeMap)
+		columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, dataNullable, comments, dataDefault)
+	case "LONG RAW":
+		originColumnType = "LONG RAW"
+		buildInColumnType = "LONGBLOB"
+		modifyColumnType = changeOracleTableColumnType(columnName, originColumnType, planColumnTypes, buildInColumnType, customColumnDataTypeMap)
+		columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, dataNullable, comments, dataDefault)
+	case "BINARY_FLOAT":
+		originColumnType = "BINARY_FLOAT"
+		buildInColumnType = "DOUBLE"
+		modifyColumnType = changeOracleTableColumnType(columnName, originColumnType, planColumnTypes, buildInColumnType, customColumnDataTypeMap)
+		columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, dataNullable, comments, dataDefault)
+	case "BINARY_DOUBLE":
+		originColumnType = "BINARY_DOUBLE"
+		buildInColumnType = "DOUBLE"
+		modifyColumnType = changeOracleTableColumnType(columnName, originColumnType, planColumnTypes, buildInColumnType, customColumnDataTypeMap)
+		columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, dataNullable, comments, dataDefault)
+	case "NCHAR":
+		originColumnType = fmt.Sprintf("NCHAR(%d)", dataLength)
+		if dataLength < 256 {
+			buildInColumnType = fmt.Sprintf("NCHAR(%d)", dataLength)
+		} else {
+			buildInColumnType = fmt.Sprintf("NVARCHAR(%d)", dataLength)
+		}
+		modifyColumnType = changeOracleTableColumnType(columnName, originColumnType, planColumnTypes, buildInColumnType, customColumnDataTypeMap)
+		columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, dataNullable, comments, dataDefault)
+	case "NCHAR VARYING":
+		originColumnType = "NCHAR VARYING"
+		buildInColumnType = fmt.Sprintf("NCHAR VARYING(%d)", dataLength)
+		modifyColumnType = changeOracleTableColumnType(columnName, originColumnType, planColumnTypes, buildInColumnType, customColumnDataTypeMap)
+		columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, dataNullable, comments, dataDefault)
+	case "NCLOB":
+		originColumnType = "NCLOB"
+		buildInColumnType = "TEXT"
+		modifyColumnType = changeOracleTableColumnType(columnName, originColumnType, planColumnTypes, buildInColumnType, customColumnDataTypeMap)
+		columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, dataNullable, comments, dataDefault)
+	case "NUMERIC":
+		originColumnType = fmt.Sprintf("NUMERIC(%d,%d)", dataPrecision, dataScale)
+		buildInColumnType = fmt.Sprintf("NUMERIC(%d,%d)", dataPrecision, dataScale)
+		modifyColumnType = changeOracleTableColumnType(columnName, originColumnType, planColumnTypes, buildInColumnType, customColumnDataTypeMap)
+		columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, dataNullable, comments, dataDefault)
+	case "NVARCHAR2":
+		originColumnType = fmt.Sprintf("NVARCHAR2(%d)", dataLength)
+		buildInColumnType = fmt.Sprintf("NVARCHAR(%d)", dataLength)
+		modifyColumnType = changeOracleTableColumnType(columnName, originColumnType, planColumnTypes, buildInColumnType, customColumnDataTypeMap)
+		columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, dataNullable, comments, dataDefault)
+	case "RAW":
+		originColumnType = fmt.Sprintf("RAW(%d)", dataLength)
+		if dataLength < 256 {
+			buildInColumnType = fmt.Sprintf("BINARY(%d)", dataLength)
+		} else {
+			buildInColumnType = fmt.Sprintf("VARBINARY(%d)", dataLength)
+		}
+		modifyColumnType = changeOracleTableColumnType(columnName, originColumnType, planColumnTypes, buildInColumnType, customColumnDataTypeMap)
+		columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, dataNullable, comments, dataDefault)
+	case "REAL":
+		originColumnType = "real"
+		buildInColumnType = "DOUBLE"
+		modifyColumnType = changeOracleTableColumnType(columnName, originColumnType, planColumnTypes, buildInColumnType, customColumnDataTypeMap)
+		columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, dataNullable, comments, dataDefault)
+	case "ROWID":
+		originColumnType = "ROWID"
+		buildInColumnType = "CHAR(10)"
+		modifyColumnType = changeOracleTableColumnType(columnName, originColumnType, planColumnTypes, buildInColumnType, customColumnDataTypeMap)
+		columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, dataNullable, comments, dataDefault)
+	case "SMALLINT":
+		originColumnType = "SMALLINT"
+		buildInColumnType = "DECIMAL(38)"
+		modifyColumnType = changeOracleTableColumnType(columnName, originColumnType, planColumnTypes, buildInColumnType, customColumnDataTypeMap)
+		columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, dataNullable, comments, dataDefault)
+	case "UROWID":
+		originColumnType = "UROWID"
+		buildInColumnType = fmt.Sprintf("VARCHAR(%d)", dataLength)
+		modifyColumnType = changeOracleTableColumnType(columnName, originColumnType, planColumnTypes, buildInColumnType, customColumnDataTypeMap)
+		columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, dataNullable, comments, dataDefault)
+	case "VARCHAR2":
+		originColumnType = fmt.Sprintf("VARCHAR2(%d)", dataLength)
+		buildInColumnType = fmt.Sprintf("VARCHAR(%d)", dataLength)
+		modifyColumnType = changeOracleTableColumnType(columnName, originColumnType, planColumnTypes, buildInColumnType, customColumnDataTypeMap)
+		columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, dataNullable, comments, dataDefault)
+	case "VARCHAR":
+		originColumnType = fmt.Sprintf("VARCHAR(%d)", dataLength)
+		buildInColumnType = fmt.Sprintf("VARCHAR(%d)", dataLength)
+		modifyColumnType = changeOracleTableColumnType(columnName, originColumnType, planColumnTypes, buildInColumnType, customColumnDataTypeMap)
+		columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, dataNullable, comments, dataDefault)
+	case "XMLTYPE":
+		originColumnType = "XMLTYPE"
+		buildInColumnType = "LONGTEXT"
+		modifyColumnType = changeOracleTableColumnType(columnName, originColumnType, planColumnTypes, buildInColumnType, customColumnDataTypeMap)
+		columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, dataNullable, comments, dataDefault)
+	default:
+		if strings.Contains(dataType, "INTERVAL") {
+			originColumnType = dataType
+			buildInColumnType = "VARCHAR(30)"
+		} else if strings.Contains(dataType, "TIMESTAMP") {
+			originColumnType = dataType
+			if strings.Contains(dataType, "WITH TIME ZONE") || strings.Contains(dataType, "WITH LOCAL TIME ZONE") {
+				if dataPrecision <= 6 {
+					buildInColumnType = fmt.Sprintf("DATETIME(%d)", dataPrecision)
+				} else {
+					buildInColumnType = fmt.Sprintf("DATETIME(%d)", 6)
+				}
+			} else {
+				if dataPrecision <= 6 {
+					buildInColumnType = fmt.Sprintf("TIMESTAMP(%d)", dataPrecision)
+				} else {
+					buildInColumnType = fmt.Sprintf("TIMESTAMP(%d)", 6)
+				}
+			}
+		} else {
+			originColumnType = dataType
+			buildInColumnType = "TEXT"
+		}
+		modifyColumnType = changeOracleTableColumnType(columnName, originColumnType, planColumnTypes, buildInColumnType, customColumnDataTypeMap)
+		columnMeta = generateOracleTableColumnMetaByType(columnName, modifyColumnType, dataNullable, comments, dataDefault)
+	}
+	return columnMeta, nil
+}
 
 // 加载表以及库数据类型映射规则
 func LoadOracleToMySQLMapRuleUsingTableAndSchema(engine *service.Engine, exporterTableSlice []string, sourceSchema, targetSchema string, overwrite bool) ([]Table, []string, error) {
@@ -48,9 +315,9 @@ func LoadOracleToMySQLMapRuleUsingTableAndSchema(engine *service.Engine, exporte
 
 	for _, tbl := range exporterTableSlice {
 		tableNameSliceMap = append(tableNameSliceMap, map[string]TableNameMap{
-			tbl: {
-				SourceTableName: tbl,
-				TargetTableName: tbl,
+			strings.ToUpper(tbl): {
+				SourceTableName: strings.ToUpper(tbl),
+				TargetTableName: strings.ToUpper(tbl),
 			},
 		})
 	}
@@ -182,19 +449,21 @@ func loadDataTypeRuleUsingTableAndSchema(sourceSchema string, exporterTableSlice
 	// - 自定义表字段类型规则存在，而库字段类型也存在的情况，则使用表字段类型转换规则
 	// - 两者都不存在，则不追加任何转换规则，字段类型转换时使用内置类型转换规则
 	for _, tblName := range tableDataTypeMapSlice {
-		if utils.IsContainString(exporterTableSlice, strings.ToUpper(tblName.SourceTableName)) {
-			tmpColTypes := columnTypesMap[tblName.SourceTableName]
+		upperTblName := strings.ToUpper(tblName.SourceTableName)
+
+		if utils.IsContainString(exporterTableSlice, upperTblName) {
+			tmpColTypes := columnTypesMap[upperTblName]
 			for idx, col := range tmpColTypes {
-				if strings.ToUpper(tblName.SourceColumnType) == strings.ToUpper(col.SourceColumnType) {
-					columnTypesMap[tblName.SourceTableName][idx].TargetColumnType = tblName.AdjustTableDataType(tblName.SourceTableName)
+				if upperTblName == strings.ToUpper(col.SourceColumnType) {
+					columnTypesMap[upperTblName][idx].TargetColumnType = tblName.AdjustTableDataType(upperTblName)
 				} else {
-					columnTypesMap[tblName.SourceTableName] = append(columnTypesMap[tblName.SourceTableName], ColumnTypeMap{
+					columnTypesMap[upperTblName] = append(columnTypesMap[upperTblName], ColumnTypeMap{
 						SourceColumnType: tblName.SourceColumnType,
-						TargetColumnType: tblName.AdjustTableDataType(tblName.SourceTableName),
+						TargetColumnType: tblName.AdjustTableDataType(upperTblName),
 					})
 				}
 			}
-			customTableSlice = append(customTableSlice, strings.ToUpper(tblName.SourceTableName))
+			customTableSlice = append(customTableSlice, upperTblName)
 		}
 	}
 
