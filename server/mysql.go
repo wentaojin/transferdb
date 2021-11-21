@@ -19,6 +19,8 @@ import (
 	"fmt"
 	"time"
 
+	"gorm.io/gorm/schema"
+
 	"github.com/wentaojin/transferdb/service"
 
 	gormLogger "gorm.io/gorm/logger"
@@ -39,6 +41,9 @@ func NewMySQLEnginePrepareDB(mysqlCfg service.TargetConfig, slowQueryThreshold i
 	gLogger.SetAsDefault()
 	gormDB, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
 		Logger: gLogger,
+		NamingStrategy: schema.NamingStrategy{
+			SingularTable: true, // 使用单数表名
+		},
 	})
 	if err != nil {
 		return &service.Engine{}, fmt.Errorf("error on initializing mysql database connection [no-schema]: %v", err)
@@ -75,6 +80,9 @@ func NewMySQLEngineGeneralDB(mysqlCfg service.TargetConfig, slowQueryThreshold i
 		DisableForeignKeyConstraintWhenMigrating: true,
 		PrepareStmt:                              true,
 		Logger:                                   gLogger,
+		NamingStrategy: schema.NamingStrategy{
+			SingularTable: true, // 使用单数表名
+		},
 	})
 
 	if err != nil {
