@@ -326,14 +326,18 @@ func changeOracleTableColumnType(columnName string, originColumnType string, bui
 	}
 
 	columnTypeFromColumn := loadDataTypeRuleOnlyUsingColumn(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice)
-	if columnTypeFromColumn != buildInColumnType {
-		return columnTypeFromColumn
-	}
 	columnTypeFromOther := loadDataTypeRuleUsingTableOrSchema(originColumnType, buildInColumnType, tableDataTypeMapSlice, schemaDataTypeMapSlice)
-	if columnTypeFromOther != buildInColumnType {
+
+	switch {
+	case columnTypeFromColumn != buildInColumnType && columnTypeFromOther == buildInColumnType:
+		return columnTypeFromColumn
+	case columnTypeFromColumn != buildInColumnType && columnTypeFromOther != buildInColumnType:
+		return columnTypeFromColumn
+	case columnTypeFromColumn == buildInColumnType && columnTypeFromOther != buildInColumnType:
 		return columnTypeFromOther
+	default:
+		return buildInColumnType
 	}
-	return buildInColumnType
 }
 
 func generateOracleTableColumnMetaByType(columnName, columnType, dataNullable, comments, dataDefault string) string {
@@ -442,16 +446,16 @@ func loadDataTypeRuleUsingTableAndSchema(originColumnType string, buildInColumnT
 
 	customSchemaDataType := loadDataTypeRuleOnlyUsingSchema(originColumnType, buildInColumnType, schemaDataTypeMapSlice)
 
-	if customTableDataType == buildInColumnType && customSchemaDataType != buildInColumnType {
+	switch {
+	case customTableDataType == buildInColumnType && customSchemaDataType != buildInColumnType:
 		return customSchemaDataType
-	}
-
-	if (customTableDataType != buildInColumnType && customSchemaDataType == buildInColumnType) ||
-		(customTableDataType != buildInColumnType && customSchemaDataType != buildInColumnType) {
+	case customTableDataType != buildInColumnType && customSchemaDataType == buildInColumnType:
 		return customTableDataType
+	case customTableDataType != buildInColumnType && customSchemaDataType != buildInColumnType:
+		return customTableDataType
+	default:
+		return buildInColumnType
 	}
-
-	return buildInColumnType
 }
 
 func loadDataTypeRuleOnlyUsingColumn(columnName string, originColumnType string, buildInColumnType string, columnDataTypeMapSlice []service.ColumnDataTypeMap) string {
