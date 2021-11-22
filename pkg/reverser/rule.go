@@ -282,14 +282,14 @@ func ReverseOracleTableColumnMapRule(
 		} else if strings.Contains(dataType, "TIMESTAMP") {
 			originColumnType = dataType
 			if strings.Contains(dataType, "WITH TIME ZONE") || strings.Contains(dataType, "WITH LOCAL TIME ZONE") {
-				if dataPrecision <= 6 {
-					buildInColumnType = fmt.Sprintf("DATETIME(%d)", dataPrecision)
+				if dataScale <= 6 {
+					buildInColumnType = fmt.Sprintf("DATETIME(%d)", dataScale)
 				} else {
 					buildInColumnType = fmt.Sprintf("DATETIME(%d)", 6)
 				}
 			} else {
-				if dataPrecision <= 6 {
-					buildInColumnType = fmt.Sprintf("TIMESTAMP(%d)", dataPrecision)
+				if dataScale <= 6 {
+					buildInColumnType = fmt.Sprintf("TIMESTAMP(%d)", dataScale)
 				} else {
 					buildInColumnType = fmt.Sprintf("TIMESTAMP(%d)", 6)
 				}

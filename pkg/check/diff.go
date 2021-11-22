@@ -1535,21 +1535,21 @@ func OracleTableMapRuleCheck(
 			return fixedMsg, tableRows, nil
 		} else if strings.Contains(oracleDataType, "TIMESTAMP") {
 			if strings.Contains(oracleDataType, "WITH TIME ZONE") || strings.Contains(oracleDataType, "WITH LOCAL TIME ZONE") {
-				if oracleDataPrecision <= 6 {
-					if mysqlDataType == "DATETIME" && mysqlDatetimePrecision == oracleDataPrecision && oracleDiffColMeta == mysqlDiffColMeta {
+				if oracleDataScale <= 6 {
+					if mysqlDataType == "DATETIME" && mysqlDatetimePrecision == oracleDataScale && oracleDiffColMeta == mysqlDiffColMeta {
 						return "", nil, nil
 					}
 					tableRows = table.Row{
 						columnName,
-						fmt.Sprintf("%s(%d) %s", oracleDataType, oracleDataPrecision, oracleColMeta),
+						fmt.Sprintf("%s(%d) %s", oracleDataType, oracleDataScale, oracleColMeta),
 						fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDatetimePrecision, mysqlColMeta),
-						fmt.Sprintf("DATETIME(%d) %s", oracleDataPrecision, oracleColMeta)}
+						fmt.Sprintf("DATETIME(%d) %s", oracleDataScale, oracleColMeta)}
 
 					fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 						targetSchema,
 						tableName,
 						columnName,
-						fmt.Sprintf("DATETIME(%d)", oracleDataPrecision),
+						fmt.Sprintf("DATETIME(%d)", oracleDataScale),
 						oracleColMeta,
 					)
 					return fixedMsg, tableRows, nil
@@ -1557,7 +1557,7 @@ func OracleTableMapRuleCheck(
 					// mysql/tidb 只支持精度 6，oracle 精度最大是 9，会检查出来但是保持原样
 					tableRows = table.Row{
 						columnName,
-						fmt.Sprintf("%s(%d) %s", oracleDataType, oracleDataPrecision, oracleColMeta),
+						fmt.Sprintf("%s(%d) %s", oracleDataType, oracleDataScale, oracleColMeta),
 						fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDatetimePrecision, mysqlColMeta),
 						fmt.Sprintf("DATETIME(%d) %s", 6, oracleColMeta)}
 
@@ -1571,21 +1571,21 @@ func OracleTableMapRuleCheck(
 					return fixedMsg, tableRows, nil
 				}
 			} else {
-				if oracleDataPrecision <= 6 {
-					if mysqlDataType == "TIMESTAMP" && mysqlDatetimePrecision == oracleDataPrecision && oracleDiffColMeta == mysqlDiffColMeta {
+				if oracleDataScale <= 6 {
+					if mysqlDataType == "TIMESTAMP" && mysqlDatetimePrecision == oracleDataScale && oracleDiffColMeta == mysqlDiffColMeta {
 						return "", nil, nil
 					}
 					tableRows = table.Row{
 						columnName,
-						fmt.Sprintf("%s(%d) %s", oracleDataType, oracleDataPrecision, oracleColMeta),
+						fmt.Sprintf("%s(%d) %s", oracleDataType, oracleDataScale, oracleColMeta),
 						fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDatetimePrecision, mysqlColMeta),
-						fmt.Sprintf("TIMESTAMP(%d) %s", oracleDataPrecision, oracleColMeta)}
+						fmt.Sprintf("TIMESTAMP(%d) %s", oracleDataScale, oracleColMeta)}
 
 					fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 						targetSchema,
 						tableName,
 						columnName,
-						fmt.Sprintf("TIMESTAMP(%d)", oracleDataPrecision),
+						fmt.Sprintf("TIMESTAMP(%d)", oracleDataScale),
 						oracleColMeta,
 					)
 					return fixedMsg, tableRows, nil
@@ -1593,7 +1593,7 @@ func OracleTableMapRuleCheck(
 					// mysql/tidb 只支持精度 6，oracle 精度最大是 9，会检查出来但是保持原样
 					tableRows = table.Row{
 						columnName,
-						fmt.Sprintf("%s(%d) %s", oracleDataType, oracleDataPrecision, oracleColMeta),
+						fmt.Sprintf("%s(%d) %s", oracleDataType, oracleDataScale, oracleColMeta),
 						fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDatetimePrecision, mysqlColMeta),
 						fmt.Sprintf("TIMESTAMP(%d) %s", 6, oracleColMeta)}
 
