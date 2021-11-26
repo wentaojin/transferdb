@@ -31,22 +31,22 @@ build: clean gotool
 	$(GOBUILD) -ldflags '$(LDFLAGS)' -o $(BINARYPATH) $(CMDPATH)
 
 gather: gotool
-	$(GORUN) -race $(CMDPATH) --config $(CONFIGPATH) --mode gather
+	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode gather
 
 prepare: gotool
-	$(GORUN) -race $(CMDPATH) --config $(CONFIGPATH) --mode prepare
+	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode prepare
 
 reverse: gotool
-	$(GORUN) -race $(CMDPATH) --config $(CONFIGPATH) --mode reverse
+	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode reverse
 
 check: gotool
-	$(GORUN) -race $(CMDPATH) --config $(CONFIGPATH) --mode check
+	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode check
 
 all: gotool
-	$(GORUN) -race $(CMDPATH) --config $(CONFIGPATH) --mode all
+	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode all
 
 full: gotool
-	$(GORUN) -race $(CMDPATH) --config $(CONFIGPATH) --mode full
+	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode full
 
 gotool:
 	$(GO) mod tidy

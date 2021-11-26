@@ -241,7 +241,7 @@ func syncOracleSingleTableTask(cfg *service.CfgFile, engine *service.Engine, tab
 	for _, rowidSQL := range oraRowIDSQL {
 		sql := rowidSQL
 		mode := syncMode
-		wp.DoWait(func() error {
+		wp.Do(func() error {
 			// 抽取 Oracle 数据
 			columns, rowsResult, err := extractorTableFullRecord(engine, cfg.SourceConfig.SchemaName, table, sql)
 			if err != nil {

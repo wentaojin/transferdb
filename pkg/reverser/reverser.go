@@ -134,7 +134,7 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 		tbl := tblName
 		wrMR := wrReverse
 		wrCMP := wrComp
-		wp.DoWait(func() error {
+		wp.Do(func() error {
 			createSQL, compatibilitySQL, errMSg := tbl.GenerateAndExecMySQLCreateSQL()
 			if errMSg != nil {
 				return errMSg
