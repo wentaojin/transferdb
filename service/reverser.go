@@ -97,6 +97,13 @@ and upper(table_name)=upper('%s')`, strings.ToUpper(schemaName), strings.ToUpper
 	if err != nil {
 		return comments, err
 	}
+	if len(res) == 0 {
+		return res, fmt.Errorf("oracle table [%s.%s] comment can't be null", schemaName, tableName)
+	}
+	if len(res) > 1 {
+		return res, fmt.Errorf("oracle schema [%s] table [%s] comments exist multiple values: [%v]", schemaName, tableName, res)
+	}
+
 	return res, nil
 }
 
@@ -128,6 +135,9 @@ func (e *Engine) GetOracleTableColumn(schemaName string, tableName string) ([]ma
 	_, res, err := Query(e.OracleDB, querySQL)
 	if err != nil {
 		return res, err
+	}
+	if len(res) == 0 {
+		return res, fmt.Errorf("oracle table [%s.%s] column info cann't be null", schemaName, tableName)
 	}
 	return res, nil
 }
@@ -372,15 +382,14 @@ func (e *Engine) GetOracleTable(schemaName string) ([]string, error) {
 		tables []string
 		err    error
 	)
-	cols, res, err := Query(e.OracleDB, fmt.Sprintf(`SELECT table_name FROM ALL_TABLES WHERE UPPER(owner) = UPPER('%s')`, schemaName))
+	_, res, err := Query(e.OracleDB, fmt.Sprintf(`SELECT table_name AS TABLE_NAME FROM ALL_TABLES WHERE UPPER(owner) = UPPER('%s')`, schemaName))
 	if err != nil {
 		return tables, err
 	}
-	for _, col := range cols {
-		for _, r := range res {
-			tables = append(tables, r[col])
-		}
+	for _, r := range res {
+		tables = append(tables, strings.ToUpper(r["TABLE_NAME"]))
 	}
+
 	return tables, nil
 }
 

@@ -106,11 +106,11 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 				return fmt.Errorf("oracle partition table list should only be one, can't be exist more [%v]", partitionTableList)
 			}
 			t.AppendRows([]table.Row{
-				{"TABLE", fmt.Sprintf("%s.%s", d.SourceSchemaName, partitionTableList[0]), fmt.Sprintf("%s.%s", d.TargetSchemaName, partitionTableList[0]), "True", "Manual Create And Adjust TABLE"},
+				{"TABLE", fmt.Sprintf("%s.%s", d.SourceSchemaName, partitionTableList[0]), fmt.Sprintf("%s.%s", d.TargetSchemaName, partitionTableList[0]), "True", "Manual Create Partition Table"},
 			})
 		} else {
 			t.AppendRows([]table.Row{
-				{"TABLE", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName), fmt.Sprintf("%s.%s", d.TargetSchemaName, d.TableName), "False", "Manual Create And Adjust TABLE"},
+				{"TABLE", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName), fmt.Sprintf("%s.%s", d.TargetSchemaName, d.TableName), "False", "Create Table"},
 			})
 		}
 		builder.WriteString(fmt.Sprintf("%v\n", t.Render()))
@@ -134,7 +134,7 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 
 		// 输出创建表以及索引语句
 		if len(createSQLS) != 0 {
-			builder.WriteString("-- create table and index sql\n")
+			builder.WriteString("/* create table and index sql */\n")
 			for _, sql := range createSQLS {
 				builder.WriteString(fmt.Sprintf("%s\n", sql))
 			}
@@ -142,14 +142,11 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 
 		// 输出表创建过程可能存在不兼容的语句对象（外键、检查约束）
 		if len(compatibilitySQLS) != 0 {
-			builder.WriteString("-- maybe exist compatibility sql\n")
+			builder.WriteString("/* [notice] maybe exist compatibility sql */\n")
 			for _, sql := range compatibilitySQLS {
 				builder.WriteString(fmt.Sprintf("%s\n", sql))
 			}
 		}
-
-		builder.WriteString(fmt.Sprintf("-- the above info comes from oracle table [%s.%s]\n", d.SourceSchemaName, d.TableName))
-		builder.WriteString(fmt.Sprintf("-- the above info comes from mysql table [%s.%s]\n", d.TargetSchemaName, d.TableName))
 
 		if _, err := fmt.Fprintln(d.FileMW, builder.String()); err != nil {
 			return err
@@ -188,13 +185,10 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 		t.SetStyle(table.StyleLight)
 		t.AppendHeader(table.Row{"TABLE", "PARTITION", "ORACLE", "MYSQL", "SUGGEST"})
 		t.AppendRows([]table.Row{
-			{d.TableName, "PARTITION", oracleTable.IsPartition, mysqlTable.IsPartition, "Manual Adjust"},
+			{d.TableName, "PARTITION", oracleTable.IsPartition, mysqlTable.IsPartition, "Manual Create Partition Table"},
 		})
 		builder.WriteString(fmt.Sprintf("%v\n", t.Render()))
-
 		builder.WriteString("*/\n")
-		builder.WriteString(fmt.Sprintf("\n-- the above info comes from oracle table [%s.%s]\n", d.SourceSchemaName, d.TableName))
-		builder.WriteString(fmt.Sprintf("-- the above info comes from mysql table [%s.%s]\n", d.TargetSchemaName, d.TableName))
 
 		if _, err := fmt.Fprintln(d.FileMW, builder.String()); err != nil {
 			return err
@@ -219,7 +213,7 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 		t.SetStyle(table.StyleLight)
 		t.AppendHeader(table.Row{"TABLE", "COMMENT", "ORACLE", "MYSQL", "SUGGEST"})
 		t.AppendRows([]table.Row{
-			{d.TableName, "COMMENT", oracleTable.TableComment, mysqlTable.TableComment, "Run SQL"},
+			{d.TableName, "COMMENT", oracleTable.TableComment, mysqlTable.TableComment, "Create Table Comment"},
 		})
 		builder.WriteString(fmt.Sprintf("%v\n", t.Render()))
 
@@ -242,7 +236,7 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 			{d.TableName, "CHARACTER AND COLLATION",
 				fmt.Sprintf("character set[%s] collation[%s]", oracleTable.TableCharacterSet, oracleTable.TableCollation),
 				fmt.Sprintf("character set[%s] collation[%s]", mysqlTable.TableCharacterSet, mysqlTable.TableCollation),
-				"Run SQL"},
+				"Create Table Character Collation"},
 		})
 		builder.WriteString(fmt.Sprintf("%v\n", t.Render()))
 
@@ -275,7 +269,7 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 		for mysqlColName, mysqlColInfo := range tableColumnsMap {
 			t.AppendRows([]table.Row{
 				{d.TableName, mysqlColName,
-					fmt.Sprintf("%s(%s)", mysqlColInfo.DataType, mysqlColInfo.DataLength), "Run SQL"},
+					fmt.Sprintf("%s(%s)", mysqlColInfo.DataType, mysqlColInfo.DataLength), "Create Table Column Character Collation"},
 			})
 			sqlStrings = append(sqlStrings, fmt.Sprintf("ALTER TABLE %s.%s MODIFY %s %s(%s) CHARACTER SET %s COLLATE %s;",
 				d.TargetSchemaName, d.TableName, mysqlColName, mysqlColInfo.DataType, mysqlColInfo.DataLength, utils.MySQLCharacterSet, utils.MySQLCollation))
@@ -302,7 +296,7 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 		t.SetStyle(table.StyleLight)
 		t.AppendHeader(table.Row{"TABLE", "PK AND UK", "SUGGEST"})
 		t.AppendRows([]table.Row{
-			{d.TableName, "Oracle And Mysql Different", "Run SQL"},
+			{d.TableName, "Oracle And Mysql Different", "Create Table Primary And Unique Key"},
 		})
 		builder.WriteString(fmt.Sprintf("%v\n", t.Render()))
 
@@ -341,7 +335,7 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 			t.SetStyle(table.StyleLight)
 			t.AppendHeader(table.Row{"TABLE", "FOREIGN KEY", "SUGGEST"})
 			t.AppendRows([]table.Row{
-				{d.TableName, "Oracle And Mysql Different", "Run SQL"},
+				{d.TableName, "Oracle And Mysql Different", "Create Table Foreign Key"},
 			})
 			builder.WriteString(fmt.Sprintf("%v\n", t.Render()))
 
@@ -378,7 +372,7 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 				t.SetStyle(table.StyleLight)
 				t.AppendHeader(table.Row{"TABLE", "CHECK KEY", "SUGGEST"})
 				t.AppendRows([]table.Row{
-					{d.TableName, "Oracle And Mysql Different", "Run SQL"},
+					{d.TableName, "Oracle And Mysql Different", "Create Table Check Key"},
 				})
 				builder.WriteString(fmt.Sprintf("%v\n", t.Render()))
 
@@ -459,7 +453,7 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 		t.SetStyle(table.StyleLight)
 		t.AppendHeader(table.Row{"TABLE", "INDEXES", "SUGGEST"})
 		t.AppendRows([]table.Row{
-			{d.TableName, "Oracle And Mysql Different", "Run SQL"},
+			{d.TableName, "Oracle And Mysql Different", "Create Table Index"},
 		})
 		builder.WriteString(fmt.Sprintf("%v\n", t.Render()))
 
@@ -484,7 +478,7 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 			t.SetStyle(table.StyleLight)
 			t.AppendHeader(table.Row{"TABLE", "PARTITIONS", "SUGGEST"})
 			t.AppendRows([]table.Row{
-				{d.TableName, "Oracle And Mysql Different", "Manual Modify"},
+				{d.TableName, "Oracle And Mysql Different", "Manual Create Partition Table"},
 			})
 			builder.WriteString(fmt.Sprintf("%v\n", t.Render()))
 
@@ -593,8 +587,6 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 
 	// diff 记录不为空
 	if builder.String() != "" {
-		builder.WriteString(fmt.Sprintf("\n-- the above info comes from oracle table [%s.%s]\n", d.SourceSchemaName, d.TableName))
-		builder.WriteString(fmt.Sprintf("-- the above info comes from mysql table [%s.%s]\n", d.TargetSchemaName, d.TableName))
 		if _, err := fmt.Fprintln(d.FileMW, builder.String()); err != nil {
 			return err
 		}

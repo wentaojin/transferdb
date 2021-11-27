@@ -63,9 +63,7 @@ func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 	if err != nil {
 		return "", "", err
 	}
-	if len(tablesMap) > 1 {
-		return "", "", fmt.Errorf("oracle schema [%s] table [%s] comments exist multiple values: [%v]", t.SourceSchemaName, t.SourceTableName, tablesMap)
-	}
+
 	service.Logger.Info("get oracle table comment",
 		zap.String("schema", t.SourceSchemaName),
 		zap.String("table", t.SourceTableName),
@@ -124,7 +122,7 @@ func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 	sw.SetStyle(table.StyleLight)
 	sw.AppendHeader(table.Row{"#", "ORACLE", "MYSQL", "SUGGEST"})
 	sw.AppendRows([]table.Row{
-		{"TABLE", fmt.Sprintf("%s.%s", t.SourceSchemaName, t.SourceTableName), fmt.Sprintf("%s.%s", t.TargetSchemaName, modifyTableName), "Manual"},
+		{"TABLE", fmt.Sprintf("%s.%s", t.SourceSchemaName, t.SourceTableName), fmt.Sprintf("%s.%s", t.TargetSchemaName, modifyTableName), "Create Table"},
 	})
 	sqls.WriteString(fmt.Sprintf("%v\n", sw.Render()))
 	sqls.WriteString("*/\n")
@@ -211,12 +209,12 @@ func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 
 	if len(fkMetas) > 0 || len(ckMetas) > 0 || len(compatibilityIndexSQL) > 0 || len(compatibilityUniqueIndexSQL) > 0 {
 		builder.WriteString("/*\n")
-		builder.WriteString(fmt.Sprintf(" oracle table check consrtaint maybe mysql has compatibility, skip\n"))
+		builder.WriteString(fmt.Sprintf(" oracle table consrtaint maybe mysql has compatibility, skip\n"))
 		tw := table.NewWriter()
 		tw.SetStyle(table.StyleLight)
 		tw.AppendHeader(table.Row{"#", "ORACLE", "MYSQL", "SUGGEST"})
 		tw.AppendRows([]table.Row{
-			{"TABLE", fmt.Sprintf("%s.%s", t.SourceSchemaName, t.SourceTableName), fmt.Sprintf("%s.%s", t.TargetSchemaName, modifyTableName), "Manual Create"}})
+			{"TABLE", fmt.Sprintf("%s.%s", t.SourceSchemaName, t.SourceTableName), fmt.Sprintf("%s.%s", t.TargetSchemaName, modifyTableName), "Create Constraints"}})
 
 		builder.WriteString(fmt.Sprintf("%v\n", tw.Render()))
 		builder.WriteString("*/\n")
@@ -282,12 +280,12 @@ func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 			}
 			if len(ckMetas) > 0 {
 				builder.WriteString("/*\n")
-				builder.WriteString(fmt.Sprintf(" oracle table check consrtaint maybe mysql has compatibility, skip\n"))
+				builder.WriteString(fmt.Sprintf(" oracle table consrtaint maybe mysql has compatibility, skip\n"))
 				tw := table.NewWriter()
 				tw.SetStyle(table.StyleLight)
 				tw.AppendHeader(table.Row{"#", "ORACLE", "MYSQL", "SUGGEST"})
 				tw.AppendRows([]table.Row{
-					{"TABLE", fmt.Sprintf("%s.%s", t.SourceSchemaName, t.SourceTableName), fmt.Sprintf("%s.%s", t.TargetSchemaName, modifyTableName), "Manual Create"},
+					{"TABLE", fmt.Sprintf("%s.%s", t.SourceSchemaName, t.SourceTableName), fmt.Sprintf("%s.%s", t.TargetSchemaName, modifyTableName), "Create Constraints"},
 				})
 				builder.WriteString(fmt.Sprintf("%v\n", tw.Render()))
 				builder.WriteString("*/\n")

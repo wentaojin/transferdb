@@ -18,7 +18,6 @@ package service
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/BurntSushi/toml"
 )
@@ -131,12 +130,6 @@ func (c *CfgFile) GenerateTables(engine *Engine) ([]string, error) {
 	if len(exporterTableSlice) == 0 {
 		return exporterTableSlice, fmt.Errorf("exporter table slice can not null from reverse task")
 	}
-
-	// 表名大写
-	for _, tbl := range exporterTableSlice {
-		upperTableSlice = append(upperTableSlice, strings.ToUpper(tbl))
-	}
-
 	return upperTableSlice, nil
 }
 

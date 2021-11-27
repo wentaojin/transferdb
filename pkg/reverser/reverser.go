@@ -87,7 +87,7 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 
 		for _, part := range partitionTableList {
 			t.AppendRows([]table.Row{
-				{cfg.SourceConfig.SchemaName, part, "Manual Create And Adjust Table"},
+				{cfg.SourceConfig.SchemaName, part, "Manual Create Partition Table"},
 			})
 		}
 		t.SetColumnConfigs([]table.ColumnConfig{
@@ -110,7 +110,7 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 	t.SetStyle(table.StyleLight)
 	t.AppendHeader(table.Row{"#", "ORACLE", "MYSQL", "SUGGEST"})
 	t.AppendRows([]table.Row{
-		{"Schema", cfg.SourceConfig.SchemaName, cfg.TargetConfig.SchemaName, "Manual Create Schema"},
+		{"Schema", cfg.SourceConfig.SchemaName, cfg.TargetConfig.SchemaName, "Create Schema"},
 	})
 	builder.WriteString(t.Render() + "\n")
 	builder.WriteString("*/\n")
@@ -140,16 +140,12 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 				return errMSg
 			}
 			if createSQL != "" {
-				createString := fmt.Sprintf("%s\n-- the above info comes from oracle table [%s.%s]\n-- the above info comes from mysql table [%s.%s]\n", createSQL, tbl.SourceSchemaName, tbl.SourceTableName, tbl.TargetSchemaName, tbl.TargetTableName)
-
-				if _, errMSg = fmt.Fprintln(wrMR, createString); errMSg != nil {
+				if _, errMSg = fmt.Fprintln(wrMR, createSQL); errMSg != nil {
 					return err
 				}
 			}
 			if compatibilitySQL != "" {
-				compatibilityString := fmt.Sprintf("%s\n-- the above info comes from oracle table [%s.%s]\n-- the above info create mysql table sql [%s.%s]\n", compatibilitySQL, tbl.SourceSchemaName, tbl.SourceTableName, tbl.TargetSchemaName, tbl.TargetTableName)
-
-				if _, errMSg = fmt.Fprintln(wrCMP, compatibilityString); errMSg != nil {
+				if _, errMSg = fmt.Fprintln(wrCMP, compatibilitySQL); errMSg != nil {
 					return err
 				}
 			}
