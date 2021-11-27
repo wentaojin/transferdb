@@ -43,12 +43,12 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 	//}
 
 	// 获取待转换表
-	service.Logger.Info("get oracle to mysql all tables")
-
 	exporterTableSlice, err := cfg.GenerateTables(engine)
 	if err != nil {
 		return err
 	}
+
+	service.Logger.Info("get oracle to mysql all tables", zap.Strings("tables", exporterTableSlice))
 
 	// 加载表列表
 	tables, partitionTableList, err := LoadOracleToMySQLTableList(engine, exporterTableSlice, cfg.SourceConfig.SchemaName, cfg.TargetConfig.SchemaName, cfg.TargetConfig.Overwrite)
