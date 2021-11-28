@@ -92,55 +92,13 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 		builder.WriteString("/*\n")
 		builder.WriteString(fmt.Sprintf(" the oracle table exists, but the mysql table does not exist\n"))
 		builder.WriteString(fmt.Sprintf(" oracle table maybe mysql has compatibility, will convert to normal table, please manual process\n"))
-
-		t := table.NewWriter()
-		t.SetStyle(table.StyleLight)
-		t.AppendHeader(table.Row{"ORACLE", "MYSQL", "ORACLE TABLE TYPE", "SUGGEST"})
+		builder.WriteString("*/\n")
 
 		// 表列表
-		reverseTables, partitionTableList, temporaryTableList, clusteredTableList, err := reverser.LoadOracleToMySQLTableList(d.Engine, []string{d.TableName}, d.SourceSchemaName, d.TargetSchemaName, false)
+		reverseTables, _, _, _, err := reverser.LoadOracleToMySQLTableList(d.Engine, []string{d.TableName}, d.SourceSchemaName, d.TargetSchemaName, false)
 		if err != nil {
 			return err
 		}
-
-		if len(partitionTableList) > 0 || len(temporaryTableList) > 0 || len(clusteredTableList) > 0 {
-			if len(partitionTableList) > 0 {
-				for _, part := range partitionTableList {
-					t.AppendRows([]table.Row{
-						{fmt.Sprintf("%s.%s", d.SourceSchemaName, part),
-							fmt.Sprintf("%s.%s", d.TargetSchemaName, part),
-							"Partition", "Manual Process Table"},
-					})
-				}
-			}
-			if len(temporaryTableList) > 0 {
-				for _, temp := range temporaryTableList {
-					t.AppendRows([]table.Row{
-						{fmt.Sprintf("%s.%s", d.SourceSchemaName, temp),
-							fmt.Sprintf("%s.%s", d.TargetSchemaName, temp),
-							"Temporary", "Manual Process Table"},
-					})
-				}
-			}
-			if len(clusteredTableList) > 0 {
-				for _, clustered := range clusteredTableList {
-					t.AppendRows([]table.Row{
-						{fmt.Sprintf("%s.%s", d.SourceSchemaName, clustered),
-							fmt.Sprintf("%s.%s", d.TargetSchemaName, clustered),
-							"Clustered", "Manual Process Table"},
-					})
-				}
-			}
-		} else {
-			t.AppendRows([]table.Row{
-				{fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName),
-					fmt.Sprintf("%s.%s", d.TargetSchemaName, d.TableName),
-					"Normal", "Manual Process Table"},
-			})
-		}
-
-		builder.WriteString(fmt.Sprintf("%v\n", t.Render()))
-		builder.WriteString("*/\n")
 
 		var (
 			createSQLS, compatibilitySQLS []string
@@ -160,7 +118,6 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 
 		// 输出创建表以及索引语句
 		if len(createSQLS) != 0 {
-			builder.WriteString("/* create table and index sql */\n")
 			for _, sql := range createSQLS {
 				builder.WriteString(fmt.Sprintf("%s\n", sql))
 			}
@@ -168,7 +125,7 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 
 		// 输出表创建过程可能存在不兼容的语句对象（外键、检查约束）
 		if len(compatibilitySQLS) != 0 {
-			builder.WriteString("/* [notice] maybe exist compatibility sql */\n")
+			builder.WriteString("-- [notice] maybe exist compatibility sql\n")
 			for _, sql := range compatibilitySQLS {
 				builder.WriteString(fmt.Sprintf("%s\n", sql))
 			}
@@ -199,7 +156,7 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 		isTiDB = true
 	}
 
-	// 表类型检查
+	// 表类型检查 - only 分区表
 	service.Logger.Info("check table",
 		zap.String("table partition type check", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)))
 
@@ -489,6 +446,7 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 		}
 	}
 
+	// 分区表检查
 	if mysqlTable.IsPartition && oracleTable.IsPartition {
 		service.Logger.Info("check table",
 			zap.String("table partition check", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)),
