@@ -53,14 +53,13 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 	if err != nil {
 		return err
 	}
+	service.Logger.Info("get oracle to mysql all tables", zap.Strings("tables", exporterTableSlice))
+
 	if len(exporterTableSlice) == 0 {
-		service.Logger.Info("there are no table objects in the oracle schema",
+		service.Logger.Warn("there are no table objects in the oracle schema",
 			zap.String("schema", cfg.SourceConfig.SchemaName))
 		return nil
 	}
-
-	service.Logger.Info("get oracle to mysql all tables", zap.Strings("tables", exporterTableSlice))
-
 	// 加载表列表
 	tables, partitionTableList, err := LoadOracleToMySQLTableList(engine, exporterTableSlice, cfg.SourceConfig.SchemaName, cfg.TargetConfig.SchemaName, cfg.TargetConfig.Overwrite)
 	if err != nil {

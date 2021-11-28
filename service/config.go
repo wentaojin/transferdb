@@ -104,8 +104,8 @@ func (c *CfgFile) configFromFile(file string) error {
 // 根据配置文件获取表列表
 func (c *CfgFile) GenerateTables(engine *Engine) ([]string, error) {
 	var (
-		exporterTableSlice, upperTableSlice []string
-		err                                 error
+		exporterTableSlice []string
+		err                error
 	)
 	switch {
 	case len(c.SourceConfig.IncludeTable) != 0 && len(c.SourceConfig.ExcludeTable) == 0:
@@ -130,7 +130,7 @@ func (c *CfgFile) GenerateTables(engine *Engine) ([]string, error) {
 	if len(exporterTableSlice) == 0 {
 		return exporterTableSlice, fmt.Errorf("exporter table slice can not null from reverse task")
 	}
-	return upperTableSlice, nil
+	return exporterTableSlice, nil
 }
 
 func (c *CfgFile) String() string {
