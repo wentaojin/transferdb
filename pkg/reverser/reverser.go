@@ -125,7 +125,7 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 	builder.WriteString(t.Render() + "\n")
 	builder.WriteString("*/\n")
 	builder.WriteString(fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s;\n", cfg.TargetConfig.SchemaName))
-	if _, err = fileReverse.WriteString(builder.String()); err != nil {
+	if _, err = fileReverse.WriteString(builder.String() + "\n"); err != nil {
 		return err
 	}
 
