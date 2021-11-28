@@ -38,6 +38,7 @@ type Table struct {
 	TargetSchemaName string
 	SourceTableName  string
 	TargetTableName  string
+	SourceTableType  string
 	Overwrite        bool
 	Engine           *service.Engine
 }
@@ -120,9 +121,9 @@ func (t Table) GenerateAndExecMySQLCreateSQL() (string, string, error) {
 
 	sw := table.NewWriter()
 	sw.SetStyle(table.StyleLight)
-	sw.AppendHeader(table.Row{"#", "ORACLE", "MYSQL", "SUGGEST"})
+	sw.AppendHeader(table.Row{"#", "ORACLE TABLE TYPE", "ORACLE", "MYSQL", "SUGGEST"})
 	sw.AppendRows([]table.Row{
-		{"TABLE", fmt.Sprintf("%s.%s", t.SourceSchemaName, t.SourceTableName), fmt.Sprintf("%s.%s", t.TargetSchemaName, modifyTableName), "Create Table"},
+		{"TABLE", t.SourceTableType, fmt.Sprintf("%s.%s", t.SourceSchemaName, t.SourceTableName), fmt.Sprintf("%s.%s", t.TargetSchemaName, modifyTableName), "Create Table"},
 	})
 	sqls.WriteString(fmt.Sprintf("%v\n", sw.Render()))
 	sqls.WriteString("*/\n")
@@ -789,11 +790,19 @@ func (t *Table) String() string {
 }
 
 // 加载表列表
-func LoadOracleToMySQLTableList(engine *service.Engine, exporterTableSlice []string, sourceSchema, targetSchema string, overwrite bool) ([]Table, []string, error) {
-	// 筛选过滤分区表并打印警告
+func LoadOracleToMySQLTableList(engine *service.Engine, exporterTableSlice []string, sourceSchema, targetSchema string, overwrite bool) ([]Table, []string, []string, []string, error) {
+	// 筛选过滤可能不支持的表类型
 	partitionTables, err := engine.FilterOraclePartitionTable(sourceSchema, exporterTableSlice)
 	if err != nil {
-		return []Table{}, partitionTables, err
+		return []Table{}, partitionTables, []string{}, []string{}, err
+	}
+	temporaryTables, err := engine.FilterOracleTemporaryTable(sourceSchema, exporterTableSlice)
+	if err != nil {
+		return []Table{}, []string{}, temporaryTables, []string{}, err
+	}
+	clusteredTables, err := engine.FilterOracleClusteredTable(sourceSchema, exporterTableSlice)
+	if err != nil {
+		return []Table{}, []string{}, []string{}, clusteredTables, err
 	}
 
 	if len(partitionTables) != 0 {
@@ -802,22 +811,39 @@ func LoadOracleToMySQLTableList(engine *service.Engine, exporterTableSlice []str
 			zap.String("partition table list", fmt.Sprintf("%v", partitionTables)),
 			zap.String("suggest", "if necessary, please manually convert and process the tables in the above list"))
 	}
+	if len(temporaryTables) != 0 {
+		service.Logger.Warn("temporary tables",
+			zap.String("schema", sourceSchema),
+			zap.String("temporary table list", fmt.Sprintf("%v", temporaryTables)),
+			zap.String("suggest", "if necessary, please manually process the tables in the above list"))
+	}
+	if len(clusteredTables) != 0 {
+		service.Logger.Warn("clustered tables",
+			zap.String("schema", sourceSchema),
+			zap.String("clustered table list", fmt.Sprintf("%v", clusteredTables)),
+			zap.String("suggest", "if necessary, please manually process the tables in the above list"))
+	}
 
 	var tables []Table
 
 	// 返回需要转换 schema table
 	for _, tbl := range exporterTableSlice {
-		var table Table
+		var t Table
 
+		// 获取表对象类型
+		tableType, err := engine.GetOracleTableType(sourceSchema, tbl)
+		if err != nil {
+			return tables, partitionTables, temporaryTables, clusteredTables, err
+		}
 		// 库名、表名规则
-		table.SourceSchemaName = sourceSchema
-		table.TargetSchemaName = targetSchema
-		table.SourceTableName = tbl
-		table.TargetTableName = tbl
-
-		table.Engine = engine
-		table.Overwrite = overwrite
-		tables = append(tables, table)
+		t.SourceSchemaName = sourceSchema
+		t.TargetSchemaName = targetSchema
+		t.SourceTableName = tbl
+		t.TargetTableName = tbl
+		t.SourceTableType = tableType
+		t.Engine = engine
+		t.Overwrite = overwrite
+		tables = append(tables, t)
 	}
-	return tables, partitionTables, nil
+	return tables, partitionTables, temporaryTables, clusteredTables, nil
 }

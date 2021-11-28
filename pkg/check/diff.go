@@ -90,29 +90,55 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 	}
 	if !isExist {
 		builder.WriteString("/*\n")
-		builder.WriteString(fmt.Sprintf(" oracle table exist but mysql table not exists\n"))
+		builder.WriteString(fmt.Sprintf(" the oracle table exists, but the mysql table does not exist\n"))
+		builder.WriteString(fmt.Sprintf(" oracle table maybe mysql has compatibility, will convert to normal table, please manual process\n"))
 
 		t := table.NewWriter()
 		t.SetStyle(table.StyleLight)
-		t.AppendHeader(table.Row{"#", "ORACLE", "MYSQL", "IS PARTITION", "SUGGEST"})
+		t.AppendHeader(table.Row{"ORACLE", "MYSQL", "ORACLE TABLE TYPE", "SUGGEST"})
 
-		// 加载表列表
-		reverseTables, partitionTableList, err := reverser.LoadOracleToMySQLTableList(d.Engine, []string{d.TableName}, d.SourceSchemaName, d.TargetSchemaName, false)
+		// 表列表
+		reverseTables, partitionTableList, temporaryTableList, clusteredTableList, err := reverser.LoadOracleToMySQLTableList(d.Engine, []string{d.TableName}, d.SourceSchemaName, d.TargetSchemaName, false)
 		if err != nil {
 			return err
 		}
-		if len(partitionTableList) > 0 {
-			if len(partitionTableList) != 1 {
-				return fmt.Errorf("oracle partition table list should only be one, can't be exist more [%v]", partitionTableList)
+
+		if len(partitionTableList) > 0 || len(temporaryTableList) > 0 || len(clusteredTableList) > 0 {
+			if len(partitionTableList) > 0 {
+				for _, part := range partitionTableList {
+					t.AppendRows([]table.Row{
+						{fmt.Sprintf("%s.%s", d.SourceSchemaName, part),
+							fmt.Sprintf("%s.%s", d.TargetSchemaName, part),
+							"Partition", "Manual Process Table"},
+					})
+				}
 			}
-			t.AppendRows([]table.Row{
-				{"TABLE", fmt.Sprintf("%s.%s", d.SourceSchemaName, partitionTableList[0]), fmt.Sprintf("%s.%s", d.TargetSchemaName, partitionTableList[0]), "True", "Manual Create Partition Table"},
-			})
+			if len(temporaryTableList) > 0 {
+				for _, temp := range temporaryTableList {
+					t.AppendRows([]table.Row{
+						{fmt.Sprintf("%s.%s", d.SourceSchemaName, temp),
+							fmt.Sprintf("%s.%s", d.TargetSchemaName, temp),
+							"Temporary", "Manual Process Table"},
+					})
+				}
+			}
+			if len(clusteredTableList) > 0 {
+				for _, clustered := range clusteredTableList {
+					t.AppendRows([]table.Row{
+						{fmt.Sprintf("%s.%s", d.SourceSchemaName, clustered),
+							fmt.Sprintf("%s.%s", d.TargetSchemaName, clustered),
+							"Clustered", "Manual Process Table"},
+					})
+				}
+			}
 		} else {
 			t.AppendRows([]table.Row{
-				{"TABLE", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName), fmt.Sprintf("%s.%s", d.TargetSchemaName, d.TableName), "False", "Create Table"},
+				{fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName),
+					fmt.Sprintf("%s.%s", d.TargetSchemaName, d.TableName),
+					"Normal", "Manual Process Table"},
 			})
 		}
+
 		builder.WriteString(fmt.Sprintf("%v\n", t.Render()))
 		builder.WriteString("*/\n")
 

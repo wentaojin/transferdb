@@ -60,8 +60,8 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 			zap.String("schema", cfg.SourceConfig.SchemaName))
 		return nil
 	}
-	// 加载表列表
-	tables, partitionTableList, err := LoadOracleToMySQLTableList(engine, exporterTableSlice, cfg.SourceConfig.SchemaName, cfg.TargetConfig.SchemaName, cfg.TargetConfig.Overwrite)
+	// 表列表
+	tables, partitionTableList, temporaryTableList, clusteredTableList, err := LoadOracleToMySQLTableList(engine, exporterTableSlice, cfg.SourceConfig.SchemaName, cfg.TargetConfig.SchemaName, cfg.TargetConfig.Overwrite)
 	if err != nil {
 		return err
 	}
@@ -87,23 +87,35 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 	}
 	defer fileCompatibility.Close()
 
-	if len(partitionTableList) > 0 {
+	if len(partitionTableList) > 0 || len(temporaryTableList) > 0 || len(clusteredTableList) > 0 {
 		var builder strings.Builder
 		builder.WriteString("/*\n")
-		builder.WriteString(fmt.Sprintf(" oracle partition table maybe mysql has compatibility, will convert to normal table, please manual adjust\n"))
+		builder.WriteString(fmt.Sprintf(" oracle table maybe mysql has compatibility, will convert to normal table, please manual process\n"))
 		t := table.NewWriter()
 		t.SetStyle(table.StyleLight)
-		t.AppendHeader(table.Row{"SCHEMA", "ORACLE PARTITION LIST", "SUGGEST"})
+		t.AppendHeader(table.Row{"SCHEMA", "ORACLE TABLE TYPE", "ORACLE", "SUGGEST"})
 
-		for _, part := range partitionTableList {
-			t.AppendRows([]table.Row{
-				{cfg.SourceConfig.SchemaName, part, "Manual Create Partition Table"},
-			})
+		if len(partitionTableList) > 0 {
+			for _, part := range partitionTableList {
+				t.AppendRows([]table.Row{
+					{cfg.SourceConfig.SchemaName, "Partition", part, "Manual Process Table"},
+				})
+			}
 		}
-		t.SetColumnConfigs([]table.ColumnConfig{
-			{Number: 1, AutoMerge: true},
-			{Number: 3, AutoMerge: true},
-		})
+		if len(temporaryTableList) > 0 {
+			for _, temp := range temporaryTableList {
+				t.AppendRows([]table.Row{
+					{cfg.SourceConfig.SchemaName, "Temporary", temp, "Manual Process Table"},
+				})
+			}
+		}
+		if len(clusteredTableList) > 0 {
+			for _, clustered := range clusteredTableList {
+				t.AppendRows([]table.Row{
+					{cfg.SourceConfig.SchemaName, "Clustered", clustered, "Manual Process Table"},
+				})
+			}
+		}
 
 		builder.WriteString(t.Render() + "\n")
 		builder.WriteString("*/\n")

@@ -382,7 +382,7 @@ func (e *Engine) GetOracleTable(schemaName string) ([]string, error) {
 		tables []string
 		err    error
 	)
-	_, res, err := Query(e.OracleDB, fmt.Sprintf(`SELECT table_name AS TABLE_NAME FROM ALL_TABLES WHERE UPPER(owner) = UPPER('%s')`, schemaName))
+	_, res, err := Query(e.OracleDB, fmt.Sprintf(`SELECT table_name AS TABLE_NAME FROM ALL_TABLES WHERE UPPER(owner) = UPPER('%s') AND (IOT_TYPE IS NUll OR IOT_TYPE='IOT')`, schemaName))
 	if err != nil {
 		return tables, err
 	}
@@ -393,10 +393,87 @@ func (e *Engine) GetOracleTable(schemaName string) ([]string, error) {
 	return tables, nil
 }
 
+func (e *Engine) GetOracleTableType(schemaName, tableName string) (string, error) {
+	_, res, err := Query(e.OracleDB, fmt.Sprintf(`SELECT
+	(
+	CASE WHEN f.CLUSTER_NAME IS NOT NULL THEN 'CLUSTERED' ELSE
+		CASE	WHEN f.IOT_TYPE = 'IOT' THEN
+			CASE WHEN ( SELECT	t.IOT_TYPE FROM	ALL_TABLES t 	WHERE	f.owner = t.owner AND f.table_name = t.iot_name ) != 'IOT' THEN
+						(
+						SELECT
+							t.IOT_TYPE 
+						FROM
+							ALL_TABLES t 
+						WHERE
+							f.owner = t.owner 
+							AND f.table_name = t.iot_name 
+						) ELSE 'IOT' 
+				END 
+		ELSE
+				CASE	
+						WHEN f.PARTITIONED = 'YES' THEN 'PARTITIONED' ELSE
+					CASE
+							WHEN f.TEMPORARY = 'Y' THEN 
+							DECODE(f.DURATION,'SYS$SESSION','SESSION TEMPORARY','SYS$TRANSACTION','TRANSACTION TEMPORARY')
+							ELSE 'HEAP' 
+					END 
+				END 
+		END 
+	END ) TABLE_TYPE 
+FROM
+	ALL_TABLES f 
+WHERE
+	UPPER( f.owner ) = UPPER( '%s' ) 
+	AND UPPER( f.TABLE_NAME ) = UPPER( '%s')`, schemaName, tableName))
+	if err != nil {
+		return "", err
+	}
+	if len(res) == 0 {
+		return "", fmt.Errorf("oracle [%s.%s] table type can't be null", schemaName, tableName)
+	}
+	if len(res) > 1 {
+		return "", fmt.Errorf("oracle [%s.%s] table type values should be 1, result: %v", schemaName, tableName, res)
+	}
+	return res[0]["TABLE_TYPE"], nil
+}
+
 func (e *Engine) FilterOraclePartitionTable(schemaName string, tableSlice []string) ([]string, error) {
 	_, res, err := Query(e.OracleDB, fmt.Sprintf(`select table_name AS TABLE_NAME
   from all_tables
  where partitioned = 'YES'
+   and upper(owner) = upper('%s')`, schemaName))
+	if err != nil {
+		return []string{}, err
+	}
+
+	var tables []string
+	for _, r := range res {
+		tables = append(tables, r["TABLE_NAME"])
+	}
+	return utils.FilterIntersectionStringItems(tableSlice, tables), nil
+}
+
+func (e *Engine) FilterOracleTemporaryTable(schemaName string, tableSlice []string) ([]string, error) {
+	_, res, err := Query(e.OracleDB, fmt.Sprintf(`select table_name AS TABLE_NAME
+  from all_tables
+ where TEMPORARY = 'Y'
+   and upper(owner) = upper('%s')`, schemaName))
+	if err != nil {
+		return []string{}, err
+	}
+
+	var tables []string
+	for _, r := range res {
+		tables = append(tables, r["TABLE_NAME"])
+	}
+	return utils.FilterIntersectionStringItems(tableSlice, tables), nil
+}
+
+func (e *Engine) FilterOracleClusteredTable(schemaName string, tableSlice []string) ([]string, error) {
+	// 过滤蔟表
+	_, res, err := Query(e.OracleDB, fmt.Sprintf(`select table_name AS TABLE_NAME
+  from all_tables
+ where CLUSTER_NAME IS NOT NULL
    and upper(owner) = upper('%s')`, schemaName))
 	if err != nil {
 		return []string{}, err
