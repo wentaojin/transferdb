@@ -42,10 +42,21 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 	//	return err
 	//}
 
+	defer func() {
+		endTime := time.Now()
+		service.Logger.Info("reverse table oracle to mysql finished",
+			zap.String("cost", endTime.Sub(startTime).String()))
+	}()
+
 	// 获取待转换表
 	exporterTableSlice, err := cfg.GenerateTables(engine)
 	if err != nil {
 		return err
+	}
+	if len(exporterTableSlice) == 0 {
+		service.Logger.Info("there are no table objects in the oracle schema",
+			zap.String("schema", cfg.SourceConfig.SchemaName))
+		return nil
 	}
 
 	service.Logger.Info("get oracle to mysql all tables", zap.Strings("tables", exporterTableSlice))
@@ -157,21 +168,18 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 		return err
 	}
 
-	endTime := time.Now()
 	if !wp.IsDone() {
 		service.Logger.Error("reverse table oracle to mysql failed",
-			zap.String("cost", endTime.Sub(startTime).String()),
+			zap.String("cost", time.Since(startTime).String()),
 			zap.Error(fmt.Errorf("reverse table task failed, please clear and rerunning")),
 			zap.Error(err))
 		return fmt.Errorf("reverse table task failed, please clear and rerunning, error: %v", err)
 	}
-
 	service.Logger.Info("reverse", zap.String("create table and index output", filepath.Join(pwdDir,
 		fmt.Sprintf("reverse_%s.sql", cfg.SourceConfig.SchemaName))))
 	service.Logger.Info("compatibility", zap.String("maybe exist compatibility output", filepath.Join(pwdDir,
 		fmt.Sprintf("compatibility_%s.sql", cfg.SourceConfig.SchemaName))))
-	service.Logger.Info("reverse table oracle to mysql finished",
-		zap.String("cost", endTime.Sub(startTime).String()))
+
 	return nil
 }
 
