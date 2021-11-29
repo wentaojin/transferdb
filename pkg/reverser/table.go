@@ -834,7 +834,7 @@ func LoadOracleToMySQLTableList(engine *service.Engine, exporterTableSlice []str
 			zap.String("suggest", "if necessary, please manually process the tables in the above list"))
 	}
 
-	tablesMap, err := engine.GetOracleTableType(sourceSchema, exporterTableSlice)
+	tablesMap, err := engine.GetOracleTableType(sourceSchema)
 	if err != nil {
 		return []Table{}, partitionTables, temporaryTables, clusteredTables, err
 	}

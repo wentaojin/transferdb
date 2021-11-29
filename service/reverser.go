@@ -18,7 +18,6 @@ package service
 import (
 	"fmt"
 	"strings"
-	"sync"
 
 	"github.com/wentaojin/transferdb/utils"
 
@@ -394,31 +393,8 @@ func (e *Engine) GetOracleTable(schemaName string) ([]string, error) {
 	return tables, nil
 }
 
-func (e *Engine) GetOracleTableType(schemaName string, tableName []string) (map[string]string, error) {
-	var (
-		wg     sync.WaitGroup
-		tables []string
-	)
-	wg.Add(len(tableName))
-
-	jobsChan := make(chan string, len(tableName))
-	tableMap := make(map[string]string, len(tableName))
-
-	for _, t := range tableName {
-		go func(tbl string) {
-			tl := fmt.Sprintf("'%s'", strings.ToUpper(tbl))
-			jobsChan <- tl
-			wg.Done()
-		}(t)
-	}
-	go func() {
-		wg.Wait()
-		close(jobsChan)
-	}()
-
-	for data := range jobsChan {
-		tables = append(tables, data)
-	}
+func (e *Engine) GetOracleTableType(schemaName string) (map[string]string, error) {
+	tableMap := make(map[string]string)
 
 	_, res, err := Query(e.OracleDB, fmt.Sprintf(`SELECT TABLE_NAME,
 	(
@@ -450,17 +426,17 @@ FROM
 	ALL_TABLES f 
 WHERE
 	UPPER( f.owner ) = UPPER( '%s' ) 
-	AND UPPER( f.TABLE_NAME ) IN ( %s )`, schemaName, strings.Join(tables, ",")))
+	AND UPPER( f.TABLE_NAME ) IN (SELECT TABLE_NAME FROM ALL_TABLES WHERE UPPER(owner) = UPPER('%s') AND (IOT_TYPE IS NUll OR IOT_TYPE='IOT'))`, schemaName, schemaName))
 	if err != nil {
 		return tableMap, err
 	}
 	if len(res) == 0 {
-		return tableMap, fmt.Errorf("oracle [%s.%s] table type can't be null", schemaName, tableName)
+		return tableMap, fmt.Errorf("oracle schema [%s] table type can't be null", schemaName)
 	}
 
 	for _, r := range res {
 		if len(r) > 1 || len(r) == 0 {
-			return tableMap, fmt.Errorf("oracle [%s.%s] table type values should be 1, result: %v", schemaName, tableName, r)
+			return tableMap, fmt.Errorf("oracle schema [%s] table type values should be 1, result: %v", schemaName, r)
 		}
 		tableMap[r["TABLE_NAME"]] = r["TABLE_TYPE"]
 	}
