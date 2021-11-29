@@ -18,6 +18,7 @@ package service
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/wentaojin/transferdb/utils"
 
@@ -393,8 +394,33 @@ func (e *Engine) GetOracleTable(schemaName string) ([]string, error) {
 	return tables, nil
 }
 
-func (e *Engine) GetOracleTableType(schemaName, tableName string) (string, error) {
-	_, res, err := Query(e.OracleDB, fmt.Sprintf(`SELECT
+func (e *Engine) GetOracleTableType(schemaName string, tableName []string) (map[string]string, error) {
+	var (
+		wg     sync.WaitGroup
+		tables []string
+	)
+	wg.Add(len(tableName))
+
+	jobsChan := make(chan string, len(tableName))
+	tableMap := make(map[string]string, len(tableName))
+
+	for _, t := range tableName {
+		go func(tbl string) {
+			tl := fmt.Sprintf("'%s'", strings.ToUpper(tbl))
+			jobsChan <- tl
+			wg.Done()
+		}(t)
+	}
+	go func() {
+		wg.Wait()
+		close(jobsChan)
+	}()
+
+	for data := range jobsChan {
+		tables = append(tables, data)
+	}
+
+	_, res, err := Query(e.OracleDB, fmt.Sprintf(`SELECT TABLE_NAME,
 	(
 	CASE WHEN f.CLUSTER_NAME IS NOT NULL THEN 'CLUSTERED' ELSE
 		CASE	WHEN f.IOT_TYPE = 'IOT' THEN
@@ -424,17 +450,22 @@ FROM
 	ALL_TABLES f 
 WHERE
 	UPPER( f.owner ) = UPPER( '%s' ) 
-	AND UPPER( f.TABLE_NAME ) = UPPER( '%s')`, schemaName, tableName))
+	AND UPPER( f.TABLE_NAME ) IN ( %s )`, schemaName, strings.Join(tables, ",")))
 	if err != nil {
-		return "", err
+		return tableMap, err
 	}
 	if len(res) == 0 {
-		return "", fmt.Errorf("oracle [%s.%s] table type can't be null", schemaName, tableName)
+		return tableMap, fmt.Errorf("oracle [%s.%s] table type can't be null", schemaName, tableName)
 	}
-	if len(res) > 1 {
-		return "", fmt.Errorf("oracle [%s.%s] table type values should be 1, result: %v", schemaName, tableName, res)
+
+	for _, r := range res {
+		if len(r) > 1 || len(r) == 0 {
+			return tableMap, fmt.Errorf("oracle [%s.%s] table type values should be 1, result: %v", schemaName, tableName, r)
+		}
+		tableMap[r["TABLE_NAME"]] = r["TABLE_TYPE"]
 	}
-	return res[0]["TABLE_TYPE"], nil
+
+	return tableMap, nil
 }
 
 func (e *Engine) FilterOraclePartitionTable(schemaName string, tableSlice []string) ([]string, error) {

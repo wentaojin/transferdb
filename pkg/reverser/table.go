@@ -22,6 +22,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/jedib0t/go-pretty/v6/table"
 
@@ -791,6 +792,15 @@ func (t *Table) String() string {
 
 // 加载表列表
 func LoadOracleToMySQLTableList(engine *service.Engine, exporterTableSlice []string, sourceSchema, targetSchema string, overwrite bool) ([]Table, []string, []string, []string, error) {
+	startTime := time.Now()
+	service.Logger.Info("load oracle table list start")
+
+	defer func() {
+		endTime := time.Now()
+		service.Logger.Info("load oracle table list finished",
+			zap.String("cost", endTime.Sub(startTime).String()))
+	}()
+
 	// 筛选过滤可能不支持的表类型
 	partitionTables, err := engine.FilterOraclePartitionTable(sourceSchema, exporterTableSlice)
 	if err != nil {
@@ -824,26 +834,42 @@ func LoadOracleToMySQLTableList(engine *service.Engine, exporterTableSlice []str
 			zap.String("suggest", "if necessary, please manually process the tables in the above list"))
 	}
 
-	var tables []Table
-
-	// 返回需要转换 schema table
-	for _, tbl := range exporterTableSlice {
-		var t Table
-
-		// 获取表对象类型
-		tableType, err := engine.GetOracleTableType(sourceSchema, tbl)
-		if err != nil {
-			return tables, partitionTables, temporaryTables, clusteredTables, err
-		}
-		// 库名、表名规则
-		t.SourceSchemaName = sourceSchema
-		t.TargetSchemaName = targetSchema
-		t.SourceTableName = tbl
-		t.TargetTableName = tbl
-		t.SourceTableType = tableType
-		t.Engine = engine
-		t.Overwrite = overwrite
-		tables = append(tables, t)
+	tablesMap, err := engine.GetOracleTableType(sourceSchema, exporterTableSlice)
+	if err != nil {
+		return []Table{}, partitionTables, temporaryTables, clusteredTables, err
 	}
+
+	var (
+		wg     sync.WaitGroup
+		tables []Table
+	)
+	wg.Add(len(exporterTableSlice))
+
+	jobsChan := make(chan Table, len(exporterTableSlice))
+
+	for _, ts := range exporterTableSlice {
+		go func(tbl, sourceSchemaName, targetSchemaName string, e *service.Engine, ow bool, tableMap map[string]string) {
+			// 库名、表名规则
+			jobsChan <- Table{
+				SourceSchemaName: sourceSchemaName,
+				TargetSchemaName: targetSchemaName,
+				SourceTableName:  tbl,
+				TargetTableName:  tbl,
+				SourceTableType:  tableMap[tbl],
+				Overwrite:        ow,
+				Engine:           e,
+			}
+			wg.Done()
+		}(ts, sourceSchema, targetSchema, engine, overwrite, tablesMap)
+	}
+	go func() {
+		wg.Wait()
+		close(jobsChan)
+	}()
+
+	for data := range jobsChan {
+		tables = append(tables, data)
+	}
+
 	return tables, partitionTables, temporaryTables, clusteredTables, nil
 }
