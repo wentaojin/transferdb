@@ -40,7 +40,7 @@ type Table struct {
 	TargetTableName  string
 	SourceTableType  string
 	Overwrite        bool
-	Engine           *service.Engine
+	Engine           *service.Engine `json:"-"`
 }
 
 type ColumnTypeMap struct {
@@ -785,7 +785,7 @@ func (t Table) reverserOracleTableCKToMySQL() ([]string, error) {
 }
 
 func (t *Table) String() string {
-	jsonStr, _ := json.Marshal(&t)
+	jsonStr, _ := json.Marshal(t)
 	return string(jsonStr)
 }
 
