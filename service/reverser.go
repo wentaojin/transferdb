@@ -435,8 +435,8 @@ WHERE
 	}
 
 	for _, r := range res {
-		if len(r) > 1 || len(r) == 0 {
-			return tableMap, fmt.Errorf("oracle schema [%s] table type values should be 1, result: %v", schemaName, r)
+		if len(r) > 2 || len(r) == 0 || len(r) == 1 {
+			return tableMap, fmt.Errorf("oracle schema [%s] table type values should be 2, result: %v", schemaName, r)
 		}
 		tableMap[r["TABLE_NAME"]] = r["TABLE_TYPE"]
 	}
