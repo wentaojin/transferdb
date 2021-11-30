@@ -153,13 +153,22 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 	wp := workpool.New(cfg.AppConfig.Threads)
 	jobChan := make(chan Job, bufferSize)
 	Produce(wp, tables, jobChan)
-	Consume(fileReverse, fileCompatibility, jobChan)
-
-	if err := wp.Wait(); err != nil {
+	if err = wp.Wait(); err != nil {
 		return err
 	}
+	endTime := time.Now()
+	if !wp.IsDone() {
+		service.Logger.Error("reverse table oracle to mysql failed",
+			zap.String("cost", endTime.Sub(startTime).String()),
+			zap.Error(fmt.Errorf("reverse table task failed, please rerunning")),
+			zap.Error(err))
+		return fmt.Errorf("reverse table task failed, please rerunning, error: %v", err)
+	}
+
 	// 数据发送完毕，关闭通道
 	close(jobChan)
+
+	Consume(fileReverse, fileCompatibility, jobChan)
 
 	service.Logger.Info("reverse", zap.String("create table and index output", filepath.Join(pwdDir,
 		fmt.Sprintf("reverse_%s.sql", cfg.SourceConfig.SchemaName))))

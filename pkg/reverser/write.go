@@ -43,7 +43,7 @@ func Produce(wp *workpool.WorkPool, tables []Table, jobChan chan Job) {
 			zap.String("rule", tblName.String()))
 		// 变量替换，直接使用原变量会导致并发输出有问题
 		tbl := tblName
-		wp.DoWait(func() error {
+		wp.Do(func() error {
 			createSQL, compatibilitySQL, err := tbl.GenerateAndExecMySQLCreateSQL()
 			if err != nil {
 				return err
