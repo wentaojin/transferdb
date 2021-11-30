@@ -20,7 +20,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/jedib0t/go-pretty/v6/table"
@@ -29,6 +28,11 @@ import (
 
 	"github.com/xxjwxc/gowp/workpool"
 	"go.uber.org/zap"
+)
+
+const (
+	// 缓冲通道 size
+	bufferSize = 1000
 )
 
 func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) error {
@@ -143,8 +147,10 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 
 	// 设置工作池
 	// 设置 goroutine 数
-	wrReverse := &FileMW{sync.Mutex{}, fileReverse}
-	wrComp := &FileMW{sync.Mutex{}, fileCompatibility}
+	//wrReverse := &FileMW{sync.Mutex{}, fileReverse}
+	//wrComp := &FileMW{sync.Mutex{}, fileCompatibility}
+	revChanBuff := make(chan string, bufferSize)
+	compChanBuff := make(chan string, bufferSize)
 
 	wp := workpool.New(cfg.AppConfig.Threads)
 
@@ -154,27 +160,33 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 
 		// 变量替换，直接使用原变量会导致并发输出有问题
 		tbl := tblName
-		wrMR := wrReverse
-		wrCMP := wrComp
 		wp.Do(func() error {
 			createSQL, compatibilitySQL, errMSg := tbl.GenerateAndExecMySQLCreateSQL()
 			if errMSg != nil {
 				return errMSg
 			}
 			if createSQL != "" {
-				if _, errMSg = fmt.Fprintln(wrMR, createSQL); errMSg != nil {
-					return err
-				}
+				revChanBuff <- createSQL
 			}
 			if compatibilitySQL != "" {
-				if _, errMSg = fmt.Fprintln(wrCMP, compatibilitySQL); errMSg != nil {
-					return err
-				}
+				compChanBuff <- compatibilitySQL
 			}
 
 			return nil
 		})
 	}
+
+	for d := range revChanBuff {
+		if _, errMSg := fmt.Fprintln(fileReverse, d); errMSg != nil {
+			return err
+		}
+	}
+	for d := range compChanBuff {
+		if _, errMSg := fmt.Fprintln(fileCompatibility, d); errMSg != nil {
+			return err
+		}
+	}
+
 	if err = wp.Wait(); err != nil {
 		return err
 	}
@@ -186,6 +198,10 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 			zap.Error(err))
 		return fmt.Errorf("reverse table task failed, please clear and rerunning, error: %v", err)
 	}
+
+	close(revChanBuff)
+	close(compChanBuff)
+
 	service.Logger.Info("reverse", zap.String("create table and index output", filepath.Join(pwdDir,
 		fmt.Sprintf("reverse_%s.sql", cfg.SourceConfig.SchemaName))))
 	service.Logger.Info("compatibility", zap.String("maybe exist compatibility output", filepath.Join(pwdDir,
