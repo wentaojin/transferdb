@@ -98,7 +98,7 @@ and upper(table_name)=upper('%s')`, strings.ToUpper(schemaName), strings.ToUpper
 		return comments, err
 	}
 	if len(res) == 0 {
-		return res, fmt.Errorf("oracle table [%s.%s] comment can't be null", schemaName, tableName)
+		return res, fmt.Errorf("oracle table [%s.%s] comment can't be null，result: [%v]", schemaName, tableName, res)
 	}
 	if len(res) > 1 {
 		return res, fmt.Errorf("oracle schema [%s] table [%s] comments exist multiple values: [%v]", schemaName, tableName, res)
@@ -396,20 +396,12 @@ func (e *Engine) GetOracleTable(schemaName string) ([]string, error) {
 func (e *Engine) GetOracleTableType(schemaName string) (map[string]string, error) {
 	tableMap := make(map[string]string)
 
-	_, res, err := Query(e.OracleDB, fmt.Sprintf(`SELECT TABLE_NAME,
+	_, res, err := Query(e.OracleDB, fmt.Sprintf(`SELECT 
+f.TABLE_NAME,
 	(
 	CASE WHEN f.CLUSTER_NAME IS NOT NULL THEN 'CLUSTERED' ELSE
 		CASE	WHEN f.IOT_TYPE = 'IOT' THEN
-			CASE WHEN ( SELECT	t.IOT_TYPE FROM	ALL_TABLES t 	WHERE	f.owner = t.owner AND f.table_name = t.iot_name ) != 'IOT' THEN
-						(
-						SELECT
-							t.IOT_TYPE 
-						FROM
-							ALL_TABLES t 
-						WHERE
-							f.owner = t.owner 
-							AND f.table_name = t.iot_name 
-						) ELSE 'IOT' 
+			CASE WHEN t.IOT_TYPE != 'IOT' THEN t.IOT_TYPE ELSE 'IOT' 
 				END 
 		ELSE
 				CASE	
@@ -423,10 +415,12 @@ func (e *Engine) GetOracleTableType(schemaName string) (map[string]string, error
 		END 
 	END ) TABLE_TYPE 
 FROM
-	ALL_TABLES f 
-WHERE
-	UPPER( f.owner ) = UPPER( '%s' ) 
-	AND UPPER( f.TABLE_NAME ) IN (SELECT TABLE_NAME FROM ALL_TABLES WHERE UPPER(owner) = UPPER('%s') AND (IOT_TYPE IS NUll OR IOT_TYPE='IOT'))`, schemaName, schemaName))
+(SELECT tmp.owner,tmp.TABLE_NAME，tmp.CLUSTER_NAME,tmp.PARTITIONED,tmp.TEMPORARY,tmp.DURATION,tmp.IOT_TYPE
+FROM
+	ALL_TABLES tmp, ALL_TABLES w
+WHERE tmp.owner=w.owner AND tmp.table_name = w.table_name AND tmp.owner  = '%s' AND (w.IOT_TYPE IS NUll OR w.IOT_TYPE='IOT')) f left join (
+select owner,iot_name,iot_type from ALL_TABLES WHERE owner  = '%s')t 
+ON f.owner = t.owner AND f.table_name = t.iot_name`, strings.ToUpper(schemaName), strings.ToUpper(schemaName)))
 	if err != nil {
 		return tableMap, err
 	}
