@@ -22,11 +22,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/xxjwxc/gowp/workpool"
+
 	"github.com/jedib0t/go-pretty/v6/table"
 
 	"github.com/wentaojin/transferdb/service"
 
-	"github.com/xxjwxc/gowp/workpool"
 	"go.uber.org/zap"
 )
 
@@ -149,58 +150,16 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 	// 设置 goroutine 数
 	//wrReverse := &FileMW{sync.Mutex{}, fileReverse}
 	//wrComp := &FileMW{sync.Mutex{}, fileCompatibility}
-	revChanBuff := make(chan string, bufferSize)
-	compChanBuff := make(chan string, bufferSize)
-
 	wp := workpool.New(cfg.AppConfig.Threads)
+	jobChan := make(chan Job, bufferSize)
+	Produce(wp, tables, jobChan)
+	Consume(fileReverse, fileCompatibility, jobChan)
 
-	for _, tblName := range tables {
-		service.Logger.Info("reverse table rule",
-			zap.String("rule", tblName.String()))
-
-		// 变量替换，直接使用原变量会导致并发输出有问题
-		tbl := tblName
-		wp.Do(func() error {
-			createSQL, compatibilitySQL, errMSg := tbl.GenerateAndExecMySQLCreateSQL()
-			if errMSg != nil {
-				return errMSg
-			}
-			if createSQL != "" {
-				revChanBuff <- createSQL
-			}
-			if compatibilitySQL != "" {
-				compChanBuff <- compatibilitySQL
-			}
-
-			return nil
-		})
-	}
-
-	for d := range revChanBuff {
-		if _, errMSg := fmt.Fprintln(fileReverse, d); errMSg != nil {
-			return err
-		}
-	}
-	for d := range compChanBuff {
-		if _, errMSg := fmt.Fprintln(fileCompatibility, d); errMSg != nil {
-			return err
-		}
-	}
-
-	if err = wp.Wait(); err != nil {
+	if err := wp.Wait(); err != nil {
 		return err
 	}
-
-	if !wp.IsDone() {
-		service.Logger.Error("reverse table oracle to mysql failed",
-			zap.String("cost", time.Since(startTime).String()),
-			zap.Error(fmt.Errorf("reverse table task failed, please clear and rerunning")),
-			zap.Error(err))
-		return fmt.Errorf("reverse table task failed, please clear and rerunning, error: %v", err)
-	}
-
-	close(revChanBuff)
-	close(compChanBuff)
+	// 数据发送完毕，关闭通道
+	close(jobChan)
 
 	service.Logger.Info("reverse", zap.String("create table and index output", filepath.Join(pwdDir,
 		fmt.Sprintf("reverse_%s.sql", cfg.SourceConfig.SchemaName))))
