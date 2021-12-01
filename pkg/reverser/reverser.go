@@ -89,6 +89,11 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 	wrReverse := &FileMW{sync.Mutex{}, fileReverse}
 	wrComp := &FileMW{sync.Mutex{}, fileCompatibility}
 
+	// 创建 Schema
+	if err := GenCreateSchema(wrReverse, cfg.SourceConfig.SchemaName, cfg.TargetConfig.SchemaName); err != nil {
+		return err
+	}
+
 	// 不兼容项 - 表提示
 	if err = CompatibilityDBTips(wrComp, cfg.SourceConfig.SchemaName, partitionTableList, temporaryTableList, clusteredTableList); err != nil {
 		return err

@@ -39,10 +39,6 @@ type Table struct {
 	Engine           *service.Engine `json:"-"`
 }
 
-func (t Table) GenCreateSchemaSQL() string {
-	return fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s;", t.TargetSchemaName)
-}
-
 func (t Table) GenCreateTableSQL(modifyTableName string) (string, error) {
 	// 表语句 With 主键约束
 	tablesMap, err := t.Engine.GetOracleTableComment(t.SourceSchemaName, t.SourceTableName)

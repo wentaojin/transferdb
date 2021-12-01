@@ -34,7 +34,6 @@ const (
 type ReverseWriter struct {
 	DBType            string
 	DBVersion         string
-	CreateSchema      string
 	CreateTable       string
 	CreateUK          []string
 	CreateFK          []string
@@ -123,7 +122,6 @@ func NewReverseWriter(t Table, revFileMW, compFileMW *FileMW) (*ReverseWriter, e
 	return &ReverseWriter{
 		DBType:            dbType,
 		DBVersion:         dbVersion,
-		CreateSchema:      t.GenCreateSchemaSQL(),
 		CreateTable:       tableStruct,
 		CreateUK:          ukSQL,
 		CreateFK:          fkSQL,
@@ -143,20 +141,6 @@ func (d *ReverseWriter) Reverse() error {
 		sqlRev  strings.Builder
 		sqlComp strings.Builder
 	)
-
-	// schema
-	sqlRev.WriteString("/*\n")
-	sqlRev.WriteString(fmt.Sprintf(" oracle schema reverse mysql database\n"))
-	t := table.NewWriter()
-	t.SetStyle(table.StyleLight)
-	t.AppendHeader(table.Row{"#", "ORACLE", "MYSQL", "SUGGEST"})
-	t.AppendRows([]table.Row{
-		{"Schema", d.ReverseTable.SourceSchemaName, d.ReverseTable.TargetSchemaName, "Create Schema"},
-	})
-	sqlRev.WriteString(t.Render() + "\n")
-	sqlRev.WriteString("*/\n")
-
-	sqlRev.WriteString(d.CreateSchema + "\n")
 
 	// 表 with 主键
 	sqlRev.WriteString("/*\n")
@@ -277,6 +261,27 @@ func (d *ReverseWriter) Reverse() error {
 			return err
 		}
 	}
+	return nil
+}
+
+func GenCreateSchema(file *FileMW, sourceSchema, targetSchema string) error {
+	var sqlRev strings.Builder
+	sqlRev.WriteString("/*\n")
+	sqlRev.WriteString(fmt.Sprintf(" oracle schema reverse mysql database\n"))
+	t := table.NewWriter()
+	t.SetStyle(table.StyleLight)
+	t.AppendHeader(table.Row{"#", "ORACLE", "MYSQL", "SUGGEST"})
+	t.AppendRows([]table.Row{
+		{"Schema", sourceSchema, targetSchema, "Create Schema"},
+	})
+	sqlRev.WriteString(t.Render() + "\n")
+	sqlRev.WriteString("*/\n")
+
+	sqlRev.WriteString(fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s;\n\n", targetSchema))
+	if _, err := fmt.Fprintln(file, sqlRev.String()); err != nil {
+		return err
+	}
+
 	return nil
 }
 
