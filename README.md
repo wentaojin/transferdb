@@ -27,7 +27,7 @@ transferdb 用于异构数据库迁移（ ORACLE 数据库 -> MySQL/TiDB 数据�
       3. 表数据类型对比以 TransferDB 内置转换规则为基准，若下游表数据类型与基准不符则输出 
       4. ORACLE 字符数据类型 Char / Bytes ，默认 Bytes，MySQL/TiDB 是字符长度，TransferDB 只有当 Scale 数值不一致时才输出不一致 
       5. 表级别字符集检查，采用内置字符集 utf8mb4 检查，若下游表字符集非 utf8mb4 会被检查输出 
-      6. 上游表结构存在，下游不存在，自动生成相关表结构语句输出到 check_${sourcedb}.sql文件
+      6. 上游表结构存在，下游不存在，自动生成相关表结构语句输出到 reverse_${sourcedb}.sql/compatibility_${sourcedb}.sql 文件
       
 3. 支持对象信息收集
    1. 收集现有 ORACLE 数据库内表、索引、分区表、字段长度等信息输出 gather_info.txt 文件，用于评估迁移至 MySQL/TiDB 成本【检查项无输出自动屏蔽显示】

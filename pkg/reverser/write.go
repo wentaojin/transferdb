@@ -16,75 +16,307 @@ limitations under the License.
 package reverser
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
+	"io"
+	"strings"
+	"sync"
 
-	"github.com/xxjwxc/gowp/workpool"
+	"github.com/wentaojin/transferdb/utils"
 
-	"github.com/wentaojin/transferdb/service"
-	"go.uber.org/zap"
+	"github.com/jedib0t/go-pretty/v6/table"
 )
 
-type Job struct {
-	Table            Table
-	ReverseSQL       string
-	CompatibilitySQL string
+const (
+	DBTypeTiDB  = "TiDB"
+	DBTypeMySQL = "MYSQL"
+)
+
+type ReverseWriter struct {
+	DBType            string
+	DBVersion         string
+	CreateSchema      string
+	CreateTable       string
+	CreateUK          []string
+	CreateFK          []string
+	CreateCK          []string
+	CreateUniqueIndex []string
+	CreateNormalIndex []string
+	CreateOtherIndex  []string
+	ReverseTable      Table
+	RevFileMW         *FileMW
+	CompFileMW        *FileMW
 }
 
-func (j *Job) String() string {
-	jsonStr, _ := json.Marshal(j)
-	return string(jsonStr)
+type FileMW struct {
+	Mutex  sync.Mutex
+	Writer io.Writer
 }
 
-func Produce(wp *workpool.WorkPool, tables []Table, jobChan chan Job) {
-	for _, tblName := range tables {
-		service.Logger.Info("reverse table rule",
-			zap.String("rule", tblName.String()))
-		// 变量替换，直接使用原变量会导致并发输出有问题
-		tbl := tblName
-		wp.Do(func() error {
-			createSQL, compatibilitySQL, err := tbl.GenerateAndExecMySQLCreateSQL()
-			if err != nil {
+func (d *FileMW) Write(b []byte) (n int, err error) {
+	d.Mutex.Lock()
+	defer d.Mutex.Unlock()
+	return d.Writer.Write(b)
+}
+
+func NewReverseWriter(t Table, revFileMW, compFileMW *FileMW) (*ReverseWriter, error) {
+	version, err := t.Engine.GetMySQLDBVersion()
+	if err != nil {
+		return nil, err
+	}
+
+	var (
+		dbVersion string
+		dbType    string
+	)
+
+	if strings.Contains(version, "TiDB") {
+		dbVersion = version
+		dbType = DBTypeTiDB
+	} else {
+		dbType = DBTypeMySQL
+		if strings.Contains(version, utils.MySQLVersionDelimiter) {
+			dbVersion = strings.Split(version, utils.MySQLVersionDelimiter)[0]
+		} else {
+			dbVersion = version
+		}
+	}
+
+	// 表名转换
+	modifyTableName := changeOracleTableName(t.SourceTableName, t.TargetTableName)
+	t.TargetTableName = modifyTableName
+
+	tableStruct, err := t.GenCreateTableSQL(modifyTableName)
+	if err != nil {
+		return nil, err
+	}
+
+	ukSQL, err := t.GenCreateUKSQL(modifyTableName)
+	if err != nil {
+		return nil, err
+	}
+	fkSQL, err := t.GenCreateFKSQL(modifyTableName)
+	if err != nil {
+		return nil, err
+	}
+	ckSQL, err := t.GenCreateCKSQL(modifyTableName)
+	if err != nil {
+		return nil, err
+	}
+	revNonUniqueIndex, compNonUniqueIndex, err := t.GenCreateNonUniqueIndex(modifyTableName)
+	if err != nil {
+		return nil, err
+	}
+
+	revUniqueIndex, compUniqueIndex, err := t.GenCreateUniqueIndex(modifyTableName)
+	if err != nil {
+		return nil, err
+	}
+
+	var compIndex []string
+	if len(compNonUniqueIndex) > 0 {
+		compIndex = append(compIndex, compNonUniqueIndex...)
+	}
+	if len(compUniqueIndex) > 0 {
+		compIndex = append(compIndex, compUniqueIndex...)
+	}
+
+	return &ReverseWriter{
+		DBType:            dbType,
+		DBVersion:         dbVersion,
+		CreateSchema:      t.GenCreateSchemaSQL(),
+		CreateTable:       tableStruct,
+		CreateUK:          ukSQL,
+		CreateFK:          fkSQL,
+		CreateCK:          ckSQL,
+		CreateUniqueIndex: revUniqueIndex,
+		CreateNormalIndex: revNonUniqueIndex,
+		CreateOtherIndex:  compIndex,
+		ReverseTable:      t,
+		RevFileMW:         revFileMW,
+		CompFileMW:        compFileMW,
+	}, nil
+
+}
+
+func (d *ReverseWriter) Reverse() error {
+	var (
+		sqlRev  strings.Builder
+		sqlComp strings.Builder
+	)
+
+	// schema
+	sqlRev.WriteString("/*\n")
+	sqlRev.WriteString(fmt.Sprintf(" oracle schema reverse mysql database\n"))
+	t := table.NewWriter()
+	t.SetStyle(table.StyleLight)
+	t.AppendHeader(table.Row{"#", "ORACLE", "MYSQL", "SUGGEST"})
+	t.AppendRows([]table.Row{
+		{"Schema", d.ReverseTable.SourceSchemaName, d.ReverseTable.TargetSchemaName, "Create Schema"},
+	})
+	sqlRev.WriteString(t.Render() + "\n")
+	sqlRev.WriteString("*/\n")
+
+	sqlRev.WriteString(d.CreateSchema + "\n")
+
+	// 表 with 主键
+	sqlRev.WriteString("/*\n")
+	sqlRev.WriteString(fmt.Sprintf(" oracle table reverse sql \n"))
+
+	sw := table.NewWriter()
+	sw.SetStyle(table.StyleLight)
+	sw.AppendHeader(table.Row{"#", "ORACLE TABLE TYPE", "ORACLE", "MYSQL", "SUGGEST"})
+	sw.AppendRows([]table.Row{
+		{"TABLE", d.ReverseTable.SourceTableType, fmt.Sprintf("%s.%s", d.ReverseTable.SourceSchemaName, d.ReverseTable.SourceTableName), fmt.Sprintf("%s.%s", d.ReverseTable.TargetSchemaName, d.ReverseTable.TargetTableName), "Create Table"},
+	})
+	sqlRev.WriteString(fmt.Sprintf("%v\n", sw.Render()))
+	sqlRev.WriteString("*/\n")
+	sqlRev.WriteString(d.CreateTable + "\n\n")
+
+	// 唯一约束
+	if len(d.CreateUK) > 0 {
+		for _, sql := range d.CreateUK {
+			sqlRev.WriteString(sql + "\n")
+		}
+	}
+
+	// 唯一索引
+	if len(d.CreateUniqueIndex) > 0 {
+		for _, sql := range d.CreateUniqueIndex {
+			sqlRev.WriteString(sql + "\n")
+		}
+	}
+
+	// 普通索引
+	if len(d.CreateNormalIndex) > 0 {
+		for _, sql := range d.CreateNormalIndex {
+			sqlRev.WriteString(sql + "\n")
+		}
+	}
+
+	// 不兼容项
+	if len(d.CreateFK) > 0 || len(d.CreateCK) > 0 || len(d.CreateOtherIndex) > 0 {
+		sqlComp.WriteString("/*\n")
+		sqlComp.WriteString(fmt.Sprintf(" oracle table index or consrtaint maybe mysql has compatibility, skip\n"))
+		tw := table.NewWriter()
+		tw.SetStyle(table.StyleLight)
+		tw.AppendHeader(table.Row{"#", "ORACLE", "MYSQL", "SUGGEST"})
+		tw.AppendRows([]table.Row{
+			{"TABLE", fmt.Sprintf("%s.%s", d.ReverseTable.SourceSchemaName, d.ReverseTable.SourceTableName), fmt.Sprintf("%s.%s", d.ReverseTable.TargetSchemaName, d.ReverseTable.TargetTableName), "Create Index Or Constraints"}})
+
+		sqlComp.WriteString(fmt.Sprintf("%v\n", tw.Render()))
+		sqlComp.WriteString("*/\n")
+	}
+
+	// 外键约束、检查约束
+	if d.DBType != DBTypeTiDB {
+		if len(d.CreateFK) > 0 {
+			for _, sql := range d.CreateFK {
+				sqlRev.WriteString(sql + "\n")
+			}
+		}
+
+		if utils.VersionOrdinal(d.DBVersion) > utils.VersionOrdinal(utils.MySQLCheckConsVersion) {
+			if len(d.CreateCK) > 0 {
+				for _, sql := range d.CreateCK {
+					sqlRev.WriteString(sql + "\n")
+				}
+			}
+		} else {
+			// 增加不兼容性语句
+			if len(d.CreateCK) > 0 {
+				for _, sql := range d.CreateCK {
+					sqlComp.WriteString(sql + "\n")
+				}
+			}
+		}
+		// 增加不兼容性语句
+		if len(d.CreateOtherIndex) > 0 {
+			for _, sql := range d.CreateOtherIndex {
+				sqlComp.WriteString(sql + "\n")
+			}
+		}
+		// 文件写入
+		if sqlRev.String() != "" {
+			if _, err := fmt.Fprintln(d.RevFileMW, sqlRev.String()); err != nil {
 				return err
 			}
-			jobChan <- Job{
-				Table:            tbl,
-				ReverseSQL:       createSQL,
-				CompatibilitySQL: compatibilitySQL,
+		}
+		if sqlComp.String() != "" {
+			if _, err := fmt.Fprintln(d.CompFileMW, sqlComp.String()); err != nil {
+				return err
 			}
-			return nil
-		})
+		}
+		return nil
 	}
+
+	// TiDB 增加不兼容性语句
+	if len(d.CreateFK) > 0 {
+		for _, sql := range d.CreateFK {
+			sqlComp.WriteString(sql + "\n")
+		}
+	}
+	if len(d.CreateCK) > 0 {
+		for _, sql := range d.CreateCK {
+			sqlComp.WriteString(sql + "\n")
+		}
+	}
+	if len(d.CreateOtherIndex) > 0 {
+		for _, sql := range d.CreateOtherIndex {
+			sqlComp.WriteString(sql + "\n")
+		}
+	}
+
+	// 文件写入
+	if sqlRev.String() != "" {
+		if _, err := fmt.Fprintln(d.RevFileMW, sqlRev.String()); err != nil {
+			return err
+		}
+	}
+	if sqlComp.String() != "" {
+		if _, err := fmt.Fprintln(d.CompFileMW, sqlComp.String()); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
-func Consume(revFile, compFile *os.File, job chan Job) {
-	for j := range job {
-		if j.ReverseSQL != "" {
-			_, err := fmt.Fprintln(revFile, j.ReverseSQL)
-			if err != nil {
-				service.Logger.Error("reverse table oracle to mysql failed",
-					zap.String("type", "reverse sql"),
-					zap.String("info", j.String()),
-					zap.Error(fmt.Errorf("reverse table task failed, please clear and rerunning")),
-					zap.Error(err))
+func CompatibilityDBTips(file *FileMW, sourceSchema string, partition, temporary, clustered []string) error {
+	// 兼容提示
+	if len(partition) > 0 || len(temporary) > 0 || len(clustered) > 0 {
+		var sqlComp strings.Builder
 
-				revFile.Close()
-				return
+		sqlComp.WriteString("/*\n")
+		sqlComp.WriteString(fmt.Sprintf(" oracle table maybe mysql has compatibility, will convert to normal table, please manual process\n"))
+		t := table.NewWriter()
+		t.SetStyle(table.StyleLight)
+		t.AppendHeader(table.Row{"SCHEMA", "TABLE NAME", "ORACLE TABLE TYPE", "SUGGEST"})
+
+		if len(partition) > 0 {
+			for _, part := range partition {
+				t.AppendRows([]table.Row{
+					{sourceSchema, part, "Partition", "Manual Process Table"},
+				})
 			}
 		}
-		if j.CompatibilitySQL != "" {
-			_, err := fmt.Fprintln(compFile, j.CompatibilitySQL)
-			if err != nil {
-				service.Logger.Error("reverse table oracle to mysql failed",
-					zap.String("type", "compatibility sql"),
-					zap.String("info", j.String()),
-					zap.Error(fmt.Errorf("reverse table task failed, please clear and rerunning")),
-					zap.Error(err))
-
-				compFile.Close()
-				return
+		if len(temporary) > 0 {
+			for _, temp := range temporary {
+				t.AppendRows([]table.Row{
+					{sourceSchema, temp, "Temporary", "Manual Process Table"},
+				})
 			}
+		}
+		if len(clustered) > 0 {
+			for _, clustered := range clustered {
+				t.AppendRows([]table.Row{
+					{sourceSchema, clustered, "Clustered", "Manual Process Table"},
+				})
+			}
+		}
+		sqlComp.WriteString(t.Render() + "\n")
+		sqlComp.WriteString("*/\n")
+		if _, err := fmt.Fprintln(file, sqlComp.String()); err != nil {
+			return err
 		}
 	}
+	return nil
 }

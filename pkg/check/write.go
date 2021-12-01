@@ -18,11 +18,9 @@ package check
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"reflect"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/jedib0t/go-pretty/v6/table"
@@ -41,28 +39,21 @@ type DiffWriter struct {
 	TargetSchemaName string
 	TableName        string
 	Engine           *service.Engine
-	*FileMW
+	ChkFileMW        *reverser.FileMW
+	RevFileMW        *reverser.FileMW
+	CompFileMW       *reverser.FileMW
 }
 
-type FileMW struct {
-	Mutex  sync.Mutex
-	Writer io.Writer
-}
-
-func NewDiffWriter(sourceSchemaName, targetSchemaName, tableName string, engine *service.Engine, fileMW *FileMW) *DiffWriter {
+func NewDiffWriter(sourceSchemaName, targetSchemaName, tableName string, engine *service.Engine, chkFileMW, revFileMW, compFileMW *reverser.FileMW) *DiffWriter {
 	return &DiffWriter{
 		SourceSchemaName: sourceSchemaName,
 		TargetSchemaName: targetSchemaName,
 		TableName:        tableName,
 		Engine:           engine,
-		FileMW:           fileMW,
+		ChkFileMW:        chkFileMW,
+		RevFileMW:        revFileMW,
+		CompFileMW:       compFileMW,
 	}
-}
-
-func (d *FileMW) Write(b []byte) (n int, err error) {
-	d.Mutex.Lock()
-	defer d.Mutex.Unlock()
-	return d.Writer.Write(b)
 }
 
 // 表结构对比
@@ -76,11 +67,6 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 		zap.String("oracle table", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)),
 		zap.String("mysql table", fmt.Sprintf("%s.%s", d.TargetSchemaName, d.TableName)))
 
-	service.Logger.Info("check table",
-		zap.String("get oracle table", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)),
-		zap.String("get mysql table", fmt.Sprintf("%s.%s", d.TargetSchemaName, d.TableName)))
-
-	// 输出格式：表结构一致不输出，只输出上下游不一致信息且输出以下游可执行 SQL 输出
 	var builder strings.Builder
 
 	// 判断 MySQL 表是否存在
@@ -89,50 +75,25 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 		return err
 	}
 	if !isExist {
-		builder.WriteString("/*\n")
-		builder.WriteString(fmt.Sprintf(" the oracle table exists, but the mysql table does not exist\n"))
-		builder.WriteString(fmt.Sprintf(" oracle table maybe mysql has compatibility, will convert to normal table, please manual process\n"))
-		builder.WriteString("*/\n")
-
 		// 表列表
-		reverseTables, _, _, _, err := reverser.LoadOracleToMySQLTableList(d.Engine, []string{d.TableName}, d.SourceSchemaName, d.TargetSchemaName, false)
+		reverseTables, partitionTableList, temporaryTableList, clusteredTableList, err := reverser.LoadOracleToMySQLTableList(d.Engine, []string{d.TableName}, d.SourceSchemaName, d.TargetSchemaName, false)
 		if err != nil {
 			return err
 		}
 
-		var (
-			createSQLS, compatibilitySQLS []string
-		)
-		for _, tbl := range reverseTables {
-			createSQL, compatibilitySQL, err := tbl.GenerateAndExecMySQLCreateSQL()
-			if err != nil {
-				return err
-			}
-			if createSQL != "" {
-				createSQLS = append(createSQLS, createSQL)
-			}
-			if compatibilitySQL != "" {
-				compatibilitySQLS = append(compatibilitySQLS, compatibilitySQL)
-			}
-		}
-
-		// 输出创建表以及索引语句
-		if len(createSQLS) != 0 {
-			for _, sql := range createSQLS {
-				builder.WriteString(fmt.Sprintf("%s\n", sql))
-			}
-		}
-
-		// 输出表创建过程可能存在不兼容的语句对象（外键、检查约束）
-		if len(compatibilitySQLS) != 0 {
-			builder.WriteString("-- [notice] maybe exist compatibility sql\n")
-			for _, sql := range compatibilitySQLS {
-				builder.WriteString(fmt.Sprintf("%s\n", sql))
-			}
-		}
-
-		if _, err := fmt.Fprintln(d.FileMW, builder.String()); err != nil {
+		// 不兼容项 - 表提示
+		if err = reverser.CompatibilityDBTips(d.CompFileMW, d.SourceSchemaName, partitionTableList, temporaryTableList, clusteredTableList); err != nil {
 			return err
+		}
+
+		for _, tbl := range reverseTables {
+			writer, er := reverser.NewReverseWriter(tbl, d.RevFileMW, d.CompFileMW)
+			if er != nil {
+				return er
+			}
+			if er = writer.Reverse(); er != nil {
+				return er
+			}
 		}
 		service.Logger.Warn("table not exists",
 			zap.String("oracle table", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)),
@@ -173,7 +134,7 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 		builder.WriteString(fmt.Sprintf("%v\n", t.Render()))
 		builder.WriteString("*/\n")
 
-		if _, err := fmt.Fprintln(d.FileMW, builder.String()); err != nil {
+		if _, err := fmt.Fprintln(d.ChkFileMW, builder.String()); err != nil {
 			return err
 		}
 
@@ -571,7 +532,7 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 
 	// diff 记录不为空
 	if builder.String() != "" {
-		if _, err := fmt.Fprintln(d.FileMW, builder.String()); err != nil {
+		if _, err := fmt.Fprintln(d.ChkFileMW, builder.String()); err != nil {
 			return err
 		}
 	}

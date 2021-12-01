@@ -19,21 +19,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
+	"sync"
 	"time"
 
 	"github.com/xxjwxc/gowp/workpool"
 
-	"github.com/jedib0t/go-pretty/v6/table"
-
 	"github.com/wentaojin/transferdb/service"
 
 	"go.uber.org/zap"
-)
-
-const (
-	// 缓冲通道 size
-	bufferSize = 1000
 )
 
 func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) error {
@@ -65,6 +58,7 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 			zap.String("schema", cfg.SourceConfig.SchemaName))
 		return nil
 	}
+
 	// 表列表
 	tables, partitionTableList, temporaryTableList, clusteredTableList, err := LoadOracleToMySQLTableList(engine, exporterTableSlice, cfg.SourceConfig.SchemaName, cfg.TargetConfig.SchemaName, cfg.TargetConfig.Overwrite)
 	if err != nil {
@@ -92,70 +86,39 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 	}
 	defer fileCompatibility.Close()
 
-	if len(partitionTableList) > 0 || len(temporaryTableList) > 0 || len(clusteredTableList) > 0 {
-		var builder strings.Builder
-		builder.WriteString("/*\n")
-		builder.WriteString(fmt.Sprintf(" oracle table maybe mysql has compatibility, will convert to normal table, please manual process\n"))
-		t := table.NewWriter()
-		t.SetStyle(table.StyleLight)
-		t.AppendHeader(table.Row{"SCHEMA", "ORACLE TABLE TYPE", "ORACLE", "SUGGEST"})
+	wrReverse := &FileMW{sync.Mutex{}, fileReverse}
+	wrComp := &FileMW{sync.Mutex{}, fileCompatibility}
 
-		if len(partitionTableList) > 0 {
-			for _, part := range partitionTableList {
-				t.AppendRows([]table.Row{
-					{cfg.SourceConfig.SchemaName, "Partition", part, "Manual Process Table"},
-				})
-			}
-		}
-		if len(temporaryTableList) > 0 {
-			for _, temp := range temporaryTableList {
-				t.AppendRows([]table.Row{
-					{cfg.SourceConfig.SchemaName, "Temporary", temp, "Manual Process Table"},
-				})
-			}
-		}
-		if len(clusteredTableList) > 0 {
-			for _, clustered := range clusteredTableList {
-				t.AppendRows([]table.Row{
-					{cfg.SourceConfig.SchemaName, "Clustered", clustered, "Manual Process Table"},
-				})
-			}
-		}
-
-		builder.WriteString(t.Render() + "\n")
-		builder.WriteString("*/\n")
-		if _, err = fileCompatibility.WriteString(builder.String()); err != nil {
-			return err
-		}
-	}
-
-	// 创建数据库
-	var builder strings.Builder
-	builder.WriteString("/*\n")
-	builder.WriteString(fmt.Sprintf(" oracle schema reverse mysql database\n"))
-	t := table.NewWriter()
-	t.SetStyle(table.StyleLight)
-	t.AppendHeader(table.Row{"#", "ORACLE", "MYSQL", "SUGGEST"})
-	t.AppendRows([]table.Row{
-		{"Schema", cfg.SourceConfig.SchemaName, cfg.TargetConfig.SchemaName, "Create Schema"},
-	})
-	builder.WriteString(t.Render() + "\n")
-	builder.WriteString("*/\n")
-	builder.WriteString(fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s;\n", cfg.TargetConfig.SchemaName))
-	if _, err = fileReverse.WriteString(builder.String() + "\n"); err != nil {
+	// 不兼容项 - 表提示
+	if err = CompatibilityDBTips(wrComp, cfg.SourceConfig.SchemaName, partitionTableList, temporaryTableList, clusteredTableList); err != nil {
 		return err
 	}
 
 	// 设置工作池
 	// 设置 goroutine 数
-	//wrReverse := &FileMW{sync.Mutex{}, fileReverse}
-	//wrComp := &FileMW{sync.Mutex{}, fileCompatibility}
+
 	wp := workpool.New(cfg.AppConfig.Threads)
-	jobChan := make(chan Job, bufferSize)
-	Produce(wp, tables, jobChan)
+
+	for _, t := range tables {
+		tbl := t
+		revFileMW := wrReverse
+		compFileMW := wrComp
+		wp.Do(func() error {
+			writer, er := NewReverseWriter(tbl, revFileMW, compFileMW)
+			if er != nil {
+				return er
+			}
+			if er = writer.Reverse(); er != nil {
+				return er
+			}
+
+			return nil
+		})
+	}
 	if err = wp.Wait(); err != nil {
 		return err
 	}
+
 	endTime := time.Now()
 	if !wp.IsDone() {
 		service.Logger.Error("reverse table oracle to mysql failed",
@@ -164,11 +127,6 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 			zap.Error(err))
 		return fmt.Errorf("reverse table task failed, please rerunning, error: %v", err)
 	}
-
-	// 数据发送完毕，关闭通道
-	close(jobChan)
-
-	Consume(fileReverse, fileCompatibility, jobChan)
 
 	service.Logger.Info("reverse", zap.String("create table and index output", filepath.Join(pwdDir,
 		fmt.Sprintf("reverse_%s.sql", cfg.SourceConfig.SchemaName))))

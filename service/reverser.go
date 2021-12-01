@@ -253,7 +253,7 @@ select x.constraint_name,
 func (e *Engine) GetOracleTableUniqueIndex(schemaName string, tableName string) ([]map[string]string, error) {
 	querySQL := fmt.Sprintf(`SELECT
 	temp.TABLE_NAME,
-	temp.UNIQUENESS,--是否唯一索引
+	temp.UNIQUENESS,
 	temp.INDEX_NAME,
 	temp.INDEX_TYPE,
 	temp.column_list,
@@ -263,7 +263,7 @@ FROM
 SELECT
 	I.TABLE_OWNER,
 	I.TABLE_NAME,
-	I.UNIQUENESS,--是否唯一索引
+	I.UNIQUENESS,
 	I.INDEX_NAME,
 	I.INDEX_TYPE,
 	LISTAGG ( T.COLUMN_NAME, ',' ) WITHIN GROUP ( ORDER BY T.COLUMN_POSITION ) AS COLUMN_LIST 
@@ -311,7 +311,7 @@ AND temp.TABLE_OWNER = E.TABLE_OWNER
 func (e *Engine) GetOracleTableNormalIndex(schemaName string, tableName string) ([]map[string]string, error) {
 	querySQL := fmt.Sprintf(`SELECT
 	temp.TABLE_NAME,
-	temp.UNIQUENESS,--是否唯一索引
+	temp.UNIQUENESS,
 	temp.INDEX_NAME,
 	temp.INDEX_TYPE,
 	temp.column_list,
@@ -321,7 +321,7 @@ FROM
 	SELECT
 		T.TABLE_OWNER,
 		T.TABLE_NAME,
-		I.UNIQUENESS,--是否唯一索引
+		I.UNIQUENESS,
 		T.INDEX_NAME,
 		I.INDEX_TYPE,
 		LISTAGG ( T.COLUMN_NAME, ',' ) WITHIN GROUP ( ORDER BY T.COLUMN_POSITION ) AS column_list 

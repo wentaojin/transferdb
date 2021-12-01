@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/wentaojin/transferdb/pkg/reverser"
+
 	"github.com/xxjwxc/gowp/workpool"
 
 	"go.uber.org/zap"
@@ -44,14 +46,36 @@ func OracleTableToMySQLMappingCheck(engine *service.Engine, cfg *service.CfgFile
 	if err != nil {
 		return err
 	}
-	file, err := os.OpenFile(filepath.Join(pwdDir,
+	fileCheck, err := os.OpenFile(filepath.Join(pwdDir,
 		fmt.Sprintf("check_%s.sql", cfg.SourceConfig.SchemaName)), os.O_WRONLY|os.O_CREATE|os.O_APPEND|os.O_TRUNC, 0666)
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer fileCheck.Close()
 
-	wr := &FileMW{sync.Mutex{}, file}
+	fileReverse, err := os.OpenFile(filepath.Join(pwdDir, fmt.Sprintf("reverse_%s.sql", cfg.SourceConfig.SchemaName)), os.O_WRONLY|os.O_CREATE|os.O_APPEND|os.O_TRUNC, 0666)
+	if err != nil {
+		return err
+	}
+	defer fileReverse.Close()
+
+	fileCompatibility, err := os.OpenFile(filepath.Join(pwdDir, fmt.Sprintf("compatibility_%s.sql", cfg.SourceConfig.SchemaName)), os.O_WRONLY|os.O_CREATE|os.O_APPEND|os.O_TRUNC, 0666)
+	if err != nil {
+		return err
+	}
+	defer fileCompatibility.Close()
+
+	wrCheck := &reverser.FileMW{
+		Mutex:  sync.Mutex{},
+		Writer: fileCheck}
+	wrReverse := &reverser.FileMW{
+		Mutex:  sync.Mutex{},
+		Writer: fileReverse,
+	}
+	wrComp := &reverser.FileMW{
+		Mutex:  sync.Mutex{},
+		Writer: fileCompatibility,
+	}
 
 	wp := workpool.New(cfg.AppConfig.Threads)
 
@@ -60,9 +84,12 @@ func OracleTableToMySQLMappingCheck(engine *service.Engine, cfg *service.CfgFile
 		targetSchemaName := cfg.TargetConfig.SchemaName
 		tableName := table
 		e := engine
-		fileMW := wr
+		checkFile := wrCheck
+		revFile := wrReverse
+		compFile := wrComp
+
 		wp.Do(func() error {
-			if err := NewDiffWriter(sourceSchemaName, targetSchemaName, tableName, e, fileMW).DiffOracleAndMySQLTable(); err != nil {
+			if err := NewDiffWriter(sourceSchemaName, targetSchemaName, tableName, e, checkFile, revFile, compFile).DiffOracleAndMySQLTable(); err != nil {
 				return err
 			}
 			return nil
