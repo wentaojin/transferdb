@@ -189,11 +189,13 @@ func (e *Engine) GetOracleTableUniqueKey(schemaName string, tableName string) ([
 func (e *Engine) GetOracleTableCheckKey(schemaName string, tableName string) ([]map[string]string, error) {
 	querySQL := fmt.Sprintf(`select cu.constraint_name,SEARCH_CONDITION
           from all_cons_columns cu, all_constraints au
-         where cu.constraint_name = au.constraint_name
+         where cu.owner=au.owner
+           and cu.table_name=au.table_name
+           and cu.constraint_name = au.constraint_name
            and au.constraint_type = 'C'
            and au.STATUS = 'ENABLED'
            and upper(au.table_name) = upper('%s')
-           and upper(cu.owner) = upper('%s')`,
+           and upper(au.owner) = upper('%s')`,
 		strings.ToUpper(tableName),
 		strings.ToUpper(schemaName),
 	)
