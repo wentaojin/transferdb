@@ -116,6 +116,9 @@ func (t *Table) String(jsonType string) string {
 	return string(jsonStr)
 }
 
+/*
+	Oracle
+*/
 func NewOracleTableINFO(schemaName, tableName string, engine *service.Engine) (*Table, error) {
 	oraTable := &Table{
 		SchemaName: schemaName,
@@ -136,12 +139,61 @@ func NewOracleTableINFO(schemaName, tableName string, engine *service.Engine) (*
 	}
 	oraTable.TableComment = strings.ToUpper(commentInfo[0]["COMMENTS"])
 
-	columnInfo, err := engine.GetOracleTableColumn(schemaName, tableName)
+	columns, OracleCharacterSet, err := getOracleTableColumn(schemaName, tableName, engine, isGBKCharacterSet)
 	if err != nil {
 		return oraTable, err
 	}
-	columns := make(map[string]Column, len(columnInfo))
+
+	indexes, err := getOracleTableIndex(schemaName, tableName, engine)
+	if err != nil {
+		return oraTable, err
+	}
+
+	puConstraints, fkConstraints, ckConstraints, err := getOracleConstraint(schemaName, tableName, engine)
+	if err != nil {
+		return oraTable, err
+	}
+
+	isPart, err := engine.IsOraclePartitionTable(schemaName, tableName)
+	if err != nil {
+		return oraTable, err
+	}
+	var parts []Partition
+	if isPart {
+		partInfo, err := engine.GetOraclePartitionTableINFO(schemaName, tableName)
+		if err != nil {
+			return oraTable, err
+		}
+		for _, part := range partInfo {
+			parts = append(parts, Partition{
+				PartitionKey:     strings.ToUpper(part["PARTITION_EXPRESS"]),
+				PartitionType:    strings.ToUpper(part["PARTITIONING_TYPE"]),
+				SubPartitionKey:  strings.ToUpper(part["SUBPARTITION_EXPRESS"]),
+				SubPartitionType: strings.ToUpper(part["SUBPARTITIONING_TYPE"]),
+			})
+		}
+	}
+	oraTable.TableCharacterSet = strings.ToUpper(OracleCharacterSet)
+	oraTable.TableCollation = utils.OracleCollationBin
+	oraTable.Columns = columns
+	oraTable.Indexes = indexes
+	oraTable.PUConstraints = puConstraints
+	oraTable.ForeignConstraints = fkConstraints
+	oraTable.CheckConstraints = ckConstraints
+	oraTable.IsPartition = isPart
+	oraTable.Partitions = parts
+	return oraTable, nil
+}
+
+func getOracleTableColumn(schemaName, tableName string, engine *service.Engine, isGBKCharacterSet bool) (map[string]Column, string, error) {
 	var OracleCharacterSet string
+
+	columnInfo, err := engine.GetOracleTableColumn(schemaName, tableName)
+	if err != nil {
+		return nil, OracleCharacterSet, err
+	}
+
+	columns := make(map[string]Column, len(columnInfo))
 
 	for _, rowCol := range columnInfo {
 		if isGBKCharacterSet {
@@ -188,12 +240,15 @@ func NewOracleTableINFO(schemaName, tableName string, engine *service.Engine) (*
 			MySQLOriginDataDefault:  "", // only mysql
 		}
 	}
+	return columns, OracleCharacterSet, err
+}
 
+func getOracleTableIndex(schemaName, tableName string, engine *service.Engine) ([]Index, error) {
 	var indexes []Index
 
 	indexInfo, err := engine.GetOracleTableNormalIndex(schemaName, tableName)
 	if err != nil {
-		return oraTable, err
+		return indexes, err
 	}
 	for _, indexCol := range indexInfo {
 		indexes = append(indexes, Index{
@@ -208,7 +263,7 @@ func NewOracleTableINFO(schemaName, tableName string, engine *service.Engine) (*
 
 	indexInfo, err = engine.GetOracleTableUniqueIndex(schemaName, tableName)
 	if err != nil {
-		return oraTable, err
+		return indexes, err
 	}
 	for _, indexCol := range indexInfo {
 		indexes = append(indexes, Index{
@@ -221,10 +276,19 @@ func NewOracleTableINFO(schemaName, tableName string, engine *service.Engine) (*
 		})
 	}
 
-	var puConstraints []ConstraintPUKey
+	return indexes, nil
+}
+
+func getOracleConstraint(schemaName, tableName string, engine *service.Engine) ([]ConstraintPUKey, []ConstraintForeign, []ConstraintCheck, error) {
+	var (
+		puConstraints []ConstraintPUKey
+		fkConstraints []ConstraintForeign
+		ckConstraints []ConstraintCheck
+	)
+
 	pkInfo, err := engine.GetOracleTablePrimaryKey(schemaName, tableName)
 	if err != nil {
-		return oraTable, err
+		return puConstraints, fkConstraints, ckConstraints, err
 	}
 	for _, pk := range pkInfo {
 		puConstraints = append(puConstraints, ConstraintPUKey{
@@ -235,7 +299,7 @@ func NewOracleTableINFO(schemaName, tableName string, engine *service.Engine) (*
 
 	ukInfo, err := engine.GetOracleTableUniqueKey(schemaName, tableName)
 	if err != nil {
-		return oraTable, err
+		return puConstraints, fkConstraints, ckConstraints, err
 	}
 	for _, pk := range ukInfo {
 		puConstraints = append(puConstraints, ConstraintPUKey{
@@ -244,10 +308,9 @@ func NewOracleTableINFO(schemaName, tableName string, engine *service.Engine) (*
 		})
 	}
 
-	var fkConstraints []ConstraintForeign
 	fkInfo, err := engine.GetOracleTableForeignKey(schemaName, tableName)
 	if err != nil {
-		return oraTable, err
+		return puConstraints, fkConstraints, ckConstraints, err
 	}
 	for _, fk := range fkInfo {
 		fkConstraints = append(fkConstraints, ConstraintForeign{
@@ -259,47 +322,22 @@ func NewOracleTableINFO(schemaName, tableName string, engine *service.Engine) (*
 			UpdateRule:            "", // Oracle 不支持 Update Rule
 		})
 	}
-	var ckConstraints []ConstraintCheck
+
 	ckInfo, err := engine.GetOracleTableCheckKey(schemaName, tableName)
 	if err != nil {
-		return oraTable, err
+		return puConstraints, fkConstraints, ckConstraints, err
 	}
 	for _, ck := range ckInfo {
 		ckConstraints = append(ckConstraints, ConstraintCheck{
 			ConstraintExpression: strings.ToUpper(ck["SEARCH_CONDITION"]),
 		})
 	}
-	isPart, err := engine.IsOraclePartitionTable(schemaName, tableName)
-	if err != nil {
-		return oraTable, err
-	}
-	var parts []Partition
-	if isPart {
-		partInfo, err := engine.GetOraclePartitionTableINFO(schemaName, tableName)
-		if err != nil {
-			return oraTable, err
-		}
-		for _, part := range partInfo {
-			parts = append(parts, Partition{
-				PartitionKey:     strings.ToUpper(part["PARTITION_EXPRESS"]),
-				PartitionType:    strings.ToUpper(part["PARTITIONING_TYPE"]),
-				SubPartitionKey:  strings.ToUpper(part["SUBPARTITION_EXPRESS"]),
-				SubPartitionType: strings.ToUpper(part["SUBPARTITIONING_TYPE"]),
-			})
-		}
-	}
-	oraTable.TableCharacterSet = strings.ToUpper(OracleCharacterSet)
-	oraTable.TableCollation = utils.OracleCollationBin
-	oraTable.Columns = columns
-	oraTable.Indexes = indexes
-	oraTable.PUConstraints = puConstraints
-	oraTable.ForeignConstraints = fkConstraints
-	oraTable.CheckConstraints = ckConstraints
-	oraTable.IsPartition = isPart
-	oraTable.Partitions = parts
-	return oraTable, nil
+	return puConstraints, fkConstraints, ckConstraints, nil
 }
 
+/*
+	MySQL
+*/
 func NewMySQLTableINFO(schemaName, tableName string, engine *service.Engine) (*Table, string, error) {
 	mysqlTable := &Table{
 		SchemaName: schemaName,
@@ -350,9 +388,58 @@ func NewMySQLTableINFO(schemaName, tableName string, engine *service.Engine) (*T
 	}
 	mysqlTable.TableComment = strings.ToUpper(comment)
 
-	columnInfo, err := engine.GetMySQLTableColumn(schemaName, tableName)
+	columns, err := getMySQLTableColumn(schemaName, tableName, engine)
 	if err != nil {
 		return mysqlTable, version, err
+	}
+
+	indexes, err := getMySQLTableIndex(schemaName, tableName, engine)
+	if err != nil {
+		return mysqlTable, version, err
+	}
+
+	puConstraints, fkConstraints, ckConstraints, err := getMySQLTableConstraint(schemaName, tableName, version, engine, isTiDB)
+	if err != nil {
+		return mysqlTable, version, err
+	}
+
+	var parts []Partition
+
+	isPart, err := engine.IsMySQLPartitionTable(schemaName, tableName)
+	if err != nil {
+		return mysqlTable, version, err
+	}
+	if isPart {
+		partInfo, err := engine.GetMySQLPartitionTableINFO(schemaName, tableName)
+		if err != nil {
+			return mysqlTable, version, err
+		}
+		for _, part := range partInfo {
+			parts = append(parts, Partition{
+				PartitionKey:     strings.ToUpper(part["PARTITION_EXPRESS"]),
+				PartitionType:    strings.ToUpper(part["PARTITIONING_TYPE"]),
+				SubPartitionKey:  strings.ToUpper(part["SUBPARTITION_EXPRESS"]),
+				SubPartitionType: strings.ToUpper(part["SUBPARTITIONING_TYPE"]),
+			})
+		}
+	}
+
+	mysqlTable.TableCharacterSet = strings.ToUpper(characterSet)
+	mysqlTable.TableCollation = strings.ToUpper(collation)
+	mysqlTable.Columns = columns
+	mysqlTable.Indexes = indexes
+	mysqlTable.PUConstraints = puConstraints
+	mysqlTable.ForeignConstraints = fkConstraints
+	mysqlTable.CheckConstraints = ckConstraints
+	mysqlTable.IsPartition = isPart
+	mysqlTable.Partitions = parts
+	return mysqlTable, version, nil
+}
+
+func getMySQLTableColumn(schemaName, tableName string, engine *service.Engine) (map[string]Column, error) {
+	columnInfo, err := engine.GetMySQLTableColumn(schemaName, tableName)
+	if err != nil {
+		return nil, err
 	}
 	columns := make(map[string]Column, len(columnInfo))
 
@@ -398,11 +485,16 @@ func NewMySQLTableINFO(schemaName, tableName string, engine *service.Engine) (*T
 		}
 	}
 
+	return columns, nil
+}
+
+func getMySQLTableIndex(schemaName, tableName string, engine *service.Engine) ([]Index, error) {
+	var indexes []Index
+
 	indexInfo, err := engine.GetMySQLTableIndex(schemaName, tableName)
 	if err != nil {
-		return mysqlTable, version, err
+		return indexes, err
 	}
-	var indexes []Index
 	for _, indexCol := range indexInfo {
 		indexes = append(indexes, Index{
 			IndexInfo: IndexInfo{
@@ -413,11 +505,19 @@ func NewMySQLTableINFO(schemaName, tableName string, engine *service.Engine) (*T
 			ColumnExpress: strings.ToUpper(indexCol["COLUMN_EXPRESSION"]),
 		})
 	}
+	return indexes, nil
+}
 
-	var puConstraints []ConstraintPUKey
+func getMySQLTableConstraint(schemaName, tableName, version string, engine *service.Engine, isTiDB bool) ([]ConstraintPUKey, []ConstraintForeign, []ConstraintCheck, error) {
+
+	var (
+		puConstraints []ConstraintPUKey
+		fkConstraints []ConstraintForeign
+		ckConstraints []ConstraintCheck
+	)
 	puInfo, err := engine.GetMySQLTablePrimaryAndUniqueKey(schemaName, tableName)
 	if err != nil {
-		return mysqlTable, version, err
+		return puConstraints, fkConstraints, ckConstraints, err
 	}
 	for _, pu := range puInfo {
 		puConstraints = append(puConstraints, ConstraintPUKey{
@@ -426,34 +526,10 @@ func NewMySQLTableINFO(schemaName, tableName string, engine *service.Engine) (*T
 		})
 	}
 
-	var (
-		ckConstraints []ConstraintCheck
-		fkConstraints []ConstraintForeign
-		parts         []Partition
-	)
-	isPart, err := engine.IsMySQLPartitionTable(schemaName, tableName)
-	if err != nil {
-		return mysqlTable, version, err
-	}
-	if isPart {
-		partInfo, err := engine.GetMySQLPartitionTableINFO(schemaName, tableName)
-		if err != nil {
-			return mysqlTable, version, err
-		}
-		for _, part := range partInfo {
-			parts = append(parts, Partition{
-				PartitionKey:     strings.ToUpper(part["PARTITION_EXPRESS"]),
-				PartitionType:    strings.ToUpper(part["PARTITIONING_TYPE"]),
-				SubPartitionKey:  strings.ToUpper(part["SUBPARTITION_EXPRESS"]),
-				SubPartitionType: strings.ToUpper(part["SUBPARTITIONING_TYPE"]),
-			})
-		}
-	}
-
 	if !isTiDB {
 		fkInfo, err := engine.GetMySQLTableForeignKey(schemaName, tableName)
 		if err != nil {
-			return mysqlTable, version, err
+			return puConstraints, fkConstraints, ckConstraints, err
 		}
 		for _, fk := range fkInfo {
 			fkConstraints = append(fkConstraints, ConstraintForeign{
@@ -475,7 +551,7 @@ func NewMySQLTableINFO(schemaName, tableName string, engine *service.Engine) (*T
 		if utils.VersionOrdinal(dbVersion) > utils.VersionOrdinal(utils.MySQLCheckConsVersion) {
 			ckInfo, err := engine.GetMySQLTableCheckKey(schemaName, tableName)
 			if err != nil {
-				return mysqlTable, version, err
+				return puConstraints, fkConstraints, ckConstraints, err
 			}
 			for _, ck := range ckInfo {
 				ckConstraints = append(ckConstraints, ConstraintCheck{
@@ -484,46 +560,5 @@ func NewMySQLTableINFO(schemaName, tableName string, engine *service.Engine) (*T
 			}
 		}
 	}
-
-	mysqlTable.TableCharacterSet = strings.ToUpper(characterSet)
-	mysqlTable.TableCollation = strings.ToUpper(collation)
-	mysqlTable.Columns = columns
-	mysqlTable.Indexes = indexes
-	mysqlTable.PUConstraints = puConstraints
-	mysqlTable.ForeignConstraints = fkConstraints
-	mysqlTable.CheckConstraints = ckConstraints
-	mysqlTable.IsPartition = isPart
-	mysqlTable.Partitions = parts
-	return mysqlTable, version, nil
-}
-
-func generateColumnNullCommentDefaultMeta(dataNullable, comments, dataDefault string) string {
-	var (
-		colMeta string
-	)
-
-	if dataNullable == "NULL" {
-		switch {
-		case comments != "" && dataDefault != "":
-			colMeta = fmt.Sprintf("DEFAULT %s COMMENT '%s'", dataDefault, comments)
-		case comments != "" && dataDefault == "":
-			colMeta = fmt.Sprintf("DEFAULT NULL COMMENT '%s'", comments)
-		case comments == "" && dataDefault != "":
-			colMeta = fmt.Sprintf("DEFAULT %s", dataDefault)
-		case comments == "" && dataDefault == "":
-			colMeta = "DEFAULT NULL"
-		}
-	} else {
-		switch {
-		case comments != "" && dataDefault != "":
-			colMeta = fmt.Sprintf("%s DEFAULT %s COMMENT '%s'", dataNullable, dataDefault, comments)
-		case comments != "" && dataDefault == "":
-			colMeta = fmt.Sprintf("%s COMMENT '%s'", dataNullable, comments)
-		case comments == "" && dataDefault != "":
-			colMeta = fmt.Sprintf("%s DEFAULT %s", dataNullable, dataDefault)
-		case comments == "" && dataDefault == "":
-			colMeta = fmt.Sprintf("%s", dataNullable)
-		}
-	}
-	return colMeta
+	return puConstraints, fkConstraints, ckConstraints, nil
 }
