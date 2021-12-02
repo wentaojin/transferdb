@@ -419,9 +419,9 @@ f.TABLE_NAME,
 FROM
 (SELECT tmp.owner,tmp.TABLE_NAME，tmp.CLUSTER_NAME,tmp.PARTITIONED,tmp.TEMPORARY,tmp.DURATION,tmp.IOT_TYPE
 FROM
-	ALL_TABLES tmp, ALL_TABLES w
+	DBA_TABLES tmp, DBA_TABLES w
 WHERE tmp.owner=w.owner AND tmp.table_name = w.table_name AND tmp.owner  = '%s' AND (w.IOT_TYPE IS NUll OR w.IOT_TYPE='IOT')) f left join (
-select owner,iot_name,iot_type from ALL_TABLES WHERE owner  = '%s')t 
+select owner,iot_name,iot_type from DBA_TABLES WHERE owner  = '%s')t 
 ON f.owner = t.owner AND f.table_name = t.iot_name`, strings.ToUpper(schemaName), strings.ToUpper(schemaName)))
 	if err != nil {
 		return tableMap, err

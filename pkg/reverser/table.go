@@ -609,13 +609,12 @@ func LoadOracleToMySQLTableList(engine *service.Engine, exporterTableSlice []str
 			zap.String("suggest", "if necessary, please manually process the tables in the above list"))
 	}
 
-	// todo: 优化 SQL
-	//service.Logger.Info("get oracle table type start")
-	//tablesMap, err := engine.GetOracleTableType(sourceSchema)
-	//if err != nil {
-	//	return []Table{}, partitionTables, temporaryTables, clusteredTables, err
-	//}
-	//service.Logger.Info("get oracle table type finish")
+	service.Logger.Info("get oracle table type start")
+	tablesMap, err := engine.GetOracleTableType(sourceSchema)
+	if err != nil {
+		return []Table{}, partitionTables, temporaryTables, clusteredTables, err
+	}
+	service.Logger.Info("get oracle table type finish")
 
 	var tables []Table
 	for _, ts := range exporterTableSlice {
@@ -625,10 +624,9 @@ func LoadOracleToMySQLTableList(engine *service.Engine, exporterTableSlice []str
 			TargetSchemaName: targetSchema,
 			SourceTableName:  ts,
 			TargetTableName:  ts,
-			//SourceTableType:  tablesMap[ts],
-			SourceTableType: "HEAP",
-			Overwrite:       overwrite,
-			Engine:          engine,
+			SourceTableType:  tablesMap[ts],
+			Overwrite:        overwrite,
+			Engine:           engine,
 		})
 	}
 
