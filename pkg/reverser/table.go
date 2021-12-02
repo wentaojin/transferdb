@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/wentaojin/transferdb/service"
@@ -617,35 +616,18 @@ func LoadOracleToMySQLTableList(engine *service.Engine, exporterTableSlice []str
 	}
 	service.Logger.Info("get oracle table type finish")
 
-	var (
-		wg     sync.WaitGroup
-		tables []Table
-	)
-	wg.Add(len(exporterTableSlice))
-
-	jobsChan := make(chan Table, len(exporterTableSlice))
-
+	var tables []Table
 	for _, ts := range exporterTableSlice {
-		go func(tbl, sourceSchemaName, targetSchemaName string, e *service.Engine, ow bool, tableMap map[string]string) {
-			// 库名、表名规则
-			jobsChan <- Table{
-				SourceSchemaName: sourceSchemaName,
-				TargetSchemaName: targetSchemaName,
-				SourceTableName:  tbl,
-				TargetTableName:  tbl,
-				SourceTableType:  tableMap[tbl],
-				Overwrite:        ow,
-				Engine:           e,
-			}
-			wg.Done()
-		}(ts, sourceSchema, targetSchema, engine, overwrite, tablesMap)
-	}
-
-	wg.Wait()
-	close(jobsChan)
-
-	for data := range jobsChan {
-		tables = append(tables, data)
+		// 库名、表名规则
+		tables = append(tables, Table{
+			SourceSchemaName: sourceSchema,
+			TargetSchemaName: targetSchema,
+			SourceTableName:  ts,
+			TargetTableName:  ts,
+			SourceTableType:  tablesMap[ts],
+			Overwrite:        overwrite,
+			Engine:           engine,
+		})
 	}
 
 	return tables, partitionTables, temporaryTables, clusteredTables, nil
