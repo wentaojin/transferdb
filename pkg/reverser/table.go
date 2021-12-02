@@ -610,10 +610,12 @@ func LoadOracleToMySQLTableList(engine *service.Engine, exporterTableSlice []str
 			zap.String("suggest", "if necessary, please manually process the tables in the above list"))
 	}
 
+	service.Logger.Info("get oracle table type start")
 	tablesMap, err := engine.GetOracleTableType(sourceSchema)
 	if err != nil {
 		return []Table{}, partitionTables, temporaryTables, clusteredTables, err
 	}
+	service.Logger.Info("get oracle table type finish")
 
 	var (
 		wg     sync.WaitGroup
@@ -638,10 +640,9 @@ func LoadOracleToMySQLTableList(engine *service.Engine, exporterTableSlice []str
 			wg.Done()
 		}(ts, sourceSchema, targetSchema, engine, overwrite, tablesMap)
 	}
-	go func() {
-		wg.Wait()
-		close(jobsChan)
-	}()
+
+	wg.Wait()
+	close(jobsChan)
 
 	for data := range jobsChan {
 		tables = append(tables, data)
