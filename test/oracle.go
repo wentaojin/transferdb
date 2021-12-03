@@ -52,7 +52,7 @@ func main() {
 	     t.NULLABLE,
 	     t.DATA_DEFAULT,
 	     c.COMMENTS
-	from all_tab_columns t, all_col_comments c
+	from dba_tab_columns t, dba_col_comments c
 	where t.table_name = c.table_name
 	 and t.column_name = c.column_name
      and t.owner = c.owner

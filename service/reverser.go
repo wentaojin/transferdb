@@ -88,7 +88,7 @@ func (e *Engine) GetOracleTableComment(schemaName string, tableName string) ([]m
 		err      error
 	)
 	querySQL := fmt.Sprintf(`select table_name,table_type,comments 
-from all_tab_comments 
+from dba_tab_comments 
 where 
 table_type = 'TABLE'
 and upper(owner)=upper('%s')
@@ -108,7 +108,6 @@ and upper(table_name)=upper('%s')`, strings.ToUpper(schemaName), strings.ToUpper
 }
 
 func (e *Engine) GetOracleTableColumn(schemaName string, tableName string) ([]map[string]string, error) {
-	// all_tab_columns 视图 https://docs.oracle.com/cd/B19306_01/server.102/b14237/statviews_2094.html
 	querySQL := fmt.Sprintf(`select t.COLUMN_NAME,
 	     t.DATA_TYPE,
 		 t.CHAR_LENGTH,
@@ -123,7 +122,7 @@ func (e *Engine) GetOracleTableColumn(schemaName string, tableName string) ([]ma
 			 ) NULLABLE,
 	     t.DATA_DEFAULT,
 	     c.COMMENTS
-	from all_tab_columns t, all_col_comments c
+	from dba_tab_columns t, dba_col_comments c
 	where t.table_name = c.table_name
 	 and t.column_name = c.column_name
      and t.owner = c.owner
@@ -149,7 +148,7 @@ func (e *Engine) GetOracleTablePrimaryKey(schemaName string, tableName string) (
 	// primary key status Disabled will not do primary key processing
 	querySQL := fmt.Sprintf(`select cu.constraint_name,
        LISTAGG(cu.column_name, ',') WITHIN GROUP(ORDER BY cu.POSITION) AS COLUMN_LIST
-  from all_cons_columns cu, all_constraints au
+  from dba_cons_columns cu, dba_constraints au
  where cu.constraint_name = au.constraint_name
    and au.constraint_type = 'P'
    and au.STATUS = 'ENABLED'
@@ -168,7 +167,7 @@ func (e *Engine) GetOracleTablePrimaryKey(schemaName string, tableName string) (
 func (e *Engine) GetOracleTableUniqueKey(schemaName string, tableName string) ([]map[string]string, error) {
 	querySQL := fmt.Sprintf(`select cu.constraint_name,au.index_name,
        LISTAGG(cu.column_name, ',') WITHIN GROUP(ORDER BY cu.POSITION) AS column_list
-  from all_cons_columns cu, all_constraints au
+  from dba_cons_columns cu, dba_constraints au
  where cu.constraint_name = au.constraint_name
    and cu.owner = au.owner
    and cu.table_name = au.table_name
@@ -188,7 +187,7 @@ func (e *Engine) GetOracleTableUniqueKey(schemaName string, tableName string) ([
 
 func (e *Engine) GetOracleTableCheckKey(schemaName string, tableName string) ([]map[string]string, error) {
 	querySQL := fmt.Sprintf(`select cu.constraint_name,SEARCH_CONDITION
-          from all_cons_columns cu, all_constraints au
+          from dba_cons_columns cu, dba_constraints au
          where cu.owner=au.owner
            and cu.table_name=au.table_name
            and cu.constraint_name = au.constraint_name
@@ -215,7 +214,7 @@ func (e *Engine) GetOracleTableForeignKey(schemaName string, tableName string) (
          t1.r_constraint_name,
          t1.DELETE_RULE,
          LISTAGG(a1.column_name, ',') WITHIN GROUP(ORDER BY a1.POSITION) AS COLUMN_LIST
-    from all_constraints t1, all_cons_columns a1
+    from dba_constraints t1, dba_cons_columns a1
    where t1.constraint_name = a1.constraint_name
      AND upper(t1.table_name) = upper('%s')
      AND upper(t1.owner) = upper('%s')
@@ -227,7 +226,7 @@ temp2 as
          t1.TABLE_NAME,
          t1.constraint_name,
          LISTAGG(a1.column_name, ',') WITHIN GROUP(ORDER BY a1.POSITION) AS COLUMN_LIST
-    from all_constraints t1, all_cons_columns a1
+    from dba_constraints t1, dba_cons_columns a1
    where t1.constraint_name = a1.constraint_name
      AND upper(t1.owner) = upper('%s')
      AND t1.STATUS = 'ENABLED'
@@ -270,8 +269,8 @@ SELECT
 	I.INDEX_TYPE,
 	LISTAGG ( T.COLUMN_NAME, ',' ) WITHIN GROUP ( ORDER BY T.COLUMN_POSITION ) AS COLUMN_LIST 
 FROM
-	ALL_INDEXES I,
-	ALL_IND_COLUMNS T 
+	DBA_INDEXES I,
+	DBA_IND_COLUMNS T 
 WHERE
 	I.INDEX_NAME = T.INDEX_NAME 
 	AND I.TABLE_OWNER = T.TABLE_OWNER 
@@ -284,7 +283,7 @@ WHERE
 	SELECT
 		1 
 	FROM
-		ALL_CONSTRAINTS C 
+		DBA_CONSTRAINTS C 
 	WHERE
 		I.INDEX_NAME = C.INDEX_NAME 
 		AND I.TABLE_OWNER = C.OWNER 
@@ -298,7 +297,7 @@ GROUP BY
 	I.INDEX_NAME,
 	I.INDEX_TYPE
 ) temp
-	LEFT JOIN ALL_IND_EXPRESSIONS E ON temp.TABLE_NAME = E.TABLE_NAME 
+	LEFT JOIN DBA_IND_EXPRESSIONS E ON temp.TABLE_NAME = E.TABLE_NAME 
 AND temp.TABLE_OWNER = E.TABLE_OWNER 
 	AND temp.INDEX_NAME = E.INDEX_NAME`,
 		strings.ToUpper(tableName),
@@ -328,8 +327,8 @@ FROM
 		I.INDEX_TYPE,
 		LISTAGG ( T.COLUMN_NAME, ',' ) WITHIN GROUP ( ORDER BY T.COLUMN_POSITION ) AS column_list 
 	FROM
-		ALL_IND_COLUMNS T,
-		ALL_INDEXES I 
+		DBA_IND_COLUMNS T,
+		DBA_INDEXES I 
 	WHERE t.table_owner=i.table_owner 
 		and t.table_name=i.table_name
 		and t.index_name=i.index_name
@@ -339,7 +338,7 @@ FROM
 	  AND T.TABLE_NAME = upper( '%s' ) 
 		AND T.TABLE_OWNER = upper( '%s' ) 
 		and not exists (
-		select 1 from ALL_CONSTRAINTS C where 
+		select 1 from DBA_CONSTRAINTS C where 
 		c.owner=i.table_owner 
 		and c.table_name=i.table_name
 		and c.index_name=i.index_name)
@@ -350,7 +349,7 @@ FROM
 		T.INDEX_NAME,
 		I.INDEX_TYPE 
 	) temp
-	LEFT JOIN ALL_IND_EXPRESSIONS E ON temp.TABLE_NAME = E.TABLE_NAME 
+	LEFT JOIN DBA_IND_EXPRESSIONS E ON temp.TABLE_NAME = E.TABLE_NAME 
 AND temp.TABLE_OWNER = E.TABLE_OWNER 
 	AND temp.INDEX_NAME = E.INDEX_NAME`,
 		strings.ToUpper(tableName),
@@ -367,7 +366,7 @@ func (e *Engine) getOracleSchema() ([]string, error) {
 		schemas []string
 		err     error
 	)
-	cols, res, err := Query(e.OracleDB, `SELECT DISTINCT username FROM ALL_USERS`)
+	cols, res, err := Query(e.OracleDB, `SELECT DISTINCT username FROM DBA_USERS`)
 	if err != nil {
 		return schemas, err
 	}
@@ -384,7 +383,7 @@ func (e *Engine) GetOracleTable(schemaName string) ([]string, error) {
 		tables []string
 		err    error
 	)
-	_, res, err := Query(e.OracleDB, fmt.Sprintf(`SELECT table_name AS TABLE_NAME FROM ALL_TABLES WHERE UPPER(owner) = UPPER('%s') AND (IOT_TYPE IS NUll OR IOT_TYPE='IOT')`, schemaName))
+	_, res, err := Query(e.OracleDB, fmt.Sprintf(`SELECT table_name AS TABLE_NAME FROM DBA_TABLES WHERE UPPER(owner) = UPPER('%s') AND (IOT_TYPE IS NUll OR IOT_TYPE='IOT')`, schemaName))
 	if err != nil {
 		return tables, err
 	}
@@ -442,7 +441,7 @@ ON f.owner = t.owner AND f.table_name = t.iot_name`, strings.ToUpper(schemaName)
 
 func (e *Engine) FilterOraclePartitionTable(schemaName string, tableSlice []string) ([]string, error) {
 	_, res, err := Query(e.OracleDB, fmt.Sprintf(`select table_name AS TABLE_NAME
-  from all_tables
+  from dba_tables
  where partitioned = 'YES'
    and upper(owner) = upper('%s')`, schemaName))
 	if err != nil {
@@ -458,7 +457,7 @@ func (e *Engine) FilterOraclePartitionTable(schemaName string, tableSlice []stri
 
 func (e *Engine) FilterOracleTemporaryTable(schemaName string, tableSlice []string) ([]string, error) {
 	_, res, err := Query(e.OracleDB, fmt.Sprintf(`select table_name AS TABLE_NAME
-  from all_tables
+  from dba_tables
  where TEMPORARY = 'Y'
    and upper(owner) = upper('%s')`, schemaName))
 	if err != nil {
@@ -475,7 +474,7 @@ func (e *Engine) FilterOracleTemporaryTable(schemaName string, tableSlice []stri
 func (e *Engine) FilterOracleClusteredTable(schemaName string, tableSlice []string) ([]string, error) {
 	// 过滤蔟表
 	_, res, err := Query(e.OracleDB, fmt.Sprintf(`select table_name AS TABLE_NAME
-  from all_tables
+  from dba_tables
  where CLUSTER_NAME IS NOT NULL
    and upper(owner) = upper('%s')`, schemaName))
 	if err != nil {

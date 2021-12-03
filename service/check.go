@@ -34,7 +34,7 @@ func (e *Engine) GetOracleDBCharacterSet() (string, error) {
 
 func (e *Engine) IsOraclePartitionTable(schemaName, tableName string) (bool, error) {
 	_, res, err := Query(e.OracleDB, fmt.Sprintf(`select count(1) AS COUNT
-  from all_tables
+  from dba_tables
  where partitioned = 'YES'
    and upper(owner) = upper('%s')
    and upper(table_name) = upper('%s')`, schemaName, tableName))
@@ -57,8 +57,8 @@ FROM (SELECT pt.OWNER,
              pt.PARTITIONING_TYPE,
              pt.SUBPARTITIONING_TYPE,
              LISTAGG(ptc.COLUMN_NAME, ',') WITHIN GROUP (ORDER BY ptc.COLUMN_POSITION) AS PARTITION_EXPRESS
-      FROM ALL_PART_TABLES pt,
-           ALL_PART_KEY_COLUMNS ptc
+      FROM DBA_PART_TABLES pt,
+           DBA_PART_KEY_COLUMNS ptc
       WHERE pt.OWNER = ptc.OWNER
         AND pt.TABLE_NAME = ptc.NAME
         AND ptc.OBJECT_TYPE = 'TABLE'
@@ -66,7 +66,7 @@ FROM (SELECT pt.OWNER,
         AND UPPER(pt.TABLE_NAME) = UPPER('%s')
       GROUP BY pt.OWNER, pt.TABLE_NAME, pt.PARTITIONING_TYPE,
                pt.SUBPARTITIONING_TYPE) L,
-     ALL_SUBPART_KEY_COLUMNS skc
+     DBA_SUBPART_KEY_COLUMNS skc
 WHERE L.OWNER = skc.OWNER
   AND L.TABLE_NAME = skc.NAME
 GROUP BY  L.PARTITIONING_TYPE,

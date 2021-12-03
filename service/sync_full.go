@@ -493,7 +493,7 @@ func (e *Engine) getAndInitOracleNormalTableFullSyncMetaUsingRowID(
 
 func (e *Engine) getOracleTableRowsByStatistics(schemaName, tableName string) (int, error) {
 	querySQL := fmt.Sprintf(`select NVL(NUM_ROWS,0) AS NUM_ROWS
-  from all_tables
+  from dba_tables
  where upper(OWNER) = upper('%s')
    and upper(table_name) = upper('%s')`, schemaName, tableName)
 	_, res, err := Query(e.OracleDB, querySQL)

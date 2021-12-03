@@ -197,7 +197,7 @@ CREATE TABLE `steven`.`BMSQL_OORDER` (
 `o_c_id` decimal(11,0),
 `o_carrier_id` decimal(11,0),
 `o_ol_cnt` decimal(11,0),
-`o_all_local` decimal(11,0),
+`o_dba_local` decimal(11,0),
 `o_entry_d` timestamp(6),
 PRIMARY KEY (o_w_id,o_d_id,o_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
