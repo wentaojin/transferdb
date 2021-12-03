@@ -64,9 +64,9 @@ $ ./transferdb --config config.toml --mode reverse
 
 元数据库[默认 db_meta]自定义转换规则，规则优先级【字段 -> 表 -> 库 -> 内置】
 文件自定义规则示例：
-表 [schema_data_type_map] 用于库级别数据类型自定义转换规则，库级别优先级高于内置规则
-表 [table_data_type_map]  用于表级别数据类型自定义转换规则，表级别优先级高于库级别、高于内置规则
-表 [column_data_type_map] 用于字段级别数据类型自定义转换规则，字段级别优先级高于表级别、高于库级别、高于内置规则
+表 [schema_rule_map] 用于库级别自定义转换规则，库级别优先级高于内置规则
+表 [table_rule_map]  用于表级别自定义转换规则，表级别优先级高于库级别、高于内置规则
+表 [column_rule_map] 用于字段级别自定义转换规则，字段级别优先级高于表级别、高于库级别、高于内置规则
 
 5、表结构检查(独立于表结构转换，可单独运行，校验规则使用内置规则，[输出示例](conf/check_${sourcedb}.sql)
 $ ./transferdb --config config.toml --mode check

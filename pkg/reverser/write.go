@@ -266,6 +266,10 @@ func (d *ReverseWriter) Reverse() error {
 
 func GenCreateSchema(file *FileMW, sourceSchema, targetSchema string) error {
 	var sqlRev strings.Builder
+
+	sourceSchema = strings.ToUpper(sourceSchema)
+	targetSchema = strings.ToUpper(targetSchema)
+
 	sqlRev.WriteString("/*\n")
 	sqlRev.WriteString(fmt.Sprintf(" oracle schema reverse mysql database\n"))
 	t := table.NewWriter()
@@ -311,9 +315,9 @@ func CompatibilityDBTips(file *FileMW, sourceSchema string, partition, temporary
 			}
 		}
 		if len(clustered) > 0 {
-			for _, clustered := range clustered {
+			for _, cd := range clustered {
 				t.AppendRows([]table.Row{
-					{sourceSchema, clustered, "Clustered", "Manual Process Table"},
+					{sourceSchema, cd, "Clustered", "Manual Process Table"},
 				})
 			}
 		}

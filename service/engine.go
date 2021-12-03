@@ -93,9 +93,9 @@ func Query(db *sql.DB, querySQL string) ([]string, []map[string]string, error) {
 // 初始化同步表结构
 func (e *Engine) InitMysqlEngineDB() error {
 	if err := e.GormDB.AutoMigrate(
-		&ColumnDataTypeMap{},
-		&TableDataTypeMap{},
-		&SchemaDataTypeMap{},
+		&ColumnRuleMap{},
+		&TableRuleMap{},
+		&SchemaRuleMap{},
 		&WaitSyncMeta{},
 		&FullSyncMeta{},
 		&IncrementSyncMeta{},

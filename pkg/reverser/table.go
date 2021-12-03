@@ -176,8 +176,8 @@ func (t Table) reverserOracleTableNormalIndexToMySQL(modifyTableName string) ([]
 					}
 
 					sql := fmt.Sprintf("CREATE INDEX `%s` ON `%s`.`%s`(%s);",
-						strings.ToLower(idxMeta["INDEX_NAME"]), t.TargetSchemaName, modifyTableName,
-						strings.ToLower(strings.Join(normalIndex, ",")))
+						strings.ToUpper(idxMeta["INDEX_NAME"]), t.TargetSchemaName, modifyTableName,
+						strings.ToUpper(strings.Join(normalIndex, ",")))
 
 					createIndexSQL = append(createIndexSQL, sql)
 
@@ -199,8 +199,8 @@ func (t Table) reverserOracleTableNormalIndexToMySQL(modifyTableName string) ([]
 					}
 
 					sql := fmt.Sprintf("CREATE INDEX `%s` ON `%s`.`%s`(%s);",
-						strings.ToLower(idxMeta["INDEX_NAME"]), t.TargetSchemaName, modifyTableName,
-						strings.ToLower(strings.Join(normalIndex, ",")))
+						strings.ToUpper(idxMeta["INDEX_NAME"]), t.TargetSchemaName, modifyTableName,
+						strings.ToUpper(strings.Join(normalIndex, ",")))
 
 					compatibilityIndexSQL = append(compatibilityIndexSQL, sql)
 
@@ -222,8 +222,8 @@ func (t Table) reverserOracleTableNormalIndexToMySQL(modifyTableName string) ([]
 					}
 
 					sql := fmt.Sprintf("CREATE BITMAP INDEX `%s` ON `%s`.`%s`(%s);",
-						strings.ToLower(idxMeta["INDEX_NAME"]), t.TargetSchemaName, modifyTableName,
-						strings.ToLower(strings.Join(normalIndex, ",")))
+						strings.ToUpper(idxMeta["INDEX_NAME"]), t.TargetSchemaName, modifyTableName,
+						strings.ToUpper(strings.Join(normalIndex, ",")))
 					compatibilityIndexSQL = append(compatibilityIndexSQL, sql)
 
 					service.Logger.Warn("reverse normal index",
@@ -287,9 +287,9 @@ func (t Table) reverserOracleTableUniqueIndexToMySQL(modifyTableName string) ([]
 					}
 
 					sql := fmt.Sprintf("CREATE UNIQUE INDEX `%s` ON `%s`.`%s`(%s);",
-						strings.ToLower(idxMeta["INDEX_NAME"]),
+						strings.ToUpper(idxMeta["INDEX_NAME"]),
 						t.TargetSchemaName, modifyTableName,
-						strings.ToLower(strings.Join(uniqueIndex, ",")))
+						strings.ToUpper(strings.Join(uniqueIndex, ",")))
 
 					createIndexSQL = append(createIndexSQL, sql)
 
@@ -311,8 +311,8 @@ func (t Table) reverserOracleTableUniqueIndexToMySQL(modifyTableName string) ([]
 					}
 
 					sql := fmt.Sprintf("CREATE UNIQUE INDEX `%s` ON `%s`.`%s`(%s);",
-						strings.ToLower(idxMeta["INDEX_NAME"]), t.TargetSchemaName, modifyTableName,
-						strings.ToLower(strings.Join(uniqueIndex, ",")))
+						strings.ToUpper(idxMeta["INDEX_NAME"]), t.TargetSchemaName, modifyTableName,
+						strings.ToUpper(strings.Join(uniqueIndex, ",")))
 
 					compatibilityIndexSQL = append(compatibilityIndexSQL, sql)
 
@@ -406,7 +406,7 @@ func (t Table) reverserOracleTablePKToMySQL() ([]string, error) {
 		for _, col := range strings.Split(primaryKeyMap[0]["COLUMN_LIST"], ",") {
 			pkArr = append(pkArr, fmt.Sprintf("`%s`", col))
 		}
-		pk := fmt.Sprintf("PRIMARY KEY (%s)", strings.ToLower(strings.Join(pkArr, ",")))
+		pk := fmt.Sprintf("PRIMARY KEY (%s)", strings.ToUpper(strings.Join(pkArr, ",")))
 		keysMeta = append(keysMeta, pk)
 	}
 	return keysMeta, nil
@@ -425,7 +425,7 @@ func (t Table) reverserOracleTableUKToMySQL() ([]string, error) {
 				ukArr = append(ukArr, fmt.Sprintf("`%s`", col))
 			}
 			uk := fmt.Sprintf("ADD UNIQUE `%s` (%s)",
-				strings.ToLower(rowUKCol["CONSTRAINT_NAME"]), strings.ToLower(strings.Join(ukArr, ",")))
+				strings.ToUpper(rowUKCol["CONSTRAINT_NAME"]), strings.ToUpper(strings.Join(ukArr, ",")))
 
 			keysMeta = append(keysMeta, uk)
 		}
@@ -444,29 +444,29 @@ func (t Table) reverserOracleTableFKToMySQL() ([]string, error) {
 		for _, rowFKCol := range foreignKeyMap {
 			if rowFKCol["DELETE_RULE"] == "" || rowFKCol["DELETE_RULE"] == "NO ACTION" {
 				fk := fmt.Sprintf("CONSTRAINT `%s` FOREIGN KEY(%s) REFERENCES `%s`.`%s`(%s)",
-					strings.ToLower(rowFKCol["CONSTRAINT_NAME"]),
-					strings.ToLower(rowFKCol["COLUMN_LIST"]),
-					strings.ToLower(rowFKCol["R_OWNER"]),
-					strings.ToLower(rowFKCol["RTABLE_NAME"]),
-					strings.ToLower(rowFKCol["RCOLUMN_LIST"]))
+					strings.ToUpper(rowFKCol["CONSTRAINT_NAME"]),
+					strings.ToUpper(rowFKCol["COLUMN_LIST"]),
+					strings.ToUpper(rowFKCol["R_OWNER"]),
+					strings.ToUpper(rowFKCol["RTABLE_NAME"]),
+					strings.ToUpper(rowFKCol["RCOLUMN_LIST"]))
 				keysMeta = append(keysMeta, fk)
 			}
 			if rowFKCol["DELETE_RULE"] == "CASCADE" {
 				fk := fmt.Sprintf("CONSTRAINT `%s` FOREIGN KEY(%s) REFERENCES `%s`.`%s`(%s) ON DELETE CASCADE",
-					strings.ToLower(rowFKCol["CONSTRAINT_NAME"]),
-					strings.ToLower(rowFKCol["COLUMN_LIST"]),
-					strings.ToLower(rowFKCol["R_OWNER"]),
-					strings.ToLower(rowFKCol["RTABLE_NAME"]),
-					strings.ToLower(rowFKCol["RCOLUMN_LIST"]))
+					strings.ToUpper(rowFKCol["CONSTRAINT_NAME"]),
+					strings.ToUpper(rowFKCol["COLUMN_LIST"]),
+					strings.ToUpper(rowFKCol["R_OWNER"]),
+					strings.ToUpper(rowFKCol["RTABLE_NAME"]),
+					strings.ToUpper(rowFKCol["RCOLUMN_LIST"]))
 				keysMeta = append(keysMeta, fk)
 			}
 			if rowFKCol["DELETE_RULE"] == "SET NULL" {
 				fk := fmt.Sprintf("CONSTRAINT `%s` FOREIGN KEY(%s) REFERENCES `%s`.`%s`(%s) ON DELETE SET NULL",
-					strings.ToLower(rowFKCol["CONSTRAINT_NAME"]),
-					strings.ToLower(rowFKCol["COLUMN_LIST"]),
-					strings.ToLower(rowFKCol["R_OWNER"]),
-					strings.ToLower(rowFKCol["RTABLE_NAME"]),
-					strings.ToLower(rowFKCol["RCOLUMN_LIST"]))
+					strings.ToUpper(rowFKCol["CONSTRAINT_NAME"]),
+					strings.ToUpper(rowFKCol["COLUMN_LIST"]),
+					strings.ToUpper(rowFKCol["R_OWNER"]),
+					strings.ToUpper(rowFKCol["RTABLE_NAME"]),
+					strings.ToUpper(rowFKCol["RCOLUMN_LIST"]))
 				keysMeta = append(keysMeta, fk)
 			}
 		}
@@ -500,7 +500,7 @@ func (t Table) reverserOracleTableCKToMySQL() ([]string, error) {
 				}
 				if !matchNull {
 					keysMeta = append(keysMeta, fmt.Sprintf("CONSTRAINT `%s` CHECK (%s)",
-						strings.ToLower(rowCKCol["CONSTRAINT_NAME"]),
+						strings.ToUpper(rowCKCol["CONSTRAINT_NAME"]),
 						rowCKCol["SEARCH_CONDITION"]))
 				}
 			} else {
@@ -551,7 +551,7 @@ func (t Table) reverserOracleTableCKToMySQL() ([]string, error) {
 				}
 
 				keysMeta = append(keysMeta, fmt.Sprintf("CONSTRAINT `%s` CHECK (%s)",
-					strings.ToLower(rowCKCol["CONSTRAINT_NAME"]),
+					strings.ToUpper(rowCKCol["CONSTRAINT_NAME"]),
 					strings.Join(d, " ")))
 			}
 		}
@@ -620,10 +620,10 @@ func LoadOracleToMySQLTableList(engine *service.Engine, exporterTableSlice []str
 	for _, ts := range exporterTableSlice {
 		// 库名、表名规则
 		tables = append(tables, Table{
-			SourceSchemaName: sourceSchema,
-			TargetSchemaName: targetSchema,
-			SourceTableName:  ts,
-			TargetTableName:  ts,
+			SourceSchemaName: strings.ToUpper(sourceSchema),
+			TargetSchemaName: strings.ToUpper(targetSchema),
+			SourceTableName:  strings.ToUpper(ts),
+			TargetTableName:  strings.ToUpper(ts),
 			SourceTableType:  tablesMap[ts],
 			Overwrite:        overwrite,
 			Engine:           engine,

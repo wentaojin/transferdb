@@ -25,8 +25,8 @@ import (
 	上下游字段类型映射表
 */
 // 数据类型转换优先级： column > table > schema > build-in
-// 自定义列数据类型转换规则 - 字段列级别
-type ColumnDataTypeMap struct {
+// 自定义列转换规则 - 字段列级别
+type ColumnRuleMap struct {
 	ID               uint       `gorm:"primary_key;autoIncrement;comment:'自增编号'" json:"id"`
 	SourceSchemaName string     `gorm:"not null;index:unique_schema_col,unique;comment:'源端库 schema'" json:"source_schema_name"`
 	SourceTableName  string     `gorm:"not null;index:unique_schema_col,unique;comment:'源端表名'" json:"source_table_name"`
@@ -37,8 +37,8 @@ type ColumnDataTypeMap struct {
 	UpdatedAt        *time.Time `gorm:"type:timestamp;not null on update current_timestamp;default:current_timestamp;comment:'更新时间'" json:"updatedAt"`
 }
 
-// 自定义表数据类型转换规则 - table 级别
-type TableDataTypeMap struct {
+// 自定义表转换规则 - table 级别
+type TableRuleMap struct {
 	ID               uint       `gorm:"primary_key;autoIncrement;comment:'自增编号'" json:"id"`
 	SourceSchemaName string     `gorm:"not null;index:unique_schema_table_col,unique;comment:'源端库 schema'" json:"source_schema_name"`
 	SourceTableName  string     `gorm:"not null;index:unique_schema_table_col,unique;comment:'源端表名'" json:"source_table_name"`
@@ -48,8 +48,8 @@ type TableDataTypeMap struct {
 	UpdatedAt        *time.Time `gorm:"type:timestamp;not null on update current_timestamp;default:current_timestamp;comment:'更新时间'" json:"updatedAt"`
 }
 
-// 自定义库数据类型转换规则 - schema 级别
-type SchemaDataTypeMap struct {
+// 自定义库转换规则 - schema 级别
+type SchemaRuleMap struct {
 	ID               uint       `gorm:"primary_key;autoIncrement;comment:'自增编号'" json:"id"`
 	SourceSchemaName string     `gorm:"not null;index:unique_schema_col,unique;comment:'源端库 schema'" json:"source_schema_name"`
 	SourceColumnType string     `gorm:"not null;index:unique_schema_col,unique;comment:'源端表字段类型'" json:"source_column_type"`
@@ -58,8 +58,8 @@ type SchemaDataTypeMap struct {
 	UpdatedAt        *time.Time `gorm:"type:timestamp;not null on update current_timestamp;default:current_timestamp;comment:'更新时间'" json:"updatedAt"`
 }
 
-func (e *Engine) GetColumnDataTypeMap(schemaName, tableName string) ([]ColumnDataTypeMap, error) {
-	var c []ColumnDataTypeMap
+func (e *Engine) GetColumnRuleMap(schemaName, tableName string) ([]ColumnRuleMap, error) {
+	var c []ColumnRuleMap
 	if err := e.GormDB.Where("upper(source_schema_name) = ? AND upper(source_table_name) = ?",
 		strings.ToUpper(schemaName), strings.ToUpper(tableName)).Find(&c).Error; err != nil {
 		return c, fmt.Errorf("get custom column data type map by schema [%s] failed: %v", schemaName, err)
@@ -67,8 +67,8 @@ func (e *Engine) GetColumnDataTypeMap(schemaName, tableName string) ([]ColumnDat
 	return c, nil
 }
 
-func (e *Engine) GetTableDataTypeMap(schemaName, tableName string) ([]TableDataTypeMap, error) {
-	var c []TableDataTypeMap
+func (e *Engine) GetTableRuleMap(schemaName, tableName string) ([]TableRuleMap, error) {
+	var c []TableRuleMap
 	if err := e.GormDB.Where("upper(source_schema_name) = ? AND upper(source_table_name) = ?",
 		strings.ToUpper(schemaName), strings.ToUpper(tableName)).Find(&c).Error; err != nil {
 		return c, fmt.Errorf("get custom table data type map by schema [%s] table failed: %v", schemaName, err)
@@ -76,15 +76,15 @@ func (e *Engine) GetTableDataTypeMap(schemaName, tableName string) ([]TableDataT
 	return c, nil
 }
 
-func (e *Engine) GetSchemaDataTypeMap(schemaName string) ([]SchemaDataTypeMap, error) {
-	var c []SchemaDataTypeMap
+func (e *Engine) GetSchemaRuleMap(schemaName string) ([]SchemaRuleMap, error) {
+	var c []SchemaRuleMap
 	if err := e.GormDB.Where("upper(source_schema_name) = ? ", strings.ToUpper(schemaName)).Find(&c).Error; err != nil {
 		return c, fmt.Errorf("get custom schema data type map by schema [%s] failed: %v", schemaName, err)
 	}
 	return c, nil
 }
 
-func (c *ColumnDataTypeMap) AdjustColumnDataType(tableName, columnName string) string {
+func (c *ColumnRuleMap) AdjustColumnDataType(tableName, columnName string) string {
 	var colType string
 	if strings.ToUpper(tableName) == strings.ToUpper(c.SourceTableName) && strings.ToUpper(columnName) == strings.ToUpper(c.SourceColumnName) {
 		if c.TargetColumnType != "" {
@@ -96,7 +96,7 @@ func (c *ColumnDataTypeMap) AdjustColumnDataType(tableName, columnName string) s
 	return colType
 }
 
-func (c *TableDataTypeMap) AdjustTableDataType(tableName string) string {
+func (c *TableRuleMap) AdjustTableDataType(tableName string) string {
 	var colType string
 	if strings.ToUpper(tableName) == strings.ToUpper(c.SourceTableName) {
 		if c.TargetColumnType != "" {
@@ -108,7 +108,7 @@ func (c *TableDataTypeMap) AdjustTableDataType(tableName string) string {
 	return colType
 }
 
-func (c *SchemaDataTypeMap) AdjustSchemaDataType() string {
+func (c *SchemaRuleMap) AdjustSchemaDataType() string {
 	var colType string
 	if c.TargetColumnType != "" {
 		colType = c.TargetColumnType
