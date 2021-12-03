@@ -227,7 +227,7 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 					builder.WriteString(fmt.Sprintf("# oracle partition info: %s, ", partJSON))
 					continue
 				}
-				return fmt.Errorf("table paritions assert Partition failed")
+				return fmt.Errorf("oracle table [%s] paritions [%v] assert Partition failed, type: [%v]", oracleTable.TableName, part, reflect.TypeOf(part))
 			}
 		}
 	}
@@ -379,7 +379,7 @@ func (d *DiffWriter) primaryAndUniqueKeyRuleCheck(builder strings.Builder, oracl
 					return fmt.Errorf("table constraint primary and unique key diff failed: not support type [%s]", value.ConstraintType)
 				}
 			}
-			return fmt.Errorf("table constraint primary and unique key assert ConstraintPUKey failed")
+			return fmt.Errorf("oracle table [%s] constraint primary and unique key [%v] assert ConstraintPUKey failed, type: [%v]", oracleTable.TableName, pu, reflect.TypeOf(pu))
 		}
 	}
 	return nil
@@ -407,7 +407,7 @@ func (d *DiffWriter) foreignKeyRuleCheck(builder strings.Builder, oracleTable, m
 				builder.WriteString(fmt.Sprintf("ALTER TABLE %s.%s ADD FOREIGN KEY(%s) REFERENCES %s.%s(%s）ON DELETE %s;\n", d.TargetSchemaName, d.TableName, value.ColumnName, d.TargetSchemaName, value.ReferencedTableName, value.ReferencedColumnName, value.DeleteRule))
 				continue
 			}
-			return fmt.Errorf("table constraint foreign key assert ConstraintForeign failed")
+			return fmt.Errorf("oracle table [%s] constraint foreign key [%v] assert ConstraintForeign failed, type: [%v]", oracleTable.TableName, fk, reflect.TypeOf(fk))
 		}
 	}
 	return nil
@@ -435,7 +435,7 @@ func (d *DiffWriter) checkKeyRuleCheck(builder strings.Builder, oracleTable, mys
 					d.TargetSchemaName, d.TableName, fmt.Sprintf("%s_check_key", d.TableName), value.ConstraintExpression))
 				continue
 			}
-			return fmt.Errorf("table constraint check key assert ConstraintCheck failed")
+			return fmt.Errorf("oracle table [%s] constraint check key [%v] assert ConstraintCheck failed, type: [%v]", oracleTable.TableName, ck, reflect.TypeOf(ck))
 		}
 	}
 	return nil
@@ -487,7 +487,7 @@ func (d *DiffWriter) indexRuleCheck(builder strings.Builder, oracleTable, mysqlT
 					continue
 				}
 			}
-			return fmt.Errorf("table index assert Index failed")
+			return fmt.Errorf("oracle table [%s] index [%v] assert Index failed, type: [%v]", oracleTable.TableName, idx, reflect.TypeOf(idx))
 		}
 	}
 
