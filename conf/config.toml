@@ -65,7 +65,7 @@ session-params = ["alter session set nls_date_format = 'yyyy-mm-dd hh24:mi:ss'"]
 # 配置 oracle 连接时区
 timezone = "Local"
 # 配置 oracle 迁移 schema（gather 阶段可设置可不设置，不设置则表示 gather 库内所有 schema，其他阶段必须设置）
-schema-name = "sys"
+schema-name = "marvin"
 # 源端迁移任务表（只用于 prepare/reverse/check/all/full 阶段，gather 阶段不适用，gather 只适用于 schema 级别）
 # include-table 和 exclude-table 不能同时配置，两者只能配置一个,如果两个都没配置则 Schema 内表全迁移
 include-table = []

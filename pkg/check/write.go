@@ -486,6 +486,7 @@ func (d *DiffWriter) indexRuleCheck(builder strings.Builder, oracleTable, mysqlT
 						fmt.Sprintf("idx_%s", strings.ReplaceAll(value.IndexColumn, ",", "_")), d.TargetSchemaName, d.TableName, value.ColumnExpress))
 					continue
 				}
+				return fmt.Errorf("oracle table [%s] diff failed, not support index: [%v]", oracleTable.TableName, value)
 			}
 			return fmt.Errorf("oracle table [%s] index [%v] assert Index failed, type: [%v]", oracleTable.TableName, idx, reflect.TypeOf(idx))
 		}
