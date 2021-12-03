@@ -55,11 +55,11 @@ func GetStringSliceElementIndex(items []string, item string) int {
 func IsSubsetString(originItems, checkItems []string) (bool, []string) {
 	s1 := set.NewStringSet()
 	for _, t := range originItems {
-		s1.Add(strings.ToLower(t))
+		s1.Add(strings.ToUpper(t))
 	}
 	s2 := set.NewStringSet()
 	for _, t := range checkItems {
-		s2.Add(strings.ToLower(t))
+		s2.Add(strings.ToUpper(t))
 	}
 	isSubset := s1.IsSubset(s2)
 	var notExists []string
@@ -73,11 +73,11 @@ func IsSubsetString(originItems, checkItems []string) (bool, []string) {
 func FilterDifferenceStringItems(originItems, excludeItems []string) []string {
 	s1 := set.NewStringSet()
 	for _, t := range originItems {
-		s1.Add(strings.ToLower(t))
+		s1.Add(strings.ToUpper(t))
 	}
 	s2 := set.NewStringSet()
 	for _, t := range excludeItems {
-		s2.Add(strings.ToLower(t))
+		s2.Add(strings.ToUpper(t))
 	}
 	return strset.Difference(s1, s2).List()
 }
@@ -86,11 +86,11 @@ func FilterDifferenceStringItems(originItems, excludeItems []string) []string {
 func FilterIntersectionStringItems(originItems, newItems []string) []string {
 	s1 := set.NewStringSet()
 	for _, t := range originItems {
-		s1.Add(strings.ToLower(t))
+		s1.Add(strings.ToUpper(t))
 	}
 	s2 := set.NewStringSet()
 	for _, t := range newItems {
-		s2.Add(strings.ToLower(t))
+		s2.Add(strings.ToUpper(t))
 	}
 	return strset.Intersection(s1, s2).List()
 }

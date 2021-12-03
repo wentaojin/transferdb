@@ -267,9 +267,6 @@ func (d *ReverseWriter) Reverse() error {
 func GenCreateSchema(file *FileMW, sourceSchema, targetSchema string) error {
 	var sqlRev strings.Builder
 
-	sourceSchema = strings.ToUpper(sourceSchema)
-	targetSchema = strings.ToUpper(targetSchema)
-
 	sqlRev.WriteString("/*\n")
 	sqlRev.WriteString(fmt.Sprintf(" oracle schema reverse mysql database\n"))
 	t := table.NewWriter()

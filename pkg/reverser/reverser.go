@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -90,12 +91,12 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 	wrComp := &FileMW{sync.Mutex{}, fileCompatibility}
 
 	// 创建 Schema
-	if err := GenCreateSchema(wrReverse, cfg.SourceConfig.SchemaName, cfg.TargetConfig.SchemaName); err != nil {
+	if err := GenCreateSchema(wrReverse, strings.ToUpper(cfg.SourceConfig.SchemaName), strings.ToUpper(cfg.TargetConfig.SchemaName)); err != nil {
 		return err
 	}
 
 	// 不兼容项 - 表提示
-	if err = CompatibilityDBTips(wrComp, cfg.SourceConfig.SchemaName, partitionTableList, temporaryTableList, clusteredTableList); err != nil {
+	if err = CompatibilityDBTips(wrComp, strings.ToUpper(cfg.SourceConfig.SchemaName), partitionTableList, temporaryTableList, clusteredTableList); err != nil {
 		return err
 	}
 
