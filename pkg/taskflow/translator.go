@@ -38,13 +38,17 @@ func translatorTableFullRecord(
 	targetSchemaName, targetTableName string,
 	columns []string, rowsResult []string, workerThreads, insertBatchSize int, safeMode bool) ([]string, error) {
 	startTime := time.Now()
-	service.Logger.Info("single full table data translator start",
-		zap.String("schema", targetSchemaName),
-		zap.String("table", targetTableName))
 
 	var sqlSlice []string
 	sqlPrefix := generateMySQLPrepareInsertSQLStatement(targetSchemaName, targetTableName, columns, safeMode)
 	rowCounts := len(rowsResult)
+	service.Logger.Info("single full table data translator start",
+		zap.String("schema", targetSchemaName),
+		zap.String("table", targetTableName),
+		zap.Int("rows", rowCounts),
+		zap.Int("translator thread", workerThreads),
+		zap.Int("insert batch size", insertBatchSize),
+		zap.Bool("safe mode", safeMode))
 
 	if rowCounts <= insertBatchSize {
 		sqlSlice = append(sqlSlice, utils.StringsBuilder(sqlPrefix, " ", strings.Join(rowsResult, ",")))
@@ -72,12 +76,26 @@ func translatorTableFullRecord(
 		if !wp.IsDone() {
 			return sqlSlice, fmt.Errorf("translatorTableFullRecord concurrency meet error")
 		}
+
+		endTime := time.Now()
+		service.Logger.Info("single full table data translator split finished",
+			zap.String("schema", targetSchemaName),
+			zap.String("table", targetTableName),
+			zap.Int("rows", rowCounts),
+			zap.Int("translator thread", workerThreads),
+			zap.Int("insert batch size", insertBatchSize),
+			zap.Bool("safe mode", safeMode),
+			zap.String("cost", endTime.Sub(startTime).String()))
 	}
 
 	endTime := time.Now()
 	service.Logger.Info("single full table data translator finished",
 		zap.String("schema", targetSchemaName),
 		zap.String("table", targetTableName),
+		zap.Int("rows", rowCounts),
+		zap.Int("translator thread", workerThreads),
+		zap.Int("insert batch size", insertBatchSize),
+		zap.Bool("safe mode", safeMode),
 		zap.String("cost", endTime.Sub(startTime).String()))
 	return sqlSlice, nil
 }
@@ -101,7 +119,7 @@ func translatorAndApplyOracleIncrementRecord(
 	engine *service.Engine,
 	sourceTableName string,
 	targetSchema string,
-	rowsResult []service.LogminerContent, taskQueue chan IncrementPayload) error {
+	rowsResult []service.LogminerContent, taskQueue chan IncrPayload) error {
 
 	startTime := time.Now()
 	service.Logger.Info("oracle table increment log apply start",
@@ -143,7 +161,7 @@ func translatorAndApplyOracleIncrementRecord(
 		}
 
 		// 注册任务到 Job 队列
-		lp := IncrementPayload{
+		lp := IncrPayload{
 			Engine:         engine,
 			GlobalSCN:      rows.SCN, // 更新元数据 GLOBAL_SCN 至当前消费的 SCN 号
 			SourceTableSCN: rows.SCN,

@@ -376,8 +376,6 @@ func (e *Engine) GetOracleCurrentSnapshotSCN() (int, error) {
 }
 
 func (e *Engine) GetOracleTableRecordByRowIDSQL(sql string) ([]string, []string, error) {
-	Logger.Info("exec sql",
-		zap.String("sql", sql))
 	cols, res, err := e.QueryFormatOracleRows(sql)
 	if err != nil {
 		return []string{}, []string{}, err

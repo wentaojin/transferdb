@@ -35,7 +35,8 @@ func extractorTableFullRecord(engine *service.Engine, sourceSchemaName, sourceTa
 	startTime := time.Now()
 	service.Logger.Info("single full table data extractor start",
 		zap.String("schema", sourceSchemaName),
-		zap.String("table", sourceTableName))
+		zap.String("table", sourceTableName),
+		zap.String("rowid sql", oracleQuery))
 
 	columns, rowsResult, err := engine.GetOracleTableRecordByRowIDSQL(oracleQuery)
 	if err != nil {
@@ -46,6 +47,7 @@ func extractorTableFullRecord(engine *service.Engine, sourceSchemaName, sourceTa
 	service.Logger.Info("single full table data extractor finished",
 		zap.String("schema", sourceSchemaName),
 		zap.String("table", sourceTableName),
+		zap.String("rowid sql", oracleQuery),
 		zap.String("cost", endTime.Sub(startTime).String()))
 
 	return columns, rowsResult, nil
