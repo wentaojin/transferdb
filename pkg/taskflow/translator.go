@@ -35,19 +35,17 @@ func translatorTableFullRecord(
 	targetSchemaName, targetTableName string,
 	columns []string, rowsResult []string, rowCounts, insertBatchSize int, safeMode bool, sqlChan chan string) {
 	startTime := time.Now()
+	service.Logger.Info("single full table data translator start",
+		zap.String("schema", targetSchemaName),
+		zap.String("table", targetTableName),
+		zap.Int("rows", rowCounts),
+		zap.Int("insert batch size", insertBatchSize),
+		zap.Bool("safe mode", safeMode))
+
 	sqlPrefix := generateMySQLPrepareInsertSQLStatement(targetSchemaName, targetTableName, columns, safeMode)
 
 	if rowCounts <= insertBatchSize {
 		sqlChan <- utils.StringsBuilder(sqlPrefix, " ", strings.Join(rowsResult, ","))
-
-		endTime := time.Now()
-		service.Logger.Info("single full table data translator sql finished",
-			zap.String("schema", targetSchemaName),
-			zap.String("table", targetTableName),
-			zap.Int("rows", rowCounts),
-			zap.Int("insert batch size", insertBatchSize),
-			zap.Bool("safe mode", safeMode),
-			zap.String("cost", endTime.Sub(startTime).String()))
 	} else {
 		// 数据行按照 batch 拼接拆分
 		// 向上取整，多切 batch，防止数据丢失
@@ -56,17 +54,17 @@ func translatorTableFullRecord(
 
 		for _, batchRows := range multiBatchRows {
 			sqlChan <- utils.StringsBuilder(sqlPrefix, " ", strings.Join(batchRows, ","))
-
-			endTime := time.Now()
-			service.Logger.Info("single full table data translator sql finished",
-				zap.String("schema", targetSchemaName),
-				zap.String("table", targetTableName),
-				zap.Int("rows", rowCounts),
-				zap.Int("insert batch size", insertBatchSize),
-				zap.Bool("safe mode", safeMode),
-				zap.String("cost", endTime.Sub(startTime).String()))
 		}
 	}
+
+	endTime := time.Now()
+	service.Logger.Info("single full table data translator finished",
+		zap.String("schema", targetSchemaName),
+		zap.String("table", targetTableName),
+		zap.Int("rows", rowCounts),
+		zap.Int("insert batch size", insertBatchSize),
+		zap.Bool("safe mode", safeMode),
+		zap.String("cost", endTime.Sub(startTime).String()))
 	close(sqlChan)
 }
 

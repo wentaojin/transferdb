@@ -29,19 +29,22 @@ import (
 
 // 表数据应用 -> 全量任务
 func applierTableFullRecord(targetSchemaName, targetTableName string, engine *service.Engine, sql chan string) error {
+	startTime := time.Now()
+	service.Logger.Info("single full table data applier start",
+		zap.String("schema", targetSchemaName),
+		zap.String("table", targetTableName))
+
 	for s := range sql {
-		startTime := time.Now()
 		_, err := engine.MysqlDB.Exec(s)
 		if err != nil {
 			return fmt.Errorf("single full table data bulk insert mysql [%s] falied:%v", s, err)
 		}
-		endTime := time.Now()
-		service.Logger.Info("single full table data applier sql finished",
-			zap.String("schema", targetSchemaName),
-			zap.String("table", targetTableName),
-			zap.String("sql", s),
-			zap.String("cost", endTime.Sub(startTime).String()))
 	}
+	endTime := time.Now()
+	service.Logger.Info("single full table data applier finished",
+		zap.String("schema", targetSchemaName),
+		zap.String("table", targetTableName),
+		zap.String("cost", endTime.Sub(startTime).String()))
 	return nil
 }
 
