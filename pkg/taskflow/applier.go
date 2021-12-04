@@ -30,10 +30,6 @@ import (
 // 表数据应用 -> 全量任务
 func applierTableFullRecord(targetSchemaName, targetTableName string, workerThreads int, sqlSlice []string, engine *service.Engine) error {
 	startTime := time.Now()
-	service.Logger.Info("single full table data applier start",
-		zap.String("schema", targetSchemaName),
-		zap.String("table", targetTableName))
-
 	wp := workpool.New(workerThreads)
 	for _, sql := range sqlSlice {
 		s := sql

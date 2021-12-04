@@ -33,11 +33,6 @@ import (
 // 捕获全量数据
 func extractorTableFullRecord(engine *service.Engine, sourceSchemaName, sourceTableName, oracleQuery string) ([]string, []string, error) {
 	startTime := time.Now()
-	service.Logger.Info("single full table data extractor start",
-		zap.String("schema", sourceSchemaName),
-		zap.String("table", sourceTableName),
-		zap.String("rowid sql", oracleQuery))
-
 	columns, rowsResult, err := engine.GetOracleTableRecordByRowIDSQL(oracleQuery)
 	if err != nil {
 		return columns, rowsResult, err

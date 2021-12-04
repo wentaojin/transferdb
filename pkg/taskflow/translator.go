@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"math"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/wentaojin/transferdb/utils"
@@ -42,13 +41,6 @@ func translatorTableFullRecord(
 	var sqlSlice []string
 	sqlPrefix := generateMySQLPrepareInsertSQLStatement(targetSchemaName, targetTableName, columns, safeMode)
 	rowCounts := len(rowsResult)
-	service.Logger.Info("single full table data translator start",
-		zap.String("schema", targetSchemaName),
-		zap.String("table", targetTableName),
-		zap.Int("rows", rowCounts),
-		zap.Int("translator thread", workerThreads),
-		zap.Int("insert batch size", insertBatchSize),
-		zap.Bool("safe mode", safeMode))
 
 	if rowCounts <= insertBatchSize {
 		sqlSlice = append(sqlSlice, utils.StringsBuilder(sqlPrefix, " ", strings.Join(rowsResult, ",")))
@@ -59,14 +51,12 @@ func translatorTableFullRecord(
 		multiBatchRows := utils.SplitMultipleStringSlice(rowsResult, int64(splitsNums))
 
 		// 保证并发 Slice Append 安全
-		var lock sync.Mutex
 		wp := workpool.New(workerThreads)
-		for _, batchRows := range multiBatchRows {
+		for idx, batchRows := range multiBatchRows {
+			i := idx
 			rows := batchRows
 			wp.Do(func() error {
-				lock.Lock()
-				sqlSlice = append(sqlSlice, utils.StringsBuilder(sqlPrefix, " ", strings.Join(rows, ",")))
-				lock.Unlock()
+				sqlSlice[i] = utils.StringsBuilder(sqlPrefix, " ", strings.Join(rows, ","))
 				return nil
 			})
 		}
@@ -82,6 +72,7 @@ func translatorTableFullRecord(
 			zap.String("schema", targetSchemaName),
 			zap.String("table", targetTableName),
 			zap.Int("rows", rowCounts),
+			zap.Float64("splits", splitsNums),
 			zap.Int("translator thread", workerThreads),
 			zap.Int("insert batch size", insertBatchSize),
 			zap.Bool("safe mode", safeMode),
