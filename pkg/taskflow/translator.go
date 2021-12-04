@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/wentaojin/transferdb/utils"
@@ -51,12 +52,14 @@ func translatorTableFullRecord(
 		multiBatchRows := utils.SplitMultipleStringSlice(rowsResult, int64(splitsNums))
 
 		// 保证并发 Slice Append 安全
+		var lock sync.Mutex
 		wp := workpool.New(workerThreads)
-		for idx, batchRows := range multiBatchRows {
-			i := idx
+		for _, batchRows := range multiBatchRows {
 			rows := batchRows
 			wp.Do(func() error {
-				sqlSlice[i] = utils.StringsBuilder(sqlPrefix, " ", strings.Join(rows, ","))
+				lock.Lock()
+				sqlSlice = append(sqlSlice, utils.StringsBuilder(sqlPrefix, " ", strings.Join(rows, ",")))
+				lock.Unlock()
 				return nil
 			})
 		}
