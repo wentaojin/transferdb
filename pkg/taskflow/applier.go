@@ -20,6 +20,8 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/wentaojin/transferdb/service"
 
 	"github.com/xxjwxc/gowp/workpool"
@@ -28,18 +30,33 @@ import (
 )
 
 // 表数据应用 -> 全量任务
-func applierTableFullRecord(targetSchemaName, targetTableName string, engine *service.Engine, sql chan string) error {
+func applierTableFullRecord(targetSchemaName, targetTableName string, workerThreads int, engine *service.Engine, sqlChan <-chan string) error {
 	startTime := time.Now()
 	service.Logger.Info("single full table data applier start",
 		zap.String("schema", targetSchemaName),
 		zap.String("table", targetTableName))
 
-	for s := range sql {
-		_, err := engine.MysqlDB.Exec(s)
-		if err != nil {
-			return fmt.Errorf("single full table data bulk insert mysql [%s] falied:%v", s, err)
-		}
+	var group errgroup.Group
+
+	for i := 0; i < workerThreads; i++ {
+		group.Go(func() error {
+			for sql := range sqlChan {
+				_, err := engine.MysqlDB.Exec(sql)
+				if err != nil {
+					return fmt.Errorf("single full table data bulk insert mysql [%s] falied: %v", sql, err)
+				}
+			}
+			return nil
+		})
 	}
+
+	if err := group.Wait(); err != nil {
+		service.Logger.Error("single full table data applier error",
+			zap.String("schema", targetSchemaName),
+			zap.String("table", targetTableName))
+		return fmt.Errorf("full table data concurrency bulk insert mysql falied: %v", err)
+	}
+
 	endTime := time.Now()
 	service.Logger.Info("single full table data applier finished",
 		zap.String("schema", targetSchemaName),

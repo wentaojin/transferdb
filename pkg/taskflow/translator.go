@@ -33,8 +33,10 @@ import (
 // 转换表数据 -> 全量任务
 func translatorTableFullRecord(
 	targetSchemaName, targetTableName string,
-	columns []string, rowsResult []string, rowCounts, insertBatchSize int, safeMode bool, sqlChan chan string) {
+	columns []string, rowsResult []string, translatorBufferSize, insertBatchSize int, safeMode bool) <-chan string {
 	startTime := time.Now()
+	sqlChan := make(chan string, translatorBufferSize)
+	rowCounts := len(rowsResult)
 	service.Logger.Info("single full table data translator start",
 		zap.String("schema", targetSchemaName),
 		zap.String("table", targetTableName),
@@ -45,18 +47,23 @@ func translatorTableFullRecord(
 	sqlPrefix := generateMySQLPrepareInsertSQLStatement(targetSchemaName, targetTableName, columns, safeMode)
 
 	if rowCounts <= insertBatchSize {
-		sqlChan <- utils.StringsBuilder(sqlPrefix, " ", strings.Join(rowsResult, ","))
+		go func() {
+			sqlChan <- utils.StringsBuilder(sqlPrefix, " ", strings.Join(rowsResult, ","))
+			close(sqlChan)
+		}()
 	} else {
 		// 数据行按照 batch 拼接拆分
 		// 向上取整，多切 batch，防止数据丢失
 		splitsNums := math.Ceil(float64(rowCounts) / float64(insertBatchSize))
 		multiBatchRows := utils.SplitMultipleStringSlice(rowsResult, int64(splitsNums))
 
-		for _, batchRows := range multiBatchRows {
-			sqlChan <- utils.StringsBuilder(sqlPrefix, " ", strings.Join(batchRows, ","))
-		}
+		go func() {
+			for _, batchRows := range multiBatchRows {
+				sqlChan <- utils.StringsBuilder(sqlPrefix, " ", strings.Join(batchRows, ","))
+			}
+			close(sqlChan)
+		}()
 	}
-
 	endTime := time.Now()
 	service.Logger.Info("single full table data translator finished",
 		zap.String("schema", targetSchemaName),
@@ -65,7 +72,8 @@ func translatorTableFullRecord(
 		zap.Int("insert batch size", insertBatchSize),
 		zap.Bool("safe mode", safeMode),
 		zap.String("cost", endTime.Sub(startTime).String()))
-	close(sqlChan)
+
+	return sqlChan
 }
 
 // 拼接 SQL 语句

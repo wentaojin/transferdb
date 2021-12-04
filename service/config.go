@@ -44,6 +44,8 @@ type FullConfig struct {
 	WorkerThreads    int  `toml:"worker-threads" json:"worker-threads"`
 	TableThreads     int  `toml:"table-threads" json:"table-threads"`
 	EnableCheckpoint bool `toml:"enable-checkpoint" json:"enable-checkpoint"`
+	TranslatorBuffer int  `toml:"translator-buffer" json:"translator-buffer"`
+	ApplyThreads     int  `toml:"apply-threads" json:"apply-threads"`
 }
 
 type AllConfig struct {

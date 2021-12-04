@@ -176,7 +176,7 @@ func syncFullTableTaskUsingSCN(cfg *service.CfgFile, engine *service.Engine, ful
 		workerBatch := cfg.FullConfig.WorkerBatch
 		insertBatchSize := cfg.AppConfig.InsertBatchSize
 		sourceSchemaName := cfg.SourceConfig.SchemaName
-		wp.DoWait(func() error {
+		wp.Do(func() error {
 			// 全量同步前，获取 SCN
 			globalSCN, err := engine.GetOracleCurrentSnapshotSCN()
 			if err != nil {
@@ -207,7 +207,7 @@ func syncFullTableTaskUsingCheckpoint(cfg *service.CfgFile, engine *service.Engi
 	for _, table := range transferTables {
 		tbl := table
 		mode := syncMode
-		wp.DoWait(func() error {
+		wp.Do(func() error {
 			if err := syncOracleSingleTableTask(cfg, engine, tbl, mode); err != nil {
 				return err
 			}
@@ -257,21 +257,16 @@ func syncOracleSingleTableTask(cfg *service.CfgFile, engine *service.Engine, tab
 				return nil
 			}
 
-			// 转换 Oracle 数据 -> MySQL
-			rowCounts := len(rowsResult)
-			sqlChan := make(chan string, rowCounts)
-			translatorTableFullRecord(
-				cfg.TargetConfig.SchemaName,
-				table,
-				columns,
-				rowsResult,
-				rowCounts,
-				cfg.AppConfig.InsertBatchSize,
-				true,
-				sqlChan)
-
-			// 应用 Oracle 数据 -> MySQL
-			if err := applierTableFullRecord(cfg.TargetConfig.SchemaName, table, engine, sqlChan); err != nil {
+			// 转换/应用 Oracle 数据 -> MySQL
+			if err := applierTableFullRecord(cfg.TargetConfig.SchemaName, table, cfg.FullConfig.ApplyThreads, engine,
+				translatorTableFullRecord(
+					cfg.TargetConfig.SchemaName,
+					table,
+					columns,
+					rowsResult,
+					cfg.FullConfig.TranslatorBuffer,
+					cfg.AppConfig.InsertBatchSize,
+					true)); err != nil {
 				return err
 			}
 
