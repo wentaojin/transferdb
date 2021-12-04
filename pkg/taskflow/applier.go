@@ -28,30 +28,20 @@ import (
 )
 
 // 表数据应用 -> 全量任务
-func applierTableFullRecord(targetSchemaName, targetTableName string, workerThreads int, sqlSlice []string, engine *service.Engine) error {
-	startTime := time.Now()
-	wp := workpool.New(workerThreads)
-	for _, sql := range sqlSlice {
-		s := sql
-		wp.Do(func() error {
-			_, err := engine.MysqlDB.Exec(s)
-			if err != nil {
-				return fmt.Errorf("single full table data bulk insert mysql [%s] falied:%v", sql, err)
-			}
-			return nil
-		})
+func applierTableFullRecord(targetSchemaName, targetTableName string, engine *service.Engine, sql chan string) error {
+	for s := range sql {
+		startTime := time.Now()
+		_, err := engine.MysqlDB.Exec(s)
+		if err != nil {
+			return fmt.Errorf("single full table data bulk insert mysql [%s] falied:%v", s, err)
+		}
+		endTime := time.Now()
+		service.Logger.Info("single full table data applier sql finished",
+			zap.String("schema", targetSchemaName),
+			zap.String("table", targetTableName),
+			zap.String("sql", s),
+			zap.String("cost", endTime.Sub(startTime).String()))
 	}
-	if err := wp.Wait(); err != nil {
-		return err
-	}
-	if !wp.IsDone() {
-		return fmt.Errorf("single full table data applier meet error")
-	}
-	endTime := time.Now()
-	service.Logger.Info("single full table data applier finished",
-		zap.String("schema", targetSchemaName),
-		zap.String("table", targetTableName),
-		zap.String("cost", endTime.Sub(startTime).String()))
 	return nil
 }
 

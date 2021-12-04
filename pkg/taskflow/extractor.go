@@ -258,22 +258,20 @@ func syncOracleSingleTableTask(cfg *service.CfgFile, engine *service.Engine, tab
 			}
 
 			// 转换 Oracle 数据 -> MySQL
-			mysqlSQLSlice, err := translatorTableFullRecord(
+			rowCounts := len(rowsResult)
+			sqlChan := make(chan string, rowCounts)
+			translatorTableFullRecord(
 				cfg.TargetConfig.SchemaName,
 				table,
 				columns,
 				rowsResult,
-				cfg.FullConfig.WorkerThreads,
+				rowCounts,
 				cfg.AppConfig.InsertBatchSize,
 				true,
-			)
-			if err != nil {
-				return err
-			}
+				sqlChan)
 
 			// 应用 Oracle 数据 -> MySQL
-			if err := applierTableFullRecord(cfg.TargetConfig.SchemaName, table, cfg.FullConfig.WorkerThreads, mysqlSQLSlice,
-				engine); err != nil {
+			if err := applierTableFullRecord(cfg.TargetConfig.SchemaName, table, engine, sqlChan); err != nil {
 				return err
 			}
 

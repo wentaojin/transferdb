@@ -19,14 +19,11 @@ import (
 	"fmt"
 	"math"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/wentaojin/transferdb/utils"
 
 	"github.com/wentaojin/transferdb/service"
-
-	"github.com/xxjwxc/gowp/workpool"
 
 	"go.uber.org/zap"
 )
@@ -36,62 +33,41 @@ import (
 // 转换表数据 -> 全量任务
 func translatorTableFullRecord(
 	targetSchemaName, targetTableName string,
-	columns []string, rowsResult []string, workerThreads, insertBatchSize int, safeMode bool) ([]string, error) {
+	columns []string, rowsResult []string, rowCounts, insertBatchSize int, safeMode bool, sqlChan chan string) {
 	startTime := time.Now()
-
-	var sqlSlice []string
 	sqlPrefix := generateMySQLPrepareInsertSQLStatement(targetSchemaName, targetTableName, columns, safeMode)
-	rowCounts := len(rowsResult)
 
 	if rowCounts <= insertBatchSize {
-		sqlSlice = append(sqlSlice, utils.StringsBuilder(sqlPrefix, " ", strings.Join(rowsResult, ",")))
+		sqlChan <- utils.StringsBuilder(sqlPrefix, " ", strings.Join(rowsResult, ","))
+
+		endTime := time.Now()
+		service.Logger.Info("single full table data translator sql finished",
+			zap.String("schema", targetSchemaName),
+			zap.String("table", targetTableName),
+			zap.Int("rows", rowCounts),
+			zap.Int("insert batch size", insertBatchSize),
+			zap.Bool("safe mode", safeMode),
+			zap.String("cost", endTime.Sub(startTime).String()))
 	} else {
 		// 数据行按照 batch 拼接拆分
 		// 向上取整，多切 batch，防止数据丢失
 		splitsNums := math.Ceil(float64(rowCounts) / float64(insertBatchSize))
 		multiBatchRows := utils.SplitMultipleStringSlice(rowsResult, int64(splitsNums))
 
-		// 保证并发 Slice Append 安全
-		var lock sync.Mutex
-		wp := workpool.New(workerThreads)
 		for _, batchRows := range multiBatchRows {
-			rows := batchRows
-			wp.Do(func() error {
-				lock.Lock()
-				sqlSlice = append(sqlSlice, utils.StringsBuilder(sqlPrefix, " ", strings.Join(rows, ",")))
-				lock.Unlock()
-				return nil
-			})
-		}
-		if err := wp.Wait(); err != nil {
-			return sqlSlice, err
-		}
-		if !wp.IsDone() {
-			return sqlSlice, fmt.Errorf("translatorTableFullRecord concurrency meet error")
-		}
+			sqlChan <- utils.StringsBuilder(sqlPrefix, " ", strings.Join(batchRows, ","))
 
-		endTime := time.Now()
-		service.Logger.Info("single full table data translator split finished",
-			zap.String("schema", targetSchemaName),
-			zap.String("table", targetTableName),
-			zap.Int("rows", rowCounts),
-			zap.Float64("splits", splitsNums),
-			zap.Int("translator thread", workerThreads),
-			zap.Int("insert batch size", insertBatchSize),
-			zap.Bool("safe mode", safeMode),
-			zap.String("cost", endTime.Sub(startTime).String()))
+			endTime := time.Now()
+			service.Logger.Info("single full table data translator sql finished",
+				zap.String("schema", targetSchemaName),
+				zap.String("table", targetTableName),
+				zap.Int("rows", rowCounts),
+				zap.Int("insert batch size", insertBatchSize),
+				zap.Bool("safe mode", safeMode),
+				zap.String("cost", endTime.Sub(startTime).String()))
+		}
 	}
-
-	endTime := time.Now()
-	service.Logger.Info("single full table data translator finished",
-		zap.String("schema", targetSchemaName),
-		zap.String("table", targetTableName),
-		zap.Int("rows", rowCounts),
-		zap.Int("translator thread", workerThreads),
-		zap.Int("insert batch size", insertBatchSize),
-		zap.Bool("safe mode", safeMode),
-		zap.String("cost", endTime.Sub(startTime).String()))
-	return sqlSlice, nil
+	close(sqlChan)
 }
 
 // 拼接 SQL 语句
