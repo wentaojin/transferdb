@@ -63,7 +63,7 @@ func translatorTableFullRecord(
 		wp := workpool.New(workerThreads)
 		for _, batchRows := range multiBatchRows {
 			rows := batchRows
-			wp.DoWait(func() error {
+			wp.Do(func() error {
 				lock.Lock()
 				sqlSlice = append(sqlSlice, utils.StringsBuilder(sqlPrefix, " ", strings.Join(rows, ",")))
 				lock.Unlock()

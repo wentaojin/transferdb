@@ -177,7 +177,6 @@ func filterOracleRedoGreaterOrEqualRecordByTable(
 func syncFullTableTaskUsingSCN(cfg *service.CfgFile, engine *service.Engine, fullTblSlice []string, syncMode string) error {
 	wp := workpool.New(cfg.FullConfig.WorkerThreads)
 	for _, table := range fullTblSlice {
-		// 变量替换，直接使用原变量会导致并发输出有问题
 		tbl := table
 		workerBatch := cfg.FullConfig.WorkerBatch
 		insertBatchSize := cfg.AppConfig.InsertBatchSize
@@ -211,7 +210,6 @@ func syncFullTableTaskUsingSCN(cfg *service.CfgFile, engine *service.Engine, ful
 func syncFullTableTaskUsingCheckpoint(cfg *service.CfgFile, engine *service.Engine, transferTables []string, syncMode string) error {
 	wp := workpool.New(cfg.FullConfig.WorkerThreads)
 	for _, table := range transferTables {
-		// 变量替换，直接使用原变量会导致并发输出有问题
 		tbl := table
 		mode := syncMode
 		wp.DoWait(func() error {

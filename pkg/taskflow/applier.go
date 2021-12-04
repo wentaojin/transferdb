@@ -37,7 +37,7 @@ func applierTableFullRecord(targetSchemaName, targetTableName string, workerThre
 	wp := workpool.New(workerThreads)
 	for _, sql := range sqlSlice {
 		s := sql
-		wp.DoWait(func() error {
+		wp.Do(func() error {
 			_, err := engine.MysqlDB.Exec(s)
 			if err != nil {
 				return fmt.Errorf("single full table data bulk insert mysql [%s] falied:%v", sql, err)
