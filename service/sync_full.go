@@ -375,23 +375,20 @@ func (e *Engine) GetOracleTableChunksByRowID(schemaName, tableName string, chunk
 
 	ctx, _ := context.WithCancel(context.Background())
 
-	_, res, err := Query(e.OracleDB, utils.StringsBuilder(`SELECT NVL(STATUS,"NON-CREATED") STATUS FROM user_parallel_execute_tasks WHERE TASK_NAME='`, taskName, `'`))
+	_, err := e.OracleDB.ExecContext(ctx, utils.StringsBuilder(`EXEC DBMS_PARALLEL_EXECUTE.DROP_TASK('`, taskName, `')`))
 	if err != nil {
-		return 0, err
-	}
-
-	// 任务状态判断
-	if res[0]["STATUS"] == "NON-CREATED" {
-		_, err = e.OracleDB.ExecContext(ctx, utils.StringsBuilder(`BEGIN
-  DBMS_PARALLEL_EXECUTE.create_task (task_name => '`, taskName, `');
-END;`))
-		if err != nil {
-			return rowCount, fmt.Errorf("oracle DBMS_PARALLEL_EXECUTE create task failed: %v", err)
-		}
+		return rowCount, fmt.Errorf("oracle DBMS_PARALLEL_EXECUTE drop task failed: %v", err)
 	}
 
 	_, err = e.OracleDB.ExecContext(ctx, utils.StringsBuilder(`BEGIN
-  DBMS_PARALLEL_EXECUTE.create_chunks_by_rowid(task_name   => '`, taskName, `',
+  DBMS_PARALLEL_EXECUTE.CREATE_TASK (task_name => '`, taskName, `');
+END;`))
+	if err != nil {
+		return rowCount, fmt.Errorf("oracle DBMS_PARALLEL_EXECUTE create task failed: %v", err)
+	}
+
+	_, err = e.OracleDB.ExecContext(ctx, utils.StringsBuilder(`BEGIN
+  DBMS_PARALLEL_EXECUTE.CREATE_CHUNKS_BY_ROWID (task_name   => '`, taskName, `',
                                                table_owner => '`, schemaName, `',
                                                table_name  => '`, tableName, `',
                                                by_row      => TRUE,
@@ -405,7 +402,7 @@ END;`))
        end_rowid || ''';' cmd
 FROM   user_parallel_execute_chunks WHERE  task_name = '`, taskName, `' ORDER BY chunk_id`)
 
-	_, res, err = Query(e.OracleDB, sql)
+	_, res, err := Query(e.OracleDB, sql)
 	if err != nil {
 		return rowCount, err
 	}
@@ -429,7 +426,7 @@ FROM   user_parallel_execute_chunks WHERE  task_name = '`, taskName, `' ORDER BY
 			return rowCount, fmt.Errorf("gorm create table [%s.%s] full_sync_meta failed [rowids rows = 0]: %v", schemaName, tableName, err)
 		}
 
-		_, err = e.OracleDB.ExecContext(ctx, utils.StringsBuilder(`EXEC DBMS_PARALLEL_EXECUTE.drop_task('`, taskName, `');`))
+		_, err = e.OracleDB.ExecContext(ctx, utils.StringsBuilder(`EXEC DBMS_PARALLEL_EXECUTE.DROP_TASK('`, taskName, `')`))
 		if err != nil {
 			return rowCount, fmt.Errorf("oracle DBMS_PARALLEL_EXECUTE drop task failed: %v", err)
 		}
