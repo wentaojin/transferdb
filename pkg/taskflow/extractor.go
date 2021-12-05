@@ -173,7 +173,7 @@ func syncFullTableTaskUsingSCN(cfg *service.CfgFile, engine *service.Engine, ful
 	wp := workpool.New(cfg.FullConfig.WorkerThreads)
 	for _, table := range fullTblSlice {
 		tbl := table
-		workerBatch := cfg.FullConfig.WorkerBatch
+		chunkSize := cfg.FullConfig.ChunkSize
 		insertBatchSize := cfg.AppConfig.InsertBatchSize
 		sourceSchemaName := cfg.SourceConfig.SchemaName
 		wp.Do(func() error {
@@ -183,7 +183,7 @@ func syncFullTableTaskUsingSCN(cfg *service.CfgFile, engine *service.Engine, ful
 				return err
 			}
 			if err := engine.InitWaitAndFullSyncMetaRecord(sourceSchemaName,
-				tbl, globalSCN, workerBatch, insertBatchSize, syncMode); err != nil {
+				tbl, globalSCN, chunkSize, insertBatchSize, syncMode); err != nil {
 				return err
 			}
 			if err := syncOracleSingleTableTask(cfg, engine, tbl, syncMode); err != nil {
@@ -264,7 +264,7 @@ func syncOracleSingleTableTask(cfg *service.CfgFile, engine *service.Engine, tab
 					table,
 					columns,
 					rowsResult,
-					cfg.FullConfig.TranslatorBuffer,
+					cfg.FullConfig.BufferSize,
 					cfg.AppConfig.InsertBatchSize,
 					true)); err != nil {
 				return err

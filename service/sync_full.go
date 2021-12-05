@@ -16,8 +16,8 @@ limitations under the License.
 package service
 
 import (
+	"context"
 	"fmt"
-	"math"
 	"strconv"
 	"strings"
 
@@ -148,62 +148,47 @@ func (e *Engine) TruncateMySQLTableRecord(targetSchemaName string, tableName str
 	return nil
 }
 
-func (e *Engine) InitWaitAndFullSyncMetaRecord(schemaName, tableName string, globalSCN int, extractorBatch, insertBatchSize int, syncMode string) error {
-	tableRows, err := e.getOracleTableRowsByStatistics(schemaName, tableName)
+func (e *Engine) InitWaitAndFullSyncMetaRecord(schemaName, tableName string, globalSCN int, chunkSize, insertBatchSize int, syncMode string) error {
+	tableRows, isPartition, err := e.getOracleTableRowsByStatistics(schemaName, tableName)
 	if err != nil {
 		return err
 	}
 
 	// 统计信息数据行数 0，直接全表扫
 	if tableRows == 0 {
-		sql := fmt.Sprintf("select * from %s.%s", strings.ToUpper(schemaName), strings.ToUpper(tableName))
+		sql := utils.StringsBuilder(`SELECT * FROM `, schemaName, `.`, tableName)
 		Logger.Warn("get oracle table rows",
 			zap.String("schema", schemaName),
 			zap.String("table", tableName),
 			zap.String("sql", sql),
 			zap.Int("statistics rows", tableRows))
 
-		if err := e.GormDB.Create(&FullSyncMeta{
+		if err = e.GormDB.Create(&FullSyncMeta{
 			SourceSchemaName: strings.ToUpper(schemaName),
 			SourceTableName:  strings.ToUpper(tableName),
 			RowidSQL:         sql,
-			IsPartition:      "N",
+			IsPartition:      isPartition,
 			GlobalSCN:        globalSCN,
 		}).Error; err != nil {
 			return fmt.Errorf("gorm create table [%s.%s] full_sync_meta failed [statistics rows = 0]: %v", schemaName, tableName, err)
 		}
-		if err := e.UpdateWaitSyncMetaTableRecord(schemaName, tableName, tableRows, globalSCN, syncMode); err != nil {
+		if err = e.UpdateWaitSyncMetaTableRecord(schemaName, tableName, tableRows, globalSCN, syncMode); err != nil {
 			return err
 		}
 		return nil
 	}
 
-	// 用于判断是否需要切分
-	// 当行数少于 parallel*10000 则不切分
 	Logger.Info("get oracle table statistics rows",
 		zap.String("schema", schemaName),
 		zap.String("table", tableName),
 		zap.Int("rows", tableRows))
 
-	parallel := math.Ceil(float64(tableRows) / float64(extractorBatch))
-
-	// Oracle 表数据切分数根据 sum(数据块数) / parallel
-	if tableRows > extractorBatch {
-		rowCounts, err := e.getAndInitOracleNormalTableFullSyncMetaUsingRowID(schemaName, tableName, globalSCN, int(parallel), insertBatchSize)
-		if err != nil {
-			return err
-		}
-		if err := e.UpdateWaitSyncMetaTableRecord(schemaName, tableName, rowCounts, globalSCN, syncMode); err != nil {
-			return err
-		}
-	} else {
-		rowCounts, err := e.getAndInitOracleNormalTableFullSyncMetaUsingRowID(schemaName, tableName, globalSCN, 1, insertBatchSize)
-		if err != nil {
-			return err
-		}
-		if err := e.UpdateWaitSyncMetaTableRecord(schemaName, tableName, rowCounts, globalSCN, syncMode); err != nil {
-			return err
-		}
+	rowCounts, err := e.GetOracleTableChunksByRowID(strings.ToUpper(schemaName), strings.ToUpper(tableName), strconv.Itoa(chunkSize), globalSCN, insertBatchSize, isPartition)
+	if err != nil {
+		return err
+	}
+	if err = e.UpdateWaitSyncMetaTableRecord(schemaName, tableName, rowCounts, globalSCN, syncMode); err != nil {
+		return err
 	}
 
 	return nil
@@ -383,70 +368,60 @@ func (e *Engine) GetOracleTableRecordByRowIDSQL(sql string) ([]string, []string,
 	return cols, res, nil
 }
 
-func (e *Engine) getAndInitOracleNormalTableFullSyncMetaUsingRowID(
-	schemaName,
-	tableName string,
-	globalSCN int, parallel, insertBatchSize int) (int, error) {
-	querySQL := fmt.Sprintf(`select rownum,
-       'select * from %s.%s where rowid between ' || chr(39) ||
-       dbms_rowid.rowid_create(1, DOI, lo_fno, lo_block, 0) || chr(39) ||
-       ' and  ' || chr(39) ||
-       dbms_rowid.rowid_create(1, DOI, hi_fno, hi_block, 1000000) ||
-       chr(39) DATA
-  from (SELECT DISTINCT DOI,
-                        grp,
-                        first_value(relative_fno) over(partition BY DOI, grp order by relative_fno, block_id rows BETWEEN unbounded preceding AND unbounded following) lo_fno,
-                        first_value(block_id) over(partition BY DOI, grp order by relative_fno, block_id rows BETWEEN unbounded preceding AND unbounded following) lo_block,
-                        last_value(relative_fno) over(partition BY DOI, grp order by relative_fno, block_id rows BETWEEN unbounded preceding AND unbounded following) hi_fno,
-                        last_value(block_id + blocks - 1) over(partition BY DOI, grp order by relative_fno, block_id rows BETWEEN unbounded preceding AND unbounded following) hi_block,
-                        SUM(blocks) over(partition BY DOI, grp) sum_blocks,
-                        SUBOBJECT_NAME
-          FROM (SELECT obj.OBJECT_ID,
-                       obj.SUBOBJECT_NAME,
-                       obj.DATA_OBJECT_ID as DOI,
-                       ext.relative_fno,
-                       ext.block_id,
-                       (SUM(blocks) over()) SUM,
-                       (SUM(blocks)
-                        over(ORDER BY DATA_OBJECT_ID, relative_fno, block_id) - 0.01) sum_fno,
-                       TRUNC((SUM(blocks) over(ORDER BY DATA_OBJECT_ID,
-                                               relative_fno,
-                                               block_id) - 0.01) /
-                             (SUM(blocks) over() / %d)) grp,
-                       ext.blocks
-                   FROM dba_extents ext, dba_objects obj
-                 WHERE UPPER(ext.segment_name) = UPPER('%s')
-                   AND UPPER(ext.owner) = UPPER('%s')
-                   AND obj.owner = ext.owner
-                   AND obj.object_name = ext.segment_name
-                   AND obj.DATA_OBJECT_ID IS NOT NULL
-                 ORDER BY DATA_OBJECT_ID, relative_fno, block_id)
-         order by DOI, grp)`, strings.ToUpper(schemaName), strings.ToUpper(tableName), parallel, strings.ToUpper(tableName), strings.ToUpper(schemaName))
-
+func (e *Engine) GetOracleTableChunksByRowID(schemaName, tableName string, chunkSize string, globalSCN, insertBatchSize int, isPartition string) (int, error) {
 	var rowCount int
 
-	_, res, err := Query(e.OracleDB, querySQL)
+	taskName := utils.StringsBuilder(schemaName, `_`, tableName, `_`, `TASK`)
+	ctx, _ := context.WithCancel(context.Background())
+	_, err := e.OracleDB.ExecContext(ctx, utils.StringsBuilder(`BEGIN
+  DBMS_PARALLEL_EXECUTE.create_task (task_name => '`, taskName, `');
+END;`))
+	if err != nil {
+		return rowCount, fmt.Errorf("oracle DBMS_PARALLEL_EXECUTE create task failed: %v", err)
+	}
+
+	_, err = e.OracleDB.ExecContext(ctx, utils.StringsBuilder(`BEGIN
+  DBMS_PARALLEL_EXECUTE.create_chunks_by_rowid(task_name   => '`, tableName, `',
+                                               table_owner => '`, schemaName, `',
+                                               table_name  => '`, tableName, `',
+                                               by_row      => TRUE,
+                                               chunk_size  => `, chunkSize, `);
+END;`))
+	if err != nil {
+		return rowCount, fmt.Errorf("oracle DBMS_PARALLEL_EXECUTE create_chunks_by_rowid task failed: %v", err)
+	}
+
+	sql := utils.StringsBuilder(`SELECT 'SELECT * FROM `, schemaName, `.`, tableName, `WHERE ROWID BETWEEN ''' || start_rowid || ''' AND ''' ||
+       end_rowid || ''';' cmd
+FROM   user_parallel_execute_chunks WHERE  task_name = '`, taskName, `' ORDER BY chunk_id`)
+
+	_, res, err := Query(e.OracleDB, sql)
 	if err != nil {
 		return rowCount, err
 	}
 
 	// 判断数据是否存在，跳过 full_sync_meta 记录，更新 wait_sync_meta 记录，无需同步
 	if len(res) == 0 {
-		sql := fmt.Sprintf("select * from %s.%s", strings.ToUpper(schemaName), strings.ToUpper(tableName))
+		sql = utils.StringsBuilder(`SELECT * FROM `, schemaName, `.`, tableName)
 		Logger.Warn("get oracle table rowids rows",
 			zap.String("schema", schemaName),
 			zap.String("table", tableName),
 			zap.String("sql", sql),
 			zap.Int("rowids rows", len(res)))
 
-		if err := e.GormDB.Create(&FullSyncMeta{
-			SourceSchemaName: strings.ToUpper(schemaName),
-			SourceTableName:  strings.ToUpper(tableName),
+		if err = e.GormDB.Create(&FullSyncMeta{
+			SourceSchemaName: schemaName,
+			SourceTableName:  tableName,
 			RowidSQL:         sql,
-			IsPartition:      "N",
+			IsPartition:      isPartition,
 			GlobalSCN:        globalSCN,
 		}).Error; err != nil {
 			return rowCount, fmt.Errorf("gorm create table [%s.%s] full_sync_meta failed [rowids rows = 0]: %v", schemaName, tableName, err)
+		}
+
+		_, err = e.OracleDB.ExecContext(ctx, utils.StringsBuilder(`EXEC DBMS_PARALLEL_EXECUTE.drop_task('`, taskName, `');`))
+		if err != nil {
+			return rowCount, fmt.Errorf("oracle DBMS_PARALLEL_EXECUTE drop task failed: %v", err)
 		}
 
 		return rowCount, nil
@@ -461,13 +436,13 @@ func (e *Engine) getAndInitOracleNormalTableFullSyncMetaUsingRowID(
 			SourceSchemaName: strings.ToUpper(schemaName),
 			SourceTableName:  strings.ToUpper(tableName),
 			RowidSQL:         r["DATA"],
-			IsPartition:      "N",
+			IsPartition:      isPartition,
 			GlobalSCN:        globalSCN,
 		})
 		fullMetaIdx = append(fullMetaIdx, idx)
 	}
 
-	// 划分 batch 数(500)
+	// 元数据库信息 batch 写入
 	if len(fullMetas) <= insertBatchSize {
 		if err := e.GormDB.Create(&fullMetas).Error; err != nil {
 			return len(res), fmt.Errorf("gorm create table [%s.%s] full_sync_meta failed: %v", schemaName, tableName, err)
@@ -480,29 +455,34 @@ func (e *Engine) getAndInitOracleNormalTableFullSyncMetaUsingRowID(
 			for _, idx := range ms {
 				fullMetaBatch = append(fullMetaBatch, fullMetas[idx])
 			}
-			if err := e.GormDB.Create(&fullMetaBatch).Error; err != nil {
+			if err = e.GormDB.Create(&fullMetaBatch).Error; err != nil {
 				return len(res), fmt.Errorf("gorm create table [%s.%s] full_sync_meta failed: %v", schemaName, tableName, err)
 			}
 		}
 	}
 
+	_, err = e.OracleDB.ExecContext(ctx, utils.StringsBuilder(`EXEC DBMS_PARALLEL_EXECUTE.drop_task('`, taskName, `');`))
+	if err != nil {
+		return rowCount, fmt.Errorf("oracle DBMS_PARALLEL_EXECUTE drop task failed: %v", err)
+	}
+
 	return len(res), nil
 }
 
-func (e *Engine) getOracleTableRowsByStatistics(schemaName, tableName string) (int, error) {
-	querySQL := fmt.Sprintf(`select NVL(NUM_ROWS,0) AS NUM_ROWS
+func (e *Engine) getOracleTableRowsByStatistics(schemaName, tableName string) (int, string, error) {
+	querySQL := fmt.Sprintf(`select NVL(NUM_ROWS,0) AS NUM_ROWS,PARTITIONED
   from dba_tables
  where upper(OWNER) = upper('%s')
    and upper(table_name) = upper('%s')`, schemaName, tableName)
 	_, res, err := Query(e.OracleDB, querySQL)
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
 
 	numRows, err := strconv.Atoi(res[0]["NUM_ROWS"])
 	if err != nil {
-		return 0, fmt.Errorf("get oracle schema table [%v] rows by statistics falied: %v",
+		return 0, res[0]["PARTITIONED"], fmt.Errorf("get oracle schema table [%v] rows by statistics falied: %v",
 			fmt.Sprintf("%s.%s", schemaName, tableName), err)
 	}
-	return numRows, nil
+	return numRows, res[0]["PARTITIONED"], nil
 }

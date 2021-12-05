@@ -40,11 +40,11 @@ type AppConfig struct {
 }
 
 type FullConfig struct {
-	WorkerBatch      int  `toml:"worker-batch" json:"worker-batch"`
+	ChunkSize        int  `toml:"chunk-size" json:"chunk-size"`
 	WorkerThreads    int  `toml:"worker-threads" json:"worker-threads"`
 	TableThreads     int  `toml:"table-threads" json:"table-threads"`
 	EnableCheckpoint bool `toml:"enable-checkpoint" json:"enable-checkpoint"`
-	TranslatorBuffer int  `toml:"translator-buffer" json:"translator-buffer"`
+	BufferSize       int  `toml:"buffer-size" json:"buffer-size"`
 	ApplyThreads     int  `toml:"apply-threads" json:"apply-threads"`
 }
 
