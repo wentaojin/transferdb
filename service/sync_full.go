@@ -417,7 +417,7 @@ END;`)
 func (e *Engine) GetOracleTableChunksByRowID(taskName, schemaName, tableName string, chunkSize string, globalSCN, insertBatchSize int, isPartition string) (int, error) {
 	var rowCount int
 
-	querySQL := utils.StringsBuilder(`SELECT 'SELECT * FROM `, schemaName, `.`, tableName, `WHERE ROWID BETWEEN ''' || start_rowid || ''' AND ''' || end_rowid || ''';' CMD FROM user_parallel_execute_chunks WHERE  task_name = '`, taskName, `' ORDER BY chunk_id`)
+	querySQL := utils.StringsBuilder(`SELECT 'SELECT * FROM `, schemaName, `.`, tableName, ` WHERE ROWID BETWEEN ''' || start_rowid || ''' AND ''' || end_rowid || '''' CMD FROM user_parallel_execute_chunks WHERE  task_name = '`, taskName, `' ORDER BY chunk_id`)
 
 	_, res, err := Query(e.OracleDB, querySQL)
 	if err != nil {
