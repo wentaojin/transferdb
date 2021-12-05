@@ -20,8 +20,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/thinkeridea/go-extend/exstrings"
-
 	"github.com/wentaojin/transferdb/utils"
 
 	"gorm.io/gorm"
@@ -162,6 +160,7 @@ func (e *Engine) QueryFormatOracleRows(querySQL string) ([]string, []string, err
 	}
 
 	// Read all rows
+	var actualRows [][]string
 	for rows.Next() {
 		rawResult := make([][]byte, len(cols))
 		result := make([]string, len(cols))
@@ -203,12 +202,16 @@ func (e *Engine) QueryFormatOracleRows(querySQL string) ([]string, []string, err
 
 			}
 		}
-		//数据按行返回，格式如下：(1,2) (2,3) ,用于数据拼接 batch
-		rowsResult = append(rowsResult, utils.StringsBuilder("(", exstrings.Join(result, ","), ")"))
+		actualRows = append(actualRows, result)
 	}
 
 	if err = rows.Err(); err != nil {
 		return cols, rowsResult, err
+	}
+
+	for _, row := range actualRows {
+		//数据按行返回，格式如下：(1,2) (2,3) ,用于数据拼接 batch
+		rowsResult = append(rowsResult, utils.StringsBuilder("(", strings.Join(row, ","), ")"))
 	}
 
 	return cols, rowsResult, nil

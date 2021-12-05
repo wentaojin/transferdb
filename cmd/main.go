@@ -50,14 +50,14 @@ func main() {
 	}
 
 	go func() {
-		if err := http.ListenAndServe(cfg.AppConfig.PprofPort, nil); err != nil {
+		if err = http.ListenAndServe(cfg.AppConfig.PprofPort, nil); err != nil {
 			log.Fatal(err)
 		}
 		os.Exit(0)
 	}()
 
 	// 初始化日志 logger
-	if err := service.NewZapLogger(cfg); err != nil {
+	if err = service.NewZapLogger(cfg); err != nil {
 		log.Fatalf("create global zap logger failed: %v", err)
 	}
 	service.RecordAppVersion("transferdb", service.Logger, cfg)
