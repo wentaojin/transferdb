@@ -375,19 +375,9 @@ func (e *Engine) GetOracleTableChunksByRowID(schemaName, tableName string, chunk
 
 	ctx, _ := context.WithCancel(context.Background())
 
-	clearSQL := utils.StringsBuilder(`EXEC DBMS_PARALLEL_EXECUTE.DROP_TASK('`, taskName, `');`)
-	_, err := e.OracleDB.ExecContext(ctx, clearSQL)
-	if err != nil {
-		return rowCount, fmt.Errorf("oracle DBMS_PARALLEL_EXECUTE drop task failed: %v, sql: %v", err, clearSQL)
-	}
-
 	createSQL := utils.StringsBuilder(`BEGIN
   DBMS_PARALLEL_EXECUTE.CREATE_TASK (task_name => '`, taskName, `');
 END;`)
-	_, err = e.OracleDB.ExecContext(ctx, createSQL)
-	if err != nil {
-		return rowCount, fmt.Errorf("oracle DBMS_PARALLEL_EXECUTE create task failed: %v, sql: %v", err, createSQL)
-	}
 
 	chunkSQL := utils.StringsBuilder(`BEGIN
   DBMS_PARALLEL_EXECUTE.CREATE_CHUNKS_BY_ROWID (task_name   => '`, taskName, `',
@@ -396,6 +386,16 @@ END;`)
                                                by_row      => TRUE,
                                                chunk_size  => `, chunkSize, `);
 END;`)
+
+	clearSQL := utils.StringsBuilder(`BEGIN
+  DBMS_PARALLEL_EXECUTE.DROP_TASK ('`, taskName, `');
+END;`)
+
+	_, err := e.OracleDB.ExecContext(ctx, createSQL)
+	if err != nil {
+		return rowCount, fmt.Errorf("oracle DBMS_PARALLEL_EXECUTE create task failed: %v, sql: %v", err, createSQL)
+	}
+
 	_, err = e.OracleDB.ExecContext(ctx, chunkSQL)
 	if err != nil {
 		return rowCount, fmt.Errorf("oracle DBMS_PARALLEL_EXECUTE create_chunks_by_rowid task failed: %v, sql: %v", err, chunkSQL)

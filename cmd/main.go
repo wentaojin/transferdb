@@ -22,6 +22,7 @@ import (
 	_ "net/http/pprof"
 	"os"
 
+	"github.com/pkg/errors"
 	"github.com/wentaojin/transferdb/service"
 
 	"github.com/wentaojin/transferdb/pkg/signal"
@@ -67,7 +68,7 @@ func main() {
 	})
 
 	// 程序运行
-	if err := server.Run(cfg, *mode); err != nil {
-		service.Logger.Fatal("server run failed", zap.String("error", err.Error()))
+	if err = server.Run(cfg, *mode); err != nil {
+		service.Logger.Fatal("server run failed", zap.Error(errors.Cause(err)))
 	}
 }
