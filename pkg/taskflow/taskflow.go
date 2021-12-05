@@ -89,12 +89,12 @@ func FullSyncOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service.Engi
 	}
 
 	// 获取等待同步以及未同步完成的表列表
-	waitSyncTableMetas, waitSyncTableNameList, err := engine.GetWaitSyncTableMetaRecord(cfg.SourceConfig.SchemaName, FullSyncMode)
+	waitSyncTableMetas, waitSyncTableInfo, err := engine.GetWaitSyncTableMetaRecord(cfg, FullSyncMode)
 	if err != nil {
 		return err
 	}
 
-	partSyncTableMetas, partSyncTableNameList, err := engine.GetPartSyncTableMetaRecord(cfg.SourceConfig.SchemaName, FullSyncMode)
+	partSyncTableMetas, partSyncTableInfo, err := engine.GetPartSyncTableMetaRecord(cfg, FullSyncMode)
 	if err != nil {
 		return err
 	}
@@ -122,9 +122,7 @@ func FullSyncOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service.Engi
 	}
 
 	// 启动全量同步任务
-	if err = syncOracleTableTaskFlow(cfg, engine, waitSyncTableNameList, partSyncTableNameList, FullSyncMode); err != nil {
-		return err
-	}
+	syncOracleTableTaskFlow(waitSyncTableInfo, partSyncTableInfo)
 
 	endTime := time.Now()
 	service.Logger.Info("all full table data loader finished",
@@ -241,12 +239,12 @@ func syncOracleFullTableRecordToMySQLUsingAllMode(cfg *service.CfgFile, engine *
 	}
 
 	// 获取等待同步以及未同步完成的表列表
-	waitSyncTableMetas, waitSyncTableNameList, err := engine.GetWaitSyncTableMetaRecord(cfg.SourceConfig.SchemaName, syncMode)
+	waitSyncTableMetas, waitSyncTableInfo, err := engine.GetWaitSyncTableMetaRecord(cfg, syncMode)
 	if err != nil {
 		return err
 	}
 
-	partSyncTableMetas, partSyncTableNameList, err := engine.GetPartSyncTableMetaRecord(cfg.SourceConfig.SchemaName, syncMode)
+	partSyncTableMetas, partSyncTableInfo, err := engine.GetPartSyncTableMetaRecord(cfg, syncMode)
 	if err != nil {
 		return err
 	}
@@ -274,9 +272,7 @@ func syncOracleFullTableRecordToMySQLUsingAllMode(cfg *service.CfgFile, engine *
 	}
 
 	// 启动全量同步任务
-	if err = syncOracleTableTaskFlow(cfg, engine, waitSyncTableNameList, partSyncTableNameList, syncMode); err != nil {
-		return err
-	}
+	syncOracleTableTaskFlow(waitSyncTableInfo, partSyncTableInfo)
 
 	// 全量任务结束，写入增量源数据表起始 SCN 号
 	//根据配置文件生成同步表元数据 [increment_sync_meta]
@@ -553,18 +549,14 @@ func getOracleTableIncrementRecordLogFile(engine *service.Engine, sourceSchemaNa
 /*
 	全量/增量 FUNCTION
 */
-func syncOracleTableTaskFlow(cfg *service.CfgFile, engine *service.Engine, waitSyncTableNameList, partSyncTableNameList []string, syncMode string) error {
-	if len(partSyncTableNameList) > 0 {
-		if err := syncFullTableTaskUsingCheckpoint(cfg, engine, partSyncTableNameList, syncMode); err != nil {
-			return err
-		}
+func syncOracleTableTaskFlow(waitSyncTableInfo, partSyncTableInfo []service.TableSyncInfo) {
+	if len(partSyncTableInfo) > 0 {
+		syncFullTableTaskUsingCheckpoint(partSyncTableInfo)
+
 	}
-	if len(waitSyncTableNameList) > 0 {
-		if err := syncFullTableTaskUsingSCN(cfg, engine, waitSyncTableNameList, syncMode); err != nil {
-			return err
-		}
+	if len(waitSyncTableInfo) > 0 {
+		syncFullTableTaskUsingSCN(waitSyncTableInfo)
 	}
-	return nil
 }
 
 // 从配置文件获取需要迁移同步的表列表

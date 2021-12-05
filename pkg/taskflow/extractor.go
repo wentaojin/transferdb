@@ -21,6 +21,8 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/wentaojin/transferdb/utils"
 
 	"github.com/wentaojin/transferdb/service"
@@ -169,133 +171,154 @@ func filterOracleRedoGreaterOrEqualRecordByTable(
 
 // 1、根据当前表的 SCN 初始化元数据据表
 // 2、根据元数据表记录全量导出导入
-func syncFullTableTaskUsingSCN(cfg *service.CfgFile, engine *service.Engine, fullTblSlice []string, syncMode string) error {
-	wp := workpool.New(cfg.FullConfig.WorkerThreads)
-	for _, table := range fullTblSlice {
-		tbl := table
-		chunkSize := cfg.FullConfig.ChunkSize
-		insertBatchSize := cfg.AppConfig.InsertBatchSize
-		sourceSchemaName := cfg.SourceConfig.SchemaName
-		wp.Do(func() error {
-			// 全量同步前，获取 SCN
-			globalSCN, err := engine.GetOracleCurrentSnapshotSCN()
-			if err != nil {
-				return err
-			}
-			if err = engine.InitWaitAndFullSyncMetaRecord(sourceSchemaName,
-				tbl, globalSCN, chunkSize, insertBatchSize, syncMode); err != nil {
-				return err
-			}
-			if err = syncOracleSingleTableTask(cfg, engine, tbl, syncMode); err != nil {
-				return err
-			}
-			return nil
-		})
-	}
-	if err := wp.Wait(); err != nil {
-		return err
-	}
-	if !wp.IsDone() {
-		return fmt.Errorf("syncFullTableTaskUsingSCN concurrency table meet error")
-	}
-	return nil
+func syncFullTableTaskUsingSCN(tableSyncInfo []service.TableSyncInfo) <-chan service.TableSyncInfo {
+	outChan := make(chan service.TableSyncInfo, len(tableSyncInfo))
+
+	go func() {
+		for _, table := range tableSyncInfo {
+			outChan <- table
+		}
+		close(outChan)
+	}()
+
+	return outChan
+
 }
 
 // 1、根据元数据表记录全量导出导入
-func syncFullTableTaskUsingCheckpoint(cfg *service.CfgFile, engine *service.Engine, transferTables []string, syncMode string) error {
-	wp := workpool.New(cfg.FullConfig.WorkerThreads)
-	for _, table := range transferTables {
-		tbl := table
-		mode := syncMode
-		wp.Do(func() error {
-			if err := syncOracleSingleTableTask(cfg, engine, tbl, mode); err != nil {
-				return err
+func syncFullTableTaskUsingCheckpoint(tableSyncInfo []service.TableSyncInfo) <-chan service.TableSyncInfo {
+	outChan := make(chan service.TableSyncInfo, len(tableSyncInfo))
+
+	go func() {
+		for _, table := range tableSyncInfo {
+			outChan <- table
+		}
+		close(outChan)
+	}()
+
+	return outChan
+}
+
+func syncOracleSingleTableTask(workerThreads int, tableSyncInfoChan <-chan service.TableSyncInfo) error {
+
+	var group errgroup.Group
+
+	for i := 0; i < workerThreads; i++ {
+		group.Go(func() error {
+			for table := range tableSyncInfoChan {
+				if !table.IsCheckpoint {
+					startTime := time.Now()
+					service.Logger.Info("single full table init scn start",
+						zap.String("schema", table.SourceSchemaName),
+						zap.String("table", table.SourceTableName))
+					// 全量同步前，获取 SCN
+					globalSCN, err := table.Engine.GetOracleCurrentSnapshotSCN()
+					if err != nil {
+						return err
+					}
+					if err = table.Engine.InitWaitAndFullSyncMetaRecord(table.SourceSchemaName,
+						table.SourceTableName, globalSCN, table.ChunkSize, table.InsertBatchSize, table.SyncMode); err != nil {
+						return err
+					}
+
+					endTime := time.Now()
+					service.Logger.Info("single full table init scn finished",
+						zap.String("schema", table.SourceSchemaName),
+						zap.String("table", table.SourceTableName),
+						zap.String("cost", endTime.Sub(startTime).String()))
+
+					if err = syncOracleRowsByRowID(table); err != nil {
+						return err
+					}
+				} else {
+					if err := syncOracleRowsByRowID(table); err != nil {
+						return err
+					}
+				}
 			}
 			return nil
 		})
 	}
-	if err := wp.Wait(); err != nil {
-		return err
-	}
-	if !wp.IsDone() {
-		return fmt.Errorf("syncFullTableTaskUsingCheckpoint concurrency table meet error")
+	if err := group.Wait(); err != nil {
+		fmt.Println(err)
 	}
 	return nil
 }
 
-func syncOracleSingleTableTask(cfg *service.CfgFile, engine *service.Engine, table, syncMode string) error {
+func syncOracleRowsByRowID(table service.TableSyncInfo) error {
 	startTime := time.Now()
 	service.Logger.Info("single full table data loader start",
-		zap.String("schema", cfg.SourceConfig.SchemaName))
+		zap.String("schema", table.SourceSchemaName),
+		zap.String("table", table.SourceTableName))
 
-	oraRowIDSQL, err := engine.GetFullSyncMetaRowIDRecord(cfg.SourceConfig.SchemaName, table)
+	oraRowIDSQL, err := table.Engine.GetFullSyncMetaRowIDRecord(table.SourceSchemaName, table.SourceTableName)
 	if err != nil {
 		return err
 	}
-	wp := workpool.New(cfg.FullConfig.TableThreads)
+	wp := workpool.New(table.TableThreads)
 	for _, rowidSQL := range oraRowIDSQL {
 		sql := rowidSQL
-		mode := syncMode
 		wp.Do(func() error {
 			// 抽取 Oracle 数据
-			columns, rowsResult, err := extractorTableFullRecord(engine, cfg.SourceConfig.SchemaName, table, sql)
+			columns, rowsResult, err := extractorTableFullRecord(table.Engine, table.SourceSchemaName, table.SourceTableName, sql)
 			if err != nil {
 				return err
 			}
 
 			if len(rowsResult) == 0 {
 				service.Logger.Warn("oracle schema table rowid data return null rows, skip",
-					zap.String("schema", cfg.SourceConfig.SchemaName),
-					zap.String("table", table),
+					zap.String("schema", table.SourceSchemaName),
+					zap.String("table", table.SourceTableName),
 					zap.String("sql", sql))
 				// 清理记录以及更新记录
-				if err := engine.ModifyWaitAndFullSyncTableMetaRecord(
-					cfg.TargetConfig.MetaSchema,
-					cfg.SourceConfig.SchemaName, table, sql, mode); err != nil {
+				if err := table.Engine.ModifyWaitAndFullSyncTableMetaRecord(
+					table.MetaSchemaName,
+					table.SourceSchemaName, table.SourceTableName, sql, table.SyncMode); err != nil {
 					return err
 				}
 				return nil
 			}
 
 			// 转换/应用 Oracle 数据 -> MySQL
-			if err := applierTableFullRecord(cfg.TargetConfig.SchemaName, table, cfg.FullConfig.ApplyThreads, engine,
+			if err := applierTableFullRecord(table.TargetSchemaName, table.SourceTableName, table.ApplyThreads, table.Engine,
 				translatorTableFullRecord(
-					cfg.TargetConfig.SchemaName,
-					table,
+					table.TargetSchemaName,
+					table.SourceTableName,
 					columns,
 					rowsResult,
-					cfg.FullConfig.BufferSize,
-					cfg.AppConfig.InsertBatchSize,
+					table.BufferSize,
+					table.InsertBatchSize,
 					true)); err != nil {
 				return err
 			}
 
 			// 清理记录以及更新记录
-			if err := engine.ModifyWaitAndFullSyncTableMetaRecord(
-				cfg.TargetConfig.MetaSchema,
-				cfg.SourceConfig.SchemaName, table, sql, mode); err != nil {
+			if err := table.Engine.ModifyWaitAndFullSyncTableMetaRecord(
+				table.MetaSchemaName,
+				table.SourceSchemaName, table.SourceTableName, sql, table.SyncMode); err != nil {
 				return err
 			}
 			return nil
 		})
 	}
-	if err := wp.Wait(); err != nil {
+	if err = wp.Wait(); err != nil {
 		return err
 	}
 
 	endTime := time.Now()
 	if !wp.IsDone() {
 		service.Logger.Fatal("single full table data loader failed",
-			zap.String("schema", cfg.SourceConfig.SchemaName),
-			zap.String("table", table),
+			zap.String("schema", table.SourceSchemaName),
+			zap.String("table", table.SourceTableName),
 			zap.String("cost", endTime.Sub(startTime).String()))
 		return fmt.Errorf("oracle schema [%s] single full table [%v] data loader failed",
-			cfg.SourceConfig.SchemaName, table)
+			table.SourceSchemaName, table.SourceTableName)
 	}
 	service.Logger.Info("single full table data loader finished",
-		zap.String("schema", cfg.SourceConfig.SchemaName),
-		zap.String("table", table),
+		zap.String("schema", table.SourceSchemaName),
+		zap.String("table", table.SourceTableName),
 		zap.String("cost", endTime.Sub(startTime).String()))
+
 	return nil
 }
 

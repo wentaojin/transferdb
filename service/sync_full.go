@@ -259,23 +259,6 @@ func (e *Engine) InitIncrementSyncMetaRecord(schemaName, tableName, isPartition 
 	return nil
 }
 
-func (e *Engine) GetWaitSyncTableMetaRecord(schemaName string, syncMode string) ([]WaitSyncMeta, []string, error) {
-	var (
-		tableMetas []WaitSyncMeta
-		tables     []string
-	)
-	if err := e.GormDB.Where("source_schema_name = ? AND full_global_scn = -1 AND full_split_times = -1 and sync_mode = ?",
-		strings.ToUpper(schemaName), syncMode).Find(&tableMetas).Error; err != nil {
-		return tableMetas, tables, err
-	}
-	if len(tableMetas) > 0 {
-		for _, table := range tableMetas {
-			tables = append(tables, strings.ToUpper(table.SourceTableName))
-		}
-	}
-	return tableMetas, tables, nil
-}
-
 func (e *Engine) GetFinishFullSyncMetaRecord(schemaName string, syncMode string) ([]WaitSyncMeta, []string, error) {
 	var (
 		tableMetas []WaitSyncMeta
@@ -313,22 +296,87 @@ func (e *Engine) IsFinishFullSyncMetaRecord(schemaName string, transferTableSlic
 	return panicTables, nil
 }
 
-func (e *Engine) GetPartSyncTableMetaRecord(schemaName, syncMode string) ([]WaitSyncMeta, []string, error) {
+/*
+	获取全量待同步表信息
+*/
+type TableSyncInfo struct {
+	SourceSchemaName string
+	SourceTableName  string
+	ChunkSize        int
+	InsertBatchSize  int
+	SyncMode         string
+	IsCheckpoint     bool
+	TableThreads     int
+	BufferSize       int
+	ApplyThreads     int
+	TargetSchemaName string
+	MetaSchemaName   string
+	Engine           *Engine
+}
+
+func (e *Engine) GetPartSyncTableMetaRecord(cfg *CfgFile, syncMode string) ([]WaitSyncMeta, []TableSyncInfo, error) {
 	var (
 		tableMetas []WaitSyncMeta
-		tables     []string
+		tableInfo  []TableSyncInfo
 	)
+
 	if err := e.GormDB.Where("source_schema_name = ? AND full_global_scn > -1 AND full_split_times > 0 and sync_mode = ?",
-		strings.ToUpper(schemaName),
+		strings.ToUpper(cfg.SourceConfig.SchemaName),
 		syncMode).Find(&tableMetas).Error; err != nil {
-		return tableMetas, tables, err
+		return tableMetas, tableInfo, err
 	}
+
 	if len(tableMetas) > 0 {
 		for _, table := range tableMetas {
-			tables = append(tables, strings.ToUpper(table.SourceTableName))
+			tableInfo = append(tableInfo, TableSyncInfo{
+				SourceSchemaName: strings.ToUpper(cfg.SourceConfig.SchemaName),
+				SourceTableName:  strings.ToUpper(table.SourceTableName),
+				ChunkSize:        cfg.FullConfig.ChunkSize,
+				InsertBatchSize:  cfg.AppConfig.InsertBatchSize,
+				IsCheckpoint:     true, // Checkpoint 同步
+				SyncMode:         syncMode,
+				TableThreads:     cfg.FullConfig.TableThreads,
+				Engine:           e,
+				BufferSize:       cfg.FullConfig.BufferSize,
+				ApplyThreads:     cfg.FullConfig.ApplyThreads,
+				TargetSchemaName: cfg.TargetConfig.SchemaName,
+				MetaSchemaName:   cfg.TargetConfig.MetaSchema,
+			})
 		}
 	}
-	return tableMetas, tables, nil
+	return tableMetas, tableInfo, nil
+}
+
+func (e *Engine) GetWaitSyncTableMetaRecord(cfg *CfgFile, syncMode string) ([]WaitSyncMeta, []TableSyncInfo, error) {
+	var (
+		tableMetas []WaitSyncMeta
+		tableInfo  []TableSyncInfo
+	)
+
+	if err := e.GormDB.Where("source_schema_name = ? AND full_global_scn = -1 AND full_split_times = -1 and sync_mode = ?",
+		strings.ToUpper(cfg.SourceConfig.SchemaName), syncMode).Find(&tableMetas).Error; err != nil {
+		return tableMetas, tableInfo, err
+	}
+
+	if len(tableMetas) > 0 {
+		for _, table := range tableMetas {
+			tableInfo = append(tableInfo, TableSyncInfo{
+				SourceSchemaName: strings.ToUpper(cfg.SourceConfig.SchemaName),
+				SourceTableName:  strings.ToUpper(table.SourceTableName),
+				ChunkSize:        cfg.FullConfig.ChunkSize,
+				InsertBatchSize:  cfg.AppConfig.InsertBatchSize,
+				IsCheckpoint:     false, // SCN 同步
+				SyncMode:         syncMode,
+				TableThreads:     cfg.FullConfig.TableThreads,
+				Engine:           e,
+				BufferSize:       cfg.FullConfig.BufferSize,
+				ApplyThreads:     cfg.FullConfig.ApplyThreads,
+				TargetSchemaName: cfg.TargetConfig.SchemaName,
+				MetaSchemaName:   cfg.TargetConfig.MetaSchema,
+			})
+		}
+	}
+	return tableMetas, tableInfo, nil
 }
 
 func (e *Engine) IsExistWaitSyncTableMetaRecord(schemaName string, tableName, syncMode string) (bool, error) {
