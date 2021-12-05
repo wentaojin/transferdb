@@ -381,7 +381,7 @@ END;`))
 	}
 
 	_, err = e.OracleDB.ExecContext(ctx, utils.StringsBuilder(`BEGIN
-  DBMS_PARALLEL_EXECUTE.create_chunks_by_rowid(task_name   => '`, tableName, `',
+  DBMS_PARALLEL_EXECUTE.create_chunks_by_rowid(task_name   => '`, taskName, `',
                                                table_owner => '`, schemaName, `',
                                                table_name  => '`, tableName, `',
                                                by_row      => TRUE,
