@@ -33,7 +33,7 @@ transferdb 用于异构数据库迁移（ ORACLE 数据库 -> MySQL/TiDB 数据�
 3. 支持对象信息收集
    1. 收集现有 ORACLE 数据库内表、索引、分区表、字段长度等信息输出 gather_info.txt 文件，用于评估迁移至 MySQL/TiDB 成本【检查项无输出自动屏蔽显示】
 
-4. 支持数据同步
+4. 支持数据同步【ORACLE 11g 及以上版本】
    1. 数据同步需要存在主键或者唯一键 
    2. 数据同步无论 FULL / ALL 模式需要注意时间格式，ORACLE date 格式复杂，同步前可先简单验证下迁移时间格式是否存在问题，transferdb timezone PICK 数据库操作系统的时区 
    3. FULL 模式【全量数据导出导入】

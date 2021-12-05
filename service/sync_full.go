@@ -172,7 +172,7 @@ func (e *Engine) InitWaitAndFullSyncMetaRecord(schemaName, tableName string, glo
 		}).Error; err != nil {
 			return fmt.Errorf("gorm create table [%s.%s] full_sync_meta failed [statistics rows = 0]: %v", schemaName, tableName, err)
 		}
-		if err = e.UpdateWaitSyncMetaTableRecord(schemaName, tableName, tableRows, globalSCN, syncMode); err != nil {
+		if err = e.UpdateWaitSyncMetaTableRecord(schemaName, tableName, tableRows, globalSCN, isPartition, syncMode); err != nil {
 			return err
 		}
 		return nil
@@ -187,7 +187,7 @@ func (e *Engine) InitWaitAndFullSyncMetaRecord(schemaName, tableName string, glo
 	if err != nil {
 		return err
 	}
-	if err = e.UpdateWaitSyncMetaTableRecord(schemaName, tableName, rowCounts, globalSCN, syncMode); err != nil {
+	if err = e.UpdateWaitSyncMetaTableRecord(schemaName, tableName, rowCounts, globalSCN, isPartition, syncMode); err != nil {
 		return err
 	}
 
@@ -211,7 +211,7 @@ func (e *Engine) InitWaitSyncTableMetaRecord(schemaName string, tableName []stri
 	return nil
 }
 
-func (e *Engine) UpdateWaitSyncMetaTableRecord(schemaName, tableName string, rowCounts, globalSCN int, syncMode string) error {
+func (e *Engine) UpdateWaitSyncMetaTableRecord(schemaName, tableName string, rowCounts, globalSCN int, isPartition, syncMode string) error {
 	// 如果行数（切分次数）等于 0，full_sync_meta 自动生成全表读，额外更新处理 wait_sync_meta
 	if rowCounts == 0 {
 		rowCounts = 1
@@ -224,6 +224,7 @@ func (e *Engine) UpdateWaitSyncMetaTableRecord(schemaName, tableName string, row
 		Updates(map[string]interface{}{
 			"full_global_scn":  globalSCN,
 			"full_split_times": rowCounts,
+			"is_partition":     isPartition,
 		}).Error; err != nil {
 		return err
 	}
@@ -231,12 +232,13 @@ func (e *Engine) UpdateWaitSyncMetaTableRecord(schemaName, tableName string, row
 	return nil
 }
 
-func (e *Engine) InitIncrementSyncMetaRecord(schemaName, tableName string, globalSCN int) error {
+func (e *Engine) InitIncrementSyncMetaRecord(schemaName, tableName, isPartition string, globalSCN int) error {
 	if err := e.GormDB.Create(&IncrementSyncMeta{
 		GlobalSCN:        globalSCN,
 		SourceSchemaName: strings.ToUpper(schemaName),
 		SourceTableName:  strings.ToUpper(tableName),
 		SourceTableSCN:   globalSCN,
+		IsPartition:      isPartition,
 	}).Error; err != nil {
 		return err
 	}
@@ -391,9 +393,18 @@ END;`)
   DBMS_PARALLEL_EXECUTE.DROP_TASK ('`, taskName, `');
 END;`)
 
-	_, err := e.OracleDB.ExecContext(ctx, createSQL)
+	adjustSQL := utils.StringsBuilder(`SELECT COUNT(1) COUNT FROM user_parallel_execute_chunks WHERE TASK_NAME = '`,
+		taskName, `'`)
+	_, result, err := Query(e.OracleDB, adjustSQL)
 	if err != nil {
-		return rowCount, fmt.Errorf("oracle DBMS_PARALLEL_EXECUTE create task failed: %v, sql: %v", err, createSQL)
+		return 0, err
+	}
+	// 任务名不存在
+	if result[0]["COUNT"] == "0" {
+		_, err = e.OracleDB.ExecContext(ctx, createSQL)
+		if err != nil {
+			return rowCount, fmt.Errorf("oracle DBMS_PARALLEL_EXECUTE create task failed: %v, sql: %v", err, createSQL)
+		}
 	}
 
 	_, err = e.OracleDB.ExecContext(ctx, chunkSQL)
@@ -401,7 +412,7 @@ END;`)
 		return rowCount, fmt.Errorf("oracle DBMS_PARALLEL_EXECUTE create_chunks_by_rowid task failed: %v, sql: %v", err, chunkSQL)
 	}
 
-	querySQL := utils.StringsBuilder(`SELECT 'SELECT * FROM `, schemaName, `.`, tableName, `WHERE ROWID BETWEEN ''' || start_rowid || ''' AND ''' || end_rowid || ''';' cmd FROM user_parallel_execute_chunks WHERE  task_name = '`, taskName, `' ORDER BY chunk_id`)
+	querySQL := utils.StringsBuilder(`SELECT 'SELECT * FROM `, schemaName, `.`, tableName, `WHERE ROWID BETWEEN ''' || start_rowid || ''' AND ''' || end_rowid || ''';' CMD FROM user_parallel_execute_chunks WHERE  task_name = '`, taskName, `' ORDER BY chunk_id`)
 
 	_, res, err := Query(e.OracleDB, querySQL)
 	if err != nil {
@@ -443,7 +454,7 @@ END;`)
 		fullMetas = append(fullMetas, FullSyncMeta{
 			SourceSchemaName: strings.ToUpper(schemaName),
 			SourceTableName:  strings.ToUpper(tableName),
-			RowidSQL:         r["DATA"],
+			RowidSQL:         r["CMD"],
 			IsPartition:      isPartition,
 			GlobalSCN:        globalSCN,
 		})

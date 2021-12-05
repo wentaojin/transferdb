@@ -307,7 +307,7 @@ func generateTableIncrementTaskCheckpointMeta(sourceSchemaName string, engine *s
 	}
 
 	for _, tm := range tableMeta {
-		if err := engine.InitIncrementSyncMetaRecord(tm.SourceSchemaName, tm.SourceTableName, tm.FullGlobalSCN); err != nil {
+		if err := engine.InitIncrementSyncMetaRecord(tm.SourceSchemaName, tm.SourceTableName, tm.IsPartition, tm.FullGlobalSCN); err != nil {
 			return err
 		}
 	}
