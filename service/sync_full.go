@@ -183,14 +183,28 @@ func (e *Engine) InitWaitAndFullSyncMetaRecord(schemaName, tableName string, glo
 		zap.String("table", tableName),
 		zap.Int("rows", tableRows))
 
-	rowCounts, err := e.GetOracleTableChunksByRowID(strings.ToUpper(schemaName), strings.ToUpper(tableName), strconv.Itoa(chunkSize), globalSCN, insertBatchSize, isPartition)
+	taskName := utils.StringsBuilder(schemaName, `_`, tableName, `_`, `TASK`)
+
+	if err = e.StartOracleChunkCreateTask(taskName); err != nil {
+		return err
+	}
+
+	if err = e.StartOracleCreateChunkByRowID(taskName, strings.ToUpper(schemaName), strings.ToUpper(tableName), strconv.Itoa(chunkSize)); err != nil {
+		return err
+	}
+
+	rowCounts, err := e.GetOracleTableChunksByRowID(taskName, strings.ToUpper(schemaName), strings.ToUpper(tableName), strconv.Itoa(chunkSize), globalSCN, insertBatchSize, isPartition)
 	if err != nil {
 		return err
 	}
+
 	if err = e.UpdateWaitSyncMetaTableRecord(schemaName, tableName, rowCounts, globalSCN, isPartition, syncMode); err != nil {
 		return err
 	}
 
+	if err = e.CloseOracleChunkTask(taskName); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -370,16 +384,21 @@ func (e *Engine) GetOracleTableRecordByRowIDSQL(sql string) ([]string, []string,
 	return cols, res, nil
 }
 
-func (e *Engine) GetOracleTableChunksByRowID(schemaName, tableName string, chunkSize string, globalSCN, insertBatchSize int, isPartition string) (int, error) {
-	var rowCount int
-
-	taskName := utils.StringsBuilder(schemaName, `_`, tableName, `_`, `TASK`)
-
+func (e *Engine) StartOracleChunkCreateTask(taskName string) error {
 	ctx, _ := context.WithCancel(context.Background())
 
 	createSQL := utils.StringsBuilder(`BEGIN
   DBMS_PARALLEL_EXECUTE.CREATE_TASK (task_name => '`, taskName, `');
 END;`)
+	_, err := e.OracleDB.ExecContext(ctx, createSQL)
+	if err != nil {
+		return fmt.Errorf("oracle DBMS_PARALLEL_EXECUTE create task failed: %v, sql: %v", err, createSQL)
+	}
+	return nil
+}
+
+func (e *Engine) StartOracleCreateChunkByRowID(taskName, schemaName, tableName string, chunkSize string) error {
+	ctx, _ := context.WithCancel(context.Background())
 
 	chunkSQL := utils.StringsBuilder(`BEGIN
   DBMS_PARALLEL_EXECUTE.CREATE_CHUNKS_BY_ROWID (task_name   => '`, taskName, `',
@@ -388,29 +407,15 @@ END;`)
                                                by_row      => TRUE,
                                                chunk_size  => `, chunkSize, `);
 END;`)
-
-	clearSQL := utils.StringsBuilder(`BEGIN
-  DBMS_PARALLEL_EXECUTE.DROP_TASK ('`, taskName, `');
-END;`)
-
-	adjustSQL := utils.StringsBuilder(`SELECT COUNT(1) COUNT FROM user_parallel_execute_chunks WHERE TASK_NAME = '`,
-		taskName, `'`)
-	_, result, err := Query(e.OracleDB, adjustSQL)
+	_, err := e.OracleDB.ExecContext(ctx, chunkSQL)
 	if err != nil {
-		return 0, err
+		return fmt.Errorf("oracle DBMS_PARALLEL_EXECUTE create_chunks_by_rowid task failed: %v, sql: %v", err, chunkSQL)
 	}
-	// 任务名不存在
-	if result[0]["COUNT"] == "0" {
-		_, err = e.OracleDB.ExecContext(ctx, createSQL)
-		if err != nil {
-			return rowCount, fmt.Errorf("oracle DBMS_PARALLEL_EXECUTE create task failed: %v, sql: %v", err, createSQL)
-		}
-	}
+	return nil
+}
 
-	_, err = e.OracleDB.ExecContext(ctx, chunkSQL)
-	if err != nil {
-		return rowCount, fmt.Errorf("oracle DBMS_PARALLEL_EXECUTE create_chunks_by_rowid task failed: %v, sql: %v", err, chunkSQL)
-	}
+func (e *Engine) GetOracleTableChunksByRowID(taskName, schemaName, tableName string, chunkSize string, globalSCN, insertBatchSize int, isPartition string) (int, error) {
+	var rowCount int
 
 	querySQL := utils.StringsBuilder(`SELECT 'SELECT * FROM `, schemaName, `.`, tableName, `WHERE ROWID BETWEEN ''' || start_rowid || ''' AND ''' || end_rowid || ''';' CMD FROM user_parallel_execute_chunks WHERE  task_name = '`, taskName, `' ORDER BY chunk_id`)
 
@@ -436,11 +441,6 @@ END;`)
 			GlobalSCN:        globalSCN,
 		}).Error; err != nil {
 			return rowCount, fmt.Errorf("gorm create table [%s.%s] full_sync_meta failed [rowids rows = 0]: %v", schemaName, tableName, err)
-		}
-
-		_, err = e.OracleDB.ExecContext(ctx, clearSQL)
-		if err != nil {
-			return rowCount, fmt.Errorf("oracle DBMS_PARALLEL_EXECUTE drop task failed: %v, sql: %v", err, clearSQL)
 		}
 
 		return rowCount, nil
@@ -480,12 +480,21 @@ END;`)
 		}
 	}
 
-	_, err = e.OracleDB.ExecContext(ctx, clearSQL)
-	if err != nil {
-		return rowCount, fmt.Errorf("oracle DBMS_PARALLEL_EXECUTE drop task failed: %v, sql: %v", err, clearSQL)
-	}
-
 	return len(res), nil
+}
+
+func (e *Engine) CloseOracleChunkTask(taskName string) error {
+	ctx, _ := context.WithCancel(context.Background())
+
+	clearSQL := utils.StringsBuilder(`BEGIN
+  DBMS_PARALLEL_EXECUTE.DROP_TASK ('`, taskName, `');
+END;`)
+
+	_, err := e.OracleDB.ExecContext(ctx, clearSQL)
+	if err != nil {
+		return fmt.Errorf("oracle DBMS_PARALLEL_EXECUTE drop task failed: %v, sql: %v", err, clearSQL)
+	}
+	return nil
 }
 
 func (e *Engine) getOracleTableRowsByStatistics(schemaName, tableName string) (int, string, error) {
