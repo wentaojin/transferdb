@@ -372,12 +372,22 @@ func (e *Engine) GetOracleTableChunksByRowID(schemaName, tableName string, chunk
 	var rowCount int
 
 	taskName := utils.StringsBuilder(schemaName, `_`, tableName, `_`, `TASK`)
+
 	ctx, _ := context.WithCancel(context.Background())
-	_, err := e.OracleDB.ExecContext(ctx, utils.StringsBuilder(`BEGIN
+
+	_, res, err := Query(e.OracleDB, utils.StringsBuilder(`SELECT NVL(STATUS,"NON-CREATED") STATUS FROM user_parallel_execute_tasks WHERE TASK_NAME='`, taskName, `'`))
+	if err != nil {
+		return 0, err
+	}
+
+	// 任务状态判断
+	if res[0]["STATUS"] == "NON-CREATED" {
+		_, err = e.OracleDB.ExecContext(ctx, utils.StringsBuilder(`BEGIN
   DBMS_PARALLEL_EXECUTE.create_task (task_name => '`, taskName, `');
 END;`))
-	if err != nil {
-		return rowCount, fmt.Errorf("oracle DBMS_PARALLEL_EXECUTE create task failed: %v", err)
+		if err != nil {
+			return rowCount, fmt.Errorf("oracle DBMS_PARALLEL_EXECUTE create task failed: %v", err)
+		}
 	}
 
 	_, err = e.OracleDB.ExecContext(ctx, utils.StringsBuilder(`BEGIN
@@ -395,7 +405,7 @@ END;`))
        end_rowid || ''';' cmd
 FROM   user_parallel_execute_chunks WHERE  task_name = '`, taskName, `' ORDER BY chunk_id`)
 
-	_, res, err := Query(e.OracleDB, sql)
+	_, res, err = Query(e.OracleDB, sql)
 	if err != nil {
 		return rowCount, err
 	}

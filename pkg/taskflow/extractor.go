@@ -182,11 +182,11 @@ func syncFullTableTaskUsingSCN(cfg *service.CfgFile, engine *service.Engine, ful
 			if err != nil {
 				return err
 			}
-			if err := engine.InitWaitAndFullSyncMetaRecord(sourceSchemaName,
+			if err = engine.InitWaitAndFullSyncMetaRecord(sourceSchemaName,
 				tbl, globalSCN, chunkSize, insertBatchSize, syncMode); err != nil {
 				return err
 			}
-			if err := syncOracleSingleTableTask(cfg, engine, tbl, syncMode); err != nil {
+			if err = syncOracleSingleTableTask(cfg, engine, tbl, syncMode); err != nil {
 				return err
 			}
 			return nil
