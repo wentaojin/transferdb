@@ -185,7 +185,7 @@ func syncFullTableTaskUsingSCN(tableSyncInfo []service.TableSyncInfo) <-chan ser
 
 }
 
-// 1、根据元数据表记录全量导出导入
+// 根据元数据表记录全量导出导入
 func syncFullTableTaskUsingCheckpoint(tableSyncInfo []service.TableSyncInfo) <-chan service.TableSyncInfo {
 	outChan := make(chan service.TableSyncInfo, len(tableSyncInfo))
 
@@ -199,7 +199,7 @@ func syncFullTableTaskUsingCheckpoint(tableSyncInfo []service.TableSyncInfo) <-c
 	return outChan
 }
 
-func syncOracleSingleTableTask(workerThreads int, tableSyncInfoChan <-chan service.TableSyncInfo) error {
+func startOracleTableConsume(workerThreads int, tableSyncInfoChan <-chan service.TableSyncInfo) error {
 
 	var group errgroup.Group
 

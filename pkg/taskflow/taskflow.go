@@ -28,8 +28,8 @@ import (
 )
 
 const (
-	FullSyncMode      = "full"
-	IncrementSyncMode = "increment"
+	FullSyncMode      = "FULL"
+	IncrementSyncMode = "INCREMENT"
 )
 
 /*
@@ -122,7 +122,9 @@ func FullSyncOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service.Engi
 	}
 
 	// 启动全量同步任务
-	syncOracleTableTaskFlow(waitSyncTableInfo, partSyncTableInfo)
+	if err = startOracleTableFullSync(cfg.FullConfig.WorkerThreads, waitSyncTableInfo, partSyncTableInfo); err != nil {
+		return err
+	}
 
 	endTime := time.Now()
 	service.Logger.Info("all full table data loader finished",
@@ -272,7 +274,9 @@ func syncOracleFullTableRecordToMySQLUsingAllMode(cfg *service.CfgFile, engine *
 	}
 
 	// 启动全量同步任务
-	syncOracleTableTaskFlow(waitSyncTableInfo, partSyncTableInfo)
+	if err = startOracleTableFullSync(cfg.FullConfig.WorkerThreads, waitSyncTableInfo, partSyncTableInfo); err != nil {
+		return err
+	}
 
 	// 全量任务结束，写入增量源数据表起始 SCN 号
 	//根据配置文件生成同步表元数据 [increment_sync_meta]
@@ -549,14 +553,18 @@ func getOracleTableIncrementRecordLogFile(engine *service.Engine, sourceSchemaNa
 /*
 	全量/增量 FUNCTION
 */
-func syncOracleTableTaskFlow(waitSyncTableInfo, partSyncTableInfo []service.TableSyncInfo) {
+func startOracleTableFullSync(workerThreads int, waitSyncTableInfo, partSyncTableInfo []service.TableSyncInfo) error {
 	if len(partSyncTableInfo) > 0 {
-		syncFullTableTaskUsingCheckpoint(partSyncTableInfo)
-
+		if err := startOracleTableConsume(workerThreads, syncFullTableTaskUsingCheckpoint(partSyncTableInfo)); err != nil {
+			return err
+		}
 	}
 	if len(waitSyncTableInfo) > 0 {
-		syncFullTableTaskUsingSCN(waitSyncTableInfo)
+		if err := startOracleTableConsume(workerThreads, syncFullTableTaskUsingSCN(waitSyncTableInfo)); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 // 从配置文件获取需要迁移同步的表列表
