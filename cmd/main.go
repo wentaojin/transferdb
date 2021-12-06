@@ -18,10 +18,10 @@ package main
 import (
 	"flag"
 	"log"
-	"net/http"
 	"os"
 
-	"github.com/arl/statsviz"
+	"github.com/go-echarts/statsview"
+	"github.com/go-echarts/statsview/viewer"
 
 	"github.com/pkg/errors"
 	"github.com/wentaojin/transferdb/service"
@@ -50,11 +50,10 @@ func main() {
 		log.Fatalf("read config file [%s] failed: %v", *conf, err)
 	}
 
-	if err = statsviz.RegisterDefault(); err != nil {
-		log.Fatal(err)
-	}
+	viewer.SetConfiguration(viewer.WithAddr(cfg.AppConfig.PprofPort))
+	viewMgr := statsview.New()
 	go func() {
-		if err = http.ListenAndServe(cfg.AppConfig.PprofPort, nil); err != nil {
+		if err = viewMgr.Start(); err != nil {
 			log.Fatal(err)
 		}
 		os.Exit(0)

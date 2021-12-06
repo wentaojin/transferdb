@@ -4,7 +4,7 @@ go 1.16
 
 require (
 	github.com/BurntSushi/toml v0.3.1
-	github.com/arl/statsviz v0.4.0
+	github.com/go-echarts/statsview v0.3.4
 	github.com/godror/godror v0.23.1
 	github.com/google/go-cmp v0.5.2 // indirect
 	github.com/jedib0t/go-pretty/v6 v6.2.4
