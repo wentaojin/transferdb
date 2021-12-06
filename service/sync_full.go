@@ -442,6 +442,9 @@ END;`)
 	if err != nil {
 		return fmt.Errorf("oracle DBMS_PARALLEL_EXECUTE create task failed: %v, sql: %v", err, createSQL)
 	}
+
+	Logger.Info("oracle table chunk task create finished",
+		zap.String("task", taskName))
 	return nil
 }
 
@@ -459,6 +462,9 @@ END;`)
 	if err != nil {
 		return fmt.Errorf("oracle DBMS_PARALLEL_EXECUTE create_chunks_by_rowid task failed: %v, sql: %v", err, chunkSQL)
 	}
+
+	Logger.Info("oracle table create chunks by rowid finished",
+		zap.String("task", taskName))
 	return nil
 }
 
@@ -490,6 +496,9 @@ func (e *Engine) GetOracleTableChunksByRowID(taskName, schemaName, tableName str
 		}).Error; err != nil {
 			return rowCount, fmt.Errorf("gorm create table [%s.%s] full_sync_meta failed [rowids rows = 0]: %v", schemaName, tableName, err)
 		}
+
+		Logger.Info("oracle table get chunks sql by rowid finished",
+			zap.String("task", taskName))
 
 		return rowCount, nil
 	}
@@ -542,6 +551,9 @@ END;`)
 	if err != nil {
 		return fmt.Errorf("oracle DBMS_PARALLEL_EXECUTE drop task failed: %v, sql: %v", err, clearSQL)
 	}
+
+	Logger.Info("oracle table close chunks task  finished",
+		zap.String("task", taskName))
 	return nil
 }
 

@@ -127,7 +127,7 @@ func FullSyncOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service.Engi
 	}
 
 	endTime := time.Now()
-	service.Logger.Info("all full table data loader finished",
+	service.Logger.Info("all full table data sync finished",
 		zap.String("schema", cfg.SourceConfig.SchemaName),
 		zap.String("cost", endTime.Sub(startTime).String()))
 	return nil
