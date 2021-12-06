@@ -18,15 +18,16 @@ package main
 import (
 	"flag"
 	"log"
-	"net/http"
-	_ "net/http/pprof"
 	"os"
+
+	"github.com/go-echarts/statsview/viewer"
 
 	"github.com/pkg/errors"
 	"github.com/wentaojin/transferdb/service"
 
 	"github.com/wentaojin/transferdb/pkg/signal"
 
+	"github.com/go-echarts/statsview"
 	"github.com/wentaojin/transferdb/server"
 	"go.uber.org/zap"
 )
@@ -50,7 +51,9 @@ func main() {
 	}
 
 	go func() {
-		if err = http.ListenAndServe(cfg.AppConfig.PprofPort, nil); err != nil {
+		viewer.SetConfiguration(viewer.WithAddr(cfg.AppConfig.PprofPort))
+		viewMgr := statsview.New()
+		if err = viewMgr.Start(); err != nil {
 			log.Fatal(err)
 		}
 		os.Exit(0)
