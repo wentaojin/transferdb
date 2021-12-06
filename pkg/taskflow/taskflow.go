@@ -28,8 +28,8 @@ import (
 )
 
 const (
-	FullSyncMode      = "FULL"
-	IncrementSyncMode = "INCREMENT"
+	FullSyncMode = "FULL"
+	ALLSyncMode  = "ALL"
 )
 
 /*
@@ -89,12 +89,12 @@ func FullSyncOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service.Engi
 	}
 
 	// 获取等待同步以及未同步完成的表列表
-	waitSyncTableMetas, waitSyncTableInfo, err := engine.GetWaitSyncTableMetaRecord(cfg, FullSyncMode)
+	waitSyncTableMetas, waitSyncTableInfo, err := engine.GetWaitSyncTableMetaRecord(cfg.SourceConfig.SchemaName, FullSyncMode)
 	if err != nil {
 		return err
 	}
 
-	partSyncTableMetas, partSyncTableInfo, err := engine.GetPartSyncTableMetaRecord(cfg, FullSyncMode)
+	partSyncTableMetas, partSyncTableInfo, err := engine.GetPartSyncTableMetaRecord(cfg.SourceConfig.SchemaName, FullSyncMode)
 	if err != nil {
 		return err
 	}
@@ -122,7 +122,7 @@ func FullSyncOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service.Engi
 	}
 
 	// 启动全量同步任务
-	if err = startOracleTableFullSync(cfg.FullConfig.WorkerThreads, waitSyncTableInfo, partSyncTableInfo); err != nil {
+	if err = startOracleTableFullSync(cfg, engine, waitSyncTableInfo, partSyncTableInfo, FullSyncMode); err != nil {
 		return err
 	}
 
@@ -156,7 +156,7 @@ func IncrementSyncOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service
 		// 配置文件获取表列表等于元数据库表列表，直接增量数据同步
 		if len(existTableList) == len(transferTableSlice) {
 			// 判断表全量是否完成
-			panicTables, err := engine.IsFinishFullSyncMetaRecord(cfg.SourceConfig.SchemaName, transferTableSlice, IncrementSyncMode)
+			panicTables, err := engine.IsFinishFullSyncMetaRecord(cfg.SourceConfig.SchemaName, transferTableSlice, ALLSyncMode)
 			if err != nil {
 				return err
 			}
@@ -179,12 +179,12 @@ func IncrementSyncOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service
 	// 如果下游数据库增量元数据表 increment_sync_meta 不存在任何记录，说明未进行过数据同步，则进行全量 + 增量数据同步
 	if len(existTableList) == 0 && len(isNotExistTableList) == len(transferTableSlice) {
 		// 全量同步
-		if err := syncOracleFullTableRecordToMySQLUsingAllMode(cfg, engine, transferTableSlice, IncrementSyncMode); err != nil {
+		if err = syncOracleFullTableRecordToMySQLUsingAllMode(cfg, engine, transferTableSlice, ALLSyncMode); err != nil {
 			return err
 		}
 		// 增量数据同步
 		for range time.Tick(300 * time.Millisecond) {
-			if err := syncOracleTableIncrementRecordToMySQLUsingAllMode(cfg, engine); err != nil {
+			if err = syncOracleTableIncrementRecordToMySQLUsingAllMode(cfg, engine); err != nil {
 				return err
 			}
 		}
@@ -228,12 +228,12 @@ func syncOracleFullTableRecordToMySQLUsingAllMode(cfg *service.CfgFile, engine *
 				return err
 			}
 			// 判断并记录待同步表列表
-			isExist, err := engine.IsExistWaitSyncTableMetaRecord(cfg.SourceConfig.SchemaName, tableName, FullSyncMode)
+			isExist, err := engine.IsExistWaitSyncTableMetaRecord(cfg.SourceConfig.SchemaName, tableName, syncMode)
 			if err != nil {
 				return err
 			}
 			if !isExist {
-				if err := engine.InitWaitSyncTableMetaRecord(cfg.SourceConfig.SchemaName, []string{tableName}, FullSyncMode); err != nil {
+				if err := engine.InitWaitSyncTableMetaRecord(cfg.SourceConfig.SchemaName, []string{tableName}, syncMode); err != nil {
 					return err
 				}
 			}
@@ -241,12 +241,12 @@ func syncOracleFullTableRecordToMySQLUsingAllMode(cfg *service.CfgFile, engine *
 	}
 
 	// 获取等待同步以及未同步完成的表列表
-	waitSyncTableMetas, waitSyncTableInfo, err := engine.GetWaitSyncTableMetaRecord(cfg, syncMode)
+	waitSyncTableMetas, waitSyncTableInfo, err := engine.GetWaitSyncTableMetaRecord(cfg.SourceConfig.SchemaName, syncMode)
 	if err != nil {
 		return err
 	}
 
-	partSyncTableMetas, partSyncTableInfo, err := engine.GetPartSyncTableMetaRecord(cfg, syncMode)
+	partSyncTableMetas, partSyncTableInfo, err := engine.GetPartSyncTableMetaRecord(cfg.SourceConfig.SchemaName, syncMode)
 	if err != nil {
 		return err
 	}
@@ -274,7 +274,7 @@ func syncOracleFullTableRecordToMySQLUsingAllMode(cfg *service.CfgFile, engine *
 	}
 
 	// 启动全量同步任务
-	if err = startOracleTableFullSync(cfg.FullConfig.WorkerThreads, waitSyncTableInfo, partSyncTableInfo); err != nil {
+	if err = startOracleTableFullSync(cfg, engine, waitSyncTableInfo, partSyncTableInfo, syncMode); err != nil {
 		return err
 	}
 
@@ -553,14 +553,14 @@ func getOracleTableIncrementRecordLogFile(engine *service.Engine, sourceSchemaNa
 /*
 	全量/增量 FUNCTION
 */
-func startOracleTableFullSync(workerThreads int, waitSyncTableInfo, partSyncTableInfo []service.TableSyncInfo) error {
+func startOracleTableFullSync(cfg *service.CfgFile, engine *service.Engine, waitSyncTableInfo, partSyncTableInfo []string, syncMode string) error {
 	if len(partSyncTableInfo) > 0 {
-		if err := startOracleTableConsume(workerThreads, syncFullTableTaskUsingCheckpoint(partSyncTableInfo)); err != nil {
+		if err := startOracleTableConsumeByCheckpoint(cfg, engine, partSyncTableInfo, syncMode); err != nil {
 			return err
 		}
 	}
 	if len(waitSyncTableInfo) > 0 {
-		if err := startOracleTableConsume(workerThreads, syncFullTableTaskUsingSCN(waitSyncTableInfo)); err != nil {
+		if err := startOracleTableConsumeBySCN(cfg, engine, waitSyncTableInfo, syncMode); err != nil {
 			return err
 		}
 	}

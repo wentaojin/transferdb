@@ -33,9 +33,9 @@ import (
 // 转换表数据 -> 全量任务
 func translatorTableFullRecord(
 	targetSchemaName, targetTableName string,
-	columns []string, rowsResult []string, translatorBufferSize, insertBatchSize int, safeMode bool) <-chan string {
+	columns []string, rowsResult []string, bufferSize, insertBatchSize int, safeMode bool) <-chan string {
 	startTime := time.Now()
-	sqlChan := make(chan string, translatorBufferSize)
+	sqlChan := make(chan string, bufferSize)
 	rowCounts := len(rowsResult)
 	service.Logger.Info("single full table data translator start",
 		zap.String("schema", targetSchemaName),

@@ -299,81 +299,40 @@ func (e *Engine) IsFinishFullSyncMetaRecord(schemaName string, transferTableSlic
 /*
 	获取全量待同步表信息
 */
-type TableSyncInfo struct {
-	SourceSchemaName string
-	SourceTableName  string
-	ChunkSize        int
-	InsertBatchSize  int
-	SyncMode         string
-	IsCheckpoint     bool
-	TableThreads     int
-	BufferSize       int
-	ApplyThreads     int
-	TargetSchemaName string
-	MetaSchemaName   string
-	Engine           *Engine
-}
-
-func (e *Engine) GetPartSyncTableMetaRecord(cfg *CfgFile, syncMode string) ([]WaitSyncMeta, []TableSyncInfo, error) {
+func (e *Engine) GetPartSyncTableMetaRecord(sourceSchema, syncMode string) ([]WaitSyncMeta, []string, error) {
 	var (
 		tableMetas []WaitSyncMeta
-		tableInfo  []TableSyncInfo
+		tableInfo  []string
 	)
 
 	if err := e.GormDB.Where("source_schema_name = ? AND full_global_scn > -1 AND full_split_times > 0 and sync_mode = ?",
-		strings.ToUpper(cfg.SourceConfig.SchemaName),
+		strings.ToUpper(sourceSchema),
 		syncMode).Find(&tableMetas).Error; err != nil {
 		return tableMetas, tableInfo, err
 	}
 
 	if len(tableMetas) > 0 {
 		for _, table := range tableMetas {
-			tableInfo = append(tableInfo, TableSyncInfo{
-				SourceSchemaName: strings.ToUpper(cfg.SourceConfig.SchemaName),
-				SourceTableName:  strings.ToUpper(table.SourceTableName),
-				ChunkSize:        cfg.FullConfig.ChunkSize,
-				InsertBatchSize:  cfg.AppConfig.InsertBatchSize,
-				IsCheckpoint:     true, // Checkpoint 同步
-				SyncMode:         syncMode,
-				TableThreads:     cfg.FullConfig.TableThreads,
-				Engine:           e,
-				BufferSize:       cfg.FullConfig.BufferSize,
-				ApplyThreads:     cfg.FullConfig.ApplyThreads,
-				TargetSchemaName: cfg.TargetConfig.SchemaName,
-				MetaSchemaName:   cfg.TargetConfig.MetaSchema,
-			})
+			tableInfo = append(tableInfo, strings.ToUpper(table.SourceTableName))
 		}
 	}
 	return tableMetas, tableInfo, nil
 }
 
-func (e *Engine) GetWaitSyncTableMetaRecord(cfg *CfgFile, syncMode string) ([]WaitSyncMeta, []TableSyncInfo, error) {
+func (e *Engine) GetWaitSyncTableMetaRecord(sourceSchema, syncMode string) ([]WaitSyncMeta, []string, error) {
 	var (
 		tableMetas []WaitSyncMeta
-		tableInfo  []TableSyncInfo
+		tableInfo  []string
 	)
 
 	if err := e.GormDB.Where("source_schema_name = ? AND full_global_scn = -1 AND full_split_times = -1 and sync_mode = ?",
-		strings.ToUpper(cfg.SourceConfig.SchemaName), syncMode).Find(&tableMetas).Error; err != nil {
+		strings.ToUpper(sourceSchema), syncMode).Find(&tableMetas).Error; err != nil {
 		return tableMetas, tableInfo, err
 	}
 
 	if len(tableMetas) > 0 {
 		for _, table := range tableMetas {
-			tableInfo = append(tableInfo, TableSyncInfo{
-				SourceSchemaName: strings.ToUpper(cfg.SourceConfig.SchemaName),
-				SourceTableName:  strings.ToUpper(table.SourceTableName),
-				ChunkSize:        cfg.FullConfig.ChunkSize,
-				InsertBatchSize:  cfg.AppConfig.InsertBatchSize,
-				IsCheckpoint:     false, // SCN 同步
-				SyncMode:         syncMode,
-				TableThreads:     cfg.FullConfig.TableThreads,
-				Engine:           e,
-				BufferSize:       cfg.FullConfig.BufferSize,
-				ApplyThreads:     cfg.FullConfig.ApplyThreads,
-				TargetSchemaName: cfg.TargetConfig.SchemaName,
-				MetaSchemaName:   cfg.TargetConfig.MetaSchema,
-			})
+			tableInfo = append(tableInfo, strings.ToUpper(table.SourceTableName))
 		}
 	}
 	return tableMetas, tableInfo, nil

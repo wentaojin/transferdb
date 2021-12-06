@@ -43,7 +43,7 @@ func applierTableFullRecord(targetSchemaName, targetTableName string, workerThre
 			for sql := range sqlChan {
 				_, err := engine.MysqlDB.Exec(sql)
 				if err != nil {
-					return fmt.Errorf("single full table data bulk insert mysql [%s] falied: %v", sql, err)
+					return fmt.Errorf("single full table [%s.%s] data bulk insert mysql [%s] falied: %v", targetSchemaName, targetTableName, sql, err)
 				}
 			}
 			return nil
