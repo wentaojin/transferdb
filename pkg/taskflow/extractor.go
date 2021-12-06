@@ -217,7 +217,7 @@ func startOracleTableConsume(workerThreads int, tableSyncInfoChan <-chan service
 						return err
 					}
 					if err = table.Engine.InitWaitAndFullSyncMetaRecord(table.SourceSchemaName,
-						table.SourceTableName, globalSCN, table.ChunkSize, table.InsertBatchSize, table.SyncMode); err != nil {
+						table.SourceTableName, i, globalSCN, table.ChunkSize, table.InsertBatchSize, table.SyncMode); err != nil {
 						return err
 					}
 
