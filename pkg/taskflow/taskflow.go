@@ -601,3 +601,8 @@ func getTransferTableSliceByCfg(cfg *service.CfgFile, engine *service.Engine) ([
 
 	return exporterTableSlice, nil
 }
+
+// 分支测试
+func test() {
+
+}
