@@ -20,6 +20,8 @@ import (
 	"log"
 	"os"
 
+	"github.com/wentaojin/transferdb/utils"
+
 	"github.com/go-echarts/statsview"
 	"github.com/go-echarts/statsview/viewer"
 
@@ -50,11 +52,15 @@ func main() {
 		log.Fatalf("read config file [%s] failed: %v", *conf, err)
 	}
 
-	viewer.SetConfiguration(viewer.WithAddr(cfg.AppConfig.PprofPort))
-	viewMgr := statsview.New()
 	go func() {
+		addr, err := utils.GetOutBoundIP(cfg.AppConfig.PprofPort)
+		if err != nil {
+			service.Logger.Fatal("get outbound ip failed", zap.Error(errors.Cause(err)))
+		}
+		viewer.SetConfiguration(viewer.WithAddr(cfg.AppConfig.PprofPort), viewer.WithLinkAddr(addr))
+		viewMgr := statsview.New()
 		if err = viewMgr.Start(); err != nil {
-			log.Fatal(err)
+			service.Logger.Fatal("stats view start failed", zap.Error(errors.Cause(err)))
 		}
 		os.Exit(0)
 	}()

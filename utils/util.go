@@ -16,7 +16,9 @@ limitations under the License.
 package utils
 
 import (
+	"net"
 	"reflect"
+	"strings"
 )
 
 // 数组拆分
@@ -178,4 +180,15 @@ func DiffStructArray(structA, structB interface{}) ([]interface{}, []interface{}
 		return addDiffs, removeDiffs, true
 	}
 	return addDiffs, removeDiffs, false
+}
+
+// 获取本机 IP
+func GetOutBoundIP(pprofPort string) (string, error) {
+	conn, err := net.Dial("udp", "8.8.8.8:53")
+	if err != nil {
+		return "", err
+	}
+	localAddr := conn.LocalAddr().(*net.UDPAddr)
+
+	return StringsBuilder(strings.Split(localAddr.String(), ":")[0], pprofPort), nil
 }
