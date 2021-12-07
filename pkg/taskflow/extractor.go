@@ -175,7 +175,7 @@ func startOracleTableConsumeBySCN(cfg *service.CfgFile, engine *service.Engine, 
 	for idx, tbl := range waitSyncTableInfo {
 		table := tbl
 		seq := idx
-		wp.DoWait(func() error {
+		wp.Do(func() error {
 			startTime := time.Now()
 			service.Logger.Info("single full table init scn start",
 				zap.String("schema", cfg.SourceConfig.SchemaName),

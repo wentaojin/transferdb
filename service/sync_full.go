@@ -193,7 +193,7 @@ func (e *Engine) InitWaitAndFullSyncMetaRecord(schemaName, tableName string, wor
 		return err
 	}
 
-	rowCounts, err := e.GetOracleTableChunksByRowID(taskName, strings.ToUpper(schemaName), strings.ToUpper(tableName), strconv.Itoa(chunkSize), globalSCN, insertBatchSize, isPartition)
+	rowCounts, err := e.GetOracleTableChunksByRowID(taskName, strings.ToUpper(schemaName), strings.ToUpper(tableName), globalSCN, insertBatchSize, isPartition)
 	if err != nil {
 		return err
 	}
@@ -392,12 +392,22 @@ func (e *Engine) GetOracleTableRecordByRowIDSQL(sql string) ([]string, []string,
 }
 
 func (e *Engine) StartOracleChunkCreateTask(taskName string) error {
-	ctx, _ := context.WithCancel(context.Background())
+	querySQL := utils.StringsBuilder(`SELECT COUNT(1) COUNT FROM user_parallel_execute_chunks WHERE TASK_NAME='`, taskName, `'`)
+	_, res, err := Query(e.OracleDB, querySQL)
+	if err != nil {
+		return err
+	}
+	if res[0]["COUNT"] != "0" {
+		if err = e.CloseOracleChunkTask(taskName); err != nil {
+			return err
+		}
+	}
 
+	ctx, _ := context.WithCancel(context.Background())
 	createSQL := utils.StringsBuilder(`BEGIN
   DBMS_PARALLEL_EXECUTE.CREATE_TASK (task_name => '`, taskName, `');
 END;`)
-	_, err := e.OracleDB.ExecContext(ctx, createSQL)
+	_, err = e.OracleDB.ExecContext(ctx, createSQL)
 	if err != nil {
 		return fmt.Errorf("oracle DBMS_PARALLEL_EXECUTE create task failed: %v, sql: %v", err, createSQL)
 	}
@@ -421,7 +431,7 @@ END;`)
 	return nil
 }
 
-func (e *Engine) GetOracleTableChunksByRowID(taskName, schemaName, tableName string, chunkSize string, globalSCN, insertBatchSize int, isPartition string) (int, error) {
+func (e *Engine) GetOracleTableChunksByRowID(taskName, schemaName, tableName string, globalSCN, insertBatchSize int, isPartition string) (int, error) {
 	var rowCount int
 
 	querySQL := utils.StringsBuilder(`SELECT 'SELECT * FROM `, schemaName, `.`, tableName, ` WHERE ROWID BETWEEN ''' || start_rowid || ''' AND ''' || end_rowid || '''' CMD FROM user_parallel_execute_chunks WHERE  task_name = '`, taskName, `' ORDER BY chunk_id`)
