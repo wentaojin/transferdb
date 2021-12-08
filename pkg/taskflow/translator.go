@@ -32,21 +32,25 @@ import (
 // INSERT INTO 语句替换成 REPLACE INTO 语句
 // 转换表数据 -> 全量任务
 func translatorTableFullRecord(
-	targetSchemaName, targetTableName string,
+	targetSchemaName, targetTableName, rowidSQL string,
 	columns []string, rowsResult []string, bufferSize, insertBatchSize int, safeMode bool) <-chan string {
 	startTime := time.Now()
 	sqlChan := make(chan string, bufferSize)
 	rowCounts := len(rowsResult)
-	service.Logger.Info("single full table data translator start",
-		zap.String("schema", targetSchemaName),
-		zap.String("table", targetTableName),
-		zap.Int("rows", rowCounts),
-		zap.Int("insert batch size", insertBatchSize),
-		zap.Bool("safe mode", safeMode))
 
 	sqlPrefix := generateMySQLPrepareInsertSQLStatement(targetSchemaName, targetTableName, columns, safeMode)
 
 	if rowCounts <= insertBatchSize {
+		endTime := time.Now()
+		service.Logger.Info("single full table rowid data translator",
+			zap.String("schema", targetSchemaName),
+			zap.String("table", targetTableName),
+			zap.String("rowid sql", rowidSQL),
+			zap.Int("rowid rows", rowCounts),
+			zap.Int("insert batch size", insertBatchSize),
+			zap.Int("split sql nums", 1),
+			zap.Bool("write safe mode", safeMode),
+			zap.String("cost", endTime.Sub(startTime).String()))
 		go func() {
 			sqlChan <- utils.StringsBuilder(sqlPrefix, " ", strings.Join(rowsResult, ","))
 			close(sqlChan)
@@ -56,6 +60,16 @@ func translatorTableFullRecord(
 		// 向上取整，多切 batch，防止数据丢失
 		splitsNums := math.Ceil(float64(rowCounts) / float64(insertBatchSize))
 		multiBatchRows := utils.SplitMultipleStringSlice(rowsResult, int64(splitsNums))
+		endTime := time.Now()
+		service.Logger.Info("single full table rowid data translator",
+			zap.String("schema", targetSchemaName),
+			zap.String("table", targetTableName),
+			zap.String("rowid sql", rowidSQL),
+			zap.Int("rowid rows", rowCounts),
+			zap.Int("insert batch size", insertBatchSize),
+			zap.Int("split sql nums", len(multiBatchRows)),
+			zap.Bool("write safe mode", safeMode),
+			zap.String("cost", endTime.Sub(startTime).String()))
 
 		go func() {
 			for _, batchRows := range multiBatchRows {
@@ -64,14 +78,6 @@ func translatorTableFullRecord(
 			close(sqlChan)
 		}()
 	}
-	endTime := time.Now()
-	service.Logger.Info("single full table data translator finished",
-		zap.String("schema", targetSchemaName),
-		zap.String("table", targetTableName),
-		zap.Int("rows", rowCounts),
-		zap.Int("insert batch size", insertBatchSize),
-		zap.Bool("safe mode", safeMode),
-		zap.String("cost", endTime.Sub(startTime).String()))
 
 	return sqlChan
 }

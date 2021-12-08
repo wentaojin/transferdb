@@ -85,11 +85,6 @@ func (e *Engine) ModifyWaitAndFullSyncTableMetaRecord(metaSchemaName, sourceSche
 				`clear mysql meta schema [%s] table [full_sync_meta] reocrd with source table [%s] failed: %v`,
 				metaSchemaName, sourceTableName, err.Error())
 		}
-		Logger.Info("clear mysql meta",
-			zap.String("schema", sourceSchemaName),
-			zap.String("table", sourceTableName),
-			zap.String("sql", rowidSQL),
-			zap.String("status", "success"))
 
 		if err := tx.Model(&WaitSyncMeta{}).
 			Where(`source_schema_name = ? AND source_table_name= ? AND sync_mode = ?`,
@@ -104,6 +99,12 @@ func (e *Engine) ModifyWaitAndFullSyncTableMetaRecord(metaSchemaName, sourceSche
 	}); err != nil {
 		return err
 	}
+
+	Logger.Info("clear and update mysql meta",
+		zap.String("schema", sourceSchemaName),
+		zap.String("table", sourceTableName),
+		zap.String("sql", rowidSQL),
+		zap.String("status", "success"))
 
 	return nil
 }
@@ -131,7 +132,7 @@ func (e *Engine) DeleteWaitSyncTableMetaRecord(metaSchemaName, sourceSchemaName,
 	Logger.Info("delete table record",
 		zap.String("schema", metaSchemaName),
 		zap.String("table", "wait_sync_meta"),
-		zap.String("record", fmt.Sprintf("%s.%s", sourceSchemaName, sourceTableName)),
+		zap.String("sync mode", syncMode),
 		zap.String("status", "success"))
 	return nil
 }

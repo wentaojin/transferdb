@@ -39,7 +39,7 @@ func extractorTableFullRecord(engine *service.Engine, sourceSchemaName, sourceTa
 	}
 
 	endTime := time.Now()
-	service.Logger.Info("single full table data extractor finished",
+	service.Logger.Info("single full table rowid data extractor finished",
 		zap.String("schema", sourceSchemaName),
 		zap.String("table", sourceTableName),
 		zap.String("rowid sql", oracleQuery),
@@ -236,7 +236,7 @@ func startOracleTableConsumeByCheckpoint(cfg *service.CfgFile, engine *service.E
 
 func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceTableName, syncMode string) error {
 	startTime := time.Now()
-	service.Logger.Info("single full table data loader start",
+	service.Logger.Info("single full table data sync start",
 		zap.String("schema", cfg.SourceConfig.SchemaName),
 		zap.String("table", sourceTableName))
 
@@ -269,10 +269,11 @@ func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceT
 			}
 
 			// 转换/应用 Oracle 数据 -> MySQL
-			if err = applierTableFullRecord(cfg.TargetConfig.SchemaName, sourceTableName, cfg.FullConfig.ApplyThreads, engine,
+			if err = applierTableFullRecord(cfg.TargetConfig.SchemaName, sourceTableName, sql, cfg.FullConfig.ApplyThreads, engine,
 				translatorTableFullRecord(
 					cfg.TargetConfig.SchemaName,
 					sourceTableName,
+					sql,
 					columns,
 					rowsResult,
 					cfg.FullConfig.BufferSize,

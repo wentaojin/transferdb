@@ -100,7 +100,7 @@ func FullSyncOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service.Engi
 	}
 	if len(waitSyncTableMetas) == 0 && len(partSyncTableMetas) == 0 {
 		endTime := time.Now()
-		service.Logger.Info("all full table data loader finished",
+		service.Logger.Info("all full table data sync finished",
 			zap.String("schema", cfg.SourceConfig.SchemaName),
 			zap.String("cost", endTime.Sub(startTime).String()))
 		return nil
@@ -600,9 +600,4 @@ func getTransferTableSliceByCfg(cfg *service.CfgFile, engine *service.Engine) ([
 	}
 
 	return exporterTableSlice, nil
-}
-
-// 分支测试
-func test() {
-
 }

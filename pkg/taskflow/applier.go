@@ -30,11 +30,12 @@ import (
 )
 
 // 表数据应用 -> 全量任务
-func applierTableFullRecord(targetSchemaName, targetTableName string, workerThreads int, engine *service.Engine, sqlChan <-chan string) error {
+func applierTableFullRecord(targetSchemaName, targetTableName, rowidSQL string, workerThreads int, engine *service.Engine, sqlChan <-chan string) error {
 	startTime := time.Now()
-	service.Logger.Info("single full table data applier start",
+	service.Logger.Info("single full table rowid data applier start",
 		zap.String("schema", targetSchemaName),
-		zap.String("table", targetTableName))
+		zap.String("table", targetTableName),
+		zap.String("rowid sql", rowidSQL))
 
 	var group errgroup.Group
 
@@ -53,7 +54,8 @@ func applierTableFullRecord(targetSchemaName, targetTableName string, workerThre
 	if err := group.Wait(); err != nil {
 		service.Logger.Error("single full table data applier error",
 			zap.String("schema", targetSchemaName),
-			zap.String("table", targetTableName))
+			zap.String("table", targetTableName),
+			zap.String("rowid sql", rowidSQL))
 		return fmt.Errorf("full table data concurrency bulk insert mysql falied: %v", err)
 	}
 
@@ -61,6 +63,7 @@ func applierTableFullRecord(targetSchemaName, targetTableName string, workerThre
 	service.Logger.Info("single full table data applier finished",
 		zap.String("schema", targetSchemaName),
 		zap.String("table", targetTableName),
+		zap.String("rowid sql", rowidSQL),
 		zap.String("cost", endTime.Sub(startTime).String()))
 	return nil
 }
