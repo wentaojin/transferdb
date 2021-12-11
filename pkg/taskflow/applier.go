@@ -30,19 +30,25 @@ import (
 )
 
 // 表数据应用 -> 全量任务
-func applierTableFullRecord(targetSchemaName, targetTableName, rowidSQL string, workerThreads int, engine *service.Engine, sqlChan <-chan string) error {
+func applierTableFullRecord(targetSchemaName, targetTableName, rowidSQL, prepareSQL string, workerThreads int, engine *service.Engine, sqlChan <-chan string) error {
 	startTime := time.Now()
 	service.Logger.Info("single full table rowid data applier start",
 		zap.String("schema", targetSchemaName),
 		zap.String("table", targetTableName),
 		zap.String("rowid sql", rowidSQL))
 
+	stmt, err := engine.MysqlDB.Prepare(prepareSQL)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
 	var group errgroup.Group
 
 	for i := 0; i < workerThreads; i++ {
 		group.Go(func() error {
 			for sql := range sqlChan {
-				_, err := engine.MysqlDB.Exec(sql)
+				_, err = stmt.Exec(sql)
 				if err != nil {
 					return fmt.Errorf("single full table [%s.%s] data bulk insert mysql [%s] falied: %v", targetSchemaName, targetTableName, sql, err)
 				}
@@ -51,7 +57,7 @@ func applierTableFullRecord(targetSchemaName, targetTableName, rowidSQL string, 
 		})
 	}
 
-	if err := group.Wait(); err != nil {
+	if err = group.Wait(); err != nil {
 		service.Logger.Error("single full table data applier error",
 			zap.String("schema", targetSchemaName),
 			zap.String("table", targetTableName),

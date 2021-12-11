@@ -21,6 +21,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/thinkeridea/go-extend/exstrings"
+
 	"github.com/wentaojin/transferdb/utils"
 
 	"github.com/wentaojin/transferdb/service"
@@ -33,12 +35,14 @@ import (
 // 转换表数据 -> 全量任务
 func translatorTableFullRecord(
 	targetSchemaName, targetTableName, rowidSQL string,
-	columns []string, rowsResult []string, bufferSize, insertBatchSize int, safeMode bool) <-chan string {
+	columns []string, rowsResult []string, bufferSize, insertBatchSize int, safeMode bool) (<-chan string, string) {
 	startTime := time.Now()
 	sqlChan := make(chan string, bufferSize)
 	rowCounts := len(rowsResult)
 
-	sqlPrefix := generateMySQLPrepareInsertSQLStatement(targetSchemaName, targetTableName, columns, safeMode)
+	sqlPrefix := generateMySQLInsertSQLStatementPrefix(targetSchemaName, targetTableName, columns, safeMode)
+
+	var prepareSQL string
 
 	if rowCounts <= insertBatchSize {
 		endTime := time.Now()
@@ -51,10 +55,9 @@ func translatorTableFullRecord(
 			zap.Int("split sql nums", 1),
 			zap.Bool("write safe mode", safeMode),
 			zap.String("cost", endTime.Sub(startTime).String()))
-		go func() {
-			sqlChan <- utils.StringsBuilder(sqlPrefix, " ", strings.Join(rowsResult, ","))
-			close(sqlChan)
-		}()
+
+		prepareSQL = utils.StringsBuilder(sqlPrefix, " ", generateMySQLPrepareBindVarStatement(len(columns), rowCounts))
+		sqlChan <- utils.StringsBuilder(sqlPrefix, " ", exstrings.Join(rowsResult, ","))
 	} else {
 		// 数据行按照 batch 拼接拆分
 		// 向上取整，多切 batch，防止数据丢失
@@ -71,28 +74,47 @@ func translatorTableFullRecord(
 			zap.Bool("write safe mode", safeMode),
 			zap.String("cost", endTime.Sub(startTime).String()))
 
-		go func() {
-			for _, batchRows := range multiBatchRows {
-				sqlChan <- utils.StringsBuilder(sqlPrefix, " ", strings.Join(batchRows, ","))
-			}
-			close(sqlChan)
-		}()
+		prepareSQL = utils.StringsBuilder(sqlPrefix, " ", generateMySQLPrepareBindVarStatement(len(columns), insertBatchSize))
+		for _, batchRows := range multiBatchRows {
+			sqlChan <- utils.StringsBuilder(sqlPrefix, " ", exstrings.Join(batchRows, ","))
+		}
 	}
 
-	return sqlChan
+	close(sqlChan)
+
+	return sqlChan, prepareSQL
 }
 
-// 拼接 SQL 语句
-func generateMySQLPrepareInsertSQLStatement(targetSchemaName, targetTableName string, columns []string, safeMode bool) string {
-	var prepareSQL string
+// SQL Prefix 语句
+func generateMySQLInsertSQLStatementPrefix(targetSchemaName, targetTableName string, columns []string, safeMode bool) string {
+	var prefixSQL string
 	column := utils.StringsBuilder("(", strings.Join(columns, ","), ")")
 	if safeMode {
-		prepareSQL = utils.StringsBuilder(`REPLACE INTO `, targetSchemaName, ".", targetTableName, column, ` VALUES `)
+		prefixSQL = utils.StringsBuilder(`REPLACE INTO `, targetSchemaName, ".", targetTableName, column, ` VALUES `)
 
 	} else {
-		prepareSQL = utils.StringsBuilder(`INSERT INTO `, targetSchemaName, ".", targetTableName, column, ` VALUES `)
+		prefixSQL = utils.StringsBuilder(`INSERT INTO `, targetSchemaName, ".", targetTableName, column, ` VALUES `)
 	}
-	return prepareSQL
+	return prefixSQL
+}
+
+// SQL Prepare 语句
+func generateMySQLPrepareBindVarStatement(columns, bindVarBatch int) string {
+	var (
+		bindVars []string
+		bindVar  []string
+	)
+
+	for i := 0; i < columns; i++ {
+		bindVar = append(bindVar, "?")
+	}
+
+	singleBindVar := utils.StringsBuilder("(", exstrings.Join(bindVar, ","), ")")
+	for i := 0; i < bindVarBatch; i++ {
+		bindVars = append(bindVars, singleBindVar)
+	}
+
+	return exstrings.Join(bindVars, ",")
 }
 
 // 替换 Oracle 事务 SQL
