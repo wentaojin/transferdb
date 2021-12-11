@@ -269,18 +269,11 @@ func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceT
 			}
 
 			// 转换/应用 Oracle 数据 -> MySQL
-			sqlChan, prepareSQL := translatorTableFullRecord(
-				cfg.TargetConfig.SchemaName,
-				sourceTableName,
-				sql,
-				columns,
-				rowsResult,
-				cfg.FullConfig.BufferSize,
-				cfg.AppConfig.InsertBatchSize,
-				true)
+			sqlArray, prepareSQL := translatorTableFullRecord(cfg.TargetConfig.SchemaName, sourceTableName,
+				sql, columns, rowsResult, cfg.AppConfig.InsertBatchSize, true)
 
 			if err = applierTableFullRecord(cfg.TargetConfig.SchemaName,
-				sourceTableName, sql, prepareSQL, cfg.FullConfig.ApplyThreads, engine, sqlChan); err != nil {
+				sourceTableName, sql, prepareSQL, cfg.FullConfig.ApplyThreads, engine, sqlArray); err != nil {
 				return err
 			}
 

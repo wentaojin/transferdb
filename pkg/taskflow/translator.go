@@ -35,14 +35,23 @@ import (
 // 转换表数据 -> 全量任务
 func translatorTableFullRecord(
 	targetSchemaName, targetTableName, rowidSQL string,
-	columns []string, rowsResult []string, bufferSize, insertBatchSize int, safeMode bool) (<-chan string, string) {
+	columns []string, rowsResult []string, insertBatchSize int, safeMode bool) ([]string, string) {
 	startTime := time.Now()
-	sqlChan := make(chan string, bufferSize)
 	rowCounts := len(rowsResult)
+	columnCounts := len(columns)
+
+	service.Logger.Info("single full table rowid data translator start",
+		zap.String("schema", targetSchemaName),
+		zap.String("table", targetTableName),
+		zap.String("rowid sql", rowidSQL),
+		zap.Int("rowid rows", rowCounts))
 
 	sqlPrefix := generateMySQLInsertSQLStatementPrefix(targetSchemaName, targetTableName, columns, safeMode)
 
-	var prepareSQL string
+	var (
+		prepareSQL string
+		sqlArray   []string
+	)
 
 	if rowCounts <= insertBatchSize {
 		endTime := time.Now()
@@ -56,8 +65,8 @@ func translatorTableFullRecord(
 			zap.Bool("write safe mode", safeMode),
 			zap.String("cost", endTime.Sub(startTime).String()))
 
-		prepareSQL = utils.StringsBuilder(sqlPrefix, " ", generateMySQLPrepareBindVarStatement(len(columns), rowCounts))
-		sqlChan <- utils.StringsBuilder(sqlPrefix, " ", exstrings.Join(rowsResult, ","))
+		prepareSQL = utils.StringsBuilder(sqlPrefix, generateMySQLPrepareBindVarStatement(columnCounts, rowCounts))
+		sqlArray = append(sqlArray, utils.StringsBuilder(sqlPrefix, exstrings.Join(rowsResult, ",")))
 	} else {
 		// 数据行按照 batch 拼接拆分
 		// 向上取整，多切 batch，防止数据丢失
@@ -74,21 +83,27 @@ func translatorTableFullRecord(
 			zap.Bool("write safe mode", safeMode),
 			zap.String("cost", endTime.Sub(startTime).String()))
 
-		prepareSQL = utils.StringsBuilder(sqlPrefix, " ", generateMySQLPrepareBindVarStatement(len(columns), insertBatchSize))
+		prepareSQL = utils.StringsBuilder(sqlPrefix, generateMySQLPrepareBindVarStatement(columnCounts, insertBatchSize))
 		for _, batchRows := range multiBatchRows {
-			sqlChan <- utils.StringsBuilder(sqlPrefix, " ", exstrings.Join(batchRows, ","))
+			sqlArray = append(sqlArray, utils.StringsBuilder(sqlPrefix, exstrings.Join(batchRows, ",")))
 		}
 	}
 
-	close(sqlChan)
+	endTime := time.Now()
+	service.Logger.Info("single full table rowid data translator finished",
+		zap.String("schema", targetSchemaName),
+		zap.String("table", targetTableName),
+		zap.String("rowid sql", rowidSQL),
+		zap.Int("rowid rows", rowCounts),
+		zap.String("cost", endTime.Sub(startTime).String()))
 
-	return sqlChan, prepareSQL
+	return sqlArray, prepareSQL
 }
 
 // SQL Prefix 语句
 func generateMySQLInsertSQLStatementPrefix(targetSchemaName, targetTableName string, columns []string, safeMode bool) string {
 	var prefixSQL string
-	column := utils.StringsBuilder("(", strings.Join(columns, ","), ")")
+	column := utils.StringsBuilder(" (", strings.Join(columns, ","), ")")
 	if safeMode {
 		prefixSQL = utils.StringsBuilder(`REPLACE INTO `, targetSchemaName, ".", targetTableName, column, ` VALUES `)
 
