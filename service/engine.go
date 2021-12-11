@@ -131,29 +131,38 @@ func (e *Engine) IsExistOracleTable(schemaName string, includeTables []string) e
 }
 
 // 查询 Oracle 数据并按行返回对应字段以及行数据 -> 按字段类型返回行数据
+// 获取表字段名
+func (e *Engine) GetOracleTableColumnName(schemaName, tableName string) ([]string, error) {
+	rows, err := e.OracleDB.Query(utils.StringsBuilder(`SELECT * FROM `, strings.ToUpper(schemaName), strings.ToUpper(tableName)), ` WHERE 1=2`)
+	if err != nil {
+		return []string{}, err
+	}
+	defer rows.Close()
+
+	cols, err := rows.Columns()
+	if err != nil {
+		return cols, err
+	}
+	return cols, nil
+}
+
 // 用于拼接 batch
-func (e *Engine) QueryFormatOracleRows(querySQL string) ([]string, []string, error) {
+func (e *Engine) QueryFormatOracleRows(querySQL string, columns int) ([]string, error) {
 	var (
-		cols       []string
 		err        error
 		rowsResult []string
 	)
 	rows, err := e.OracleDB.Query(querySQL)
 	if err != nil {
-		return cols, rowsResult, err
+		return rowsResult, err
 	}
 	defer rows.Close()
-
-	cols, err = rows.Columns()
-	if err != nil {
-		return cols, rowsResult, err
-	}
 
 	// 用于判断字段值是数字还是字符
 	var columnTypes []string
 	colTypes, err := rows.ColumnTypes()
 	if err != nil {
-		return cols, rowsResult, err
+		return rowsResult, err
 	}
 
 	for _, ct := range colTypes {
@@ -163,16 +172,16 @@ func (e *Engine) QueryFormatOracleRows(querySQL string) ([]string, []string, err
 
 	// Read all rows
 	for rows.Next() {
-		rawResult := make([][]byte, len(cols))
-		result := make([]string, len(cols))
-		dest := make([]interface{}, len(cols))
+		rawResult := make([][]byte, columns)
+		result := make([]string, columns)
+		dest := make([]interface{}, columns)
 		for i := range rawResult {
 			dest[i] = &rawResult[i]
 		}
 
 		err = rows.Scan(dest...)
 		if err != nil {
-			return cols, rowsResult, err
+			return rowsResult, err
 		}
 
 		for i, raw := range rawResult {
@@ -208,8 +217,8 @@ func (e *Engine) QueryFormatOracleRows(querySQL string) ([]string, []string, err
 	}
 
 	if err = rows.Err(); err != nil {
-		return cols, rowsResult, err
+		return rowsResult, err
 	}
 
-	return cols, rowsResult, nil
+	return rowsResult, nil
 }

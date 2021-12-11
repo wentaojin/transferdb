@@ -31,11 +31,11 @@ import (
 )
 
 // 捕获全量数据
-func extractorTableFullRecord(engine *service.Engine, sourceSchemaName, sourceTableName, oracleQuery string) ([]string, []string, error) {
+func extractorTableFullRecord(engine *service.Engine, sourceSchemaName, sourceTableName, oracleQuery string, columns int) ([]string, error) {
 	startTime := time.Now()
-	columns, rowsResult, err := engine.GetOracleTableRecordByRowIDSQL(oracleQuery)
+	rowsResult, err := engine.GetOracleTableRecordByRowIDSQL(oracleQuery, columns)
 	if err != nil {
-		return columns, rowsResult, fmt.Errorf("get oracle schema [%s] table [%s] record by rowid sql falied: %v", sourceSchemaName, sourceTableName, err)
+		return rowsResult, fmt.Errorf("get oracle schema [%s] table [%s] record by rowid sql falied: %v", sourceSchemaName, sourceTableName, err)
 	}
 
 	endTime := time.Now()
@@ -45,7 +45,7 @@ func extractorTableFullRecord(engine *service.Engine, sourceSchemaName, sourceTa
 		zap.String("rowid sql", oracleQuery),
 		zap.String("cost", endTime.Sub(startTime).String()))
 
-	return columns, rowsResult, nil
+	return rowsResult, nil
 }
 
 // 捕获增量数据
@@ -240,6 +240,20 @@ func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceT
 		zap.String("schema", cfg.SourceConfig.SchemaName),
 		zap.String("table", sourceTableName))
 
+	// Prepare
+	columns, err := engine.GetOracleTableColumnName(cfg.SourceConfig.SchemaName, sourceTableName)
+	if err != nil {
+		return err
+	}
+	columnCounts := len(columns)
+	sqlPrefix := generateMySQLInsertSQLStatementPrefix(cfg.TargetConfig.SchemaName, sourceTableName, columns, safeMode)
+
+	stmt, err := engine.MysqlDB.Prepare(utils.StringsBuilder(sqlPrefix, generateMySQLPrepareBindVarStatement(columnCounts, cfg.AppConfig.InsertBatchSize)))
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
 	oraRowIDSQL, err := engine.GetFullSyncMetaRowIDRecord(cfg.SourceConfig.SchemaName, sourceTableName)
 	if err != nil {
 		return err
@@ -249,7 +263,7 @@ func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceT
 		sql := rowidSQL
 		wp.Do(func() error {
 			// 抽取 Oracle 数据
-			columns, rowsResult, err := extractorTableFullRecord(engine, cfg.SourceConfig.SchemaName, sourceTableName, sql)
+			rowsResult, err := extractorTableFullRecord(engine, cfg.SourceConfig.SchemaName, sourceTableName, sql, columnCounts)
 			if err != nil {
 				return err
 			}
@@ -269,18 +283,9 @@ func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceT
 			}
 
 			// 转换/应用 Oracle 数据 -> MySQL
-			sqlChan, stmt, err := translatorTableFullRecord(engine, cfg.TargetConfig.SchemaName, sourceTableName,
-				sql, columns, rowsResult, cfg.FullConfig.BufferSize, cfg.AppConfig.InsertBatchSize, true)
-			if err != nil {
-				return err
-			}
-
-			if err = applierTableFullRecord(cfg.TargetConfig.SchemaName,
-				sourceTableName, sql, cfg.FullConfig.ApplyThreads, sqlChan, stmt); err != nil {
-				return err
-			}
-
-			if err = stmt.Close(); err != nil {
+			if err = applierTableFullRecord(stmt, cfg.TargetConfig.SchemaName,
+				sourceTableName, sql, cfg.FullConfig.ApplyThreads, translatorTableFullRecord(cfg.TargetConfig.SchemaName, sourceTableName,
+					sqlPrefix, sql, rowsResult, cfg.FullConfig.BufferSize, cfg.AppConfig.InsertBatchSize, safeMode)); err != nil {
 				return err
 			}
 

@@ -31,7 +31,7 @@ import (
 )
 
 // 表数据应用 -> 全量任务
-func applierTableFullRecord(targetSchemaName, targetTableName, rowidSQL string, applyThreads int, sqlChan <-chan string, stmt *sql.Stmt) error {
+func applierTableFullRecord(stmt *sql.Stmt, targetSchemaName, targetTableName, rowidSQL string, applyThreads int, sqlChan <-chan string) error {
 	startTime := time.Now()
 	service.Logger.Info("single full table rowid data applier start",
 		zap.String("schema", targetSchemaName),

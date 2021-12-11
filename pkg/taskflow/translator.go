@@ -16,7 +16,6 @@ limitations under the License.
 package taskflow
 
 import (
-	"database/sql"
 	"fmt"
 	"math"
 	"strings"
@@ -31,23 +30,20 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	// 事务幂等性
+	safeMode = true
+)
+
 // 全量数据导出导入期间，运行安全模式
 // INSERT INTO 语句替换成 REPLACE INTO 语句
 // 转换表数据 -> 全量任务
 func translatorTableFullRecord(
-	engine *service.Engine,
-	targetSchemaName, targetTableName, rowidSQL string,
-	columns []string, rowsResult []string, bufferSize, insertBatchSize int, safeMode bool) (<-chan string, *sql.Stmt, error) {
+	targetSchemaName, targetTableName, sqlPrefix, rowidSQL string, rowsResult []string, bufferSize, insertBatchSize int, safeMode bool) <-chan string {
 	startTime := time.Now()
 	sqlChan := make(chan string, bufferSize)
 	rowCounts := len(rowsResult)
-	columnCounts := len(columns)
-	sqlPrefix := generateMySQLInsertSQLStatementPrefix(targetSchemaName, targetTableName, columns, safeMode)
 
-	var (
-		stmt *sql.Stmt
-		err  error
-	)
 	if rowCounts <= insertBatchSize {
 		endTime := time.Now()
 		service.Logger.Info("single full table rowid data translator",
@@ -59,11 +55,6 @@ func translatorTableFullRecord(
 			zap.Int("split sql nums", 1),
 			zap.Bool("write safe mode", safeMode),
 			zap.String("cost", endTime.Sub(startTime).String()))
-
-		stmt, err = engine.MysqlDB.Prepare(utils.StringsBuilder(sqlPrefix, generateMySQLPrepareBindVarStatement(columnCounts, rowCounts)))
-		if err != nil {
-			return sqlChan, stmt, err
-		}
 		go func() {
 			sqlChan <- utils.StringsBuilder(sqlPrefix, exstrings.Join(rowsResult, ","))
 			close(sqlChan)
@@ -84,11 +75,6 @@ func translatorTableFullRecord(
 			zap.Int("split sql nums", len(multiBatchRows)),
 			zap.Bool("write safe mode", safeMode),
 			zap.String("cost", endTime.Sub(startTime).String()))
-
-		stmt, err = engine.MysqlDB.Prepare(utils.StringsBuilder(sqlPrefix, generateMySQLPrepareBindVarStatement(columnCounts, insertBatchSize)))
-		if err != nil {
-			return sqlChan, stmt, err
-		}
 		go func() {
 			for _, batchRows := range multiBatchRows {
 				sqlChan <- utils.StringsBuilder(sqlPrefix, exstrings.Join(batchRows, ","))
@@ -97,7 +83,7 @@ func translatorTableFullRecord(
 		}()
 	}
 
-	return sqlChan, stmt, nil
+	return sqlChan
 }
 
 // SQL Prefix 语句

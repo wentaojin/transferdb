@@ -384,12 +384,12 @@ func (e *Engine) GetOracleCurrentSnapshotSCN() (int, error) {
 	return globalSCN, nil
 }
 
-func (e *Engine) GetOracleTableRecordByRowIDSQL(sql string) ([]string, []string, error) {
-	cols, res, err := e.QueryFormatOracleRows(sql)
+func (e *Engine) GetOracleTableRecordByRowIDSQL(sql string, columns int) ([]string, error) {
+	res, err := e.QueryFormatOracleRows(sql, columns)
 	if err != nil {
-		return []string{}, []string{}, err
+		return []string{}, err
 	}
-	return cols, res, nil
+	return res, nil
 }
 
 func (e *Engine) StartOracleChunkCreateTask(taskName string) error {
