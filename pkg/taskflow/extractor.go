@@ -241,7 +241,7 @@ func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceT
 		zap.String("table", sourceTableName))
 
 	// Prepare
-	columns, err := engine.GetOracleTableColumnName(cfg.SourceConfig.SchemaName, sourceTableName)
+	columns, err := engine.GetOracleTableFieldColumn(cfg.SourceConfig.SchemaName, sourceTableName)
 	if err != nil {
 		return err
 	}
@@ -254,6 +254,7 @@ func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceT
 	}
 	defer stmt.Close()
 
+	// Exec
 	oraRowIDSQL, err := engine.GetFullSyncMetaRowIDRecord(cfg.SourceConfig.SchemaName, sourceTableName)
 	if err != nil {
 		return err

@@ -53,10 +53,6 @@ func applierTableFullRecord(stmt *sql.Stmt, targetSchemaName, targetTableName, r
 	}
 
 	if err := group.Wait(); err != nil {
-		service.Logger.Error("single full table rowid data applier error",
-			zap.String("schema", targetSchemaName),
-			zap.String("table", targetTableName),
-			zap.String("rowid sql", rowidSQL))
 		return fmt.Errorf("full table data concurrency bulk insert mysql falied: %v", err)
 	}
 

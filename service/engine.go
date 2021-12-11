@@ -132,8 +132,8 @@ func (e *Engine) IsExistOracleTable(schemaName string, includeTables []string) e
 
 // 查询 Oracle 数据并按行返回对应字段以及行数据 -> 按字段类型返回行数据
 // 获取表字段名
-func (e *Engine) GetOracleTableColumnName(schemaName, tableName string) ([]string, error) {
-	rows, err := e.OracleDB.Query(utils.StringsBuilder(`SELECT * FROM `, strings.ToUpper(schemaName), strings.ToUpper(tableName)), ` WHERE 1=2`)
+func (e *Engine) GetOracleTableFieldColumn(schemaName, tableName string) ([]string, error) {
+	rows, err := e.OracleDB.Query(utils.StringsBuilder(`SELECT * FROM `, strings.ToUpper(schemaName), `.`, strings.ToUpper(tableName), ` WHERE 1 = 2`))
 	if err != nil {
 		return []string{}, err
 	}
