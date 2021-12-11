@@ -16,6 +16,7 @@ limitations under the License.
 package taskflow
 
 import (
+	"database/sql"
 	"fmt"
 	"math"
 	"strings"
@@ -34,25 +35,19 @@ import (
 // INSERT INTO 语句替换成 REPLACE INTO 语句
 // 转换表数据 -> 全量任务
 func translatorTableFullRecord(
+	engine *service.Engine,
 	targetSchemaName, targetTableName, rowidSQL string,
-	columns []string, rowsResult []string, insertBatchSize int, safeMode bool) ([]string, string) {
+	columns []string, rowsResult []string, bufferSize, insertBatchSize int, safeMode bool) (<-chan string, *sql.Stmt, error) {
 	startTime := time.Now()
+	sqlChan := make(chan string, bufferSize)
 	rowCounts := len(rowsResult)
 	columnCounts := len(columns)
-
-	service.Logger.Info("single full table rowid data translator start",
-		zap.String("schema", targetSchemaName),
-		zap.String("table", targetTableName),
-		zap.String("rowid sql", rowidSQL),
-		zap.Int("rowid rows", rowCounts))
-
 	sqlPrefix := generateMySQLInsertSQLStatementPrefix(targetSchemaName, targetTableName, columns, safeMode)
 
 	var (
-		prepareSQL string
-		sqlArray   []string
+		stmt *sql.Stmt
+		err  error
 	)
-
 	if rowCounts <= insertBatchSize {
 		endTime := time.Now()
 		service.Logger.Info("single full table rowid data translator",
@@ -65,8 +60,15 @@ func translatorTableFullRecord(
 			zap.Bool("write safe mode", safeMode),
 			zap.String("cost", endTime.Sub(startTime).String()))
 
-		prepareSQL = utils.StringsBuilder(sqlPrefix, generateMySQLPrepareBindVarStatement(columnCounts, rowCounts))
-		sqlArray = append(sqlArray, utils.StringsBuilder(sqlPrefix, exstrings.Join(rowsResult, ",")))
+		stmt, err = engine.MysqlDB.Prepare(utils.StringsBuilder(sqlPrefix, generateMySQLPrepareBindVarStatement(columnCounts, rowCounts)))
+		if err != nil {
+			return sqlChan, stmt, err
+		}
+		go func() {
+			sqlChan <- utils.StringsBuilder(sqlPrefix, exstrings.Join(rowsResult, ","))
+			close(sqlChan)
+		}()
+
 	} else {
 		// 数据行按照 batch 拼接拆分
 		// 向上取整，多切 batch，防止数据丢失
@@ -83,21 +85,19 @@ func translatorTableFullRecord(
 			zap.Bool("write safe mode", safeMode),
 			zap.String("cost", endTime.Sub(startTime).String()))
 
-		prepareSQL = utils.StringsBuilder(sqlPrefix, generateMySQLPrepareBindVarStatement(columnCounts, insertBatchSize))
-		for _, batchRows := range multiBatchRows {
-			sqlArray = append(sqlArray, utils.StringsBuilder(sqlPrefix, exstrings.Join(batchRows, ",")))
+		stmt, err = engine.MysqlDB.Prepare(utils.StringsBuilder(sqlPrefix, generateMySQLPrepareBindVarStatement(columnCounts, insertBatchSize)))
+		if err != nil {
+			return sqlChan, stmt, err
 		}
+		go func() {
+			for _, batchRows := range multiBatchRows {
+				sqlChan <- utils.StringsBuilder(sqlPrefix, exstrings.Join(batchRows, ","))
+			}
+			close(sqlChan)
+		}()
 	}
 
-	endTime := time.Now()
-	service.Logger.Info("single full table rowid data translator finished",
-		zap.String("schema", targetSchemaName),
-		zap.String("table", targetTableName),
-		zap.String("rowid sql", rowidSQL),
-		zap.Int("rowid rows", rowCounts),
-		zap.String("cost", endTime.Sub(startTime).String()))
-
-	return sqlArray, prepareSQL
+	return sqlChan, stmt, nil
 }
 
 // SQL Prefix 语句

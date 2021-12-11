@@ -16,9 +16,12 @@ limitations under the License.
 package taskflow
 
 import (
+	"database/sql"
 	"fmt"
 	"strings"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 
 	"github.com/wentaojin/transferdb/service"
 
@@ -28,44 +31,37 @@ import (
 )
 
 // 表数据应用 -> 全量任务
-func applierTableFullRecord(targetSchemaName, targetTableName, rowidSQL, prepareSQL string, applyThreads int, engine *service.Engine, sqlArray []string) error {
+func applierTableFullRecord(targetSchemaName, targetTableName, rowidSQL string, applyThreads int, sqlChan <-chan string, stmt *sql.Stmt) error {
 	startTime := time.Now()
 	service.Logger.Info("single full table rowid data applier start",
 		zap.String("schema", targetSchemaName),
 		zap.String("table", targetTableName),
 		zap.String("rowid sql", rowidSQL))
 
-	stmt, err := engine.MysqlDB.Prepare(prepareSQL)
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
+	var group errgroup.Group
 
-	wp := workpool.New(applyThreads)
-	for _, s := range sqlArray {
-		sql := s
-		wp.Do(func() error {
-			_, err = stmt.Exec(sql)
-			if err != nil {
-				return fmt.Errorf("single full table [%s.%s] data bulk insert mysql [%s] falied: %v", targetSchemaName, targetTableName, sql, err)
+	for i := 0; i < applyThreads; i++ {
+		group.Go(func() error {
+			for sql := range sqlChan {
+				_, err := stmt.Exec(sql)
+				if err != nil {
+					return fmt.Errorf("single full table [%s.%s] data bulk insert mysql [%s] falied: %v", targetSchemaName, targetTableName, sql, err)
+				}
 			}
 			return nil
 		})
 	}
 
-	if err = wp.Wait(); err != nil {
-		return err
-	}
-
-	if !wp.IsDone() {
-		service.Logger.Error("single full table data applier error",
+	if err := group.Wait(); err != nil {
+		service.Logger.Error("single full table rowid data applier error",
 			zap.String("schema", targetSchemaName),
 			zap.String("table", targetTableName),
 			zap.String("rowid sql", rowidSQL))
 		return fmt.Errorf("full table data concurrency bulk insert mysql falied: %v", err)
 	}
+
 	endTime := time.Now()
-	service.Logger.Info("single full table data applier finished",
+	service.Logger.Info("single full table rowid data applier finished",
 		zap.String("schema", targetSchemaName),
 		zap.String("table", targetTableName),
 		zap.String("rowid sql", rowidSQL),
