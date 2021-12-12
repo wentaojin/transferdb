@@ -18,12 +18,9 @@ package main
 import (
 	"flag"
 	"log"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
-
-	"github.com/wentaojin/transferdb/utils"
-
-	"github.com/go-echarts/statsview"
-	"github.com/go-echarts/statsview/viewer"
 
 	"github.com/pkg/errors"
 	"github.com/wentaojin/transferdb/service"
@@ -53,14 +50,8 @@ func main() {
 	}
 
 	go func() {
-		addr, err := utils.GetOutBoundIP(cfg.AppConfig.PprofPort)
-		if err != nil {
-			service.Logger.Fatal("get outbound ip failed", zap.Error(errors.Cause(err)))
-		}
-		viewer.SetConfiguration(viewer.WithAddr(cfg.AppConfig.PprofPort), viewer.WithLinkAddr(addr))
-		viewMgr := statsview.New()
-		if err = viewMgr.Start(); err != nil {
-			service.Logger.Fatal("stats view start failed", zap.Error(errors.Cause(err)))
+		if err = http.ListenAndServe(cfg.AppConfig.PprofPort, nil); err != nil {
+			service.Logger.Fatal("listen and serve pprof failed", zap.Error(errors.Cause(err)))
 		}
 		os.Exit(0)
 	}()
