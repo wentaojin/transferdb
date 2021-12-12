@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/thinkeridea/go-extend/exstrings"
+	"github.com/xxjwxc/gowp/workpool"
 
 	"github.com/wentaojin/transferdb/utils"
 
@@ -130,39 +130,56 @@ func (e *Engine) IsExistOracleTable(schemaName string, includeTables []string) e
 	return nil
 }
 
-// 查询 Oracle 数据并按行返回对应字段以及行数据 -> 按字段类型返回行数据
-// 获取表字段名
-func (e *Engine) GetOracleTableFieldColumn(schemaName, tableName string) ([]string, error) {
-	rows, err := e.OracleDB.Query(utils.StringsBuilder(`SELECT * FROM `, strings.ToUpper(schemaName), `.`, strings.ToUpper(tableName), ` WHERE 1 = 2`))
+// 批量 Batch
+func (e *Engine) BatchWriteMySQLTableData(targetSchemaName, targetTableName, insertPrepareSql string, args [][]interface{}, applyThreads int) error {
+	if len(args) > 0 {
+		stmtInsert, err := e.MysqlDB.Prepare(insertPrepareSql)
+		if err != nil {
+			return err
+		}
+		defer stmtInsert.Close()
+
+		wp := workpool.New(applyThreads)
+		for _, v := range args {
+			arg := v
+			wp.Do(func() error {
+				_, err = stmtInsert.Exec(arg...)
+				if err != nil {
+					return fmt.Errorf("single full table [%s.%s] prepare sql [%v] prepare args [%v] data bulk insert mysql falied: %v",
+						targetSchemaName, targetTableName, insertPrepareSql, arg, err)
+				}
+				return nil
+			})
+		}
+		if err = wp.Wait(); err != nil {
+			return fmt.Errorf("single full table [%s.%s] data concurrency bulk insert mysql falied: %v", targetSchemaName, targetTableName, err)
+		}
+	}
+	return nil
+}
+
+// 获取表字段名以及行数据
+func (e *Engine) GetOracleTableRows(querySQL string) ([]string, []interface{}, error) {
+	var (
+		err        error
+		rowsResult []interface{}
+	)
+	rows, err := e.OracleDB.Query(querySQL)
 	if err != nil {
-		return []string{}, err
+		return []string{}, rowsResult, err
 	}
 	defer rows.Close()
 
 	cols, err := rows.Columns()
 	if err != nil {
-		return cols, err
+		return cols, rowsResult, err
 	}
-	return cols, nil
-}
-
-// 用于拼接 batch
-func (e *Engine) QueryFormatOracleRows(querySQL string, columns int) ([]string, error) {
-	var (
-		err        error
-		rowsResult []string
-	)
-	rows, err := e.OracleDB.Query(querySQL)
-	if err != nil {
-		return rowsResult, err
-	}
-	defer rows.Close()
 
 	// 用于判断字段值是数字还是字符
 	var columnTypes []string
 	colTypes, err := rows.ColumnTypes()
 	if err != nil {
-		return rowsResult, err
+		return cols, rowsResult, err
 	}
 
 	for _, ct := range colTypes {
@@ -170,10 +187,12 @@ func (e *Engine) QueryFormatOracleRows(querySQL string, columns int) ([]string, 
 		columnTypes = append(columnTypes, ct.ScanType().String())
 	}
 
-	// Read all rows
+	// 字段列数
+	columns := len(cols)
+
+	// 表行数读取
 	for rows.Next() {
 		rawResult := make([][]byte, columns)
-		result := make([]string, columns)
 		dest := make([]interface{}, columns)
 		for i := range rawResult {
 			dest[i] = &rawResult[i]
@@ -181,44 +200,28 @@ func (e *Engine) QueryFormatOracleRows(querySQL string, columns int) ([]string, 
 
 		err = rows.Scan(dest...)
 		if err != nil {
-			return rowsResult, err
+			return cols, rowsResult, err
 		}
 
-		for i, raw := range rawResult {
+		for _, raw := range rawResult {
 			// 注意 Oracle/Mysql NULL VS 空字符串区别
 			// Oracle 空字符串与 NULL 归于一类，统一 NULL 处理 （is null 可以查询 NULL 以及空字符串值，空字符串查询无法查询到空字符串值）
 			// Mysql 空字符串与 NULL 非一类，NULL 是 NULL，空字符串是空字符串（is null 只查询 NULL 值，空字符串查询只查询到空字符串值）
 			// 按照 Oracle 特性来，转换同步统一转换成 NULL 即可，但需要注意业务逻辑中空字符串得写入，需要变更
 			// Oracle/Mysql 对于 'NULL' 统一字符 NULL 处理，查询出来转成 NULL,所以需要判断处理
 			if raw == nil {
-				result[i] = "NULL"
+				rowsResult = append(rowsResult, "NULL")
 			} else if string(raw) == "" {
-				result[i] = "NULL"
+				rowsResult = append(rowsResult, "NULL")
 			} else {
-				ok := utils.IsNum(string(raw))
-				switch {
-				case ok && columnTypes[i] != "string":
-					result[i] = string(raw)
-				default:
-					// 数据特殊字符处理
-					if strings.Contains(string(raw), "'") && !strings.Contains(string(raw), "\"") {
-						result[i] = utils.StringsBuilder("\"", string(raw), "\"")
-					} else if strings.Contains(string(raw), "'") && strings.Contains(string(raw), "\"") {
-						result[i] = utils.StringsBuilder("'", strings.Replace(string(raw), "'", "\\'", -1), "'")
-					} else {
-						result[i] = utils.StringsBuilder("'", string(raw), "'")
-					}
-				}
-
+				rowsResult = append(rowsResult, string(raw))
 			}
 		}
-		//数据按行返回，格式如下：(1,2) (2,3) ,用于数据拼接 batch
-		rowsResult = append(rowsResult, utils.StringsBuilder("(", exstrings.Join(result, ","), ")"))
 	}
 
 	if err = rows.Err(); err != nil {
-		return rowsResult, err
+		return cols, rowsResult, err
 	}
 
-	return rowsResult, nil
+	return cols, rowsResult, nil
 }

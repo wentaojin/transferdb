@@ -16,62 +16,149 @@ limitations under the License.
 package main
 
 import (
+	"database/sql"
 	"fmt"
-	"os"
-	"path/filepath"
-	"sync"
-	"time"
+	"math"
 
-	"github.com/jedib0t/go-pretty/v6/table"
-	"github.com/wentaojin/transferdb/pkg/check"
 	"github.com/xxjwxc/gowp/workpool"
+
+	"golang.org/x/sync/errgroup"
+
+	"github.com/wentaojin/transferdb/pkg/taskflow"
+
+	"github.com/wentaojin/transferdb/utils"
+
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
 )
 
 func main() {
-	pwdDir, err := os.Getwd()
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/db_meta?charset=utf8mb4&parseTime=True&loc=Local",
+		"root", "sa123456", "172.16.4.81", 5000)
+
+	gormDB, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
 	if err != nil {
 		fmt.Println(err)
 	}
-	file, err := os.OpenFile(filepath.Join(pwdDir, "transferdb.sql"), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
+	sqlDB, err := gormDB.DB()
 	if err != nil {
 		fmt.Println(err)
 	}
-	defer file.Close()
 
-	wr := &check.FileMW{Mutex: sync.Mutex{}, Writer: file}
+	var (
+		arg            []interface{}
+		args1, args2   [][]interface{}
+		prepareSQL1    string
+		prepareSQL2    string
+		group1, group2 errgroup.Group
+	)
+	arg = append(arg, 1)
+	arg = append(arg, "gg")
+	arg = append(arg, 2)
+	arg = append(arg, "gh")
+	arg = append(arg, 3)
+	arg = append(arg, "gg")
+	arg = append(arg, 4)
+	arg = append(arg, "gh")
+	arg = append(arg, 5)
+	arg = append(arg, "gh")
 
-	wp := workpool.New(10)
+	columnCounts := len([]string{"id", "name"})
+	batchSize := 2
+	actualBinds := len(arg)
+	planBinds := columnCounts * batchSize
 
-	t := table.NewWriter()
-	t.SetStyle(table.StyleLight)
-	t.AppendHeader(table.Row{"#", "First Name", "Last Name", "Salary"})
-	t.AppendRows([]table.Row{
-		{1, "Arya", "Stark", 3000},
-		{20, "Jon", "Snow", 2000, "You know nothing, Jon Snow!"},
-		{300, "Tyrion", "Lannister", 5000},
+	// 向下取整
+	splitNums := int(math.Floor(float64(actualBinds) / float64(planBinds)))
+
+	// 计划切分元素位置
+	planIntegerBinds := splitNums * planBinds
+	// 差值
+	differenceBinds := actualBinds - planIntegerBinds
+
+	if differenceBinds == 0 {
+		// batch 写入
+		// 切分 batch
+		args1 = utils.SplitMultipleSlice(arg, int64(splitNums))
+
+		// 计算占位符
+		rowBatchCounts := actualBinds / columnCounts / splitNums
+
+		prepareSQL1 = utils.StringsBuilder(taskflow.GenerateMySQLInsertSQLStatementPrefix("db_meta", "test", []string{"id", "name"}, true),
+			taskflow.GenerateMySQLPrepareBindVarStatement(columnCounts, rowBatchCounts))
+
+		fmt.Printf("prepareSQL1: %v\n", prepareSQL1)
+		fmt.Printf("prepareArgs1: %v\n", args1)
+	} else {
+		// batch 写入
+		if planIntegerBinds > 0 {
+			// 切分 batch
+			args1 = utils.SplitMultipleSlice(arg[:planIntegerBinds], int64(splitNums))
+
+			// 计算占位符
+			rowBatchCounts := planIntegerBinds / columnCounts / splitNums
+
+			prepareSQL1 = utils.StringsBuilder(taskflow.GenerateMySQLInsertSQLStatementPrefix("db_meta", "test", []string{"id", "name"}, true),
+				taskflow.GenerateMySQLPrepareBindVarStatement(columnCounts, rowBatchCounts))
+
+			fmt.Printf("prepareSQL1: %v\n", prepareSQL1)
+			fmt.Printf("prepareArgs1: %v\n", args1)
+		}
+
+		// 单次写入
+		args2 = append(args2, arg[planIntegerBinds:])
+		// 计算占位符
+		rowBatchCounts := differenceBinds / columnCounts
+
+		prepareSQL2 = utils.StringsBuilder(taskflow.GenerateMySQLInsertSQLStatementPrefix("db_meta", "test", []string{"id", "name"}, true),
+			taskflow.GenerateMySQLPrepareBindVarStatement(columnCounts, rowBatchCounts))
+
+		fmt.Printf("prepareSQL2: %v\n", prepareSQL2)
+		fmt.Printf("prepareArgs2: %v\n", args2)
+	}
+
+	group1.Go(func() error {
+		if err = batchWriter(sqlDB, prepareSQL1, args1, 10); err != nil {
+			return err
+		}
+		return nil
 	})
-	t.Render()
+	group2.Go(func() error {
+		if err = batchWriter(sqlDB, prepareSQL2, args2, 10); err != nil {
+			return err
+		}
+		return nil
+	})
+	if err = group1.Wait(); err != nil {
+		fmt.Printf("group1 error: %v\n", err)
+	}
+	if err = group2.Wait(); err != nil {
+		fmt.Printf("group2 error: %v\n", err)
+	}
+}
 
-	if _, err := fmt.Fprintln(wr, fmt.Sprintf("/*\n%s\n*/\n", t.Render())); err != nil {
-		fmt.Println(err)
-	}
+func batchWriter(sqlDB *sql.DB, insertPrepareSql string, args [][]interface{}, applyThreads int) error {
+	if len(args) > 0 {
+		stmtInsert, err := sqlDB.Prepare(insertPrepareSql)
+		if err != nil {
+			return err
+		}
+		defer stmtInsert.Close()
 
-	for i := 0; i < 1000; i++ {
-		// 变量替换，直接使用原变量会导致并发输出有问题
-		variables := i
-		fileWR := wr
-		wp.Do(func() error {
-			if _, err := fmt.Fprintln(fileWR, fmt.Sprintf("%v %d", time.Now(), variables)); err != nil {
-				return err
-			}
-			return nil
-		})
+		wp := workpool.New(applyThreads)
+		for _, v := range args {
+			arg := v
+			wp.Do(func() error {
+				_, err = stmtInsert.Exec(arg...)
+				if err != nil {
+					return err
+				}
+				return nil
+			})
+		}
+		if err = wp.Wait(); err != nil {
+			return err
+		}
 	}
-	if err = wp.Wait(); err != nil {
-		fmt.Println(err)
-	}
-
-	if !wp.IsDone() {
-		fmt.Println("not done")
-	}
+	return nil
 }

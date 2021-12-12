@@ -16,7 +16,6 @@ limitations under the License.
 package taskflow
 
 import (
-	"database/sql"
 	"fmt"
 	"strings"
 	"time"
@@ -31,29 +30,36 @@ import (
 )
 
 // 表数据应用 -> 全量任务
-func applierTableFullRecord(stmt *sql.Stmt, targetSchemaName, targetTableName, rowidSQL string, applyThreads int, sqlChan <-chan string) error {
+func applierTableFullRecord(engine *service.Engine, targetSchemaName, targetTableName, rowidSQL string, applyThreads int, prepareSQL1 string,
+	prepareArgs1 [][]interface{}, prepareSQL2 string, prepareArgs2 [][]interface{}) error {
 	startTime := time.Now()
 	service.Logger.Info("single full table rowid data applier start",
 		zap.String("schema", targetSchemaName),
 		zap.String("table", targetTableName),
 		zap.String("rowid sql", rowidSQL))
 
-	var group errgroup.Group
+	var (
+		group1, group2 errgroup.Group
+		err            error
+	)
 
-	for i := 0; i < applyThreads; i++ {
-		group.Go(func() error {
-			for sql := range sqlChan {
-				_, err := stmt.Exec(sql)
-				if err != nil {
-					return fmt.Errorf("single full table [%s.%s] data bulk insert mysql [%s] falied: %v", targetSchemaName, targetTableName, sql, err)
-				}
-			}
-			return nil
-		})
+	group1.Go(func() error {
+		if err = engine.BatchWriteMySQLTableData(targetSchemaName, targetTableName, prepareSQL1, prepareArgs1, applyThreads); err != nil {
+			return err
+		}
+		return nil
+	})
+	group2.Go(func() error {
+		if err = engine.BatchWriteMySQLTableData(targetSchemaName, targetTableName, prepareSQL2, prepareArgs2, applyThreads); err != nil {
+			return err
+		}
+		return nil
+	})
+	if err = group1.Wait(); err != nil {
+		return err
 	}
-
-	if err := group.Wait(); err != nil {
-		return fmt.Errorf("full table data concurrency bulk insert mysql falied: %v", err)
+	if err = group2.Wait(); err != nil {
+		return err
 	}
 
 	endTime := time.Now()

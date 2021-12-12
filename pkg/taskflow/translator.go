@@ -39,55 +39,79 @@ const (
 // INSERT INTO 语句替换成 REPLACE INTO 语句
 // 转换表数据 -> 全量任务
 func translatorTableFullRecord(
-	targetSchemaName, targetTableName, sqlPrefix, rowidSQL string, rowsResult []string, bufferSize, insertBatchSize int, safeMode bool) <-chan string {
+	targetSchemaName, targetTableName, rowidSQL string, columnFields []string, rowsResult []interface{}, insertBatchSize int, safeMode bool) (string, [][]interface{}, string, [][]interface{}) {
 	startTime := time.Now()
-	sqlChan := make(chan string, bufferSize)
-	rowCounts := len(rowsResult)
+	columnCounts := len(columnFields)
 
-	if rowCounts <= insertBatchSize {
-		endTime := time.Now()
-		service.Logger.Info("single full table rowid data translator",
-			zap.String("schema", targetSchemaName),
-			zap.String("table", targetTableName),
-			zap.String("rowid sql", rowidSQL),
-			zap.Int("rowid rows", rowCounts),
-			zap.Int("insert batch size", insertBatchSize),
-			zap.Int("split sql nums", 1),
-			zap.Bool("write safe mode", safeMode),
-			zap.String("cost", endTime.Sub(startTime).String()))
-		go func() {
-			sqlChan <- utils.StringsBuilder(sqlPrefix, exstrings.Join(rowsResult, ","))
-			close(sqlChan)
-		}()
+	// bindVars
+	actualBindVarsCounts := len(rowsResult)
+	planBindVarsCounts := insertBatchSize * columnCounts
 
+	// 计算可切分数，向下取整
+	splitNums := int(math.Floor(float64(actualBindVarsCounts) / float64(planBindVarsCounts)))
+
+	// 计算切分元素在 actualBindVarsCounts 位置
+	planIntegerBinds := splitNums * planBindVarsCounts
+	// 计算差值
+	differenceBinds := actualBindVarsCounts - planIntegerBinds
+	// 计算行数
+	rowCounts := actualBindVarsCounts / columnCounts
+
+	var (
+		args1, args2 [][]interface{}
+		prepareSQL1  string
+		prepareSQL2  string
+	)
+	if differenceBinds == 0 {
+		// batch 写入
+		// 切分 batch
+		args1 = utils.SplitMultipleSlice(rowsResult, int64(splitNums))
+
+		// 计算占位符
+		rowBatchCounts := actualBindVarsCounts / columnCounts / splitNums
+
+		prepareSQL1 = utils.StringsBuilder(
+			GenerateMySQLInsertSQLStatementPrefix(targetSchemaName, targetTableName, columnFields, safeMode),
+			GenerateMySQLPrepareBindVarStatement(columnCounts, rowBatchCounts))
 	} else {
-		// 数据行按照 batch 拼接拆分
-		// 向上取整，多切 batch，防止数据丢失
-		splitsNums := math.Ceil(float64(rowCounts) / float64(insertBatchSize))
-		multiBatchRows := utils.SplitMultipleStringSlice(rowsResult, int64(splitsNums))
-		endTime := time.Now()
-		service.Logger.Info("single full table rowid data translator",
-			zap.String("schema", targetSchemaName),
-			zap.String("table", targetTableName),
-			zap.String("rowid sql", rowidSQL),
-			zap.Int("rowid rows", rowCounts),
-			zap.Int("insert batch size", insertBatchSize),
-			zap.Int("split sql nums", len(multiBatchRows)),
-			zap.Bool("write safe mode", safeMode),
-			zap.String("cost", endTime.Sub(startTime).String()))
-		go func() {
-			for _, batchRows := range multiBatchRows {
-				sqlChan <- utils.StringsBuilder(sqlPrefix, exstrings.Join(batchRows, ","))
-			}
-			close(sqlChan)
-		}()
-	}
+		if planIntegerBinds > 0 {
+			// batch 写入
+			// 切分 batch
+			args1 = utils.SplitMultipleSlice(rowsResult[:planIntegerBinds], int64(splitNums))
 
-	return sqlChan
+			// 计算占位符
+			rowBatchCounts := planIntegerBinds / columnCounts / splitNums
+
+			prepareSQL1 = utils.StringsBuilder(
+				GenerateMySQLInsertSQLStatementPrefix(targetSchemaName, targetTableName, columnFields, safeMode),
+				GenerateMySQLPrepareBindVarStatement(columnCounts, rowBatchCounts))
+		}
+
+		// 单次写入
+		args2 = append(args2, rowsResult[planIntegerBinds:])
+		// 计算占位符
+		rowBatchCounts := differenceBinds / columnCounts
+
+		prepareSQL2 = utils.StringsBuilder(
+			GenerateMySQLInsertSQLStatementPrefix(targetSchemaName, targetTableName, columnFields, safeMode),
+			GenerateMySQLPrepareBindVarStatement(columnCounts, rowBatchCounts))
+	}
+	endTime := time.Now()
+	service.Logger.Info("single full table rowid data translator",
+		zap.String("schema", targetSchemaName),
+		zap.String("table", targetTableName),
+		zap.String("rowid sql", rowidSQL),
+		zap.Int("rowid rows", rowCounts),
+		zap.Int("insert batch size", insertBatchSize),
+		zap.Int("split sql nums", len(args1)+len(args2)),
+		zap.Bool("write safe mode", safeMode),
+		zap.String("cost", endTime.Sub(startTime).String()))
+
+	return prepareSQL1, args1, prepareSQL2, args2
 }
 
 // SQL Prefix 语句
-func generateMySQLInsertSQLStatementPrefix(targetSchemaName, targetTableName string, columns []string, safeMode bool) string {
+func GenerateMySQLInsertSQLStatementPrefix(targetSchemaName, targetTableName string, columns []string, safeMode bool) string {
 	var prefixSQL string
 	column := utils.StringsBuilder(" (", strings.Join(columns, ","), ")")
 	if safeMode {
@@ -100,7 +124,7 @@ func generateMySQLInsertSQLStatementPrefix(targetSchemaName, targetTableName str
 }
 
 // SQL Prepare 语句
-func generateMySQLPrepareBindVarStatement(columns, bindVarBatch int) string {
+func GenerateMySQLPrepareBindVarStatement(columns, bindVarBatch int) string {
 	var (
 		bindVars []string
 		bindVar  []string
