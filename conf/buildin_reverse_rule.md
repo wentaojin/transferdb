@@ -17,7 +17,7 @@
 | character(length)<br />length>=256 | varchar(length)              |
 | clob                               | longtext                     |
 | blob                               | blob                         |
-| date                               | Datetime                     |
+| date                               | datetime                     |
 | decimal(p,s)<br />p=0,s=0          | decimal                      |
 | decimal(p,s)                       | decimal(p,s)                 |
 | dec(p,s)<br />p=0,s=0              | decimal                      |

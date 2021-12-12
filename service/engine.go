@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/shopspring/decimal"
 	"github.com/xxjwxc/gowp/workpool"
 
 	"github.com/wentaojin/transferdb/utils"
@@ -84,6 +85,7 @@ func Query(db *sql.DB, querySQL string) ([]string, []map[string]string, error) {
 				row[key] = IsNull
 			} else {
 				// 处理空字符串以及其他值情况
+				// 数据统一 string 格式显示
 				row[key] = string(v)
 			}
 		}
@@ -203,7 +205,7 @@ func (e *Engine) GetOracleTableRows(querySQL string) ([]string, []interface{}, e
 			return cols, rowsResult, err
 		}
 
-		for _, raw := range rawResult {
+		for i, raw := range rawResult {
 			// 注意 Oracle/Mysql NULL VS 空字符串区别
 			// Oracle 空字符串与 NULL 归于一类，统一 NULL 处理 （is null 可以查询 NULL 以及空字符串值，空字符串查询无法查询到空字符串值）
 			// Mysql 空字符串与 NULL 非一类，NULL 是 NULL，空字符串是空字符串（is null 只查询 NULL 值，空字符串查询只查询到空字符串值）
@@ -214,8 +216,51 @@ func (e *Engine) GetOracleTableRows(querySQL string) ([]string, []interface{}, e
 			} else if string(raw) == "" {
 				rowsResult = append(rowsResult, "NULL")
 			} else {
-				rowsResult = append(rowsResult, string(raw))
+				switch columnTypes[i] {
+				case "int64":
+					r, err := utils.StrconvIntBitSize(string(raw), 64)
+					if err != nil {
+						return cols, rowsResult, err
+					}
+					rowsResult = append(rowsResult, r)
+				case "uint64":
+					r, err := utils.StrconvUintBitSize(string(raw), 64)
+					if err != nil {
+						return cols, rowsResult, err
+					}
+					rowsResult = append(rowsResult, r)
+				case "float32":
+					r, err := utils.StrconvFloatBitSize(string(raw), 32)
+					if err != nil {
+						return cols, rowsResult, err
+					}
+					rowsResult = append(rowsResult, r)
+				case "float64":
+					r, err := utils.StrconvFloatBitSize(string(raw), 64)
+					if err != nil {
+						return cols, rowsResult, err
+					}
+					rowsResult = append(rowsResult, r)
+				case "rune":
+					r, err := utils.StrconvRune(string(raw))
+					if err != nil {
+						return cols, rowsResult, err
+					}
+					rowsResult = append(rowsResult, r)
+				default:
+					ok := utils.IsNum(string(raw))
+					if ok {
+						r, err := decimal.NewFromString(string(raw))
+						if err != nil {
+							return cols, rowsResult, err
+						}
+						rowsResult = append(rowsResult, r)
+					} else {
+						rowsResult = append(rowsResult, string(raw))
+					}
+				}
 			}
+
 		}
 	}
 

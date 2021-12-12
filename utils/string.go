@@ -110,6 +110,39 @@ func IsNum(s string) bool {
 	return err == nil
 }
 
+// 字符转换
+func StrconvIntBitSize(s string, bitSize int) (int64, error) {
+	i, err := strconv.ParseInt(s, 10, bitSize)
+	if err != nil {
+		return i, err
+	}
+	return i, nil
+}
+
+func StrconvUintBitSize(s string, bitSize int) (uint64, error) {
+	i, err := strconv.ParseUint(s, 10, bitSize)
+	if err != nil {
+		return i, err
+	}
+	return i, nil
+}
+
+func StrconvFloatBitSize(s string, bitSize int) (float64, error) {
+	i, err := strconv.ParseFloat(s, bitSize)
+	if err != nil {
+		return i, err
+	}
+	return i, nil
+}
+
+func StrconvRune(s string) (int32, error) {
+	r, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		return rune(r), err
+	}
+	return rune(r), nil
+}
+
 // 替换字符串引号字符
 func ReplaceQuotesString(s string) string {
 	return string(exbytes.Replace([]byte(s), []byte("\""), []byte(""), -1))
