@@ -44,13 +44,15 @@ func applierTableFullRecord(engine *service.Engine, targetSchemaName, targetTabl
 	)
 
 	group1.Go(func() error {
+		// 多 batch 并发写
 		if err = engine.BatchWriteMySQLTableData(targetSchemaName, targetTableName, prepareSQL1, prepareArgs1, applyThreads); err != nil {
 			return err
 		}
 		return nil
 	})
 	group2.Go(func() error {
-		if err = engine.BatchWriteMySQLTableData(targetSchemaName, targetTableName, prepareSQL2, prepareArgs2, applyThreads); err != nil {
+		// 单 batch 写
+		if err = engine.BatchWriteMySQLTableData(targetSchemaName, targetTableName, prepareSQL2, prepareArgs2, 1); err != nil {
 			return err
 		}
 		return nil

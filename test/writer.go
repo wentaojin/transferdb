@@ -124,7 +124,7 @@ func main() {
 		return nil
 	})
 	group2.Go(func() error {
-		if err = batchWriter(sqlDB, prepareSQL2, args2, 10); err != nil {
+		if err = batchWriter(sqlDB, prepareSQL2, args2, 1); err != nil {
 			return err
 		}
 		return nil
