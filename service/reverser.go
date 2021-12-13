@@ -108,6 +108,33 @@ and upper(table_name)=upper('%s')`, strings.ToUpper(schemaName), strings.ToUpper
 }
 
 func (e *Engine) GetOracleTableColumn(schemaName string, tableName string) ([]map[string]string, error) {
+	//querySQL := fmt.Sprintf(`select t.COLUMN_NAME,
+	//     t.DATA_TYPE,
+	//	 t.CHAR_LENGTH,
+	//	 NVL(t.CHAR_USED,'UNKNOWN') CHAR_USED,
+	//     NVL(t.DATA_LENGTH,0) AS DATA_LENGTH,
+	//     NVL(t.DATA_PRECISION,0) AS DATA_PRECISION,
+	//     NVL(t.DATA_SCALE,0) AS DATA_SCALE,
+	//	decode(t.NULLABLE,'N','N','Y',(select decode(count(1),0,'Y','N') from dba_constraints con
+	//		 where con.owner=t.owner
+	//		 and con.table_name=t.table_name
+	//		 and replace(replace(upper(con.search_condition_vc),' ',''),'"','') like '%%'||upper(t.column_name)||'ISNOTNULL'||'%%')
+	//		 ) NULLABLE,
+	//     t.DATA_DEFAULT,
+	//     c.COMMENTS
+	//from dba_tab_columns t, dba_col_comments c
+	//where t.table_name = c.table_name
+	// and t.column_name = c.column_name
+	// and t.owner = c.owner
+	// and upper(t.table_name) = upper('%s')
+	// and upper(t.owner) = upper('%s')
+	//order by t.COLUMN_ID`,
+	//	strings.ToUpper(tableName),
+	//	strings.ToUpper(schemaName))
+
+	//
+
+	// TODO: ORACLE 11g dba_constraints 视图不支持 search_condition_vc，临时函数处理
 	querySQL := fmt.Sprintf(`select t.COLUMN_NAME,
 	     t.DATA_TYPE,
 		 t.CHAR_LENGTH,
@@ -118,7 +145,7 @@ func (e *Engine) GetOracleTableColumn(schemaName string, tableName string) ([]ma
 		decode(t.NULLABLE,'N','N','Y',(select decode(count(1),0,'Y','N') from dba_constraints con 
 			 where con.owner=t.owner 
 			 and con.table_name=t.table_name 
-			 and replace(replace(upper(con.search_condition_vc),' ',''),'"','') like '%%'||upper(t.column_name)||'ISNOTNULL'||'%%')
+			 and replace(replace(upper(get_search_condition('%s','%s',upper(t.COLUMN_NAME))),' ',''),'"','') like '%%'||upper(t.column_name)||'ISNOTNULL'||'%%')
 			 ) NULLABLE,
 	     t.DATA_DEFAULT,
 	     c.COMMENTS
@@ -129,6 +156,8 @@ func (e *Engine) GetOracleTableColumn(schemaName string, tableName string) ([]ma
 	 and upper(t.table_name) = upper('%s')
 	 and upper(t.owner) = upper('%s')
     order by t.COLUMN_ID`,
+		strings.ToUpper(schemaName),
+		strings.ToUpper(tableName),
 		strings.ToUpper(tableName),
 		strings.ToUpper(schemaName))
 	_, res, err := Query(e.OracleDB, querySQL)
