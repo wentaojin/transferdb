@@ -100,6 +100,7 @@ func (e *Engine) InitMysqlEngineDB() error {
 		&ColumnRuleMap{},
 		&TableRuleMap{},
 		&SchemaRuleMap{},
+		&DefaultValueMap{},
 		&WaitSyncMeta{},
 		&FullSyncMeta{},
 		&IncrementSyncMeta{},

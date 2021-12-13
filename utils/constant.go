@@ -52,4 +52,8 @@ const (
 	FKConstraintJSON = "fk"
 	CKConstraintJSON = "ck"
 	PartitionJSON    = "partition"
+
+	// 默认值规则
+	DefaultValueSysdate    = "SYSDATE"
+	DefaultValueSysdateMap = "NOW()"
 )

@@ -31,6 +31,9 @@ func TransferDBEnvPrepare(engine *service.Engine) error {
 	if err := engine.InitMysqlEngineDB(); err != nil {
 		return err
 	}
+	if err := engine.InitDefaultValueMap(); err != nil {
+		return err
+	}
 	endTime := time.Now()
 	service.Logger.Info("prepare tansferdb env finished",
 		zap.String("cost", endTime.Sub(startTime).String()))

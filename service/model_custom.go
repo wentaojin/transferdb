@@ -19,6 +19,10 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/wentaojin/transferdb/utils"
+
+	"gorm.io/gorm"
 )
 
 /*
@@ -56,6 +60,40 @@ type SchemaRuleMap struct {
 	TargetColumnType string     `gorm:"not null;index:idx_target_col;comment:'目标表字段类型'" json:"target_column_type"`
 	CreatedAt        *time.Time `gorm:"type:timestamp;not null;default:current_timestamp;comment:'创建时间'" json:"createdAt"`
 	UpdatedAt        *time.Time `gorm:"type:timestamp;not null on update current_timestamp;default:current_timestamp;comment:'更新时间'" json:"updatedAt"`
+}
+
+// 自定义字段默认值转换规则 - global 级别
+type DefaultValueMap struct {
+	ID                 uint       `gorm:"primary_key;autoIncrement;comment:'自增编号'" json:"id"`
+	SourceDefaultValue string     `gorm:"not null;index:unique_source_default,unique;comment:'源端默认值'" json:"source_default_value"`
+	TargetDefaultValue string     `gorm:"not null;index:idx_target_default;comment:'目标默认值'" json:"target_default_value"`
+	CreatedAt          *time.Time `gorm:"type:timestamp;not null;default:current_timestamp;comment:'创建时间'" json:"createdAt"`
+	UpdatedAt          *time.Time `gorm:"type:timestamp;not null on update current_timestamp;default:current_timestamp;comment:'更新时间'" json:"updatedAt"`
+}
+
+func (e *Engine) InitDefaultValueMap() error {
+	var dvm DefaultValueMap
+	results := e.GormDB.Where("upper(source_default_value) = ? and upper(target_default_value) = ?",
+		utils.DefaultValueSysdate, utils.DefaultValueSysdateMap).First(&dvm)
+	if results.Error != nil {
+		if results.Error == gorm.ErrRecordNotFound {
+			results = e.GormDB.Create(&dvm)
+			if results.Error != nil {
+				return results.Error
+			}
+			return nil
+		}
+		return results.Error
+	}
+	return nil
+}
+
+func (e *Engine) GetDefaultValueMap() ([]DefaultValueMap, error) {
+	var c []DefaultValueMap
+	if err := e.GormDB.Find(&c).Error; err != nil {
+		return c, fmt.Errorf("get custom default value rule map failed: %v", err)
+	}
+	return c, nil
 }
 
 func (e *Engine) GetColumnRuleMap(schemaName, tableName string) ([]ColumnRuleMap, error) {
