@@ -77,7 +77,10 @@ func (e *Engine) InitDefaultValueMap() error {
 		utils.DefaultValueSysdate, utils.DefaultValueSysdateMap).First(&dvm)
 	if results.Error != nil {
 		if results.Error == gorm.ErrRecordNotFound {
-			results = e.GormDB.Create(&dvm)
+			results = e.GormDB.Create(&DefaultValueMap{
+				SourceDefaultValue: utils.DefaultValueSysdate,
+				TargetDefaultValue: utils.DefaultValueSysdateMap,
+			})
 			if results.Error != nil {
 				return results.Error
 			}
