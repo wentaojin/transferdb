@@ -21,8 +21,6 @@ import (
 	"time"
 
 	"github.com/wentaojin/transferdb/utils"
-
-	"gorm.io/gorm"
 )
 
 /*
@@ -72,21 +70,25 @@ type DefaultValueMap struct {
 }
 
 func (e *Engine) InitDefaultValueMap() error {
-	var dvm DefaultValueMap
-	results := e.GormDB.Where("upper(source_default_value) = ? and upper(target_default_value) = ?",
-		utils.DefaultValueSysdate, utils.DefaultValueSysdateMap).First(&dvm)
-	if results.Error != nil {
-		if results.Error == gorm.ErrRecordNotFound {
-			results = e.GormDB.Create(&DefaultValueMap{
-				SourceDefaultValue: utils.DefaultValueSysdate,
-				TargetDefaultValue: utils.DefaultValueSysdateMap,
-			})
-			if results.Error != nil {
-				return results.Error
-			}
-			return nil
+	var counts int64
+	if err := e.GormDB.Model(&DefaultValueMap{}).Where(
+		"upper(source_default_value) = ? and upper(target_default_value) = ?",
+		utils.DefaultValueSysdate, utils.DefaultValueSysdateMap).Or(
+		"lower(source_default_value) = ? and lower(target_default_value) = ?",
+		strings.ToLower(utils.DefaultValueSysdate), strings.ToLower(utils.DefaultValueSysdateMap)).Count(&counts).Error; err != nil {
+		return err
+	}
+
+	if counts == 0 {
+		if err := e.GormDB.Create(&DefaultValueMap{
+			SourceDefaultValue: utils.DefaultValueSysdate,
+			TargetDefaultValue: utils.DefaultValueSysdateMap,
+		}).Error; err != nil {
+			return err
 		}
-		return results.Error
+	}
+	if counts > 1 {
+		return fmt.Errorf("panic, mysql get multiple record, counts: %d, query condition: source_default_value [%s],target_default_value [%s]", counts, utils.DefaultValueSysdate, utils.DefaultValueSysdateMap)
 	}
 	return nil
 }

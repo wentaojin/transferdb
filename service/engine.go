@@ -96,7 +96,7 @@ func Query(db *sql.DB, querySQL string) ([]string, []map[string]string, error) {
 
 // 初始化同步表结构
 func (e *Engine) InitMysqlEngineDB() error {
-	if err := e.GormDB.AutoMigrate(
+	if err := e.GormDB.Set("gorm:table_options", "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci").AutoMigrate(
 		&ColumnRuleMap{},
 		&TableRuleMap{},
 		&SchemaRuleMap{},
