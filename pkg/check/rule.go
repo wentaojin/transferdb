@@ -92,7 +92,7 @@ func OracleTableMapRuleCheck(
 				return "", nil, nil
 			}
 
-			tableRows = table.Row{columnName,
+			tableRows = table.Row{tableName, columnName,
 				fmt.Sprintf("NUMBER(%d,%d) %s", oracleDataPrecision, oracleDataScale, oracleColMeta),
 				fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
 				fmt.Sprintf("DECIMAL(%d,%d) %s", oracleDataPrecision, oracleDataScale, oracleColMeta)}
@@ -111,7 +111,7 @@ func OracleTableMapRuleCheck(
 					return "", nil, nil
 				}
 
-				tableRows = table.Row{columnName,
+				tableRows = table.Row{tableName, columnName,
 					fmt.Sprintf("NUMBER %s", oracleColMeta),
 					fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
 					fmt.Sprintf("DECIMAL(65,30) %s", oracleColMeta)}
@@ -128,7 +128,7 @@ func OracleTableMapRuleCheck(
 					return "", nil, nil
 				}
 
-				tableRows = table.Row{columnName,
+				tableRows = table.Row{tableName, columnName,
 					fmt.Sprintf("NUMBER(%d) %s", oracleDataPrecision, oracleColMeta),
 					fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataPrecision, mysqlColMeta),
 					fmt.Sprintf("TINYINT %s", oracleColMeta)}

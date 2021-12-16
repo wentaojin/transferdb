@@ -615,7 +615,7 @@ func (d *DiffWriter) columnRuleCheck(oracleTable, mysqlTable *Table) (string, er
 
 		textTable := table.NewWriter()
 		textTable.SetStyle(table.StyleLight)
-		textTable.AppendHeader(table.Row{"Column", "ORACLE", "MySQL", "Suggest"})
+		textTable.AppendHeader(table.Row{"Table", "Column", "ORACLE", "MySQL", "Suggest"})
 		textTable.AppendRows(tableRowArray)
 
 		builder.WriteString("/*\n")
