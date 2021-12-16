@@ -144,8 +144,7 @@ func OracleTableMapRuleCheck(
 				if mysqlDataType == "SMALLINT" && mysqlDataPrecision >= 5 && mysqlDataScale == oracleDataScale && oracleDiffColMeta == mysqlDiffColMeta {
 					return "", nil, nil
 				}
-				tableRows = table.Row{
-					columnName,
+				tableRows = table.Row{tableName, columnName,
 					fmt.Sprintf("NUMBER(%d) %s", oracleDataPrecision, oracleColMeta),
 					fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataPrecision, mysqlColMeta),
 					fmt.Sprintf("SMALLINT %s", oracleColMeta)}
@@ -161,8 +160,7 @@ func OracleTableMapRuleCheck(
 				if mysqlDataType == "INT" && mysqlDataPrecision >= 9 && mysqlDataScale == oracleDataScale && oracleDiffColMeta == mysqlDiffColMeta {
 					return "", nil, nil
 				}
-				tableRows = table.Row{
-					columnName,
+				tableRows = table.Row{tableName, columnName,
 					fmt.Sprintf("NUMBER(%d) %s", oracleDataPrecision, oracleColMeta),
 					fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataPrecision, mysqlColMeta),
 					fmt.Sprintf("INT %s", oracleColMeta)}
@@ -178,8 +176,7 @@ func OracleTableMapRuleCheck(
 				if mysqlDataType == "BIGINT" && mysqlDataPrecision >= 19 && mysqlDataScale == oracleDataScale && oracleDiffColMeta == mysqlDiffColMeta {
 					return "", nil, nil
 				}
-				tableRows = table.Row{
-					columnName,
+				tableRows = table.Row{tableName, columnName,
 					fmt.Sprintf("NUMBER(%d) %s", oracleDataPrecision, oracleColMeta),
 					fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataPrecision, mysqlColMeta),
 					fmt.Sprintf("BIGINT %s", oracleColMeta)}
@@ -195,8 +192,7 @@ func OracleTableMapRuleCheck(
 				if mysqlDataType == "DECIMAL" && mysqlDataPrecision >= 19 && mysqlDataPrecision <= 38 && mysqlDataScale == oracleDataScale && oracleDiffColMeta == mysqlDiffColMeta {
 					return "", nil, nil
 				}
-				tableRows = table.Row{
-					columnName,
+				tableRows = table.Row{tableName, columnName,
 					fmt.Sprintf("NUMBER(%d) %s", oracleDataPrecision, oracleColMeta),
 					fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataPrecision, mysqlColMeta),
 					fmt.Sprintf("DECIMAL(%d) %s", oracleDataPrecision, oracleColMeta)}
@@ -212,8 +208,7 @@ func OracleTableMapRuleCheck(
 				if mysqlDataType == "DECIMAL" && mysqlDataPrecision == oracleDataPrecision && mysqlDataScale == 4 && oracleDiffColMeta == mysqlDiffColMeta {
 					return "", nil, nil
 				}
-				tableRows = table.Row{
-					columnName,
+				tableRows = table.Row{tableName, columnName,
 					fmt.Sprintf("NUMBER(%d) %s", oracleDataPrecision, oracleColMeta),
 					fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
 					fmt.Sprintf("DECIMAL(%d,4) %s", oracleDataPrecision, oracleColMeta)}
@@ -234,8 +229,7 @@ func OracleTableMapRuleCheck(
 			if mysqlDataType == "DECIMAL" && mysqlDataPrecision == 10 && mysqlDataScale == oracleDataScale && oracleDiffColMeta == mysqlDiffColMeta {
 				return "", nil, nil
 			}
-			tableRows = table.Row{
-				columnName,
+			tableRows = table.Row{tableName, columnName,
 				fmt.Sprintf("DECIMAL %s", oracleColMeta),
 				fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
 				fmt.Sprintf("DECIMAL %s", oracleColMeta)}
@@ -252,8 +246,7 @@ func OracleTableMapRuleCheck(
 			if mysqlDataType == "DECIMAL" && mysqlDataPrecision == oracleDataPrecision && mysqlDataScale == oracleDataScale && oracleDiffColMeta == mysqlDiffColMeta {
 				return "", nil, nil
 			}
-			tableRows = table.Row{
-				columnName,
+			tableRows = table.Row{tableName, columnName,
 				fmt.Sprintf("DECIMAL(%d,%d) %s", oracleDataPrecision, oracleDataScale, oracleColMeta),
 				fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
 				fmt.Sprintf("DECIMAL(%d,%d) %s", oracleDataPrecision, oracleDataScale, oracleColMeta)}
@@ -273,8 +266,7 @@ func OracleTableMapRuleCheck(
 			if mysqlDataType == "DECIMAL" && mysqlDataPrecision == 10 && mysqlDataScale == oracleDataScale && oracleDiffColMeta == mysqlDiffColMeta {
 				return "", nil, nil
 			}
-			tableRows = table.Row{
-				columnName,
+			tableRows = table.Row{tableName, columnName,
 				fmt.Sprintf("DECIMAL %s", oracleColMeta),
 				fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
 				fmt.Sprintf("DECIMAL %s", oracleColMeta)}
@@ -291,8 +283,7 @@ func OracleTableMapRuleCheck(
 			if mysqlDataType == "DECIMAL" && mysqlDataPrecision == oracleDataPrecision && mysqlDataScale == oracleDataScale && oracleDiffColMeta == mysqlDiffColMeta {
 				return "", nil, nil
 			}
-			tableRows = table.Row{
-				columnName,
+			tableRows = table.Row{tableName, columnName,
 				fmt.Sprintf("DECIMAL(%d,%d) %s", oracleDataPrecision, oracleDataScale, oracleColMeta),
 				fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
 				fmt.Sprintf("DECIMAL(%d,%d) %s", oracleDataPrecision, oracleDataScale, oracleColMeta)}
@@ -310,8 +301,7 @@ func OracleTableMapRuleCheck(
 		if mysqlDataType == "DOUBLE" && mysqlDataPrecision == 22 && mysqlDataScale == 0 && oracleDiffColMeta == mysqlDiffColMeta {
 			return "", nil, nil
 		}
-		tableRows = table.Row{
-			columnName,
+		tableRows = table.Row{tableName, columnName,
 			fmt.Sprintf("DOUBLE PRECISION %s", oracleColMeta),
 			fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
 			fmt.Sprintf("DOUBLE PRECISION %s", oracleColMeta)}
@@ -329,8 +319,7 @@ func OracleTableMapRuleCheck(
 			if mysqlDataType == "FLOAT" && mysqlDataPrecision == 12 && mysqlDataScale == 0 && oracleDiffColMeta == mysqlDiffColMeta {
 				return "", nil, nil
 			}
-			tableRows = table.Row{
-				columnName,
+			tableRows = table.Row{tableName, columnName,
 				fmt.Sprintf("FLOAT %s", oracleColMeta),
 				fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
 				fmt.Sprintf("FLOAT %s", oracleColMeta)}
@@ -347,8 +336,7 @@ func OracleTableMapRuleCheck(
 		if mysqlDataType == "DOUBLE" && mysqlDataPrecision == 22 && mysqlDataScale == 0 && oracleDiffColMeta == mysqlDiffColMeta {
 			return "", nil, nil
 		}
-		tableRows = table.Row{
-			columnName,
+		tableRows = table.Row{tableName, columnName,
 			fmt.Sprintf("FLOAT %s", oracleColMeta),
 			fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
 			fmt.Sprintf("DOUBLE %s", oracleColMeta)}
@@ -365,8 +353,7 @@ func OracleTableMapRuleCheck(
 		if mysqlDataType == "INT" && mysqlDataPrecision >= 10 && mysqlDataScale == 0 && oracleDiffColMeta == mysqlDiffColMeta {
 			return "", nil, nil
 		}
-		tableRows = table.Row{
-			columnName,
+		tableRows = table.Row{tableName, columnName,
 			fmt.Sprintf("INTEGER %s", oracleColMeta),
 			fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
 			fmt.Sprintf("INT %s", oracleColMeta)}
@@ -383,8 +370,7 @@ func OracleTableMapRuleCheck(
 		if mysqlDataType == "INT" && mysqlDataPrecision >= 10 && mysqlDataScale == 0 && oracleDiffColMeta == mysqlDiffColMeta {
 			return "", nil, nil
 		}
-		tableRows = table.Row{
-			columnName,
+		tableRows = table.Row{tableName, columnName,
 			fmt.Sprintf("INT %s", oracleColMeta),
 			fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
 			fmt.Sprintf("INT %s", oracleColMeta)}
@@ -401,8 +387,7 @@ func OracleTableMapRuleCheck(
 		if mysqlDataType == "DOUBLE" && mysqlDataPrecision == 22 && mysqlDataScale == 0 && oracleDiffColMeta == mysqlDiffColMeta {
 			return "", nil, nil
 		}
-		tableRows = table.Row{
-			columnName,
+		tableRows = table.Row{tableName, columnName,
 			fmt.Sprintf("REAL %s", oracleColMeta),
 			fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
 			fmt.Sprintf("DOUBLE %s", oracleColMeta)}
@@ -419,8 +404,7 @@ func OracleTableMapRuleCheck(
 		if mysqlDataType == "DECIMAL" && mysqlDataPrecision == oracleDataPrecision && mysqlDataScale == oracleDataScale && oracleDiffColMeta == mysqlDiffColMeta {
 			return "", nil, nil
 		}
-		tableRows = table.Row{
-			columnName,
+		tableRows = table.Row{tableName, columnName,
 			fmt.Sprintf("NUMERIC(%d,%d) %s", oracleDataPrecision, oracleDataScale, oracleColMeta),
 			fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
 			fmt.Sprintf("DECIMAL(%d,%d) %s", oracleDataPrecision, oracleDataScale, oracleColMeta)}
@@ -437,8 +421,7 @@ func OracleTableMapRuleCheck(
 		if mysqlDataType == "DOUBLE" && mysqlDataPrecision == 22 && mysqlDataScale == 0 && oracleDiffColMeta == mysqlDiffColMeta {
 			return "", nil, nil
 		}
-		tableRows = table.Row{
-			columnName,
+		tableRows = table.Row{tableName, columnName,
 			fmt.Sprintf("BINARY_FLOAT %s", oracleColMeta),
 			fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
 			fmt.Sprintf("DOUBLE %s", oracleColMeta)}
@@ -455,8 +438,7 @@ func OracleTableMapRuleCheck(
 		if mysqlDataType == "DOUBLE" && mysqlDataPrecision == 22 && mysqlDataScale == 0 && oracleDiffColMeta == mysqlDiffColMeta {
 			return "", nil, nil
 		}
-		tableRows = table.Row{
-			columnName,
+		tableRows = table.Row{tableName, columnName,
 			fmt.Sprintf("BINARY_DOUBLE %s", oracleColMeta),
 			fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
 			fmt.Sprintf("DOUBLE %s", oracleColMeta)}
@@ -473,8 +455,7 @@ func OracleTableMapRuleCheck(
 		if mysqlDataType == "DECIMAL" && mysqlDataPrecision == 38 && mysqlDataScale == 0 && oracleDiffColMeta == mysqlDiffColMeta {
 			return "", nil, nil
 		}
-		tableRows = table.Row{
-			columnName,
+		tableRows = table.Row{tableName, columnName,
 			fmt.Sprintf("SMALLINT %s", oracleColMeta),
 			fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
 			fmt.Sprintf("DECIMAL(38) %s", oracleColMeta)}
@@ -493,8 +474,7 @@ func OracleTableMapRuleCheck(
 		if mysqlDataType == "VARCHAR" && mysqlDataLength == 255 && oracleDiffColMeta == mysqlDiffColMeta {
 			return "", nil, nil
 		}
-		tableRows = table.Row{
-			columnName,
+		tableRows = table.Row{tableName, columnName,
 			fmt.Sprintf("BFILE %s", oracleColMeta),
 			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
 			fmt.Sprintf("VARCHAR(255) %s", oracleColMeta)}
@@ -512,8 +492,7 @@ func OracleTableMapRuleCheck(
 			if mysqlDataType == "CHAR" && mysqlDataLength == oracleDataLength && oracleDiffColMeta == mysqlDiffColMeta {
 				return "", nil, nil
 			}
-			tableRows = table.Row{
-				columnName,
+			tableRows = table.Row{tableName, columnName,
 				fmt.Sprintf("CHARACTER(%d) %s", oracleDataLength, oracleColMeta),
 				fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
 				fmt.Sprintf("CHAR(%d) %s", oracleDataLength, oracleColMeta)}
@@ -530,8 +509,7 @@ func OracleTableMapRuleCheck(
 		if mysqlDataType == "VARCHAR" && mysqlDataLength == oracleDataLength && oracleDiffColMeta == mysqlDiffColMeta {
 			return "", nil, nil
 		}
-		tableRows = table.Row{
-			columnName,
+		tableRows = table.Row{tableName, columnName,
 			fmt.Sprintf("CHARACTER(%d) %s", oracleDataLength, oracleColMeta),
 			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
 			fmt.Sprintf("VARCHAR(%d) %s", oracleDataLength, oracleColMeta)}
@@ -548,8 +526,7 @@ func OracleTableMapRuleCheck(
 		if mysqlDataType == "LONGTEXT" && mysqlDataLength == 4294967295 && oracleDiffColMeta == mysqlDiffColMeta {
 			return "", nil, nil
 		}
-		tableRows = table.Row{
-			columnName,
+		tableRows = table.Row{tableName, columnName,
 			fmt.Sprintf("LONG %s", oracleColMeta),
 			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
 			fmt.Sprintf("LONGTEXT %s", oracleColMeta)}
@@ -566,8 +543,7 @@ func OracleTableMapRuleCheck(
 		if mysqlDataType == "LONGBLOB" && mysqlDataLength == 4294967295 && oracleDiffColMeta == mysqlDiffColMeta {
 			return "", nil, nil
 		}
-		tableRows = table.Row{
-			columnName,
+		tableRows = table.Row{tableName, columnName,
 			fmt.Sprintf("LONG RAW %s", oracleColMeta),
 			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
 			fmt.Sprintf("LONGBLOB %s", oracleColMeta)}
@@ -584,8 +560,7 @@ func OracleTableMapRuleCheck(
 		if mysqlDataType == "NCHAR VARYING" && mysqlDataLength == oracleDataLength && oracleDiffColMeta == mysqlDiffColMeta {
 			return "", nil, nil
 		}
-		tableRows = table.Row{
-			columnName,
+		tableRows = table.Row{tableName, columnName,
 			fmt.Sprintf("NCHAR VARYING %s", oracleColMeta),
 			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
 			fmt.Sprintf("NCHAR VARYING(%d) %s", oracleDataLength, oracleColMeta)}
@@ -602,8 +577,7 @@ func OracleTableMapRuleCheck(
 		if mysqlDataType == "TEXT" && mysqlDataLength == 65535 && oracleDiffColMeta == mysqlDiffColMeta {
 			return "", nil, nil
 		}
-		tableRows = table.Row{
-			columnName,
+		tableRows = table.Row{tableName, columnName,
 			fmt.Sprintf("NCLOB %s", oracleColMeta),
 			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
 			fmt.Sprintf("TEXT %s", oracleColMeta)}
@@ -621,8 +595,7 @@ func OracleTableMapRuleCheck(
 			if mysqlDataType == "BINARY" && mysqlDataLength == oracleDataLength && oracleDiffColMeta == mysqlDiffColMeta {
 				return "", nil, nil
 			}
-			tableRows = table.Row{
-				columnName,
+			tableRows = table.Row{tableName, columnName,
 				fmt.Sprintf("RAW(%d) %s", oracleDataLength, oracleColMeta),
 				fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
 				fmt.Sprintf("BINARY(%d) %s", oracleDataLength, oracleColMeta)}
@@ -640,8 +613,7 @@ func OracleTableMapRuleCheck(
 		if mysqlDataType == "VARBINARY" && mysqlDataLength == oracleDataLength && oracleDiffColMeta == mysqlDiffColMeta {
 			return "", nil, nil
 		}
-		tableRows = table.Row{
-			columnName,
+		tableRows = table.Row{tableName, columnName,
 			fmt.Sprintf("RAW(%d) %s", oracleDataLength, oracleColMeta),
 			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
 			fmt.Sprintf("VARBINARY(%d) %s", oracleDataLength, oracleColMeta)}
@@ -658,8 +630,7 @@ func OracleTableMapRuleCheck(
 		if mysqlDataType == "CHAR" && mysqlDataLength == 10 && oracleDiffColMeta == mysqlDiffColMeta {
 			return "", nil, nil
 		}
-		tableRows = table.Row{
-			columnName,
+		tableRows = table.Row{tableName, columnName,
 			fmt.Sprintf("ROWID %s", oracleColMeta),
 			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
 			fmt.Sprintf("CHAR(10) %s", oracleColMeta)}
@@ -676,8 +647,7 @@ func OracleTableMapRuleCheck(
 		if mysqlDataType == "VARCHAR" && mysqlDataLength == oracleDataLength && oracleDiffColMeta == mysqlDiffColMeta {
 			return "", nil, nil
 		}
-		tableRows = table.Row{
-			columnName,
+		tableRows = table.Row{tableName, columnName,
 			fmt.Sprintf("UROWID %s", oracleColMeta),
 			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
 			fmt.Sprintf("VARCHAR(%d) %s", oracleDataLength, oracleColMeta)}
@@ -694,8 +664,7 @@ func OracleTableMapRuleCheck(
 		if mysqlDataType == "VARCHAR" && mysqlDataLength == oracleDataLength && oracleDiffColMeta == mysqlDiffColMeta {
 			return "", nil, nil
 		}
-		tableRows = table.Row{
-			columnName,
+		tableRows = table.Row{tableName, columnName,
 			fmt.Sprintf("VARCHAR(%d) %s", oracleDataLength, oracleColMeta),
 			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
 			fmt.Sprintf("VARCHAR(%d) %s", oracleDataLength, oracleColMeta)}
@@ -712,8 +681,7 @@ func OracleTableMapRuleCheck(
 		if mysqlDataType == "LONGTEXT" && mysqlDataLength == 4294967295 && oracleDiffColMeta == mysqlDiffColMeta {
 			return "", nil, nil
 		}
-		tableRows = table.Row{
-			columnName,
+		tableRows = table.Row{tableName, columnName,
 			fmt.Sprintf("XMLTYPE %s", oracleColMeta),
 			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
 			fmt.Sprintf("LONGTEXT %s", oracleColMeta)}
@@ -732,8 +700,7 @@ func OracleTableMapRuleCheck(
 		if mysqlDataType == "LONGTEXT" && mysqlDataLength == 4294967295 && oracleDiffColMeta == mysqlDiffColMeta {
 			return "", nil, nil
 		}
-		tableRows = table.Row{
-			columnName,
+		tableRows = table.Row{tableName, columnName,
 			fmt.Sprintf("CLOB %s", oracleColMeta),
 			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
 			fmt.Sprintf("LONGTEXT %s", oracleColMeta)}
@@ -750,8 +717,7 @@ func OracleTableMapRuleCheck(
 		if mysqlDataType == "BLOB" && mysqlDataLength == 65535 && oracleDiffColMeta == mysqlDiffColMeta {
 			return "", nil, nil
 		}
-		tableRows = table.Row{
-			columnName,
+		tableRows = table.Row{tableName, columnName,
 			fmt.Sprintf("BLOB %s", oracleColMeta),
 			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
 			fmt.Sprintf("BLOB %s", oracleColMeta)}
@@ -770,8 +736,7 @@ func OracleTableMapRuleCheck(
 		if mysqlDataType == "DATETIME" && mysqlDataLength == 0 && mysqlDataPrecision == 0 && mysqlDataScale == 0 && mysqlDatetimePrecision == 0 && oracleDiffColMeta == mysqlDiffColMeta {
 			return "", nil, nil
 		}
-		tableRows = table.Row{
-			columnName,
+		tableRows = table.Row{tableName, columnName,
 			fmt.Sprintf("DATE %s", oracleColMeta),
 			fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
 			fmt.Sprintf("DATETIME %s", oracleColMeta)}
@@ -793,8 +758,7 @@ func OracleTableMapRuleCheck(
 			if mysqlDataType == "CHAR" && mysqlDataLength == oracleDataLength && oracleDiffColMeta == mysqlDiffColMeta && oracleColumnCharUsed == "char" {
 				return "", nil, nil
 			}
-			tableRows = table.Row{
-				columnName,
+			tableRows = table.Row{tableName, columnName,
 				fmt.Sprintf("CHAR(%d %s) %s", oracleDataLength, oracleColumnCharUsed, oracleColMeta),
 				fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
 				fmt.Sprintf("CHAR(%d) %s", oracleDataLength, oracleColMeta)}
@@ -816,8 +780,7 @@ func OracleTableMapRuleCheck(
 		if mysqlDataType == "VARCHAR" && mysqlDataLength == oracleDataLength && oracleDiffColMeta == mysqlDiffColMeta && oracleColumnCharUsed == "char" {
 			return "", nil, nil
 		}
-		tableRows = table.Row{
-			columnName,
+		tableRows = table.Row{tableName, columnName,
 			fmt.Sprintf("CHAR(%d %s) %s", oracleDataLength, oracleColumnCharUsed, oracleColMeta),
 			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
 			fmt.Sprintf("VARCHAR(%d) %s", oracleDataLength, oracleColMeta)}
@@ -839,8 +802,7 @@ func OracleTableMapRuleCheck(
 			if mysqlDataType == "NCHAR" && mysqlDataLength == oracleDataLength && oracleDiffColMeta == mysqlDiffColMeta && oracleColumnCharUsed == "char" {
 				return "", nil, nil
 			}
-			tableRows = table.Row{
-				columnName,
+			tableRows = table.Row{tableName, columnName,
 				fmt.Sprintf("NCHAR(%d %s) %s", oracleDataLength, oracleColumnCharUsed, oracleColMeta),
 				fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
 				fmt.Sprintf("NCHAR(%d) %s", oracleDataLength, oracleColMeta)}
@@ -862,8 +824,7 @@ func OracleTableMapRuleCheck(
 		if mysqlDataType == "NVARCHAR" && mysqlDataLength == oracleDataLength && oracleDiffColMeta == mysqlDiffColMeta && oracleColumnCharUsed == "char" {
 			return "", nil, nil
 		}
-		tableRows = table.Row{
-			columnName,
+		tableRows = table.Row{tableName, columnName,
 			fmt.Sprintf("NVARCHAR(%d %s) %s", oracleDataLength, oracleColumnCharUsed, oracleColMeta),
 			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
 			fmt.Sprintf("NVARCHAR(%d) %s", oracleDataLength, oracleColMeta)}
@@ -885,8 +846,7 @@ func OracleTableMapRuleCheck(
 		if mysqlDataType == "VARCHAR" && mysqlDataLength == oracleDataLength && oracleDiffColMeta == mysqlDiffColMeta && oracleColumnCharUsed == "char" {
 			return "", nil, nil
 		}
-		tableRows = table.Row{
-			columnName,
+		tableRows = table.Row{tableName, columnName,
 			fmt.Sprintf("VARCHAR2(%d %s) %s", oracleDataLength, oracleColumnCharUsed, oracleColMeta),
 			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
 			fmt.Sprintf("VARCHAR(%d) %s", oracleDataLength, oracleColMeta)}
@@ -908,8 +868,7 @@ func OracleTableMapRuleCheck(
 		if mysqlDataType == "NVARCHAR" && mysqlDataLength == oracleDataLength && oracleDiffColMeta == mysqlDiffColMeta && oracleColumnCharUsed == "char" {
 			return "", nil, nil
 		}
-		tableRows = table.Row{
-			columnName,
+		tableRows = table.Row{tableName, columnName,
 			fmt.Sprintf("NVARCHAR2(%d %s) %s", oracleDataLength, oracleColumnCharUsed, oracleColMeta),
 			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
 			fmt.Sprintf("NVARCHAR(%d) %s", oracleDataLength, oracleColMeta)}
@@ -934,8 +893,7 @@ func OracleTableMapRuleCheck(
 			if mysqlDataType == "VARCHAR" && mysqlDataLength == 30 && oracleDiffColMeta == mysqlDiffColMeta {
 				return "", nil, nil
 			}
-			tableRows = table.Row{
-				columnName,
+			tableRows = table.Row{tableName, columnName,
 				fmt.Sprintf("%s %s", oracleDataType, oracleColMeta),
 				fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
 				fmt.Sprintf("VARCHAR(30) %s", oracleColMeta)}
@@ -954,8 +912,7 @@ func OracleTableMapRuleCheck(
 					if mysqlDataType == "DATETIME" && mysqlDatetimePrecision == oracleDataScale && oracleDiffColMeta == mysqlDiffColMeta {
 						return "", nil, nil
 					}
-					tableRows = table.Row{
-						columnName,
+					tableRows = table.Row{tableName, columnName,
 						fmt.Sprintf("%s(%d) %s", oracleDataType, oracleDataScale, oracleColMeta),
 						fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDatetimePrecision, mysqlColMeta),
 						fmt.Sprintf("DATETIME(%d) %s", oracleDataScale, oracleColMeta)}
@@ -970,8 +927,7 @@ func OracleTableMapRuleCheck(
 					return fixedMsg, tableRows, nil
 				} else {
 					// mysql/tidb 只支持精度 6，oracle 精度最大是 9，会检查出来但是保持原样
-					tableRows = table.Row{
-						columnName,
+					tableRows = table.Row{tableName, columnName,
 						fmt.Sprintf("%s(%d) %s", oracleDataType, oracleDataScale, oracleColMeta),
 						fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDatetimePrecision, mysqlColMeta),
 						fmt.Sprintf("DATETIME(%d) %s", 6, oracleColMeta)}
@@ -990,8 +946,7 @@ func OracleTableMapRuleCheck(
 					if mysqlDataType == "TIMESTAMP" && mysqlDatetimePrecision == oracleDataScale && oracleDiffColMeta == mysqlDiffColMeta {
 						return "", nil, nil
 					}
-					tableRows = table.Row{
-						columnName,
+					tableRows = table.Row{tableName, columnName,
 						fmt.Sprintf("%s(%d) %s", oracleDataType, oracleDataScale, oracleColMeta),
 						fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDatetimePrecision, mysqlColMeta),
 						fmt.Sprintf("TIMESTAMP(%d) %s", oracleDataScale, oracleColMeta)}
@@ -1006,8 +961,7 @@ func OracleTableMapRuleCheck(
 					return fixedMsg, tableRows, nil
 				} else {
 					// mysql/tidb 只支持精度 6，oracle 精度最大是 9，会检查出来但是保持原样
-					tableRows = table.Row{
-						columnName,
+					tableRows = table.Row{tableName, columnName,
 						fmt.Sprintf("%s(%d) %s", oracleDataType, oracleDataScale, oracleColMeta),
 						fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDatetimePrecision, mysqlColMeta),
 						fmt.Sprintf("TIMESTAMP(%d) %s", 6, oracleColMeta)}
@@ -1026,8 +980,7 @@ func OracleTableMapRuleCheck(
 			if mysqlDataType == "TEXT" && mysqlDataLength == 65535 && mysqlDataScale == 0 && oracleDiffColMeta == mysqlDiffColMeta {
 				return "", nil, nil
 			}
-			tableRows = table.Row{
-				columnName,
+			tableRows = table.Row{tableName, columnName,
 				fmt.Sprintf("%s %s", oracleDataType, oracleColMeta),
 				fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
 				fmt.Sprintf("TEXT %s", oracleColMeta)}
