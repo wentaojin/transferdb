@@ -66,7 +66,7 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 		zap.String("oracle table", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)),
 		zap.String("mysql table", fmt.Sprintf("%s.%s", d.TargetSchemaName, d.TableName)))
 
-	var builder strings.Builder
+	var builder *strings.Builder
 
 	// 判断 MySQL 表是否存在
 	isExist, err := d.Engine.IsExistMySQLTable(d.TargetSchemaName, d.TableName)
@@ -256,7 +256,7 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 }
 
 func (d *DiffWriter) partitionRuleCheck(file *reverser.FileMW, oracleTable, mysqlTable *Table) error {
-	var builder strings.Builder
+	var builder *strings.Builder
 	builder.WriteString("/*\n")
 	builder.WriteString(fmt.Sprintf(" oracle table type is different from mysql table type\n"))
 
@@ -281,7 +281,7 @@ func (d *DiffWriter) partitionRuleCheck(file *reverser.FileMW, oracleTable, mysq
 	return nil
 }
 
-func (d *DiffWriter) commentRuleCheck(builder strings.Builder, oracleTable, mysqlTable *Table) {
+func (d *DiffWriter) commentRuleCheck(builder *strings.Builder, oracleTable, mysqlTable *Table) {
 	builder.WriteString("/*\n")
 	builder.WriteString(fmt.Sprintf(" oracle and mysql table comment\n"))
 
@@ -297,7 +297,7 @@ func (d *DiffWriter) commentRuleCheck(builder strings.Builder, oracleTable, mysq
 	builder.WriteString(fmt.Sprintf("ALTER TABLE %s.%s COMMENT '%s';\n", d.TargetSchemaName, d.TableName, oracleTable.TableComment))
 }
 
-func (d *DiffWriter) tableCharacterSetRuleCheck(builder strings.Builder, oracleTable, mysqlTable *Table) {
+func (d *DiffWriter) tableCharacterSetRuleCheck(builder *strings.Builder, oracleTable, mysqlTable *Table) {
 	builder.WriteString("/*\n")
 	builder.WriteString(fmt.Sprintf(" oracle and mysql table character set and collation\n"))
 
@@ -316,7 +316,7 @@ func (d *DiffWriter) tableCharacterSetRuleCheck(builder strings.Builder, oracleT
 	builder.WriteString(fmt.Sprintf("ALTER TABLE %s.%s CHARACTER SET = %s, COLLATE = %s;\n", d.TargetSchemaName, d.TableName, utils.MySQLCharacterSet, utils.MySQLCollation))
 }
 
-func (d *DiffWriter) columnCharacterSetRuleCheck(builder strings.Builder, oracleTable, mysqlTable *Table) {
+func (d *DiffWriter) columnCharacterSetRuleCheck(builder *strings.Builder, oracleTable, mysqlTable *Table) {
 	tableColumnsMap := make(map[string]Column)
 	for mysqlColName, mysqlColInfo := range mysqlTable.Columns {
 		if mysqlColInfo.CharacterSet != "UNKNOWN" || mysqlColInfo.Collation != "UNKNOWN" {
@@ -350,7 +350,7 @@ func (d *DiffWriter) columnCharacterSetRuleCheck(builder strings.Builder, oracle
 	}
 }
 
-func (d *DiffWriter) primaryAndUniqueKeyRuleCheck(builder strings.Builder, oracleTable, mysqlTable *Table) error {
+func (d *DiffWriter) primaryAndUniqueKeyRuleCheck(builder *strings.Builder, oracleTable, mysqlTable *Table) error {
 	addDiffPU, _, isOK := utils.DiffStructArray(oracleTable.PUConstraints, mysqlTable.PUConstraints)
 	if len(addDiffPU) != 0 && !isOK {
 		builder.WriteString("/*\n")
@@ -385,7 +385,7 @@ func (d *DiffWriter) primaryAndUniqueKeyRuleCheck(builder strings.Builder, oracl
 	return nil
 }
 
-func (d *DiffWriter) foreignKeyRuleCheck(builder strings.Builder, oracleTable, mysqlTable *Table) error {
+func (d *DiffWriter) foreignKeyRuleCheck(builder *strings.Builder, oracleTable, mysqlTable *Table) error {
 	addDiffFK, _, isOK := utils.DiffStructArray(oracleTable.ForeignConstraints, mysqlTable.ForeignConstraints)
 	if len(addDiffFK) != 0 && !isOK {
 		builder.WriteString("/*\n")
@@ -413,7 +413,7 @@ func (d *DiffWriter) foreignKeyRuleCheck(builder strings.Builder, oracleTable, m
 	return nil
 }
 
-func (d *DiffWriter) checkKeyRuleCheck(builder strings.Builder, oracleTable, mysqlTable *Table) error {
+func (d *DiffWriter) checkKeyRuleCheck(builder *strings.Builder, oracleTable, mysqlTable *Table) error {
 	addDiffCK, _, isOK := utils.DiffStructArray(oracleTable.CheckConstraints, mysqlTable.CheckConstraints)
 	if len(addDiffCK) != 0 && !isOK {
 		builder.WriteString("/*\n")
@@ -441,7 +441,7 @@ func (d *DiffWriter) checkKeyRuleCheck(builder strings.Builder, oracleTable, mys
 	return nil
 }
 
-func (d *DiffWriter) indexRuleCheck(builder strings.Builder, oracleTable, mysqlTable *Table) error {
+func (d *DiffWriter) indexRuleCheck(builder *strings.Builder, oracleTable, mysqlTable *Table) error {
 	var createIndexSQL []string
 	addDiffIndex, _, isOK := utils.DiffStructArray(oracleTable.Indexes, mysqlTable.Indexes)
 	if len(addDiffIndex) != 0 && !isOK {
@@ -538,7 +538,7 @@ func (d *DiffWriter) indexRuleCheck(builder strings.Builder, oracleTable, mysqlT
 	return nil
 }
 
-func (d *DiffWriter) columnRuleCheck(builder strings.Builder, oracleTable, mysqlTable *Table) error {
+func (d *DiffWriter) columnRuleCheck(builder *strings.Builder, oracleTable, mysqlTable *Table) error {
 	var (
 		diffColumnMsgs    []string
 		createColumnMetas []string
