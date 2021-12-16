@@ -254,3 +254,38 @@ INSERT INTO schema_data_type_map
 VALUES
     ( 'marvin', 'number(10)', 'decimal(10)' );
 
+/*
+    表结构测试
+ */
+CREATE TABLE t88 (id number primary key,
+                  name1 VARCHAR2(10),
+                  name2 VARCHAR2(10),
+                  name3 VARCHAR2(10),
+                  name4 VARCHAR2(10),
+                  name5 VARCHAR2(10),
+                  name6 VARCHAR2(10),
+                  name7 VARCHAR2(10),
+                  name8 VARCHAR2(10),
+                  name9 VARCHAR2(10),
+                  name10 VARCHAR2(10),
+                  name11 VARCHAR2(10),
+                  name12 VARCHAR2(10)
+);
+
+
+create unique index t88_unique_name12 on t88(name1,name2);
+alter table t88 add constraints t88_unique_cons UNIQUE(name1,name2) using index t88_unique_name12;
+create unique index t88_unique_name23 on t88(name2,name3);
+create unique index t88_unique_name3 on t88(name3);
+create index t88_unique_name4 on t88(name4);
+create index t88_unique_name56 on t88(name5,name6);
+create bitmap index t88_unique_name7 on t88(name7);
+create bitmap index t88_unique_name8 on t88(name8);
+create index t88_unique_name9 on t88(SUBSTR(name9,1,8));
+create index t88_unique_name10 on t88(SUBSTR(name10,1,8));
+create index t88_unique_name78 on t88(SUBSTR(name7,1,8),name8);
+create index t88_unique_name89 on t88(SUBSTR(name8,1,8),name9);
+create bitmap index t88_unique_name10_substr on t88(SUBSTR(name10,1,8),name11);
+create bitmap index t88_unique_name9_substr on t88(SUBSTR(name9,1,8),name10);
+create bitmap index t88_unique_name9_substr on t88(SUBSTR(name9,1,8),name10);
+CREATE INDEX ResumeTextIndex10 ON t88(name10) INDEXTYPE IS "CTXSYS"."CONTEXT" PARAMETERS (':Language English :Ignore the a an');

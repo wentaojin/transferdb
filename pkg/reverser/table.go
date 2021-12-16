@@ -177,7 +177,7 @@ func (t Table) reverserOracleTableNormalIndexToMySQL(modifyTableName string) ([]
 
 					sql := fmt.Sprintf("CREATE INDEX `%s` ON `%s`.`%s` (%s);",
 						strings.ToUpper(idxMeta["INDEX_NAME"]), t.TargetSchemaName, modifyTableName,
-						strings.ToUpper(strings.Join(normalIndex, ",")))
+						strings.Join(normalIndex, ","))
 
 					createIndexSQL = append(createIndexSQL, sql)
 
@@ -194,7 +194,7 @@ func (t Table) reverserOracleTableNormalIndexToMySQL(modifyTableName string) ([]
 				case "FUNCTION-BASED NORMAL":
 					sql := fmt.Sprintf("CREATE INDEX %s ON %s.%s (%s);",
 						strings.ToUpper(idxMeta["INDEX_NAME"]), t.TargetSchemaName, modifyTableName,
-						strings.ToUpper(idxMeta["COLUMN_LIST"]))
+						idxMeta["COLUMN_LIST"])
 
 					compatibilityIndexSQL = append(compatibilityIndexSQL, sql)
 
@@ -211,7 +211,7 @@ func (t Table) reverserOracleTableNormalIndexToMySQL(modifyTableName string) ([]
 				case "BITMAP":
 					sql := fmt.Sprintf("CREATE BITMAP INDEX %s ON %s.%s (%s);",
 						strings.ToUpper(idxMeta["INDEX_NAME"]), t.TargetSchemaName, modifyTableName,
-						strings.ToUpper(idxMeta["COLUMN_LIST"]))
+						idxMeta["COLUMN_LIST"])
 
 					compatibilityIndexSQL = append(compatibilityIndexSQL, sql)
 
@@ -228,7 +228,7 @@ func (t Table) reverserOracleTableNormalIndexToMySQL(modifyTableName string) ([]
 				case "FUNCTION-BASED BITMAP":
 					sql := fmt.Sprintf("CREATE BITMAP INDEX %s ON %s.%s (%s);",
 						strings.ToUpper(idxMeta["INDEX_NAME"]), t.TargetSchemaName, modifyTableName,
-						strings.ToUpper(idxMeta["COLUMN_LIST"]))
+						idxMeta["COLUMN_LIST"])
 
 					compatibilityIndexSQL = append(compatibilityIndexSQL, sql)
 
@@ -245,10 +245,10 @@ func (t Table) reverserOracleTableNormalIndexToMySQL(modifyTableName string) ([]
 				case "DOMAIN":
 					sql := fmt.Sprintf("CREATE INDEX %s ON %s.%s (%s) INDEXTYPE IS %s.%s PARAMETERS ('%s');",
 						strings.ToUpper(idxMeta["INDEX_NAME"]), t.TargetSchemaName, modifyTableName,
-						strings.ToUpper(idxMeta["COLUMN_LIST"]),
+						idxMeta["COLUMN_LIST"],
 						strings.ToUpper(idxMeta["ITYP_OWNER"]),
 						strings.ToUpper(idxMeta["ITYP_NAME"]),
-						strings.ToUpper(idxMeta["PARAMETERS"]))
+						idxMeta["PARAMETERS"])
 
 					compatibilityIndexSQL = append(compatibilityIndexSQL, sql)
 
@@ -321,7 +321,7 @@ func (t Table) reverserOracleTableUniqueIndexToMySQL(modifyTableName string) ([]
 					sql := fmt.Sprintf("CREATE UNIQUE INDEX `%s` ON `%s`.`%s` (%s);",
 						strings.ToUpper(idxMeta["INDEX_NAME"]),
 						t.TargetSchemaName, modifyTableName,
-						strings.ToUpper(strings.Join(uniqueIndex, ",")))
+						strings.Join(uniqueIndex, ","))
 
 					createIndexSQL = append(createIndexSQL, sql)
 
@@ -338,7 +338,7 @@ func (t Table) reverserOracleTableUniqueIndexToMySQL(modifyTableName string) ([]
 				case "FUNCTION-BASED NORMAL":
 					sql := fmt.Sprintf("CREATE UNIQUE INDEX `%s` ON `%s`.`%s` (%s);",
 						strings.ToUpper(idxMeta["INDEX_NAME"]), t.TargetSchemaName, modifyTableName,
-						strings.ToUpper(idxMeta["COLUMN_LIST"]))
+						idxMeta["COLUMN_LIST"])
 
 					compatibilityIndexSQL = append(compatibilityIndexSQL, sql)
 
@@ -466,7 +466,7 @@ func (t Table) reverserOracleTableFKToMySQL() ([]string, error) {
 	if len(foreignKeyMap) > 0 {
 		for _, rowFKCol := range foreignKeyMap {
 			if rowFKCol["DELETE_RULE"] == "" || rowFKCol["DELETE_RULE"] == "NO ACTION" {
-				fk := fmt.Sprintf("CONSTRAINT `%s` FOREIGN KEY(%s) REFERENCES `%s`.`%s`(%s)",
+				fk := fmt.Sprintf("CONSTRAINT `%s` FOREIGN KEY (%s) REFERENCES `%s`.`%s` (%s)",
 					strings.ToUpper(rowFKCol["CONSTRAINT_NAME"]),
 					strings.ToUpper(rowFKCol["COLUMN_LIST"]),
 					strings.ToUpper(rowFKCol["R_OWNER"]),
@@ -475,7 +475,7 @@ func (t Table) reverserOracleTableFKToMySQL() ([]string, error) {
 				keysMeta = append(keysMeta, fk)
 			}
 			if rowFKCol["DELETE_RULE"] == "CASCADE" {
-				fk := fmt.Sprintf("CONSTRAINT `%s` FOREIGN KEY(%s) REFERENCES `%s`.`%s`(%s) ON DELETE CASCADE",
+				fk := fmt.Sprintf("CONSTRAINT `%s` FOREIGN KEY (%s) REFERENCES `%s`.`%s`(%s) ON DELETE CASCADE",
 					strings.ToUpper(rowFKCol["CONSTRAINT_NAME"]),
 					strings.ToUpper(rowFKCol["COLUMN_LIST"]),
 					strings.ToUpper(rowFKCol["R_OWNER"]),
