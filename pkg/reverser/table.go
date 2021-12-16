@@ -175,7 +175,7 @@ func (t Table) reverserOracleTableNormalIndexToMySQL(modifyTableName string) ([]
 						normalIndex = append(normalIndex, fmt.Sprintf("`%s`", col))
 					}
 
-					sql := fmt.Sprintf("CREATE INDEX `%s` ON `%s`.`%s`(%s);",
+					sql := fmt.Sprintf("CREATE INDEX `%s` ON `%s`.`%s` (%s);",
 						strings.ToUpper(idxMeta["INDEX_NAME"]), t.TargetSchemaName, modifyTableName,
 						strings.ToUpper(strings.Join(normalIndex, ",")))
 
@@ -187,20 +187,14 @@ func (t Table) reverserOracleTableNormalIndexToMySQL(modifyTableName string) ([]
 						zap.String("index name", idxMeta["INDEX_NAME"]),
 						zap.String("index type", idxMeta["INDEX_TYPE"]),
 						zap.String("index column list", idxMeta["COLUMN_LIST"]),
-						zap.String("index expression", idxMeta["COLUMN_EXPRESSION"]),
 						zap.String("create normal index sql", sql))
 
 					continue
 
 				case "FUNCTION-BASED NORMAL":
-					var normalIndex []string
-					for _, col := range strings.Split(idxMeta["COLUMN_EXPRESSION"], ",") {
-						normalIndex = append(normalIndex, fmt.Sprintf("`%s`", col))
-					}
-
-					sql := fmt.Sprintf("CREATE INDEX `%s` ON `%s`.`%s`(%s);",
+					sql := fmt.Sprintf("CREATE INDEX %s ON %s.%s (%s);",
 						strings.ToUpper(idxMeta["INDEX_NAME"]), t.TargetSchemaName, modifyTableName,
-						strings.ToUpper(strings.Join(normalIndex, ",")))
+						strings.ToUpper(idxMeta["COLUMN_LIST"]))
 
 					compatibilityIndexSQL = append(compatibilityIndexSQL, sql)
 
@@ -210,20 +204,15 @@ func (t Table) reverserOracleTableNormalIndexToMySQL(modifyTableName string) ([]
 						zap.String("index name", idxMeta["INDEX_NAME"]),
 						zap.String("index type", idxMeta["INDEX_TYPE"]),
 						zap.String("index column list", idxMeta["COLUMN_LIST"]),
-						zap.String("index expression", idxMeta["COLUMN_EXPRESSION"]),
 						zap.String("create normal index sql", sql),
 						zap.String("warn", "mysql not support"))
 					continue
 
 				case "BITMAP":
-					var normalIndex []string
-					for _, col := range strings.Split(idxMeta["COLUMN_LIST"], ",") {
-						normalIndex = append(normalIndex, fmt.Sprintf("`%s`", col))
-					}
-
-					sql := fmt.Sprintf("CREATE BITMAP INDEX `%s` ON `%s`.`%s`(%s);",
+					sql := fmt.Sprintf("CREATE BITMAP INDEX %s ON %s.%s (%s);",
 						strings.ToUpper(idxMeta["INDEX_NAME"]), t.TargetSchemaName, modifyTableName,
-						strings.ToUpper(strings.Join(normalIndex, ",")))
+						strings.ToUpper(idxMeta["COLUMN_LIST"]))
+
 					compatibilityIndexSQL = append(compatibilityIndexSQL, sql)
 
 					service.Logger.Warn("reverse normal index",
@@ -232,7 +221,46 @@ func (t Table) reverserOracleTableNormalIndexToMySQL(modifyTableName string) ([]
 						zap.String("index name", idxMeta["INDEX_NAME"]),
 						zap.String("index type", idxMeta["INDEX_TYPE"]),
 						zap.String("index column list", idxMeta["COLUMN_LIST"]),
-						zap.String("index expression", idxMeta["COLUMN_EXPRESSION"]),
+						zap.String("create normal index sql", sql),
+						zap.String("warn", "mysql not support"))
+					continue
+
+				case "FUNCTION-BASED BITMAP":
+					sql := fmt.Sprintf("CREATE BITMAP INDEX %s ON %s.%s (%s);",
+						strings.ToUpper(idxMeta["INDEX_NAME"]), t.TargetSchemaName, modifyTableName,
+						strings.ToUpper(idxMeta["COLUMN_LIST"]))
+
+					compatibilityIndexSQL = append(compatibilityIndexSQL, sql)
+
+					service.Logger.Warn("reverse normal index",
+						zap.String("schema", t.SourceSchemaName),
+						zap.String("table", idxMeta["TABLE_NAME"]),
+						zap.String("index name", idxMeta["INDEX_NAME"]),
+						zap.String("index type", idxMeta["INDEX_TYPE"]),
+						zap.String("index column list", idxMeta["COLUMN_LIST"]),
+						zap.String("create normal index sql", sql),
+						zap.String("warn", "mysql not support"))
+					continue
+
+				case "DOMAIN":
+					sql := fmt.Sprintf("CREATE INDEX %s ON %s.%s (%s) INDEXTYPE IS %s.%s PARAMETERS ('%s');",
+						strings.ToUpper(idxMeta["INDEX_NAME"]), t.TargetSchemaName, modifyTableName,
+						strings.ToUpper(idxMeta["COLUMN_LIST"]),
+						strings.ToUpper(idxMeta["ITYP_OWNER"]),
+						strings.ToUpper(idxMeta["ITYP_NAME"]),
+						strings.ToUpper(idxMeta["PARAMETERS"]))
+
+					compatibilityIndexSQL = append(compatibilityIndexSQL, sql)
+
+					service.Logger.Warn("reverse normal index",
+						zap.String("schema", t.SourceSchemaName),
+						zap.String("table", idxMeta["TABLE_NAME"]),
+						zap.String("index name", idxMeta["INDEX_NAME"]),
+						zap.String("index type", idxMeta["INDEX_TYPE"]),
+						zap.String("index column list", idxMeta["COLUMN_LIST"]),
+						zap.String("domain owner", idxMeta["ITYP_OWNER"]),
+						zap.String("domain index name", idxMeta["ITYP_NAME"]),
+						zap.String("domain parameters", idxMeta["PARAMETERS"]),
 						zap.String("create normal index sql", sql),
 						zap.String("warn", "mysql not support"))
 					continue
@@ -244,7 +272,9 @@ func (t Table) reverserOracleTableNormalIndexToMySQL(modifyTableName string) ([]
 						zap.String("index name", idxMeta["INDEX_NAME"]),
 						zap.String("index type", idxMeta["INDEX_TYPE"]),
 						zap.String("index column list", idxMeta["COLUMN_LIST"]),
-						zap.String("index expression", idxMeta["COLUMN_EXPRESSION"]),
+						zap.String("domain owner", idxMeta["ITYP_OWNER"]),
+						zap.String("domain index name", idxMeta["ITYP_NAME"]),
+						zap.String("domain parameters", idxMeta["PARAMETERS"]),
 						zap.String("error", "mysql not support"))
 
 					return createIndexSQL, compatibilityIndexSQL, fmt.Errorf("[NORMAL] oracle schema [%s] table [%s] reverse normal index panic, error: %v", t.SourceSchemaName, t.SourceTableName, idxMeta)
@@ -257,7 +287,9 @@ func (t Table) reverserOracleTableNormalIndexToMySQL(modifyTableName string) ([]
 				zap.String("index name", idxMeta["INDEX_NAME"]),
 				zap.String("index type", idxMeta["INDEX_TYPE"]),
 				zap.String("index column list", idxMeta["COLUMN_LIST"]),
-				zap.String("index expression", idxMeta["COLUMN_EXPRESSION"]))
+				zap.String("domain owner", idxMeta["ITYP_OWNER"]),
+				zap.String("domain index name", idxMeta["ITYP_NAME"]),
+				zap.String("domain parameters", idxMeta["PARAMETERS"]))
 			return createIndexSQL, compatibilityIndexSQL, fmt.Errorf("[NON-NORMAL] oracle schema [%s] table [%s] reverse normal index panic, error: %v", t.SourceSchemaName, t.SourceTableName, idxMeta)
 		}
 	}
@@ -286,7 +318,7 @@ func (t Table) reverserOracleTableUniqueIndexToMySQL(modifyTableName string) ([]
 						uniqueIndex = append(uniqueIndex, fmt.Sprintf("`%s`", col))
 					}
 
-					sql := fmt.Sprintf("CREATE UNIQUE INDEX `%s` ON `%s`.`%s`(%s);",
+					sql := fmt.Sprintf("CREATE UNIQUE INDEX `%s` ON `%s`.`%s` (%s);",
 						strings.ToUpper(idxMeta["INDEX_NAME"]),
 						t.TargetSchemaName, modifyTableName,
 						strings.ToUpper(strings.Join(uniqueIndex, ",")))
@@ -299,20 +331,14 @@ func (t Table) reverserOracleTableUniqueIndexToMySQL(modifyTableName string) ([]
 						zap.String("index name", idxMeta["INDEX_NAME"]),
 						zap.String("index type", idxMeta["INDEX_TYPE"]),
 						zap.String("index column list", idxMeta["COLUMN_LIST"]),
-						zap.String("index expression", idxMeta["COLUMN_EXPRESSION"]),
 						zap.String("create unique index sql", sql))
 
 					continue
 
 				case "FUNCTION-BASED NORMAL":
-					var uniqueIndex []string
-					for _, col := range strings.Split(idxMeta["COLUMN_EXPRESSION"], ",") {
-						uniqueIndex = append(uniqueIndex, fmt.Sprintf("`%s`", col))
-					}
-
-					sql := fmt.Sprintf("CREATE UNIQUE INDEX `%s` ON `%s`.`%s`(%s);",
+					sql := fmt.Sprintf("CREATE UNIQUE INDEX `%s` ON `%s`.`%s` (%s);",
 						strings.ToUpper(idxMeta["INDEX_NAME"]), t.TargetSchemaName, modifyTableName,
-						strings.ToUpper(strings.Join(uniqueIndex, ",")))
+						strings.ToUpper(idxMeta["COLUMN_LIST"]))
 
 					compatibilityIndexSQL = append(compatibilityIndexSQL, sql)
 
@@ -322,7 +348,6 @@ func (t Table) reverserOracleTableUniqueIndexToMySQL(modifyTableName string) ([]
 						zap.String("index name", idxMeta["INDEX_NAME"]),
 						zap.String("index type", idxMeta["INDEX_TYPE"]),
 						zap.String("index column list", idxMeta["COLUMN_LIST"]),
-						zap.String("index expression", idxMeta["COLUMN_EXPRESSION"]),
 						zap.String("create unique index sql", sql),
 						zap.String("warn", "mysql not support"))
 
@@ -335,7 +360,6 @@ func (t Table) reverserOracleTableUniqueIndexToMySQL(modifyTableName string) ([]
 						zap.String("index name", idxMeta["INDEX_NAME"]),
 						zap.String("index type", idxMeta["INDEX_TYPE"]),
 						zap.String("index column list", idxMeta["COLUMN_LIST"]),
-						zap.String("index expression", idxMeta["COLUMN_EXPRESSION"]),
 						zap.String("error", "mysql not support"))
 
 					return createIndexSQL, compatibilityIndexSQL, fmt.Errorf("[UNIQUE] oracle schema [%s] table [%s] reverse normal index panic, error: %v", t.SourceSchemaName, t.SourceTableName, idxMeta)
@@ -346,8 +370,7 @@ func (t Table) reverserOracleTableUniqueIndexToMySQL(modifyTableName string) ([]
 				zap.String("table", idxMeta["TABLE_NAME"]),
 				zap.String("index name", idxMeta["INDEX_NAME"]),
 				zap.String("index type", idxMeta["INDEX_TYPE"]),
-				zap.String("index column list", idxMeta["COLUMN_LIST"]),
-				zap.String("index expression", idxMeta["COLUMN_EXPRESSION"]))
+				zap.String("index column list", idxMeta["COLUMN_LIST"]))
 			return createIndexSQL, compatibilityIndexSQL,
 				fmt.Errorf("[NON-UNIQUE] oracle schema [%s] table [%s] panic, error: %v", t.SourceSchemaName, t.SourceTableName, idxMeta)
 		}

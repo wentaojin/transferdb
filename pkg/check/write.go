@@ -448,20 +448,6 @@ func (d *DiffWriter) indexRuleCheck(builder strings.Builder, oracleTable, mysqlT
 		for _, idx := range addDiffIndex {
 			value, ok := idx.(Index)
 			if ok {
-				if value.Uniqueness == "NONUNIQUE" && value.IndexType == "NORMAL" {
-					// 考虑 MySQL 索引类型 BTREE，额外判断处理
-					var equalArray []interface{}
-					for _, mysqlIndexInfo := range mysqlTable.Indexes {
-						if reflect.DeepEqual(value.IndexInfo, mysqlIndexInfo.IndexInfo) {
-							equalArray = append(equalArray, value.IndexInfo)
-						}
-					}
-					if len(equalArray) == 0 {
-						createIndexSQL = append(createIndexSQL, fmt.Sprintf("CREATE INDEX %s ON %s.%s(%s);\n",
-							fmt.Sprintf("idx_%s", strings.ReplaceAll(value.IndexColumn, ",", "_")), d.TargetSchemaName, d.TableName, value.IndexColumn))
-					}
-					continue
-				}
 				if value.Uniqueness == "UNIQUE" && value.IndexType == "NORMAL" {
 					// 考虑 MySQL 索引类型 BTREE，额外判断处理
 					var equalArray []interface{}
@@ -471,19 +457,59 @@ func (d *DiffWriter) indexRuleCheck(builder strings.Builder, oracleTable, mysqlT
 						}
 					}
 					if len(equalArray) == 0 {
-						createIndexSQL = append(createIndexSQL, fmt.Sprintf("CREATE UNIQUE INDEX %s ON %s.%s(%s);\n",
-							fmt.Sprintf("idx_%s_unique", strings.ReplaceAll(value.IndexColumn, ",", "_")), d.TargetSchemaName, d.TableName, value.IndexColumn))
+						createIndexSQL = append(createIndexSQL, fmt.Sprintf("CREATE UNIQUE INDEX %s ON %s.%s (%s);\n",
+							value.IndexName, d.TargetSchemaName, d.TableName, value.IndexColumn))
+					}
+					continue
+				}
+				if value.Uniqueness == "UNIQUE" && value.IndexType == "FUNCTION-BASED NORMAL" {
+					// 考虑 MySQL 索引类型 BTREE，额外判断处理
+					var equalArray []interface{}
+					for _, mysqlIndexInfo := range mysqlTable.Indexes {
+						if reflect.DeepEqual(value.IndexInfo, mysqlIndexInfo.IndexInfo) {
+							equalArray = append(equalArray, value.IndexInfo)
+						}
+					}
+					if len(equalArray) == 0 {
+						createIndexSQL = append(createIndexSQL, fmt.Sprintf("CREATE UNIQUE INDEX %s ON %s.%s (%s);\n",
+							value.IndexName, d.TargetSchemaName, d.TableName, value.IndexColumn))
+					}
+					continue
+				}
+				if value.Uniqueness == "NONUNIQUE" && value.IndexType == "NORMAL" {
+					// 考虑 MySQL 索引类型 BTREE，额外判断处理
+					var equalArray []interface{}
+					for _, mysqlIndexInfo := range mysqlTable.Indexes {
+						if reflect.DeepEqual(value.IndexInfo, mysqlIndexInfo.IndexInfo) {
+							equalArray = append(equalArray, value.IndexInfo)
+						}
+					}
+					if len(equalArray) == 0 {
+						createIndexSQL = append(createIndexSQL, fmt.Sprintf("CREATE INDEX %s ON %s.%s (%s);\n",
+							value.IndexName, d.TargetSchemaName, d.TableName, value.IndexColumn))
 					}
 					continue
 				}
 				if value.Uniqueness == "NONUNIQUE" && value.IndexType == "BITMAP" {
-					createIndexSQL = append(createIndexSQL, fmt.Sprintf("CREATE BITMAP INDEX %s ON %s.%s(%s);\n",
-						fmt.Sprintf("idx_%s", strings.ReplaceAll(value.IndexColumn, ",", "_")), d.TargetSchemaName, d.TableName, value.IndexColumn))
+					createIndexSQL = append(createIndexSQL, fmt.Sprintf("CREATE BITMAP INDEX %s ON %s.%s (%s);\n",
+						value.IndexName, d.TargetSchemaName, d.TableName, value.IndexColumn))
 					continue
 				}
 				if value.Uniqueness == "NONUNIQUE" && value.IndexType == "FUNCTION-BASED NORMAL" {
-					createIndexSQL = append(createIndexSQL, fmt.Sprintf("CREATE INDEX %s ON %s.%s(%s);\n",
-						fmt.Sprintf("idx_%s", strings.ReplaceAll(value.IndexColumn, ",", "_")), d.TargetSchemaName, d.TableName, value.ColumnExpress))
+					createIndexSQL = append(createIndexSQL, fmt.Sprintf("CREATE INDEX %s ON %s.%s (%s);\n",
+						value.IndexName, d.TargetSchemaName, d.TableName, value.IndexColumn))
+					continue
+				}
+				if value.Uniqueness == "NONUNIQUE" && value.IndexType == "FUNCTION-BASED BITMAP" {
+					createIndexSQL = append(createIndexSQL, fmt.Sprintf("CREATE BITMAP INDEX %s ON %s.%s (%s);\n",
+						value.IndexName, d.TargetSchemaName, d.TableName, value.IndexColumn))
+					continue
+				}
+				if value.Uniqueness == "NONUNIQUE" && value.IndexType == "DOMAIN" {
+					createIndexSQL = append(createIndexSQL,
+						fmt.Sprintf("CREATE INDEX %s ON %s.%s (%s) INDEXTYPE IS %s.%s PARAMETERS ('%s');\n",
+							value.IndexName, d.TargetSchemaName, d.TableName, value.IndexColumn,
+							value.DomainIndexOwner, value.DomainIndexName, value.DomainParameters))
 					continue
 				}
 				return fmt.Errorf("oracle table [%s] diff failed, not support index: [%v]", oracleTable.TableName, value)

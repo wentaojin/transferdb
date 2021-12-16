@@ -63,8 +63,11 @@ type ColumnInfo struct {
 
 type Index struct {
 	IndexInfo
-	IndexType     string
-	ColumnExpress string
+	IndexName        string
+	IndexType        string
+	DomainIndexOwner string
+	DomainIndexName  string
+	DomainParameters string
 }
 
 type IndexInfo struct {
@@ -256,8 +259,11 @@ func getOracleTableIndex(schemaName, tableName string, engine *service.Engine) (
 				Uniqueness:  strings.ToUpper(indexCol["UNIQUENESS"]),
 				IndexColumn: strings.ToUpper(indexCol["COLUMN_LIST"]),
 			},
-			IndexType:     strings.ToUpper(indexCol["INDEX_TYPE"]),
-			ColumnExpress: strings.ToUpper(indexCol["COLUMN_EXPRESSION"]),
+			IndexName:        strings.ToUpper(indexCol["INDEX_NAME"]),
+			IndexType:        strings.ToUpper(indexCol["INDEX_TYPE"]),
+			DomainIndexOwner: strings.ToUpper(indexCol["ITYP_OWNER"]),
+			DomainIndexName:  strings.ToUpper(indexCol["ITYP_NAME"]),
+			DomainParameters: strings.ToUpper(indexCol["PARAMETERS"]),
 		})
 	}
 
@@ -271,8 +277,11 @@ func getOracleTableIndex(schemaName, tableName string, engine *service.Engine) (
 				Uniqueness:  strings.ToUpper(indexCol["UNIQUENESS"]),
 				IndexColumn: strings.ToUpper(indexCol["COLUMN_LIST"]),
 			},
-			IndexType:     strings.ToUpper(indexCol["INDEX_TYPE"]),
-			ColumnExpress: strings.ToUpper(indexCol["COLUMN_EXPRESSION"]),
+			IndexName:        strings.ToUpper(indexCol["INDEX_NAME"]),
+			IndexType:        strings.ToUpper(indexCol["INDEX_TYPE"]),
+			DomainIndexOwner: strings.ToUpper(indexCol["ITYP_OWNER"]),
+			DomainIndexName:  strings.ToUpper(indexCol["ITYP_NAME"]),
+			DomainParameters: strings.ToUpper(indexCol["PARAMETERS"]),
 		})
 	}
 
@@ -501,8 +510,12 @@ func getMySQLTableIndex(schemaName, tableName string, engine *service.Engine) ([
 				Uniqueness:  strings.ToUpper(indexCol["UNIQUENESS"]),
 				IndexColumn: strings.ToUpper(indexCol["COLUMN_LIST"]),
 			},
-			IndexType:     strings.ToUpper(indexCol["INDEX_TYPE"]),
-			ColumnExpress: strings.ToUpper(indexCol["COLUMN_EXPRESSION"]),
+			IndexName: strings.ToUpper(indexCol["INDEX_NAME"]),
+			IndexType: strings.ToUpper(indexCol["INDEX_TYPE"]),
+			// MySQL 没有 domain 索引
+			DomainIndexOwner: "",
+			DomainIndexName:  "",
+			DomainParameters: "",
 		})
 	}
 	return indexes, nil
