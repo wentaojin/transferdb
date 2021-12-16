@@ -255,7 +255,11 @@ func (e *Engine) GetOracleTableRows(querySQL string) ([]string, []interface{}, e
 						if err != nil {
 							return cols, rowsResult, err
 						}
-						rowsResult = append(rowsResult, r)
+						if r.IsInteger() {
+							rowsResult = append(rowsResult, r.BigInt())
+						} else {
+							rowsResult = append(rowsResult, r.BigFloat())
+						}
 					} else {
 						rowsResult = append(rowsResult, string(raw))
 					}
