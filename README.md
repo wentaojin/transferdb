@@ -6,10 +6,11 @@ transferdb 用于异构数据库迁移（ ORACLE 数据库 -> MySQL/TiDB 数据�
    1. 表定义 reverse_${sourcedb}.sql 文件，外键、检查约束、分区表、索引不兼容性对象 compatibility_${sourcedb}.sql 文件
    2. 自定义配置表字段规则映射
       1. 数据类型自定义 【column -> table -> schema -> 内置】
-         1. 库级别数据类型自定义
-         2. 表级别数据类型自定义
-         3. 字段级别数据类型自定义
-      2. 默认值自定义，任何 schema/table 转换都需要，内置 sysdate -> now() 转换规则【global 全局级别】
+         - 库级别数据类型自定义
+         - 表级别数据类型自定义
+         - 字段级别数据类型自定义
+      2. 默认值自定义【global 全局级别】
+         - 任何 schema/table 转换都需要，内置 sysdate -> now() 转换规则
    3. 内置数据类型规则映射，[内置数据类型映射规则](conf/buildin_reverse_rule.md)
    4. 表索引转换 
    5. 表非空约束、外键约束、检查约束、主键约束、唯一约束转换，主键、唯一、检查、外键等约束 ORACLE ENABLED 状态才会被创建，其他状态忽略创建
