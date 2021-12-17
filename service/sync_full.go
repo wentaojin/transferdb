@@ -464,11 +464,8 @@ func (e *Engine) GetOracleTableChunksByRowID(taskName, schemaName, tableName str
 		return rowCount, nil
 	}
 
-	var (
-		fullMetas   []FullSyncMeta
-		fullMetaIdx []int
-	)
-	for idx, r := range res {
+	var fullMetas []FullSyncMeta
+	for _, r := range res {
 		fullMetas = append(fullMetas, FullSyncMeta{
 			SourceSchemaName: strings.ToUpper(schemaName),
 			SourceTableName:  strings.ToUpper(tableName),
@@ -476,26 +473,11 @@ func (e *Engine) GetOracleTableChunksByRowID(taskName, schemaName, tableName str
 			IsPartition:      isPartition,
 			GlobalSCN:        globalSCN,
 		})
-		fullMetaIdx = append(fullMetaIdx, idx)
 	}
 
 	// 元数据库信息 batch 写入
-	if len(fullMetas) <= insertBatchSize {
-		if err := e.GormDB.Create(&fullMetas).Error; err != nil {
-			return len(res), fmt.Errorf("gorm create table [%s.%s] full_sync_meta failed: %v", schemaName, tableName, err)
-		}
-	} else {
-		var fullMetaBatch []FullSyncMeta
-		splitNums := len(fullMetas) / insertBatchSize
-		splitMetaIdxSlice := utils.SplitIntSlice(fullMetaIdx, int64(splitNums))
-		for _, ms := range splitMetaIdxSlice {
-			for _, idx := range ms {
-				fullMetaBatch = append(fullMetaBatch, fullMetas[idx])
-			}
-			if err = e.GormDB.Create(&fullMetaBatch).Error; err != nil {
-				return len(res), fmt.Errorf("gorm create table [%s.%s] full_sync_meta failed: %v", schemaName, tableName, err)
-			}
-		}
+	if err := e.GormDB.CreateInBatches(&fullMetas, insertBatchSize).Error; err != nil {
+		return len(res), fmt.Errorf("gorm create table [%s.%s] full_sync_meta [batch size]failed: %v", schemaName, tableName, err)
 	}
 
 	return len(res), nil

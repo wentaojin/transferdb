@@ -212,9 +212,9 @@ func (e *Engine) GetOracleTableRows(querySQL string) ([]string, []interface{}, e
 			// 按照 Oracle 特性来，转换同步统一转换成 NULL 即可，但需要注意业务逻辑中空字符串得写入，需要变更
 			// Oracle/Mysql 对于 'NULL' 统一字符 NULL 处理，查询出来转成 NULL,所以需要判断处理
 			if raw == nil {
-				rowsResult = append(rowsResult, "NULL")
+				rowsResult = append(rowsResult, sql.NullString{})
 			} else if string(raw) == "" {
-				rowsResult = append(rowsResult, "NULL")
+				rowsResult = append(rowsResult, sql.NullString{})
 			} else {
 				switch columnTypes[i] {
 				case "int64":
