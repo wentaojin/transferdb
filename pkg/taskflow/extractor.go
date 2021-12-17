@@ -247,7 +247,7 @@ func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceT
 	wp := workpool.New(cfg.FullConfig.TableThreads)
 	for _, rowidSQL := range oraRowIDSQL {
 		sql := rowidSQL
-		wp.Do(func() error {
+		wp.DoWait(func() error {
 			// 抽取 Oracle 数据
 			var (
 				columnFields []string

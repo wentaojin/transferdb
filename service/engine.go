@@ -190,17 +190,16 @@ func (e *Engine) GetOracleTableRows(querySQL string) ([]string, []interface{}, e
 		columnTypes = append(columnTypes, ct.ScanType().String())
 	}
 
-	// 字段列数
+	// 数据 Scan
 	columns := len(cols)
+	rawResult := make([][]byte, columns)
+	dest := make([]interface{}, columns)
+	for i := range rawResult {
+		dest[i] = &rawResult[i]
+	}
 
 	// 表行数读取
 	for rows.Next() {
-		rawResult := make([][]byte, columns)
-		dest := make([]interface{}, columns)
-		for i := range rawResult {
-			dest[i] = &rawResult[i]
-		}
-
 		err = rows.Scan(dest...)
 		if err != nil {
 			return cols, rowsResult, err
@@ -256,9 +255,17 @@ func (e *Engine) GetOracleTableRows(querySQL string) ([]string, []interface{}, e
 							return cols, rowsResult, err
 						}
 						if r.IsInteger() {
-							rowsResult = append(rowsResult, r.BigInt())
+							r, err := utils.StrconvIntBitSize(string(raw), 64)
+							if err != nil {
+								return cols, rowsResult, err
+							}
+							rowsResult = append(rowsResult, r)
 						} else {
-							rowsResult = append(rowsResult, r.BigFloat())
+							r, err := utils.StrconvFloatBitSize(string(raw), 64)
+							if err != nil {
+								return cols, rowsResult, err
+							}
+							rowsResult = append(rowsResult, r)
 						}
 					} else {
 						rowsResult = append(rowsResult, string(raw))

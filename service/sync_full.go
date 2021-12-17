@@ -526,8 +526,8 @@ func (e *Engine) getOracleTableRowsByStatistics(schemaName, tableName string) (i
 		return 0, "", err
 	}
 	if len(res) != 1 {
-		return 0, "", fmt.Errorf("get oracle schema table [%v] rows by statistics falied: %v",
-			fmt.Sprintf("%s.%s", schemaName, tableName), err)
+		return 0, "", fmt.Errorf("get oracle schema table [%v] rows by statistics falied, results: [%v]",
+			fmt.Sprintf("%s.%s", schemaName, tableName), res)
 	}
 	numRows, err := strconv.Atoi(res[0]["NUM_ROWS"])
 	if err != nil {
