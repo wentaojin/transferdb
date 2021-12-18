@@ -91,6 +91,10 @@ func Query(db *sql.DB, querySQL string) ([]string, []map[string]string, error) {
 		}
 		res = append(res, row)
 	}
+
+	if err = rows.Err(); err != nil {
+		return cols, res, err
+	}
 	return cols, res, nil
 }
 

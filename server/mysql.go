@@ -94,9 +94,9 @@ func NewMySQLEngineGeneralDB(mysqlCfg service.TargetConfig, slowQueryThreshold i
 	if err != nil {
 		return &service.Engine{}, fmt.Errorf("error on ping mysql database connection [meta-schema]: %v", err)
 	}
-	sqlDB.SetMaxIdleConns(10)
-	sqlDB.SetMaxOpenConns(100)
-	sqlDB.SetConnMaxLifetime(time.Hour)
+	sqlDB.SetMaxIdleConns(100)
+	sqlDB.SetMaxOpenConns(1024)
+	sqlDB.SetConnMaxLifetime(time.Minute * 15)
 
 	return &service.Engine{
 		MysqlDB: sqlDB,
