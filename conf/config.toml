@@ -1,6 +1,6 @@
 # prepare（必须）:
 #   1、程序运行前，首先需要初始化程序数据表
-#   2、配置表结构转换规则，
+#   2、配置 reverse 自定义转换规则
 #   - 优先级：表字段类型 > 库字段类型 两者都没配置默认采用内置转换规则
 # reverse:
 #   1、prepare 前提必须阶段
@@ -33,14 +33,14 @@ pprof-port = ":9696"
 chunk-size = 200000
 # 表导出导入并发数，同时处理多少张上游表，可动态变更
 worker-threads = 8
-# 单表 SQL 执行并发数，表内并发，表示同时多少并发 SQL 读取上游表数据
+# 单表 SQL 执行并发数，表内并发，表示同时多少并发 SQL 读取上游表数据，可动态变更
 table-threads = 64
-# 下游并发写线程数
+# 下游并发写线程数，可动态变更
 apply-threads = 64
 # 关于全量断点恢复
-#   - 若想断点恢复，设置 enable-checkpoint true,首次一旦运行则 worker-batch 数不能调整，
-#   - 若不想断点恢复或者重新调整 worker-batch 数，设置 enable-checkpoint false,重新运行全量任务
-#   - 有可能无法断点续传，则需要设置  enable-checkpoint false 重新导入导出
+#   - 若想断点恢复，设置 enable-checkpoint = true,首次一旦运行则 chunk-size 数不能调整，
+#   - 若不想断点恢复或者重新调整 chunk-size 数，设置 enable-checkpoint = false,重新运行全量任务
+#   - 有可能无法断点续传，则需要设置 enable-checkpoint = false 重新导入导出
 enable-checkpoint = true
 
 [all]
