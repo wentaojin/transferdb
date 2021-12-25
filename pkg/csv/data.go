@@ -76,7 +76,11 @@ func translatorTableFullRecord(
 				strings.ToUpper(targetSchemaName),
 				strings.ToUpper(targetTableName),
 				utils.StringsBuilder("TFB_", strconv.Itoa(dirIndex))),
-			FileName: utils.StringsBuilder("CSV_", strconv.Itoa(i)),
+			FileName: utils.StringsBuilder(
+				strings.ToUpper(targetSchemaName),
+				".",
+				strings.ToUpper(targetTableName),
+				".", strconv.Itoa(i), ".csv"),
 		})
 	}
 
