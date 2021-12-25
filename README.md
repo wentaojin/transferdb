@@ -49,6 +49,8 @@ transferdb 用于异构数据库迁移（ ORACLE 数据库 -> MySQL/TiDB 数据�
       2. 基于 logminer 日志数据同步，挖掘速率取决于重做日志磁盘+归档日志磁盘【若在归档日志中】以及 PGA 内存
       3. 具体 ALL 模式同步权限以及要求详情见下【ALL 模式同步】
 
+5. 支持 CSV 文件数据导出【ORACLE 11g 及以上版本】
+
 使用事项
 
 ```
@@ -85,6 +87,9 @@ $ ./transferdb --config config.toml --mode full
 
 8、数据同步（全量 + 增量）
 $ ./transferdb --config config.toml --mode all
+
+9、CSV 文件数据导出
+$ ./transferdb --config config.toml --mode csv
 ```
 
 ALL 模式同步
