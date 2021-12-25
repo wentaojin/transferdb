@@ -43,41 +43,31 @@ func startOracleTableFullCSV(cfg *service.CfgFile, engine *service.Engine, waitS
 	} else {
 		OracleCharacterSet = utils.OracleGBKCharacterSet
 	}
+
+	// 优先存在断点的表同步
 	if len(partSyncTableInfo) > 0 {
-		if err := startOracleTableConsumeByCheckpoint(cfg, engine, partSyncTableInfo, OracleCharacterSet, syncMode); err != nil {
+		if err = startOracleTableConsumeByCheckpoint(cfg, engine, partSyncTableInfo, OracleCharacterSet, syncMode); err != nil {
 			return err
 		}
 	}
 	if len(waitSyncTableInfo) > 0 {
-		if err := startOracleTableConsumeBySCN(cfg, engine, waitSyncTableInfo, OracleCharacterSet, syncMode); err != nil {
+		if err = startOracleTableConsumeByCheckpoint(cfg, engine, waitSyncTableInfo, OracleCharacterSet, syncMode); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func startOracleTableConsumeByCheckpoint(cfg *service.CfgFile, engine *service.Engine, partSyncTableInfo []string, sourceCharset, syncMode string) error {
-	wp := workpool.New(cfg.CSVConfig.WorkerThreads)
-
-	for _, tbl := range partSyncTableInfo {
-		table := tbl
-		wp.Do(func() error {
-			if err := syncOracleRowsByRowID(cfg, engine, sourceCharset, table, syncMode); err != nil {
-				return err
-			}
-			return nil
-		})
-	}
-	if err := wp.Wait(); err != nil {
-		return err
-	}
-	if !wp.IsDone() {
-		return fmt.Errorf("sync oracle table rows by checkpoint failed, please rerunning")
+func startOracleTableConsumeByCheckpoint(cfg *service.CfgFile, engine *service.Engine, syncTableInfo []string, sourceCharset, syncMode string) error {
+	for _, tbl := range syncTableInfo {
+		if err := syncOracleRowsByRowID(cfg, engine, sourceCharset, tbl, syncMode); err != nil {
+			return fmt.Errorf("sync oracle table rows by checkpoint failed: %v", err)
+		}
 	}
 	return nil
 }
 
-func startOracleTableConsumeBySCN(cfg *service.CfgFile, engine *service.Engine, waitSyncTableInfo []string, sourceCharset, syncMode string) error {
+func initOracleTableConsumeRowID(cfg *service.CfgFile, engine *service.Engine, waitSyncTableInfo []string, syncMode string) error {
 	wp := workpool.New(cfg.CSVConfig.WorkerThreads)
 
 	for idx, tbl := range waitSyncTableInfo {
@@ -104,10 +94,6 @@ func startOracleTableConsumeBySCN(cfg *service.CfgFile, engine *service.Engine, 
 				zap.String("schema", cfg.SourceConfig.SchemaName),
 				zap.String("table", table),
 				zap.String("cost", endTime.Sub(startTime).String()))
-
-			if err = syncOracleRowsByRowID(cfg, engine, sourceCharset, table, syncMode); err != nil {
-				return err
-			}
 			return nil
 		})
 	}
@@ -131,11 +117,12 @@ func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceC
 	if err != nil {
 		return err
 	}
-	wp := workpool.New(cfg.CSVConfig.TableThreads)
+
+	wp := workpool.New(cfg.CSVConfig.WorkerThreads)
 	for idx, rowidSQL := range oraRowIDSQL {
 		sql := rowidSQL
 		dirIndex := idx
-		wp.DoWait(func() error {
+		wp.Do(func() error {
 			// 抽取 Oracle 数据
 			var (
 				columnFields []string

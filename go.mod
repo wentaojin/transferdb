@@ -7,6 +7,7 @@ require (
 	github.com/godror/godror v0.23.1
 	github.com/google/go-cmp v0.5.2 // indirect
 	github.com/jedib0t/go-pretty/v6 v6.2.4
+	github.com/panjf2000/ants/v2 v2.4.7
 	github.com/pingcap/errors v0.11.5-0.20201126102027-b0a155152ca3 // indirect
 	github.com/pingcap/log v0.0.0-20201112100606-8f1e84a3abc8
 	github.com/pingcap/parser v0.0.0-20200623164729-3a18f1e5dceb
@@ -22,7 +23,7 @@ require (
 	golang.org/x/mod v0.4.1 // indirect
 	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
 	golang.org/x/sys v0.0.0-20210220050731-9a76102bfb43 // indirect
-	golang.org/x/text v0.3.3 // indirect
+	golang.org/x/text v0.3.3
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gorm.io/driver/mysql v1.0.4
 	gorm.io/gorm v1.20.12

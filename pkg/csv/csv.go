@@ -106,6 +106,13 @@ func FullCSVOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service.Engin
 		return fmt.Errorf("checkpoint isn't consistent, please reruning [enable-checkpoint = fase]")
 	}
 
+	// 初始化表任务
+	if len(waitSyncTableInfo) > 0 {
+		if err = initOracleTableConsumeRowID(cfg, engine, waitSyncTableInfo, taskflow.FullSyncMode); err != nil {
+			return err
+		}
+	}
+
 	// 启动全量 CSV 任务
 	if err = startOracleTableFullCSV(cfg, engine, waitSyncTableInfo, partSyncTableInfo, taskflow.FullSyncMode); err != nil {
 		return err

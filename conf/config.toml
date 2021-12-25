@@ -32,8 +32,8 @@ pprof-port = ":9696"
 header = true
 # 字段分隔符，支持一个或多个字符，默认值为 ','
 separator = ','
-# 行尾定界字符，支持一个或多个字符, 默认值 '\r\n' （回车+换行）
-terminator = '\r\n'
+# 行尾定界字符，支持一个或多个字符, 默认值 "\r\n" （回车+换行）
+terminator = "\r\n"
 # 字符串引用定界符，支持一个或多个字符，设置为空表示字符串未加引号
 delimiter = '"'
 # 使用反斜杠 (\) 来转义导出文件中的特殊字符
@@ -48,12 +48,12 @@ output-dir = "/data"
 # 1、代表每张表每并发处理多少行数
 # 2、建议参数值是 rows 整数倍，会根据 rows 大小切分
 chunk-size = 2000000
-# 表导出导入并发数，同时处理多少张上游表，可动态变更
-worker-threads = 8
-# 单表并发数，表内并发，表示同时多少并发 SQL 读取上游表数据，可动态变更
-table-threads = 64
-# csv 并发写线程数，表示同时多少个 csv 文件同时写，可动态变更
-apply-threads = 64
+# 1、用于初始化表任务并发数
+# 2、用于 SQL 执行并发数【表内并发，表间串行】，表示同时多少并发 SQL 读取上游表数据，可动态变更
+worker-threads = 64
+# 1、每个 worker-threads 内 csv 并发写线程数，表示同时多少个 csv 文件同时写，可动态变更
+# 2、一般设置等于或稍大于 chunk-size/rows 参数值
+apply-threads = 8
 # 关于全量断点恢复
 #   - 若想断点恢复，设置 enable-checkpoint = true,首次一旦运行则 chunk-size 数不能调整，
 #   - 若不想断点恢复或者重新调整 chunk-size 数，设置 enable-checkpoint = false,重新运行全量任务
