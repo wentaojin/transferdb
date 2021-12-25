@@ -16,12 +16,14 @@ limitations under the License.
 package csv
 
 import (
-	"encoding/csv"
+	"bufio"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/thinkeridea/go-extend/exstrings"
 
 	"github.com/wentaojin/transferdb/utils"
 )
@@ -29,7 +31,8 @@ import (
 type FileWriter struct {
 	SourceCharset string
 	Header        bool
-	Separator     rune
+	Separator     string
+	Terminator    string
 	Charset       string
 	Columns       []string
 	Rows          [][]string
@@ -60,8 +63,11 @@ func (f *FileWriter) WriteFile() error {
 }
 
 func (f *FileWriter) adjustCSVConfig() error {
-	if f.Separator == '\x00' {
-		f.Separator = ','
+	if f.Separator == "" {
+		f.Separator = ","
+	}
+	if f.Terminator == "" {
+		f.Terminator = "\r\n"
 	}
 	if f.Charset == "" {
 		f.Charset = f.SourceCharset
@@ -84,22 +90,21 @@ func (f *FileWriter) adjustCSVConfig() error {
 }
 
 func (f *FileWriter) write(w io.Writer, columns []string, rows [][]string) error {
-	csvWriter := csv.NewWriter(w)
-	defer csvWriter.Flush()
-
-	// 行分隔符 \r\n
-	csvWriter.UseCRLF = true
-	// 字段分隔符
-	csvWriter.Comma = f.Separator
-
+	writer := bufio.NewWriter(w)
 	if f.Header {
-		if err := csvWriter.Write(columns); err != nil {
+		if _, err := writer.WriteString(utils.StringsBuilder(exstrings.Join(columns, f.Separator), f.Terminator)); err != nil {
 			return fmt.Errorf("failed to write headers: %w", err)
 		}
 	}
+	// 写入文件
+	for _, r := range rows {
+		if _, err := writer.WriteString(utils.StringsBuilder(exstrings.Join(r, f.Separator), f.Terminator)); err != nil {
+			return fmt.Errorf("failed to write data row to csv %w", err)
+		}
+	}
 
-	if err := csvWriter.WriteAll(rows); err != nil {
-		return fmt.Errorf("failed to write data row to csv %w", err)
+	if err := writer.Flush(); err != nil {
+		return fmt.Errorf("failed to flush data row to csv %w", err)
 	}
 	return nil
 }

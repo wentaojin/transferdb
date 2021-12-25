@@ -67,6 +67,7 @@ func translatorTableFullRecord(
 			SourceCharset: sourceDBCharset,
 			Header:        csvConfig.Header,
 			Separator:     csvConfig.Separator,
+			Terminator:    csvConfig.Terminator,
 			Charset:       csvConfig.Charset,
 			Columns:       columns,
 			Rows:          csvSplitRows[i],

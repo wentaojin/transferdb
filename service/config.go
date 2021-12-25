@@ -42,7 +42,8 @@ type AppConfig struct {
 
 type CSVConfig struct {
 	Header           bool   `toml:"header" json:"header"`
-	Separator        rune   `toml:"separator" json:"separator"`
+	Separator        string `toml:"separator" json:"separator"`
+	Terminator       string `toml:"terminator" json:"terminator"`
 	Delimiter        string `toml:"delimiter" json:"delimiter"`
 	EscapeBackslash  bool   `toml:"escape-backslash" json:"escape-backslash"`
 	Charset          string `toml:"charset" json:"charset"`
