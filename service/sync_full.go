@@ -219,7 +219,6 @@ func (e *Engine) InitWaitSyncTableMetaRecord(schemaName string, tableName []stri
 			SyncMode:         syncMode,
 			FullGlobalSCN:    -1,
 			FullSplitTimes:   -1,
-			IsPartition:      "NULL",
 		}).Error; err != nil {
 			return err
 		}
