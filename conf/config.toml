@@ -14,6 +14,8 @@
 #   2、增量数据迁移
 # full: (全量模式)
 #   1、全量数据迁移 -> REPLACE INTO
+# csv：（全量模式）
+#   1、全量数据导出 -> CSV
 [app]
 # 事务 batch 数
 # 用于数据写入 batch 提交事务数
@@ -24,6 +26,38 @@ slowlog-threshold = 300
 threads = 8
 # pprof 端口
 pprof-port = ":9696"
+
+[csv]
+# CSV 文件是否包含表头
+header = true
+# 字段分隔符，支持一个或多个字符，默认值为 ','
+# 行分隔符 terminator，统一用 "\r\n"（回车+换行）,无需手工修改
+separator = ','
+# 字符串引用定界符，支持一个或多个字符，设置为空表示字符串未加引号
+delimiter = '"'
+# 使用反斜杠 (\) 来转义导出文件中的特殊字符
+escape-backslash = true
+# 目标数据库字符集 utf8/gbk，设置为空表示以上游数据库为准
+charset = "utf8"
+# 多少行数据切分一个 csv 文件
+rows = 20000
+# 数据文件输出目录, 所有表数据输出文件目录，需要磁盘空间充足
+output-dir = "/data"
+# 任务 chunk 数，固定动作，一旦确认，不能更改，除非设置 enable-checkpoint = false，重新导出导入
+# 1、代表每张表每并发处理多少行数
+# 2、建议参数值是 rows 整数倍，会根据 rows 大小切分
+chunk-size = 2000000
+# 表导出导入并发数，同时处理多少张上游表，可动态变更
+worker-threads = 8
+# 单表并发数，表内并发，表示同时多少并发 SQL 读取上游表数据，可动态变更
+table-threads = 64
+# csv 并发写线程数，表示同时多少个 csv 文件同时写，可动态变更
+apply-threads = 64
+# 关于全量断点恢复
+#   - 若想断点恢复，设置 enable-checkpoint = true,首次一旦运行则 chunk-size 数不能调整，
+#   - 若不想断点恢复或者重新调整 chunk-size 数，设置 enable-checkpoint = false,重新运行全量任务
+#   - 有可能无法断点续传，则需要设置 enable-checkpoint = false 重新导入导出
+enable-checkpoint = true
 
 [full]
 # 按照表级别操作导出导入

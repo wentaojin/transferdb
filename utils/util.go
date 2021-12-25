@@ -16,14 +16,20 @@ limitations under the License.
 package utils
 
 import (
-	"net"
+	"bytes"
+	"fmt"
+	"io/ioutil"
+	"os"
 	"reflect"
-	"strings"
+	"unicode"
+
+	"golang.org/x/text/encoding/simplifiedchinese"
+	"golang.org/x/text/transform"
 )
 
 // 数组拆分
-func SplitIntSlice(arr []int, num int64) [][]int {
-	var segmens = make([][]int, 0)
+func SplitMultipleStringSlice(arr [][]string, num int64) [][][]string {
+	var segmens = make([][][]string, 0)
 	if num == 0 {
 		segmens = append(segmens, arr)
 		return segmens
@@ -182,13 +188,58 @@ func DiffStructArray(structA, structB interface{}) ([]interface{}, []interface{}
 	return addDiffs, removeDiffs, false
 }
 
-// 获取本机 IP
-func GetOutBoundIP(pprofPort string) (string, error) {
-	conn, err := net.Dial("udp", "8.8.8.8:53")
-	if err != nil {
-		return "", err
+// GBK 转 UTF-8
+func GbkToUtf8(s []byte) ([]byte, error) {
+	reader := transform.NewReader(bytes.NewReader(s), simplifiedchinese.GBK.NewDecoder())
+	d, e := ioutil.ReadAll(reader)
+	if e != nil {
+		return nil, e
 	}
-	localAddr := conn.LocalAddr().(*net.UDPAddr)
+	return d, nil
+}
 
-	return StringsBuilder(strings.Split(localAddr.String(), ":")[0], pprofPort), nil
+// UTF-8 转 GBK
+func Utf8ToGbk(s []byte) ([]byte, error) {
+	reader := transform.NewReader(bytes.NewReader(s), simplifiedchinese.GBK.NewEncoder())
+	d, e := ioutil.ReadAll(reader)
+	if e != nil {
+		return nil, e
+	}
+	return d, nil
+}
+
+// 如果存在特殊字符，直接在特殊字符前添加\
+/**
+判断是否为字母： unicode.IsLetter(v)
+判断是否为十进制数字： unicode.IsDigit(v)
+判断是否为数字： unicode.IsNumber(v)
+判断是否为空白符号： unicode.IsSpace(v)
+判断师傅是特殊符号：unicode.IsSymbol(v)
+判断是否为Unicode标点字符 :unicode.IsPunct(v)
+判断是否为中文：unicode.Han(v)
+*/
+func SpecialLetters(letter rune) []rune {
+	var chars []rune
+	if unicode.IsPunct(letter) || unicode.IsSymbol(letter) || unicode.IsSpace(letter) {
+		chars = append(chars, '\\', letter)
+		return chars
+	}
+	chars = append(chars, letter)
+	return chars
+}
+
+// 判断文件夹是否存在
+func PathExist(path string) error {
+	_, err := os.Stat(path)
+	if err == nil {
+		return nil
+	}
+	if os.IsNotExist(err) {
+		// 创建文件夹
+		err = os.MkdirAll(path, os.ModePerm)
+		if err != nil {
+			return fmt.Errorf("file dir MkdirAll failed: %v", err)
+		}
+	}
+	return err
 }

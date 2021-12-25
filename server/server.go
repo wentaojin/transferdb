@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/wentaojin/transferdb/pkg/csv"
+
 	"github.com/wentaojin/transferdb/pkg/cost"
 
 	"github.com/wentaojin/transferdb/pkg/check"
@@ -82,6 +84,15 @@ func Run(cfg *service.CfgFile, mode string) error {
 			return err
 		}
 		if err := taskflow.FullSyncOracleTableRecordToMySQL(cfg, engine); err != nil {
+			return err
+		}
+	case "csv":
+		// csv 全量数据导出
+		engine, err := NewEngineDB(cfg)
+		if err != nil {
+			return err
+		}
+		if err := csv.FullCSVOracleTableRecordToMySQL(cfg, engine); err != nil {
 			return err
 		}
 	case "all":

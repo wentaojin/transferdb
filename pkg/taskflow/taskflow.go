@@ -42,7 +42,7 @@ func FullSyncOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service.Engi
 		zap.String("schema", cfg.SourceConfig.SchemaName))
 
 	// 获取配置文件待同步表列表
-	transferTableSlice, err := getTransferTableSliceByCfg(cfg, engine)
+	transferTableSlice, err := GetTransferTableSliceByCfg(cfg, engine)
 	if err != nil {
 		return err
 	}
@@ -140,7 +140,7 @@ func IncrementSyncOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service
 	service.Logger.Info("oracle to mysql increment sync table data start", zap.String("schema", cfg.SourceConfig.SchemaName))
 
 	// 获取配置文件待同步表列表
-	transferTableSlice, err := getTransferTableSliceByCfg(cfg, engine)
+	transferTableSlice, err := GetTransferTableSliceByCfg(cfg, engine)
 	if err != nil {
 		return err
 	}
@@ -568,7 +568,7 @@ func startOracleTableFullSync(cfg *service.CfgFile, engine *service.Engine, wait
 }
 
 // 从配置文件获取需要迁移同步的表列表
-func getTransferTableSliceByCfg(cfg *service.CfgFile, engine *service.Engine) ([]string, error) {
+func GetTransferTableSliceByCfg(cfg *service.CfgFile, engine *service.Engine) ([]string, error) {
 	err := engine.IsExistOracleSchema(cfg.SourceConfig.SchemaName)
 	if err != nil {
 		return []string{}, err

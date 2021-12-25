@@ -26,6 +26,7 @@ import (
 type CfgFile struct {
 	AppConfig    AppConfig    `toml:"app" json:"app"`
 	FullConfig   FullConfig   `toml:"full" json:"full"`
+	CSVConfig    CSVConfig    `toml:"csv" json:"csv"`
 	AllConfig    AllConfig    `toml:"all" json:"all"`
 	SourceConfig SourceConfig `toml:"source" json:"source"`
 	TargetConfig TargetConfig `toml:"target" json:"target"`
@@ -37,6 +38,21 @@ type AppConfig struct {
 	SlowlogThreshold int    `toml:"slowlog-threshold" json:"slowlog-threshold"`
 	Threads          int    `toml:"threads" json:"threads"`
 	PprofPort        string `toml:"pprof-port" json:"pprof-port"`
+}
+
+type CSVConfig struct {
+	Header           bool   `toml:"header" json:"header"`
+	Separator        rune   `toml:"separator" json:"separator"`
+	Delimiter        string `toml:"delimiter" json:"delimiter"`
+	EscapeBackslash  bool   `toml:"escape-backslash" json:"escape-backslash"`
+	Charset          string `toml:"charset" json:"charset"`
+	Rows             int    `toml:"rows" json:"rows"`
+	OutputDir        string `toml:"output-dir" json:"output-dir"`
+	ChunkSize        int    `toml:"chunk-size" json:"chunk-size"`
+	WorkerThreads    int    `toml:"worker-threads" json:"worker-threads"`
+	TableThreads     int    `toml:"table-threads" json:"table-threads"`
+	ApplyThreads     int    `toml:"apply-threads" json:"apply-threads"`
+	EnableCheckpoint bool   `toml:"enable-checkpoint" json:"enable-checkpoint"`
 }
 
 type FullConfig struct {
