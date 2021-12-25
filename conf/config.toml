@@ -40,20 +40,20 @@ delimiter = '"'
 escape-backslash = true
 # 目标数据库字符集 utf8/gbk，设置为空表示以上游数据库为准
 charset = "utf8"
-# 多少行数据切分一个 csv 文件
-rows = 20000
+# 1、任务行数数，固定动作，一旦确认，不能更改，除非设置 enable-checkpoint = false，重新导出导入
+# 2、代表每张表每并发处理多少行数
+# 3、代表多少行数据切分一个 csv 文件
+# 4、建议是 insert-batch-size 整数倍
+rows = 100000
 # 数据文件输出目录, 所有表数据输出文件目录，需要磁盘空间充足
 output-dir = "/data"
-# 任务 chunk 数，固定动作，一旦确认，不能更改，除非设置 enable-checkpoint = false，重新导出导入
-# 1、代表每张表每并发处理多少行数
-# 2、建议参数值是 rows 整数倍，会根据 rows 大小切分
-chunk-size = 2000000
-# 1、用于初始化表任务并发数
-# 2、用于 SQL 执行并发数【表内并发，表间串行】，表示同时多少并发 SQL 读取上游表数据，可动态变更
-worker-threads = 64
-# 1、每个 worker-threads 内 csv 并发写线程数，表示同时多少个 csv 文件同时写，可动态变更
-# 2、一般设置等于或稍大于 chunk-size/rows 参数值
-apply-threads = 8
+# 用于初始化表任务并发数【写下游 meta 数据库】
+task-threads = 128
+# 表导出导入并发数，同时处理多少张上游表，可动态变更
+table-threads = 8
+# 1、单表 SQL 执行并发数，表内并发，表示同时多少并发 SQL 读取上游表数据，可动态变更
+# 2、单表 csv 并发写线程数，表示同时多少个 csv 文件同时写，可动态变更
+sql-threads = 64
 # 关于全量断点恢复
 #   - 若想断点恢复，设置 enable-checkpoint = true,首次一旦运行则 chunk-size 数不能调整，
 #   - 若不想断点恢复或者重新调整 chunk-size 数，设置 enable-checkpoint = false,重新运行全量任务

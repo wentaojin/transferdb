@@ -59,16 +59,27 @@ func startOracleTableFullCSV(cfg *service.CfgFile, engine *service.Engine, waitS
 }
 
 func startOracleTableConsumeByCheckpoint(cfg *service.CfgFile, engine *service.Engine, syncTableInfo []string, sourceCharset, syncMode string) error {
+	wp := workpool.New(cfg.CSVConfig.TableThreads)
 	for _, tbl := range syncTableInfo {
-		if err := syncOracleRowsByRowID(cfg, engine, sourceCharset, tbl, syncMode); err != nil {
-			return fmt.Errorf("sync oracle table rows by checkpoint failed: %v", err)
-		}
+		table := tbl
+		wp.Do(func() error {
+			if err := syncOracleRowsByRowID(cfg, engine, sourceCharset, table, syncMode); err != nil {
+				return fmt.Errorf("sync oracle table rows by rowid failed: %v", err)
+			}
+			return nil
+		})
+	}
+	if err := wp.Wait(); err != nil {
+		return fmt.Errorf("sync oracle table rows by checkpoint failed: %v", err)
+	}
+	if !wp.IsDone() {
+		return fmt.Errorf("sync oracle table rows by scn failed, please rerunning")
 	}
 	return nil
 }
 
 func initOracleTableConsumeRowID(cfg *service.CfgFile, engine *service.Engine, waitSyncTableInfo []string, syncMode string) error {
-	wp := workpool.New(cfg.CSVConfig.WorkerThreads)
+	wp := workpool.New(cfg.CSVConfig.TaskThreads)
 
 	for idx, tbl := range waitSyncTableInfo {
 		table := tbl
@@ -85,7 +96,7 @@ func initOracleTableConsumeRowID(cfg *service.CfgFile, engine *service.Engine, w
 				return err
 			}
 			if err = engine.InitWaitAndFullSyncMetaRecord(cfg.SourceConfig.SchemaName,
-				table, seq, globalSCN, cfg.CSVConfig.ChunkSize, cfg.AppConfig.InsertBatchSize, syncMode); err != nil {
+				table, seq, globalSCN, cfg.CSVConfig.Rows, cfg.AppConfig.InsertBatchSize, syncMode); err != nil {
 				return err
 			}
 
@@ -118,10 +129,10 @@ func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceC
 		return err
 	}
 
-	wp := workpool.New(cfg.CSVConfig.WorkerThreads)
+	wp := workpool.New(cfg.CSVConfig.SQLThreads)
 	for idx, rowidSQL := range oraRowIDSQL {
 		sql := rowidSQL
-		dirIndex := idx
+		fileIndex := idx
 		wp.Do(func() error {
 			// 抽取 Oracle 数据
 			var (
@@ -147,11 +158,11 @@ func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceC
 				return nil
 			}
 
-			// 转换/应用 Oracle 数据 -> MySQL
+			// 转换/应用 Oracle CSV 数据
 			if err = applierTableFullRecord(cfg.TargetConfig.SchemaName,
-				sourceTableName, sql, cfg.CSVConfig.ApplyThreads,
-				translatorTableFullRecord(cfg.TargetConfig.SchemaName, sourceTableName,
-					sql, sourceCharset, dirIndex, columnFields, rowsResult, cfg.CSVConfig)); err != nil {
+				sourceTableName, len(rowsResult), sql,
+				translatorTableFullRecord(cfg.TargetConfig.SchemaName, sourceTableName, sourceCharset,
+					fileIndex, columnFields, rowsResult, cfg.CSVConfig)); err != nil {
 				return err
 			}
 

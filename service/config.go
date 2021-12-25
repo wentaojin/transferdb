@@ -49,9 +49,9 @@ type CSVConfig struct {
 	Charset          string `toml:"charset" json:"charset"`
 	Rows             int    `toml:"rows" json:"rows"`
 	OutputDir        string `toml:"output-dir" json:"output-dir"`
-	ChunkSize        int    `toml:"chunk-size" json:"chunk-size"`
-	WorkerThreads    int    `toml:"worker-threads" json:"worker-threads"`
-	ApplyThreads     int    `toml:"apply-threads" json:"apply-threads"`
+	TaskThreads      int    `toml:"task-threads" json:"task-threads"`
+	TableThreads     int    `toml:"table-threads" json:"table-threads"`
+	SQLThreads       int    `toml:"sql-threads" json:"sql-threads"`
 	EnableCheckpoint bool   `toml:"enable-checkpoint" json:"enable-checkpoint"`
 }
 

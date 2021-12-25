@@ -17,13 +17,10 @@ package csv
 
 import (
 	"fmt"
-	"math"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/xxjwxc/gowp/workpool"
 
 	"github.com/wentaojin/transferdb/utils"
 
@@ -49,79 +46,42 @@ func extractorTableFullRecord(engine *service.Engine, csvConfig service.CSVConfi
 }
 
 func translatorTableFullRecord(
-	targetSchemaName, targetTableName,
-	rowidSQL, sourceDBCharset string, dirIndex int, columns []string, rowsResult [][]string, csvConfig service.CSVConfig) []*FileWriter {
-	startTime := time.Now()
-
-	// 行数
-	rowCounts := len(rowsResult)
-
-	// 计算可切分数，向下取整
-	splitNums := int(math.Floor(float64(rowCounts) / float64(csvConfig.Rows)))
-
-	csvSplitRows := utils.SplitMultipleStringSlice(rowsResult, int64(splitNums))
-
-	var fw []*FileWriter
-	for i := 0; i < len(csvSplitRows); i++ {
-		fw = append(fw, &FileWriter{
-			SourceCharset: sourceDBCharset,
-			Header:        csvConfig.Header,
-			Separator:     csvConfig.Separator,
-			Terminator:    csvConfig.Terminator,
-			Charset:       csvConfig.Charset,
-			Columns:       columns,
-			Rows:          csvSplitRows[i],
-			OutDir: filepath.Join(
-				csvConfig.OutputDir,
-				strings.ToUpper(targetSchemaName),
-				strings.ToUpper(targetTableName),
-				utils.StringsBuilder("TFB_", strconv.Itoa(dirIndex))),
-			FileName: utils.StringsBuilder(
-				strings.ToUpper(targetSchemaName),
-				".",
-				strings.ToUpper(targetTableName),
-				".", strconv.Itoa(i), ".csv"),
-		})
+	targetSchemaName, targetTableName, sourceDBCharset string, fileIndex int, columns []string, rowsResult [][]string, csvConfig service.CSVConfig) *FileWriter {
+	return &FileWriter{
+		SourceCharset: sourceDBCharset,
+		Header:        csvConfig.Header,
+		Separator:     csvConfig.Separator,
+		Terminator:    csvConfig.Terminator,
+		Charset:       csvConfig.Charset,
+		Columns:       columns,
+		Rows:          rowsResult,
+		OutDir: filepath.Join(
+			csvConfig.OutputDir,
+			strings.ToUpper(targetSchemaName),
+			strings.ToUpper(targetTableName)),
+		FileName: utils.StringsBuilder(
+			strings.ToUpper(targetSchemaName),
+			".",
+			strings.ToUpper(targetTableName),
+			".", strconv.Itoa(fileIndex), ".csv"),
 	}
-
-	endTime := time.Now()
-	service.Logger.Info("single full table rowid data translator",
-		zap.String("schema", targetSchemaName),
-		zap.String("table", targetTableName),
-		zap.String("rowid sql", rowidSQL),
-		zap.Int("rowid rows", rowCounts),
-		zap.Int("csv rows", csvConfig.Rows),
-		zap.Int("split sql nums", splitNums),
-		zap.String("cost", endTime.Sub(startTime).String()))
-
-	return fw
 }
 
-func applierTableFullRecord(targetSchemaName, targetTableName, rowidSQL string, applyThreads int, fileWriter []*FileWriter) error {
+func applierTableFullRecord(targetSchemaName, targetTableName string, rowCounts int, rowidSQL string, fileWriter *FileWriter) error {
 	startTime := time.Now()
 	service.Logger.Info("single full table rowid data applier start",
 		zap.String("schema", targetSchemaName),
 		zap.String("table", targetTableName),
+		zap.Int("rows", rowCounts),
 		zap.String("rowid sql", rowidSQL))
-
-	wp := workpool.New(applyThreads)
-	for _, fw := range fileWriter {
-		f := fw
-		wp.Do(func() error {
-			if err := f.WriteFile(); err != nil {
-				return err
-			}
-			return nil
-		})
+	if err := fileWriter.WriteFile(); err != nil {
+		return err
 	}
-	if err := wp.Wait(); err != nil {
-		return fmt.Errorf("single full table [%s.%s] data concurrency csv file write falied: %v", targetSchemaName, targetTableName, err)
-	}
-
 	endTime := time.Now()
 	service.Logger.Info("single full table rowid data applier finished",
 		zap.String("schema", targetSchemaName),
 		zap.String("table", targetTableName),
+		zap.Int("rows", rowCounts),
 		zap.String("rowid sql", rowidSQL),
 		zap.String("cost", endTime.Sub(startTime).String()))
 	return nil
