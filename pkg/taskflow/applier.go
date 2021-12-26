@@ -16,6 +16,7 @@ limitations under the License.
 package taskflow
 
 import (
+	"database/sql"
 	"fmt"
 	"strings"
 	"time"
@@ -30,8 +31,14 @@ import (
 )
 
 // 表数据应用 -> 全量任务
-func applierTableFullRecord(engine *service.Engine, targetSchemaName, targetTableName, rowidSQL string, applyThreads int, prepareSQL1 string,
-	prepareArgs1 [][]interface{}, prepareSQL2 string, prepareArgs2 [][]interface{}) error {
+func applierTableFullRecord(engine *service.Engine,
+	targetSchemaName, targetTableName, rowidSQL string, applyThreads int,
+	prepareSQL1 string,
+	insertStmt1 *sql.Stmt,
+	prepareArgs1 [][]interface{},
+	prepareSQL2 string,
+	insertStmt2 *sql.Stmt,
+	prepareArgs2 [][]interface{}) error {
 	startTime := time.Now()
 	service.Logger.Info("single full table rowid data applier start",
 		zap.String("schema", targetSchemaName),
@@ -45,14 +52,14 @@ func applierTableFullRecord(engine *service.Engine, targetSchemaName, targetTabl
 
 	group1.Go(func() error {
 		// 多 batch 并发写
-		if err = engine.BatchWriteMySQLTableData(targetSchemaName, targetTableName, prepareSQL1, prepareArgs1, applyThreads); err != nil {
+		if err = engine.BatchWriteMySQLTableData(targetSchemaName, targetTableName, prepareSQL1, insertStmt1, prepareArgs1, applyThreads); err != nil {
 			return err
 		}
 		return nil
 	})
 	group2.Go(func() error {
 		// 单 batch 写
-		if err = engine.BatchWriteMySQLTableData(targetSchemaName, targetTableName, prepareSQL2, prepareArgs2, 1); err != nil {
+		if err = engine.BatchWriteMySQLTableData(targetSchemaName, targetTableName, prepareSQL2, insertStmt2, prepareArgs2, 1); err != nil {
 			return err
 		}
 		return nil

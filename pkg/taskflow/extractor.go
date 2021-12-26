@@ -236,6 +236,22 @@ func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceT
 		zap.String("schema", cfg.SourceConfig.SchemaName),
 		zap.String("table", sourceTableName))
 
+	// Prepare
+	columns, err := engine.GetOracleTableColumns(strings.ToUpper(cfg.SourceConfig.SchemaName), strings.ToUpper(sourceTableName))
+	if err != nil {
+		return err
+	}
+	prepareSQL1, prepareSQL2 := GenerateMySQLTablePrepareStatement(cfg.TargetConfig.SchemaName, sourceTableName, columns, cfg.FullConfig.ChunkSize, cfg.AppConfig.InsertBatchSize, safeMode)
+
+	batchStmt1, err := engine.MysqlDB.Prepare(prepareSQL1)
+	if err != nil {
+		return err
+	}
+	batchStmt2, err := engine.MysqlDB.Prepare(prepareSQL2)
+	if err != nil {
+		return err
+	}
+
 	oraRowIDSQL, err := engine.GetFullSyncMetaRowIDRecord(cfg.SourceConfig.SchemaName, sourceTableName)
 	if err != nil {
 		return err
@@ -270,11 +286,12 @@ func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceT
 			}
 
 			// 转换/应用 Oracle 数据 -> MySQL
-			prepareSQL1, prepareArgs1, prepareSQL2, prepareArgs2 := translatorTableFullRecord(cfg.TargetConfig.SchemaName, sourceTableName,
+			batchArgs1, batchArgs2 := translatorTableFullRecord(cfg.TargetConfig.SchemaName, sourceTableName,
 				sql, columnFields, rowsResult, cfg.AppConfig.InsertBatchSize, safeMode)
 
 			if err = applierTableFullRecord(engine, cfg.TargetConfig.SchemaName,
-				sourceTableName, sql, cfg.FullConfig.ApplyThreads, prepareSQL1, prepareArgs1, prepareSQL2, prepareArgs2); err != nil {
+				sourceTableName, sql, cfg.FullConfig.ApplyThreads,
+				prepareSQL1, batchStmt1, batchArgs1, prepareSQL2, batchStmt2, batchArgs2); err != nil {
 				return err
 			}
 
@@ -299,6 +316,14 @@ func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceT
 			zap.String("cost", endTime.Sub(startTime).String()))
 		return fmt.Errorf("oracle schema [%s] single full table [%v] data loader failed",
 			cfg.SourceConfig.SchemaName, sourceTableName)
+	}
+
+	if err = batchStmt1.Close(); err != nil {
+		return fmt.Errorf("close prepare batch sql [%v] failed: %v", prepareSQL1, err)
+	}
+
+	if err = batchStmt2.Close(); err != nil {
+		return fmt.Errorf("close prepare single sql [%v] failed: %v", prepareSQL2, err)
 	}
 	service.Logger.Info("single full table data loader finished",
 		zap.String("schema", cfg.SourceConfig.SchemaName),

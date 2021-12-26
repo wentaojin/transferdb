@@ -138,19 +138,13 @@ func (e *Engine) IsExistOracleTable(schemaName string, includeTables []string) e
 }
 
 // 批量 Batch
-func (e *Engine) BatchWriteMySQLTableData(targetSchemaName, targetTableName, insertPrepareSql string, args [][]interface{}, applyThreads int) error {
+func (e *Engine) BatchWriteMySQLTableData(targetSchemaName, targetTableName, insertPrepareSql string, stmtInsert *sql.Stmt, args [][]interface{}, applyThreads int) error {
 	if len(args) > 0 {
-		stmtInsert, err := e.MysqlDB.Prepare(insertPrepareSql)
-		if err != nil {
-			return err
-		}
-		defer stmtInsert.Close()
-
 		wp := workpool.New(applyThreads)
 		for _, v := range args {
 			arg := v
 			wp.Do(func() error {
-				_, err = stmtInsert.Exec(arg...)
+				_, err := stmtInsert.Exec(arg...)
 				if err != nil {
 					return fmt.Errorf("single full table [%s.%s] prepare sql [%v] prepare args [%v] data bulk insert mysql falied: %v",
 						targetSchemaName, targetTableName, insertPrepareSql, arg, err)
@@ -158,11 +152,26 @@ func (e *Engine) BatchWriteMySQLTableData(targetSchemaName, targetTableName, ins
 				return nil
 			})
 		}
-		if err = wp.Wait(); err != nil {
+		if err := wp.Wait(); err != nil {
 			return fmt.Errorf("single full table [%s.%s] data concurrency bulk insert mysql falied: %v", targetSchemaName, targetTableName, err)
 		}
 	}
 	return nil
+}
+
+// 获取表字段名
+func (e *Engine) GetOracleTableColumns(sourceSchema, sourceTable string) ([]string, error) {
+	rows, err := e.OracleDB.Query(utils.StringsBuilder(`SELECT * FROM `, sourceSchema, `.`, sourceTable, ` WHERE 1 = 2`))
+	if err != nil {
+		return []string{}, err
+	}
+	defer rows.Close()
+
+	cols, err := rows.Columns()
+	if err != nil {
+		return cols, err
+	}
+	return cols, nil
 }
 
 // 获取表字段名以及行数据
