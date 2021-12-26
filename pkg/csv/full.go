@@ -20,6 +20,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/wentaojin/transferdb/pkg/taskflow"
+
 	"github.com/wentaojin/transferdb/utils"
 
 	"go.uber.org/zap"
@@ -51,6 +53,11 @@ func startOracleTableFullCSV(cfg *service.CfgFile, engine *service.Engine, waitS
 		}
 	}
 	if len(waitSyncTableInfo) > 0 {
+		// 初始化表任务
+		if err = initOracleTableConsumeRowID(cfg, engine, waitSyncTableInfo, taskflow.FullSyncMode); err != nil {
+			return err
+		}
+
 		if err = startOracleTableConsumeByCheckpoint(cfg, engine, waitSyncTableInfo, OracleCharacterSet, syncMode); err != nil {
 			return err
 		}

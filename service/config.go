@@ -57,10 +57,11 @@ type CSVConfig struct {
 
 type FullConfig struct {
 	ChunkSize        int  `toml:"chunk-size" json:"chunk-size"`
-	WorkerThreads    int  `toml:"worker-threads" json:"worker-threads"`
+	TaskThreads      int  `toml:"task-threads" json:"task-threads"`
 	TableThreads     int  `toml:"table-threads" json:"table-threads"`
-	EnableCheckpoint bool `toml:"enable-checkpoint" json:"enable-checkpoint"`
+	SQLThreads       int  `toml:"sql-threads" json:"sql-threads"`
 	ApplyThreads     int  `toml:"apply-threads" json:"apply-threads"`
+	EnableCheckpoint bool `toml:"enable-checkpoint" json:"enable-checkpoint"`
 }
 
 type AllConfig struct {

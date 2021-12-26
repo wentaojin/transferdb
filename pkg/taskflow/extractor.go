@@ -169,8 +169,8 @@ func filterOracleRedoGreaterOrEqualRecordByTable(
 
 // 1、根据当前表的 SCN 初始化元数据据表
 // 2、根据元数据表记录全量导出导入
-func startOracleTableConsumeBySCN(cfg *service.CfgFile, engine *service.Engine, waitSyncTableInfo []string, syncMode string) error {
-	wp := workpool.New(cfg.FullConfig.WorkerThreads)
+func initOracleTableConsumeRowID(cfg *service.CfgFile, engine *service.Engine, waitSyncTableInfo []string, syncMode string) error {
+	wp := workpool.New(cfg.FullConfig.TaskThreads)
 
 	for idx, tbl := range waitSyncTableInfo {
 		table := tbl
@@ -196,10 +196,6 @@ func startOracleTableConsumeBySCN(cfg *service.CfgFile, engine *service.Engine, 
 				zap.String("schema", cfg.SourceConfig.SchemaName),
 				zap.String("table", table),
 				zap.String("cost", endTime.Sub(startTime).String()))
-
-			if err = syncOracleRowsByRowID(cfg, engine, table, syncMode); err != nil {
-				return err
-			}
 			return nil
 		})
 	}
@@ -213,10 +209,10 @@ func startOracleTableConsumeBySCN(cfg *service.CfgFile, engine *service.Engine, 
 }
 
 // 根据元数据表记录全量导出导入
-func startOracleTableConsumeByCheckpoint(cfg *service.CfgFile, engine *service.Engine, partSyncTableInfo []string, syncMode string) error {
-	wp := workpool.New(cfg.FullConfig.WorkerThreads)
+func startOracleTableConsumeByCheckpoint(cfg *service.CfgFile, engine *service.Engine, syncTableInfo []string, syncMode string) error {
+	wp := workpool.New(cfg.FullConfig.TableThreads)
 
-	for _, tbl := range partSyncTableInfo {
+	for _, tbl := range syncTableInfo {
 		table := tbl
 		wp.Do(func() error {
 			if err := syncOracleRowsByRowID(cfg, engine, table, syncMode); err != nil {
@@ -244,10 +240,11 @@ func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceT
 	if err != nil {
 		return err
 	}
-	wp := workpool.New(cfg.FullConfig.TableThreads)
+
+	wp := workpool.New(cfg.FullConfig.SQLThreads)
 	for _, rowidSQL := range oraRowIDSQL {
 		sql := rowidSQL
-		wp.DoWait(func() error {
+		wp.Do(func() error {
 			// 抽取 Oracle 数据
 			var (
 				columnFields []string
