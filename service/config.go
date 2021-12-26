@@ -75,12 +75,14 @@ type AllConfig struct {
 type SourceConfig struct {
 	Username      string   `toml:"username" json:"username"`
 	Password      string   `toml:"password" json:"password"`
-	ConnectString string   `toml:"connect-string",json:"connect-string"`
+	Host          string   `toml:"host" json:"host"`
+	Port          int      `toml:"port" json:"port"`
+	ServiceName   string   `toml:"service-name" json:"service-name"`
+	ConnectParams string   `toml:"connect-params" json:"connect-params"`
 	SessionParams []string `toml:"session-params" json:"session-params"`
-	Timezone      string   `toml:"timezone" json:"timezone"`
-	SchemaName    string   `toml:"schema-name",json:"schema-name"`
-	IncludeTable  []string `toml:"include-table",json:"include-table"`
-	ExcludeTable  []string `toml:"exclude-table",json:"exclude-table"`
+	SchemaName    string   `toml:"schema-name" json:"schema-name"`
+	IncludeTable  []string `toml:"include-table" json:"include-table"`
+	ExcludeTable  []string `toml:"exclude-table" json:"exclude-table"`
 }
 
 type TargetConfig struct {

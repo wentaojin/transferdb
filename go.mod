@@ -7,7 +7,6 @@ require (
 	github.com/godror/godror v0.23.1
 	github.com/google/go-cmp v0.5.2 // indirect
 	github.com/jedib0t/go-pretty/v6 v6.2.4
-	github.com/panjf2000/ants/v2 v2.4.7
 	github.com/pingcap/errors v0.11.5-0.20201126102027-b0a155152ca3 // indirect
 	github.com/pingcap/log v0.0.0-20201112100606-8f1e84a3abc8
 	github.com/pingcap/parser v0.0.0-20200623164729-3a18f1e5dceb

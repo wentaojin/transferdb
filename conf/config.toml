@@ -97,12 +97,13 @@ worker-threads = 3
 # 若需要增量数据同步，则需要 logminer 权限
 username = "marvin"
 password = "marvin"
-# 配置 oracle 连接字符串，样例：主机地址:数据库端口/服务名?参数
-connect-string = "172.16.4.182:1521/orcl?connect_timeout=2"
-# 配置 oracle 连接会话 session 变量,
+host = "172.16.4.182"
+port = 1521
+service-name = "oratidb"
+# 配置 oracle 连接参数
+connect-params = "poolMinSessions=10&poolMaxSessions=1000&poolWaitTimeout=60s&poolSessionMaxLifetime=1h&poolSessionTimeout=5m&poolIncrement=10&timezone=Local"
+# 配置 oracle 连接会话 session 变量
 session-params = ["alter session set nls_date_format = 'yyyy-mm-dd hh24:mi:ss'"]
-# 配置 oracle 连接时区
-timezone = "Local"
 # 配置 oracle 迁移 schema（gather 阶段可设置可不设置，不设置则表示 gather 库内所有 schema，其他阶段必须设置）
 schema-name = "marvin"
 # 源端迁移任务表（只用于 prepare/reverse/check/all/full 阶段，gather 阶段不适用，gather 只适用于 schema 级别）

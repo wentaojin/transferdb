@@ -18,13 +18,13 @@ package server
 import (
 	"database/sql"
 	"fmt"
-	"time"
+	"strconv"
+
+	"github.com/wentaojin/transferdb/utils"
 
 	"github.com/wentaojin/transferdb/service"
 
 	"github.com/godror/godror"
-
-	"github.com/godror/godror/dsn"
 
 	_ "github.com/godror/godror"
 )
@@ -33,28 +33,22 @@ import (
 func NewOracleDBEngine(oraCfg service.SourceConfig) (*sql.DB, error) {
 	// https://pkg.go.dev/github.com/godror/godror
 	// https://github.com/godror/godror/blob/db9cd12d89cdc1c60758aa3f36ece36cf5a61814/doc/connection.md
-	// 时区以及配置设置
-	loc, err := time.LoadLocation(oraCfg.Timezone)
+
+	connString := fmt.Sprintf("oracle://%s:%s@%s/%s?%s",
+		oraCfg.Username, oraCfg.Password, utils.StringsBuilder(oraCfg.Host, ":", strconv.Itoa(oraCfg.Port)),
+		oraCfg.ServiceName, oraCfg.ConnectParams)
+
+	oraDSN, err := godror.ParseDSN(connString)
 	if err != nil {
 		return nil, err
 	}
-	oraDsn := godror.ConnectionParams{
-		CommonParams: godror.CommonParams{
-			Username:      oraCfg.Username,
-			ConnectString: oraCfg.ConnectString,
-			Password:      godror.NewPassword(oraCfg.Password),
-			OnInitStmts:   oraCfg.SessionParams,
-			Timezone:      loc,
-		},
-		PoolParams: godror.PoolParams{
-			MinSessions:    dsn.DefaultPoolMinSessions,
-			MaxSessions:    dsn.DefaultPoolMaxSessions,
-			WaitTimeout:    dsn.DefaultWaitTimeout,
-			MaxLifeTime:    dsn.DefaultMaxLifeTime,
-			SessionTimeout: dsn.DefaultSessionTimeout,
-		},
-	}
-	sqlDB := sql.OpenDB(godror.NewConnector(oraDsn))
+
+	oraDSN.OnInitStmts = oraCfg.SessionParams
+
+	sqlDB := sql.OpenDB(godror.NewConnector(oraDSN))
+	sqlDB.SetMaxIdleConns(0)
+	sqlDB.SetMaxOpenConns(0)
+	sqlDB.SetConnMaxLifetime(0)
 
 	err = sqlDB.Ping()
 	if err != nil {
