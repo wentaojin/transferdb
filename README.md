@@ -1,6 +1,6 @@
 TransferDB
 -----------
-TransferDB 定位于异构数据库 ORACLE -> MYSQL/TiDB 对象信息收集、表结构映射、表结构对比、数据同步等功能一体化工具。
+TransferDB 定位于异构数据库 ORACLE -> MYSQL/TiDB 对象信息收集、表结构映射、表结构对比、数据同步等功能一体化工具
 
 Features
 --------
