@@ -137,7 +137,7 @@ func (e *Engine) IsExistOracleTable(schemaName string, includeTables []string) e
 	return nil
 }
 
-// 批量 Batch
+// Preapre 批量 Batch
 func (e *Engine) BatchWriteMySQLTableData(targetSchemaName, targetTableName, insertPrepareSql string, stmtInsert *sql.Stmt, args [][]interface{}, applyThreads int) error {
 	if len(args) > 0 {
 		wp := workpool.New(applyThreads)
@@ -154,6 +154,20 @@ func (e *Engine) BatchWriteMySQLTableData(targetSchemaName, targetTableName, ins
 		}
 		if err := wp.Wait(); err != nil {
 			return fmt.Errorf("single full table [%s.%s] data concurrency bulk insert mysql falied: %v", targetSchemaName, targetTableName, err)
+		}
+	}
+	return nil
+}
+
+// Single 批量 Batch
+func (e *Engine) SingleWriteMySQLTableData(targetSchemaName, targetTableName, insertPrepareSql string, args [][]interface{}) error {
+	if len(args) > 0 {
+		for _, arg := range args {
+			_, err := e.MysqlDB.Exec(insertPrepareSql, arg...)
+			if err != nil {
+				return fmt.Errorf("single full table [%s.%s] prepare sql [%v] prepare args [%v] data bulk insert mysql falied: %v",
+					targetSchemaName, targetTableName, insertPrepareSql, arg, err)
+			}
 		}
 	}
 	return nil

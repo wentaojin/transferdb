@@ -37,7 +37,6 @@ func applierTableFullRecord(engine *service.Engine,
 	insertStmt1 *sql.Stmt,
 	prepareArgs1 [][]interface{},
 	prepareSQL2 string,
-	insertStmt2 *sql.Stmt,
 	prepareArgs2 [][]interface{}) error {
 	startTime := time.Now()
 	service.Logger.Info("single full table rowid data applier start",
@@ -51,7 +50,7 @@ func applierTableFullRecord(engine *service.Engine,
 	)
 
 	group1.Go(func() error {
-		// 多 batch 并发写
+		// prepare batch 并发写
 		if err = engine.BatchWriteMySQLTableData(targetSchemaName, targetTableName, prepareSQL1, insertStmt1, prepareArgs1, applyThreads); err != nil {
 			return err
 		}
@@ -59,7 +58,7 @@ func applierTableFullRecord(engine *service.Engine,
 	})
 	group2.Go(func() error {
 		// 单 batch 写
-		if err = engine.BatchWriteMySQLTableData(targetSchemaName, targetTableName, prepareSQL2, insertStmt2, prepareArgs2, 1); err != nil {
+		if err = engine.SingleWriteMySQLTableData(targetSchemaName, targetTableName, prepareSQL2, prepareArgs2); err != nil {
 			return err
 		}
 		return nil
