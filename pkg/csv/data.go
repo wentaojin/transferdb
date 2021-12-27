@@ -18,11 +18,8 @@ package csv
 import (
 	"fmt"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
-
-	"github.com/wentaojin/transferdb/utils"
 
 	"github.com/wentaojin/transferdb/service"
 	"go.uber.org/zap"
@@ -46,7 +43,7 @@ func extractorTableFullRecord(engine *service.Engine, csvConfig service.CSVConfi
 }
 
 func translatorTableFullRecord(
-	targetSchemaName, targetTableName, sourceDBCharset string, fileIndex int, columns []string, rowsResult [][]string, csvConfig service.CSVConfig) *FileWriter {
+	targetSchemaName, targetTableName, sourceDBCharset string, columns []string, rowsResult [][]string, csvConfig service.CSVConfig, csvFileName string) *FileWriter {
 	return &FileWriter{
 		SourceCharset: sourceDBCharset,
 		Header:        csvConfig.Header,
@@ -59,11 +56,7 @@ func translatorTableFullRecord(
 			csvConfig.OutputDir,
 			strings.ToUpper(targetSchemaName),
 			strings.ToUpper(targetTableName)),
-		FileName: utils.StringsBuilder(
-			strings.ToUpper(targetSchemaName),
-			".",
-			strings.ToUpper(targetTableName),
-			".", strconv.Itoa(fileIndex), ".csv"),
+		FileName: csvFileName,
 	}
 }
 

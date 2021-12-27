@@ -18,6 +18,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -149,7 +150,8 @@ func (e *Engine) TruncateMySQLTableRecord(targetSchemaName string, tableName str
 	return nil
 }
 
-func (e *Engine) InitWaitAndFullSyncMetaRecord(schemaName, tableName string, workerID, globalSCN int, chunkSize, insertBatchSize int, syncMode string) error {
+func (e *Engine) InitWaitAndFullSyncMetaRecord(schemaName, tableName string, workerID, globalSCN int, chunkSize, insertBatchSize int,
+	csvDataDir, syncMode string) error {
 	tableRows, isPartition, err := e.getOracleTableRowsByStatistics(schemaName, tableName)
 	if err != nil {
 		return err
@@ -164,15 +166,29 @@ func (e *Engine) InitWaitAndFullSyncMetaRecord(schemaName, tableName string, wor
 			zap.String("sql", sql),
 			zap.Int("statistics rows", tableRows))
 
-		if err = e.GormDB.Create(&FullSyncMeta{
-			SourceSchemaName: strings.ToUpper(schemaName),
-			SourceTableName:  strings.ToUpper(tableName),
-			RowidSQL:         sql,
-			IsPartition:      isPartition,
-			GlobalSCN:        globalSCN,
-		}).Error; err != nil {
-			return fmt.Errorf("gorm create table [%s.%s] full_sync_meta failed [statistics rows = 0]: %v", schemaName, tableName, err)
+		if csvDataDir == "" {
+			if err = e.GormDB.Create(&FullSyncMeta{
+				SourceSchemaName: strings.ToUpper(schemaName),
+				SourceTableName:  strings.ToUpper(tableName),
+				RowidSQL:         sql,
+				IsPartition:      isPartition,
+				GlobalSCN:        globalSCN,
+			}).Error; err != nil {
+				return fmt.Errorf("gorm create table [%s.%s] full_sync_meta failed [statistics rows = 0]: %v", schemaName, tableName, err)
+			}
+		} else {
+			if err = e.GormDB.Create(&FullSyncMeta{
+				SourceSchemaName: strings.ToUpper(schemaName),
+				SourceTableName:  strings.ToUpper(tableName),
+				RowidSQL:         sql,
+				IsPartition:      isPartition,
+				GlobalSCN:        globalSCN,
+				CSVFile:          filepath.Join(csvDataDir, schemaName, tableName, utils.StringsBuilder(schemaName, `.`, tableName, `.1.csv`)),
+			}).Error; err != nil {
+				return fmt.Errorf("gorm create table [%s.%s] full_sync_meta failed [statistics rows = 0]: %v", schemaName, tableName, err)
+			}
 		}
+
 		if err = e.UpdateWaitSyncMetaTableRecord(schemaName, tableName, tableRows, globalSCN, isPartition, syncMode); err != nil {
 			return err
 		}
@@ -194,7 +210,7 @@ func (e *Engine) InitWaitAndFullSyncMetaRecord(schemaName, tableName string, wor
 		return err
 	}
 
-	rowCounts, err := e.GetOracleTableChunksByRowID(taskName, strings.ToUpper(schemaName), strings.ToUpper(tableName), globalSCN, insertBatchSize, isPartition)
+	rowCounts, err := e.GetOracleTableChunksByRowID(taskName, strings.ToUpper(schemaName), strings.ToUpper(tableName), globalSCN, insertBatchSize, csvDataDir, isPartition)
 	if err != nil {
 		return err
 	}
@@ -354,20 +370,16 @@ func (e *Engine) IsExistWaitSyncTableMetaRecord(schemaName string, tableName, sy
 	return false, nil
 }
 
-func (e *Engine) GetFullSyncMetaRowIDRecord(schemaName, tableName string) ([]string, error) {
+func (e *Engine) GetFullSyncMetaRowIDRecord(schemaName, tableName string) ([]FullSyncMeta, error) {
 	var (
-		rowID          []string
 		tableFullMetas []FullSyncMeta
 	)
 	if err := e.GormDB.
 		Where("source_schema_name = ? AND source_table_name = ?",
 			strings.ToUpper(schemaName), strings.ToUpper(tableName)).Find(&tableFullMetas).Error; err != nil {
-		return rowID, err
+		return tableFullMetas, err
 	}
-	for _, rowSQL := range tableFullMetas {
-		rowID = append(rowID, rowSQL.RowidSQL)
-	}
-	return rowID, nil
+	return tableFullMetas, nil
 }
 
 func (e *Engine) GetOracleCurrentSnapshotSCN() (int, error) {
@@ -432,7 +444,7 @@ END;`)
 	return nil
 }
 
-func (e *Engine) GetOracleTableChunksByRowID(taskName, schemaName, tableName string, globalSCN, insertBatchSize int, isPartition string) (int, error) {
+func (e *Engine) GetOracleTableChunksByRowID(taskName, schemaName, tableName string, globalSCN, insertBatchSize int, csvDataDir, isPartition string) (int, error) {
 	var rowCount int
 
 	querySQL := utils.StringsBuilder(`SELECT 'SELECT * FROM `, schemaName, `.`, tableName, ` WHERE ROWID BETWEEN ''' || start_rowid || ''' AND ''' || end_rowid || '''' CMD FROM user_parallel_execute_chunks WHERE  task_name = '`, taskName, `' ORDER BY chunk_id`)
@@ -451,27 +463,43 @@ func (e *Engine) GetOracleTableChunksByRowID(taskName, schemaName, tableName str
 			zap.String("sql", querySQL),
 			zap.Int("rowids rows", len(res)))
 
-		if err = e.GormDB.Create(&FullSyncMeta{
-			SourceSchemaName: schemaName,
-			SourceTableName:  tableName,
-			RowidSQL:         querySQL,
-			IsPartition:      isPartition,
-			GlobalSCN:        globalSCN,
-		}).Error; err != nil {
-			return rowCount, fmt.Errorf("gorm create table [%s.%s] full_sync_meta failed [rowids rows = 0]: %v", schemaName, tableName, err)
+		if csvDataDir == "" {
+			if err = e.GormDB.Create(&FullSyncMeta{
+				SourceSchemaName: schemaName,
+				SourceTableName:  tableName,
+				RowidSQL:         querySQL,
+				IsPartition:      isPartition,
+				GlobalSCN:        globalSCN,
+				CSVFile:          csvDataDir,
+			}).Error; err != nil {
+				return rowCount, fmt.Errorf("gorm create table [%s.%s] full_sync_meta failed [rowids rows = 0]: %v", schemaName, tableName, err)
+			}
+		} else {
+			if err = e.GormDB.Create(&FullSyncMeta{
+				SourceSchemaName: schemaName,
+				SourceTableName:  tableName,
+				RowidSQL:         querySQL,
+				IsPartition:      isPartition,
+				GlobalSCN:        globalSCN,
+				CSVFile:          filepath.Join(csvDataDir, schemaName, tableName, utils.StringsBuilder(schemaName, `.`, tableName, `.1.csv`)),
+			}).Error; err != nil {
+				return rowCount, fmt.Errorf("gorm create table [%s.%s] full_sync_meta failed [rowids rows = 0]: %v", schemaName, tableName, err)
+			}
 		}
 
 		return rowCount, nil
 	}
 
 	var fullMetas []FullSyncMeta
-	for _, r := range res {
+	for i, r := range res {
 		fullMetas = append(fullMetas, FullSyncMeta{
 			SourceSchemaName: strings.ToUpper(schemaName),
 			SourceTableName:  strings.ToUpper(tableName),
 			RowidSQL:         r["CMD"],
 			IsPartition:      isPartition,
 			GlobalSCN:        globalSCN,
+			CSVFile: filepath.Join(csvDataDir, schemaName, tableName,
+				utils.StringsBuilder(schemaName, `.`, tableName, `.`, strconv.Itoa(i), `.csv`)),
 		})
 	}
 

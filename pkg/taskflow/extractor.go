@@ -187,7 +187,7 @@ func initOracleTableConsumeRowID(cfg *service.CfgFile, engine *service.Engine, w
 				return err
 			}
 			if err = engine.InitWaitAndFullSyncMetaRecord(cfg.SourceConfig.SchemaName,
-				table, seq, globalSCN, cfg.FullConfig.ChunkSize, cfg.AppConfig.InsertBatchSize, syncMode); err != nil {
+				table, seq, globalSCN, cfg.FullConfig.ChunkSize, cfg.AppConfig.InsertBatchSize, "", syncMode); err != nil {
 				return err
 			}
 
@@ -249,21 +249,21 @@ func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceT
 	}
 	defer batchStmt1.Close()
 
-	oraRowIDSQL, err := engine.GetFullSyncMetaRowIDRecord(cfg.SourceConfig.SchemaName, sourceTableName)
+	fullSyncMetas, err := engine.GetFullSyncMetaRowIDRecord(cfg.SourceConfig.SchemaName, sourceTableName)
 	if err != nil {
 		return err
 	}
 
 	wp := workpool.New(cfg.FullConfig.SQLThreads)
-	for _, rowidSQL := range oraRowIDSQL {
-		sql := rowidSQL
+	for _, m := range fullSyncMetas {
+		meta := m
 		wp.Do(func() error {
 			// 抽取 Oracle 数据
 			var (
 				columnFields []string
 				rowsResult   []interface{}
 			)
-			columnFields, rowsResult, err = extractorTableFullRecord(engine, cfg.SourceConfig.SchemaName, sourceTableName, sql)
+			columnFields, rowsResult, err = extractorTableFullRecord(engine, cfg.SourceConfig.SchemaName, sourceTableName, meta.RowidSQL)
 			if err != nil {
 				return err
 			}
@@ -272,11 +272,11 @@ func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceT
 				service.Logger.Warn("oracle schema table rowid data return null rows, skip",
 					zap.String("schema", cfg.SourceConfig.SchemaName),
 					zap.String("table", sourceTableName),
-					zap.String("sql", sql))
+					zap.String("sql", meta.RowidSQL))
 				// 清理记录以及更新记录
 				if err = engine.ModifyWaitAndFullSyncTableMetaRecord(
 					cfg.TargetConfig.MetaSchema,
-					cfg.SourceConfig.SchemaName, sourceTableName, sql, syncMode); err != nil {
+					cfg.SourceConfig.SchemaName, sourceTableName, meta.RowidSQL, syncMode); err != nil {
 					return err
 				}
 				return nil
@@ -284,10 +284,10 @@ func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceT
 
 			// 转换/应用 Oracle 数据 -> MySQL
 			batchArgs1, batchArgs2, prepareSQL2 := translatorTableFullRecord(cfg.TargetConfig.SchemaName, sourceTableName,
-				sql, columnFields, rowsResult, cfg.AppConfig.InsertBatchSize, safeMode)
+				meta.RowidSQL, columnFields, rowsResult, cfg.AppConfig.InsertBatchSize, safeMode)
 
 			if err = applierTableFullRecord(engine, cfg.TargetConfig.SchemaName,
-				sourceTableName, sql, cfg.FullConfig.ApplyThreads,
+				sourceTableName, meta.RowidSQL, cfg.FullConfig.ApplyThreads,
 				prepareSQL1, batchStmt1, batchArgs1, prepareSQL2, batchArgs2); err != nil {
 				return err
 			}
@@ -295,7 +295,7 @@ func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceT
 			// 清理记录以及更新记录
 			if err = engine.ModifyWaitAndFullSyncTableMetaRecord(
 				cfg.TargetConfig.MetaSchema,
-				cfg.SourceConfig.SchemaName, sourceTableName, sql, syncMode); err != nil {
+				cfg.SourceConfig.SchemaName, sourceTableName, meta.RowidSQL, syncMode); err != nil {
 				return err
 			}
 			return nil
