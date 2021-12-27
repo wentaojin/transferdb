@@ -150,72 +150,72 @@ func (e *Engine) TruncateMySQLTableRecord(targetSchemaName string, tableName str
 	return nil
 }
 
-func (e *Engine) InitWaitAndFullSyncMetaRecord(schemaName, tableName string, workerID, globalSCN int, chunkSize, insertBatchSize int,
+func (e *Engine) InitWaitAndFullSyncMetaRecord(sourceSchema, sourceTable, targetSchema, targetTable string, workerID, globalSCN int, chunkSize, insertBatchSize int,
 	csvDataDir, syncMode string) error {
-	tableRows, isPartition, err := e.getOracleTableRowsByStatistics(schemaName, tableName)
+	tableRows, isPartition, err := e.getOracleTableRowsByStatistics(sourceSchema, sourceTable)
 	if err != nil {
 		return err
 	}
 
 	// 统计信息数据行数 0，直接全表扫
 	if tableRows == 0 {
-		sql := utils.StringsBuilder(`SELECT * FROM `, schemaName, `.`, tableName)
+		sql := utils.StringsBuilder(`SELECT * FROM `, sourceSchema, `.`, sourceTable)
 		Logger.Warn("get oracle table rows",
-			zap.String("schema", schemaName),
-			zap.String("table", tableName),
+			zap.String("schema", sourceSchema),
+			zap.String("table", sourceTable),
 			zap.String("sql", sql),
 			zap.Int("statistics rows", tableRows))
 
 		if csvDataDir == "" {
 			if err = e.GormDB.Create(&FullSyncMeta{
-				SourceSchemaName: strings.ToUpper(schemaName),
-				SourceTableName:  strings.ToUpper(tableName),
+				SourceSchemaName: strings.ToUpper(sourceSchema),
+				SourceTableName:  strings.ToUpper(sourceTable),
 				RowidSQL:         sql,
 				IsPartition:      isPartition,
 				GlobalSCN:        globalSCN,
 			}).Error; err != nil {
-				return fmt.Errorf("gorm create table [%s.%s] full_sync_meta failed [statistics rows = 0]: %v", schemaName, tableName, err)
+				return fmt.Errorf("gorm create table [%s.%s] full_sync_meta failed [statistics rows = 0]: %v", sourceSchema, sourceTable, err)
 			}
 		} else {
 			if err = e.GormDB.Create(&FullSyncMeta{
-				SourceSchemaName: strings.ToUpper(schemaName),
-				SourceTableName:  strings.ToUpper(tableName),
+				SourceSchemaName: strings.ToUpper(sourceSchema),
+				SourceTableName:  strings.ToUpper(sourceTable),
 				RowidSQL:         sql,
 				IsPartition:      isPartition,
 				GlobalSCN:        globalSCN,
-				CSVFile:          filepath.Join(csvDataDir, schemaName, tableName, utils.StringsBuilder(schemaName, `.`, tableName, `.1.csv`)),
+				CSVFile:          filepath.Join(csvDataDir, targetSchema, targetTable, utils.StringsBuilder(targetSchema, `.`, targetTable, `.1.csv`)),
 			}).Error; err != nil {
-				return fmt.Errorf("gorm create table [%s.%s] full_sync_meta failed [statistics rows = 0]: %v", schemaName, tableName, err)
+				return fmt.Errorf("gorm create table [%s.%s] full_sync_meta failed [statistics rows = 0]: %v", sourceSchema, sourceTable, err)
 			}
 		}
 
-		if err = e.UpdateWaitSyncMetaTableRecord(schemaName, tableName, tableRows, globalSCN, isPartition, syncMode); err != nil {
+		if err = e.UpdateWaitSyncMetaTableRecord(sourceSchema, sourceTable, tableRows, globalSCN, isPartition, syncMode); err != nil {
 			return err
 		}
 		return nil
 	}
 
 	Logger.Info("get oracle table statistics rows",
-		zap.String("schema", schemaName),
-		zap.String("table", tableName),
+		zap.String("schema", sourceSchema),
+		zap.String("table", sourceTable),
 		zap.Int("rows", tableRows))
 
-	taskName := utils.StringsBuilder(schemaName, `_`, tableName, `_`, `TASK`, strconv.Itoa(workerID))
+	taskName := utils.StringsBuilder(sourceSchema, `_`, sourceTable, `_`, `TASK`, strconv.Itoa(workerID))
 
 	if err = e.StartOracleChunkCreateTask(taskName); err != nil {
 		return err
 	}
 
-	if err = e.StartOracleCreateChunkByRowID(taskName, strings.ToUpper(schemaName), strings.ToUpper(tableName), strconv.Itoa(chunkSize)); err != nil {
+	if err = e.StartOracleCreateChunkByRowID(taskName, strings.ToUpper(sourceSchema), strings.ToUpper(sourceTable), strconv.Itoa(chunkSize)); err != nil {
 		return err
 	}
 
-	rowCounts, err := e.GetOracleTableChunksByRowID(taskName, strings.ToUpper(schemaName), strings.ToUpper(tableName), globalSCN, insertBatchSize, csvDataDir, isPartition)
+	rowCounts, err := e.GetOracleTableChunksByRowID(taskName, strings.ToUpper(sourceSchema), strings.ToUpper(sourceTable), globalSCN, insertBatchSize, csvDataDir, isPartition)
 	if err != nil {
 		return err
 	}
 
-	if err = e.UpdateWaitSyncMetaTableRecord(schemaName, tableName, rowCounts, globalSCN, isPartition, syncMode); err != nil {
+	if err = e.UpdateWaitSyncMetaTableRecord(sourceSchema, sourceTable, rowCounts, globalSCN, isPartition, syncMode); err != nil {
 		return err
 	}
 

@@ -46,7 +46,7 @@ charset = "utf8"
 # 4、建议是 insert-batch-size 整数倍
 rows = 100000
 # 数据文件输出目录, 所有表数据输出文件目录，需要磁盘空间充足
-output-dir = "/data1/marvin"
+output-dir = "/data1"
 # 用于初始化表任务并发数【写下游 meta 数据库】
 task-threads = 128
 # 表导出导入并发数，同时处理多少张上游表，可动态变更

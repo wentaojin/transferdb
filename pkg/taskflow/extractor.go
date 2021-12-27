@@ -174,7 +174,7 @@ func initOracleTableConsumeRowID(cfg *service.CfgFile, engine *service.Engine, w
 
 	for idx, tbl := range waitSyncTableInfo {
 		table := tbl
-		seq := idx
+		workerID := idx
 		wp.Do(func() error {
 			startTime := time.Now()
 			service.Logger.Info("single full table init scn start",
@@ -186,8 +186,9 @@ func initOracleTableConsumeRowID(cfg *service.CfgFile, engine *service.Engine, w
 			if err != nil {
 				return err
 			}
-			if err = engine.InitWaitAndFullSyncMetaRecord(cfg.SourceConfig.SchemaName,
-				table, seq, globalSCN, cfg.FullConfig.ChunkSize, cfg.AppConfig.InsertBatchSize, "", syncMode); err != nil {
+			if err = engine.InitWaitAndFullSyncMetaRecord(strings.ToUpper(cfg.SourceConfig.SchemaName),
+				table, strings.ToUpper(cfg.TargetConfig.SchemaName), table, workerID, globalSCN,
+				cfg.FullConfig.ChunkSize, cfg.AppConfig.InsertBatchSize, "", syncMode); err != nil {
 				return err
 			}
 
