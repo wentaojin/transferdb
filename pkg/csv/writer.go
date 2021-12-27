@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/thinkeridea/go-extend/exstrings"
@@ -50,7 +49,7 @@ func (f *FileWriter) WriteFile() error {
 		return err
 	}
 
-	fileW, err := os.OpenFile(filepath.Join(f.OutDir, f.FileName), os.O_WRONLY|os.O_CREATE|os.O_APPEND|os.O_TRUNC, 0666)
+	fileW, err := os.OpenFile(f.FileName, os.O_WRONLY|os.O_CREATE|os.O_APPEND|os.O_TRUNC, 0666)
 	if err != nil {
 		return err
 	}
