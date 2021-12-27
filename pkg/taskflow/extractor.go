@@ -169,34 +169,19 @@ func filterOracleRedoGreaterOrEqualRecordByTable(
 
 // 1、根据当前表的 SCN 初始化元数据据表
 // 2、根据元数据表记录全量导出导入
-func initOracleTableConsumeRowID(cfg *service.CfgFile, engine *service.Engine, waitSyncTableInfo []string, syncMode string) error {
-	wp := workpool.New(cfg.FullConfig.TaskThreads)
+func startOracleTableConsumeBySCN(cfg *service.CfgFile, engine *service.Engine, syncTableInfo []string, syncMode string) error {
+	wp := workpool.New(cfg.FullConfig.TableThreads)
 
-	for idx, tbl := range waitSyncTableInfo {
+	for idx, tbl := range syncTableInfo {
 		table := tbl
 		workerID := idx
 		wp.Do(func() error {
-			startTime := time.Now()
-			service.Logger.Info("single full table init scn start",
-				zap.String("schema", cfg.SourceConfig.SchemaName),
-				zap.String("table", table))
-
-			// 全量同步前，获取 SCN 以及初始化元数据表
-			globalSCN, err := engine.GetOracleCurrentSnapshotSCN()
-			if err != nil {
+			if err := initOracleTableConsumeRowID(cfg, engine, table, table, workerID, syncMode); err != nil {
 				return err
 			}
-			if err = engine.InitWaitAndFullSyncMetaRecord(strings.ToUpper(cfg.SourceConfig.SchemaName),
-				table, strings.ToUpper(cfg.TargetConfig.SchemaName), table, workerID, globalSCN,
-				cfg.FullConfig.ChunkSize, cfg.AppConfig.InsertBatchSize, "", syncMode); err != nil {
+			if err := syncOracleRowsByRowID(cfg, engine, table, syncMode); err != nil {
 				return err
 			}
-
-			endTime := time.Now()
-			service.Logger.Info("single full table init scn finished",
-				zap.String("schema", cfg.SourceConfig.SchemaName),
-				zap.String("table", table),
-				zap.String("cost", endTime.Sub(startTime).String()))
 			return nil
 		})
 	}
@@ -204,8 +189,34 @@ func initOracleTableConsumeRowID(cfg *service.CfgFile, engine *service.Engine, w
 		return err
 	}
 	if !wp.IsDone() {
-		return fmt.Errorf("sync oracle table rows by scn failed, please rerunning")
+		return fmt.Errorf("sync oracle table rows by checkpoint failed, please rerunning")
 	}
+	return nil
+}
+func initOracleTableConsumeRowID(cfg *service.CfgFile, engine *service.Engine,
+	sourceTable, targetTable string, workerID int, syncMode string) error {
+
+	startTime := time.Now()
+	service.Logger.Info("single full table init scn start",
+		zap.String("schema", cfg.SourceConfig.SchemaName),
+		zap.String("table", sourceTable))
+
+	// 全量同步前，获取 SCN 以及初始化元数据表
+	globalSCN, err := engine.GetOracleCurrentSnapshotSCN()
+	if err != nil {
+		return err
+	}
+	if err = engine.InitWaitAndFullSyncMetaRecord(strings.ToUpper(cfg.SourceConfig.SchemaName),
+		sourceTable, strings.ToUpper(cfg.TargetConfig.SchemaName), targetTable, workerID, globalSCN,
+		cfg.FullConfig.ChunkSize, cfg.AppConfig.InsertBatchSize, "", syncMode); err != nil {
+		return err
+	}
+
+	endTime := time.Now()
+	service.Logger.Info("single full table init scn finished",
+		zap.String("schema", cfg.SourceConfig.SchemaName),
+		zap.String("table", sourceTable),
+		zap.String("cost", endTime.Sub(startTime).String()))
 	return nil
 }
 
