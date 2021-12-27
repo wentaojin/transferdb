@@ -16,6 +16,7 @@ limitations under the License.
 package csv
 
 import (
+	"database/sql"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -25,11 +26,17 @@ import (
 	"go.uber.org/zap"
 )
 
-func extractorTableFullRecord(engine *service.Engine, csvConfig service.CSVConfig, sourceSchemaName, sourceTableName, oracleQuery string) ([]string, [][]string, error) {
+func extractorTableFullRecord(engine *service.Engine, sourceSchemaName, sourceTableName, oracleQuery string) ([]string, *sql.Rows, error) {
 	startTime := time.Now()
-	cols, rowsResult, err := engine.CSVRowProcessor(oracleQuery, csvConfig)
+
+	rows, err := engine.OracleDB.Query(oracleQuery)
 	if err != nil {
-		return cols, rowsResult, fmt.Errorf("get oracle schema [%s] table [%s] record by rowid sql falied: %v", sourceSchemaName, sourceTableName, err)
+		return []string{}, rows, fmt.Errorf("get oracle schema [%s] table [%s] record by rowid sql falied: %v", sourceSchemaName, sourceTableName, err)
+	}
+
+	cols, err := rows.Columns()
+	if err != nil {
+		return cols, rows, fmt.Errorf("[%v] error on general query rows.Columns failed", err.Error())
 	}
 
 	endTime := time.Now()
@@ -39,19 +46,24 @@ func extractorTableFullRecord(engine *service.Engine, csvConfig service.CSVConfi
 		zap.String("rowid sql", oracleQuery),
 		zap.String("cost", endTime.Sub(startTime).String()))
 
-	return cols, rowsResult, nil
+	return cols, rows, nil
 }
 
 func translatorTableFullRecord(
-	targetSchemaName, targetTableName, sourceDBCharset string, columns []string, rowsResult [][]string, csvConfig service.CSVConfig, csvFileName string) *FileWriter {
+	targetSchemaName, targetTableName, sourceDBCharset string, columns []string,
+	engine *service.Engine, sourceSchema, sourceTable, rowidSQL, syncMode, metaSchema string,
+	rowsResult *sql.Rows, csvConfig service.CSVConfig, csvFileName string) *FileWriter {
 	return &FileWriter{
+		SourceSchema:  sourceSchema,
+		SourceTable:   sourceTable,
 		SourceCharset: sourceDBCharset,
-		Header:        csvConfig.Header,
-		Separator:     csvConfig.Separator,
-		Terminator:    csvConfig.Terminator,
-		Charset:       csvConfig.Charset,
+		RowidSQL:      rowidSQL,
+		SyncMode:      syncMode,
+		Engine:        engine,
+		CSVConfig:     csvConfig,
 		Columns:       columns,
 		Rows:          rowsResult,
+		MetaSchema:    metaSchema,
 		OutDir: filepath.Join(
 			csvConfig.OutputDir,
 			strings.ToUpper(targetSchemaName),
@@ -60,12 +72,11 @@ func translatorTableFullRecord(
 	}
 }
 
-func applierTableFullRecord(targetSchemaName, targetTableName string, rowCounts int, rowidSQL string, fileWriter *FileWriter) error {
+func applierTableFullRecord(targetSchemaName, targetTableName string, rowidSQL string, fileWriter *FileWriter) error {
 	startTime := time.Now()
 	service.Logger.Info("single full table rowid data applier start",
 		zap.String("schema", targetSchemaName),
 		zap.String("table", targetTableName),
-		zap.Int("rows", rowCounts),
 		zap.String("rowid sql", rowidSQL))
 	if err := fileWriter.WriteFile(); err != nil {
 		return err
@@ -74,7 +85,6 @@ func applierTableFullRecord(targetSchemaName, targetTableName string, rowCounts 
 	service.Logger.Info("single full table rowid data applier finished",
 		zap.String("schema", targetSchemaName),
 		zap.String("table", targetTableName),
-		zap.Int("rows", rowCounts),
 		zap.String("rowid sql", rowidSQL),
 		zap.String("cost", endTime.Sub(startTime).String()))
 	return nil

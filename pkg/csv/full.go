@@ -16,6 +16,7 @@ limitations under the License.
 package csv
 
 import (
+	"database/sql"
 	"fmt"
 	"strings"
 	"time"
@@ -148,39 +149,27 @@ func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceC
 			// 抽取 Oracle 数据
 			var (
 				columnFields []string
-				rowsResult   [][]string
+				rowsResult   *sql.Rows
 			)
-			columnFields, rowsResult, err = extractorTableFullRecord(engine, cfg.CSVConfig, cfg.SourceConfig.SchemaName, sourceTableName, meta.RowidSQL)
+			columnFields, rowsResult, err = extractorTableFullRecord(engine, cfg.SourceConfig.SchemaName, meta.SourceTableName, meta.RowidSQL)
 			if err != nil {
 				return err
 			}
 
-			if len(rowsResult) == 0 {
-				service.Logger.Warn("oracle schema table rowid data return null rows, skip",
-					zap.String("schema", cfg.SourceConfig.SchemaName),
-					zap.String("table", sourceTableName),
-					zap.String("sql", meta.RowidSQL))
-				// 清理记录以及更新记录
-				if err = engine.ModifyWaitAndFullSyncTableMetaRecord(
-					cfg.TargetConfig.MetaSchema,
-					cfg.SourceConfig.SchemaName, sourceTableName, meta.RowidSQL, syncMode); err != nil {
-					return err
-				}
-				return nil
-			}
-
 			// 转换/应用 Oracle CSV 数据
-			if err = applierTableFullRecord(cfg.TargetConfig.SchemaName,
-				sourceTableName, len(rowsResult), meta.RowidSQL,
-				translatorTableFullRecord(cfg.TargetConfig.SchemaName, sourceTableName, sourceCharset,
-					columnFields, rowsResult, cfg.CSVConfig, meta.CSVFile)); err != nil {
+			if err = applierTableFullRecord(
+				cfg.TargetConfig.SchemaName, meta.SourceTableName, meta.RowidSQL,
+				translatorTableFullRecord(
+					cfg.TargetConfig.SchemaName, meta.SourceTableName, sourceCharset,
+					columnFields, engine, meta.SourceSchemaName, meta.SourceTableName, meta.RowidSQL, syncMode,
+					cfg.TargetConfig.MetaSchema, rowsResult, cfg.CSVConfig, meta.CSVFile)); err != nil {
 				return err
 			}
 
 			// 清理记录以及更新记录
 			if err = engine.ModifyWaitAndFullSyncTableMetaRecord(
 				cfg.TargetConfig.MetaSchema,
-				cfg.SourceConfig.SchemaName, sourceTableName, meta.RowidSQL, syncMode); err != nil {
+				cfg.SourceConfig.SchemaName, meta.SourceTableName, meta.RowidSQL, syncMode); err != nil {
 				return err
 			}
 			return nil
