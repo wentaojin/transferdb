@@ -228,7 +228,7 @@ func SpecialLetters(letter rune) []rune {
 	return chars
 }
 
-// 判断文件夹是否存在
+// 判断文件夹是否存在，不存在则创建
 func PathExist(path string) error {
 	_, err := os.Stat(path)
 	if err == nil {
