@@ -397,14 +397,6 @@ func (e *Engine) GetOracleCurrentSnapshotSCN() (int, error) {
 	return globalSCN, nil
 }
 
-func (e *Engine) GetOracleTableRecordByRowIDSQL(sql string) ([]string, []interface{}, error) {
-	cols, res, err := e.GetOracleTableRows(sql)
-	if err != nil {
-		return cols, res, err
-	}
-	return cols, res, nil
-}
-
 func (e *Engine) StartOracleChunkCreateTask(taskName string) error {
 	querySQL := utils.StringsBuilder(`SELECT COUNT(1) COUNT FROM user_parallel_execute_chunks WHERE TASK_NAME='`, taskName, `'`)
 	_, res, err := Query(e.OracleDB, querySQL)

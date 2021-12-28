@@ -16,6 +16,7 @@ limitations under the License.
 package taskflow
 
 import (
+	"database/sql"
 	"fmt"
 	"strconv"
 	"strings"
@@ -31,11 +32,11 @@ import (
 )
 
 // 捕获全量数据
-func extractorTableFullRecord(engine *service.Engine, sourceSchemaName, sourceTableName, oracleQuery string) ([]string, []interface{}, error) {
+func extractorTableFullRecord(engine *service.Engine, sourceSchemaName, sourceTableName, oracleQuery string) (*sql.Rows, error) {
 	startTime := time.Now()
-	cols, rowsResult, err := engine.GetOracleTableRecordByRowIDSQL(oracleQuery)
+	rows, err := engine.OracleDB.Query(oracleQuery)
 	if err != nil {
-		return cols, rowsResult, fmt.Errorf("get oracle schema [%s] table [%s] record by rowid sql falied: %v", sourceSchemaName, sourceTableName, err)
+		return rows, fmt.Errorf("get oracle schema [%s] table [%s] record by rowid sql falied: %v", sourceSchemaName, sourceTableName, err)
 	}
 
 	endTime := time.Now()
@@ -45,7 +46,7 @@ func extractorTableFullRecord(engine *service.Engine, sourceSchemaName, sourceTa
 		zap.String("rowid sql", oracleQuery),
 		zap.String("cost", endTime.Sub(startTime).String()))
 
-	return cols, rowsResult, nil
+	return rows, nil
 }
 
 // 捕获增量数据
@@ -272,35 +273,24 @@ func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceT
 		wp.Do(func() error {
 			// 抽取 Oracle 数据
 			var (
-				columnFields []string
-				rowsResult   []interface{}
+				rowsResult *sql.Rows
 			)
-			columnFields, rowsResult, err = extractorTableFullRecord(engine, cfg.SourceConfig.SchemaName, sourceTableName, meta.RowidSQL)
+			rowsResult, err = extractorTableFullRecord(engine, cfg.SourceConfig.SchemaName, sourceTableName, meta.RowidSQL)
 			if err != nil {
 				return err
 			}
 
-			if len(rowsResult) == 0 {
-				service.Logger.Warn("oracle schema table rowid data return null rows, skip",
-					zap.String("schema", cfg.SourceConfig.SchemaName),
-					zap.String("table", sourceTableName),
-					zap.String("sql", meta.RowidSQL))
-				// 清理记录以及更新记录
-				if err = engine.ModifyWaitAndFullSyncTableMetaRecord(
-					cfg.TargetConfig.MetaSchema,
-					cfg.SourceConfig.SchemaName, sourceTableName, meta.RowidSQL, syncMode); err != nil {
-					return err
-				}
-				return nil
-			}
-
 			// 转换/应用 Oracle 数据 -> MySQL
-			batchArgs1, batchArgs2, prepareSQL2 := translatorTableFullRecord(cfg.TargetConfig.SchemaName, sourceTableName,
-				meta.RowidSQL, columnFields, rowsResult, cfg.AppConfig.InsertBatchSize, safeMode)
+			//batchArgs1, batchArgs2, prepareSQL2 := translatorTableFullRecord(cfg.TargetConfig.SchemaName, sourceTableName,
+			//	meta.RowidSQL, columnFields, rowsResult, cfg.AppConfig.InsertBatchSize, safeMode)
 
 			if err = applierTableFullRecord(engine, cfg.TargetConfig.SchemaName,
-				sourceTableName, meta.RowidSQL, cfg.FullConfig.ApplyThreads,
-				prepareSQL1, batchStmt1, batchArgs1, prepareSQL2, batchArgs2); err != nil {
+				meta.SourceTableName, meta.RowidSQL,
+				meta.SourceSchemaName,
+				meta.SourceTableName,
+				cfg.TargetConfig.MetaSchema,
+				syncMode,
+				prepareSQL1, batchStmt1, rowsResult, cfg.AppConfig.InsertBatchSize); err != nil {
 				return err
 			}
 
