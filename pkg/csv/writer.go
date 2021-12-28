@@ -38,12 +38,10 @@ type FileWriter struct {
 	SourceTable   string
 	Columns       []string
 	RowidSQL      string
-	SyncMode      string
 	Rows          *sql.Rows
 	OutDir        string
 	FileName      string
 	Engine        *service.Engine
-	MetaSchema    string
 	service.CSVConfig
 }
 
@@ -113,13 +111,6 @@ func (f *FileWriter) write(w io.Writer) error {
 			zap.String("schema", f.SourceSchema),
 			zap.String("table", f.SourceTable),
 			zap.String("sql", f.RowidSQL))
-
-		// 清理记录以及更新记录
-		if err := f.Engine.ModifyWaitAndFullSyncTableMetaRecord(
-			f.MetaSchema,
-			f.SourceSchema, f.SourceSchema, f.RowidSQL, f.SyncMode); err != nil {
-			return err
-		}
 		return nil
 	}
 
