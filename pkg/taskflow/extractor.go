@@ -288,8 +288,6 @@ func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceT
 				meta.SourceTableName, meta.RowidSQL,
 				meta.SourceSchemaName,
 				meta.SourceTableName,
-				cfg.TargetConfig.MetaSchema,
-				syncMode,
 				prepareSQL1, batchStmt1, rowsResult, cfg.AppConfig.InsertBatchSize); err != nil {
 				return err
 			}

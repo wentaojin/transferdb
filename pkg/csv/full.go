@@ -161,8 +161,7 @@ func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceC
 				cfg.TargetConfig.SchemaName, meta.SourceTableName, meta.RowidSQL,
 				translatorTableFullRecord(
 					cfg.TargetConfig.SchemaName, meta.SourceTableName, sourceCharset,
-					columnFields, engine, meta.SourceSchemaName, meta.SourceTableName, meta.RowidSQL, syncMode,
-					cfg.TargetConfig.MetaSchema, rowsResult, cfg.CSVConfig, meta.CSVFile)); err != nil {
+					columnFields, engine, meta.SourceSchemaName, meta.SourceTableName, meta.RowidSQL, rowsResult, cfg.CSVConfig, meta.CSVFile)); err != nil {
 				return err
 			}
 

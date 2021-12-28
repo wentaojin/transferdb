@@ -35,7 +35,6 @@ import (
 func applierTableFullRecord(engine *service.Engine,
 	targetSchemaName, targetTableName, rowidSQL string,
 	sourceSchemaName, sourceTableName string,
-	metaSchemaName, syncMode string,
 	prepareSQL string,
 	insertStmt *sql.Stmt,
 	rows *sql.Rows,
@@ -55,14 +54,7 @@ func applierTableFullRecord(engine *service.Engine,
 			zap.String("schema", sourceSchemaName),
 			zap.String("table", sourceTableName),
 			zap.String("sql", rowidSQL))
-		// 清理记录以及更新记录
-		if err := engine.ModifyWaitAndFullSyncTableMetaRecord(
-			metaSchemaName,
-			sourceSchemaName, sourceTableName, rowidSQL, syncMode); err != nil {
-			return err
-		}
 		return nil
-
 	}
 
 	var (
@@ -191,16 +183,19 @@ func applierTableFullRecord(engine *service.Engine,
 
 	// 单条写入
 	// 计算占位符
-	rowBatchCounts := len(rowsResult) / columns
+	rowCounts := len(rowsResult)
+	if rowCounts > 0 {
+		rowBatchCounts := rowCounts / columns
 
-	prepareSQL2 := utils.StringsBuilder(
-		GenerateMySQLInsertSQLStatementPrefix(targetSchemaName, targetTableName, cols, safeMode),
-		GenerateMySQLPrepareBindVarStatement(columns, rowBatchCounts))
+		prepareSQL2 := utils.StringsBuilder(
+			GenerateMySQLInsertSQLStatementPrefix(targetSchemaName, targetTableName, cols, safeMode),
+			GenerateMySQLPrepareBindVarStatement(columns, rowBatchCounts))
 
-	_, err = engine.MysqlDB.Exec(prepareSQL2, rowsResult...)
-	if err != nil {
-		return fmt.Errorf("single full table [%s.%s] prepare sql [%v] prepare args [%v] data bulk insert mysql falied: %v",
-			targetSchemaName, targetTableName, prepareSQL2, rowsResult, err)
+		_, err = engine.MysqlDB.Exec(prepareSQL2, rowsResult...)
+		if err != nil {
+			return fmt.Errorf("single full table [%s.%s] prepare sql [%v] prepare args [%v] data bulk insert mysql falied: %v",
+				targetSchemaName, targetTableName, prepareSQL2, rowsResult, err)
+		}
 	}
 
 	endTime := time.Now()

@@ -51,19 +51,17 @@ func extractorTableFullRecord(engine *service.Engine, sourceSchemaName, sourceTa
 
 func translatorTableFullRecord(
 	targetSchemaName, targetTableName, sourceDBCharset string, columns []string,
-	engine *service.Engine, sourceSchema, sourceTable, rowidSQL, syncMode, metaSchema string,
+	engine *service.Engine, sourceSchema, sourceTable, rowidSQL string,
 	rowsResult *sql.Rows, csvConfig service.CSVConfig, csvFileName string) *FileWriter {
 	return &FileWriter{
 		SourceSchema:  sourceSchema,
 		SourceTable:   sourceTable,
 		SourceCharset: sourceDBCharset,
 		RowidSQL:      rowidSQL,
-		SyncMode:      syncMode,
 		Engine:        engine,
 		CSVConfig:     csvConfig,
 		Columns:       columns,
 		Rows:          rowsResult,
-		MetaSchema:    metaSchema,
 		OutDir: filepath.Join(
 			csvConfig.OutputDir,
 			strings.ToUpper(targetSchemaName),
