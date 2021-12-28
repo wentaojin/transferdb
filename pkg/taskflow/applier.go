@@ -96,6 +96,8 @@ func applierTableFullRecord(engine *service.Engine,
 	}
 
 	// 表行数读取
+	batchBindVars := insertBatchSize * columns
+
 	for rows.Next() {
 		err = rows.Scan(dest...)
 		if err != nil {
@@ -172,8 +174,8 @@ func applierTableFullRecord(engine *service.Engine,
 		}
 
 		// batch 写入
-		if len(rowsResult) == insertBatchSize {
-			_, err := insertStmt.Exec(rowsResult...)
+		if len(rowsResult) == batchBindVars {
+			_, err := insertStmt.Exec(rowsResult)
 			if err != nil {
 				return fmt.Errorf("single full table [%s.%s] prepare sql [%v] prepare args [%v] data bulk insert mysql falied: %v",
 					targetSchemaName, targetTableName, prepareSQL, rowsResult, err)
@@ -181,6 +183,10 @@ func applierTableFullRecord(engine *service.Engine,
 			// 数组清空
 			rowsResult = rowsResult[0:0]
 		}
+	}
+
+	if err = rows.Err(); err != nil {
+		return err
 	}
 
 	// 单条写入
@@ -195,10 +201,6 @@ func applierTableFullRecord(engine *service.Engine,
 	if err != nil {
 		return fmt.Errorf("single full table [%s.%s] prepare sql [%v] prepare args [%v] data bulk insert mysql falied: %v",
 			targetSchemaName, targetTableName, prepareSQL2, rowsResult, err)
-	}
-
-	if err = rows.Err(); err != nil {
-		return err
 	}
 
 	endTime := time.Now()
