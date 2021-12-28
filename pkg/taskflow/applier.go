@@ -175,7 +175,7 @@ func applierTableFullRecord(engine *service.Engine,
 
 		// batch 写入
 		if len(rowsResult) == batchBindVars {
-			_, err := insertStmt.Exec(rowsResult)
+			_, err := insertStmt.Exec(rowsResult...)
 			if err != nil {
 				return fmt.Errorf("single full table [%s.%s] prepare sql [%v] prepare args [%v] data bulk insert mysql falied: %v",
 					targetSchemaName, targetTableName, prepareSQL, rowsResult, err)
