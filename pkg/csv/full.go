@@ -74,7 +74,7 @@ func startOracleTableConsumeByCheckpoint(cfg *service.CfgFile, engine *service.E
 	wp := workpool.New(cfg.CSVConfig.TableThreads)
 	for _, tbl := range syncTableInfo {
 		table := tbl
-		wp.DoWait(func() error {
+		wp.Do(func() error {
 			if err := syncOracleRowsByRowID(cfg, engine, sourceCharset, table, syncMode); err != nil {
 				return fmt.Errorf("sync oracle table rows by rowid failed: %v", err)
 			}
@@ -96,7 +96,7 @@ func initOracleTableConsumeRowID(cfg *service.CfgFile, engine *service.Engine, w
 	for idx, tbl := range waitSyncTableInfo {
 		table := tbl
 		workerID := idx
-		wp.DoWait(func() error {
+		wp.Do(func() error {
 			startTime := time.Now()
 			service.Logger.Info("single full table init scn start",
 				zap.String("schema", cfg.SourceConfig.SchemaName),
@@ -145,7 +145,7 @@ func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceC
 	wp := workpool.New(cfg.CSVConfig.SQLThreads)
 	for _, m := range fullSyncMetas {
 		meta := m
-		wp.DoWait(func() error {
+		wp.Do(func() error {
 			// 抽取 Oracle 数据
 			var (
 				columnFields []string
