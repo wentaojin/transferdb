@@ -162,11 +162,7 @@ func (f *FileWriter) write(w io.Writer) error {
 					}
 
 					if f.EscapeBackslash {
-						var b strings.Builder
-						for _, r := range []rune(string(by)) {
-							b.WriteString(string(utils.SpecialLetters(r)))
-						}
-						bs = b.String()
+						bs = utils.SpecialLetters(by)
 					} else {
 						bs = string(by)
 					}

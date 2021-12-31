@@ -21,6 +21,7 @@ import (
 	"io/ioutil"
 	"os"
 	"reflect"
+	"strings"
 	"unicode"
 
 	"golang.org/x/text/encoding/simplifiedchinese"
@@ -218,14 +219,23 @@ func Utf8ToGbk(s []byte) ([]byte, error) {
 判断是否为Unicode标点字符 :unicode.IsPunct(v)
 判断是否为中文：unicode.Han(v)
 */
-func SpecialLetters(letter rune) []rune {
-	var chars []rune
-	if unicode.IsPunct(letter) || unicode.IsSymbol(letter) || unicode.IsSpace(letter) {
-		chars = append(chars, '\\', letter)
-		return chars
+func SpecialLetters(bs []byte) string {
+
+	var (
+		b     strings.Builder
+		chars []rune
+	)
+	for _, r := range bytes.Runes(bs) {
+		if unicode.IsPunct(r) || unicode.IsSymbol(r) || unicode.IsSpace(r) {
+			chars = append(chars, '\\', r)
+		} else {
+			chars = append(chars, r)
+		}
 	}
-	chars = append(chars, letter)
-	return chars
+
+	b.WriteString(string(chars))
+
+	return b.String()
 }
 
 // 判断文件夹是否存在，不存在则创建
