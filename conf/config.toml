@@ -68,7 +68,8 @@ enable-checkpoint = true
 chunk-size = 100000
 # 表导出导入并发数，同时处理多少张上游表，可动态变更
 table-threads = 8
-# 单表 SQL 执行并发数，表内并发，表示同时多少并发 SQL 读取上游表数据，可动态变更
+# 1、单表 SQL 执行并发数，表内并发，表示同时多少并发 SQL 读取上游表数据，可动态变更
+# 2、每并发处理 chunk-size 行数，根据 insert-batch-size 大小切分提交
 sql-threads = 64
 # 关于全量断点恢复
 #   - 若想断点恢复，设置 enable-checkpoint = true,首次一旦运行则 chunk-size 数不能调整，
