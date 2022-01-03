@@ -70,6 +70,9 @@ const (
 	// CSV 字符集判断
 	UTF8CharacterSetCSV = "UTF8"
 	GBKCharacterSetCSV  = "GBK"
+
+	// Reverse/Check GBK 字符集处理
+
 )
 
 // MySQL 8.0
