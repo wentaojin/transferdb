@@ -66,6 +66,10 @@ const (
 
 	// Oracle 用户、表、字段默认使用 DB 排序规则
 	OracleUserTableColumnDefaultCollation = "USING_NLS_COMP"
+
+	// CSV 字符集判断
+	UTF8CharacterSetCSV = "UTF8"
+	GBKCharacterSetCSV  = "GBK"
 )
 
 // MySQL 8.0
@@ -91,5 +95,12 @@ var OracleCollationMap = map[string]string{
 var OracleDBCharacterSetMap = map[string]string{
 	"AL32UTF8": "UTF8MB4",
 	"UTF8":     "UTF8MB4",
+	"ZHS16GBK": "GBK",
+}
+
+// ORACLE 字符集映射规则
+var OracleDBCSVCharacterSetMap = map[string]string{
+	"AL32UTF8": "UTF8",
+	"UTF8":     "UTF8",
 	"ZHS16GBK": "GBK",
 }

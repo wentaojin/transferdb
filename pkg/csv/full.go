@@ -23,8 +23,6 @@ import (
 
 	"github.com/wentaojin/transferdb/pkg/taskflow"
 
-	"github.com/wentaojin/transferdb/utils"
-
 	"go.uber.org/zap"
 
 	"github.com/wentaojin/transferdb/service"
@@ -36,24 +34,14 @@ func startOracleTableFullCSV(cfg *service.CfgFile, engine *service.Engine, waitS
 		zap.Strings("wait sync tables", waitSyncTableInfo),
 		zap.Strings("part sync tables", partSyncTableInfo))
 
-	characterSet, err := engine.GetOracleDBCharacterSet()
+	oracleCharacterSet, err := engine.GetOracleDBCharacterSet()
 	if err != nil {
 		return err
-	}
-	isGBKCharacterSet := false
-	if strings.Contains(strings.ToUpper(characterSet), ".ZHS16GBK") {
-		isGBKCharacterSet = true
-	}
-	var OracleCharacterSet string
-	if isGBKCharacterSet {
-		OracleCharacterSet = utils.OracleUTF8CharacterSet
-	} else {
-		OracleCharacterSet = utils.OracleGBKCharacterSet
 	}
 
 	// 优先存在断点的表同步
 	if len(partSyncTableInfo) > 0 {
-		if err = startOracleTableConsumeByCheckpoint(cfg, engine, partSyncTableInfo, OracleCharacterSet, syncMode); err != nil {
+		if err = startOracleTableConsumeByCheckpoint(cfg, engine, partSyncTableInfo, oracleCharacterSet, syncMode); err != nil {
 			return err
 		}
 	}
@@ -63,7 +51,7 @@ func startOracleTableFullCSV(cfg *service.CfgFile, engine *service.Engine, waitS
 			return err
 		}
 
-		if err = startOracleTableConsumeByCheckpoint(cfg, engine, waitSyncTableInfo, OracleCharacterSet, syncMode); err != nil {
+		if err = startOracleTableConsumeByCheckpoint(cfg, engine, waitSyncTableInfo, oracleCharacterSet, syncMode); err != nil {
 			return err
 		}
 	}

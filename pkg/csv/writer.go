@@ -75,14 +75,18 @@ func (f *FileWriter) adjustCSVConfig() error {
 		f.Terminator = "\r\n"
 	}
 	if f.Charset == "" {
-		f.Charset = f.SourceCharset
+		if val, ok := utils.OracleDBCSVCharacterSetMap[strings.ToUpper(f.SourceCharset)]; ok {
+			f.Charset = val
+		} else {
+			return fmt.Errorf("oracle db csv characterset [%v] isn't support", f.SourceCharset)
+		}
 	}
 	isSupport := false
 	if f.Charset != "" {
 		switch strings.ToUpper(f.Charset) {
-		case "UTF8":
+		case utils.UTF8CharacterSetCSV:
 			isSupport = true
-		case "GBK":
+		case utils.GBKCharacterSetCSV:
 			isSupport = true
 		default:
 			isSupport = false
@@ -151,7 +155,7 @@ func (f *FileWriter) write(w io.Writer) error {
 						bs string
 					)
 					// 处理字符集、特殊字符转义、字符串引用定界符
-					if strings.ToUpper(f.Charset) == utils.OracleGBKCharacterSet {
+					if strings.ToUpper(f.Charset) == utils.GBKCharacterSetCSV {
 						gbkBytes, err := utils.Utf8ToGbk(raw)
 						if err != nil {
 							return err
