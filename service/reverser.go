@@ -143,7 +143,7 @@ WHERE
 		REPLACE ( upper( xs.search_condition ), ' ', '' ),'"',	'' 	) LIKE '%%' || upper( t.column_name ) || 'ISNOTNULL' || '%%')
 			 ) NULLABLE,
 	    t.DATA_DEFAULT,
-		DECODE(t.COLLATION,'USING_NLS_COMP',SELECT VALUE from NLS_DATABASE_PARAMETERS WHERE PARAMETER = 'NLS_COMP',t.COLLATION) COLLATION,
+		DECODE(t.COLLATION,'USING_NLS_COMP',(SELECT VALUE from NLS_DATABASE_PARAMETERS WHERE PARAMETER = 'NLS_COMP'),t.COLLATION) COLLATION,
 	    c.COMMENTS
 	from dba_tab_columns t, dba_col_comments c
 	where t.table_name = c.table_name

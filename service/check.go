@@ -61,8 +61,7 @@ func (e *Engine) GetOracleDBCharacterNLSSortCollation() (string, error) {
 
 func (e *Engine) GetOracleSchemaCollation(schemaName string) (string, error) {
 	querySQL := fmt.Sprintf(`SELECT DECODE(DEFAULT_COLLATION,
-'USING_NLS_COMP',SELECT VALUE from NLS_DATABASE_PARAMETERS WHERE PARAMETER = 'NLS_COMP',DEFAULT_COLLATION) DEFAULT_COLLATION
-) FROM DBA_USERS WHERE USERNAME = '%s'`, strings.ToUpper(schemaName))
+'USING_NLS_COMP',(SELECT VALUE from NLS_DATABASE_PARAMETERS WHERE PARAMETER = 'NLS_COMP'),DEFAULT_COLLATION) DEFAULT_COLLATION FROM DBA_USERS WHERE USERNAME = '%s'`, strings.ToUpper(schemaName))
 	_, res, err := Query(e.OracleDB, querySQL)
 	if err != nil {
 		return "", err
