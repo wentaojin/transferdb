@@ -402,8 +402,6 @@ func (d *DiffWriter) columnCharacterSetAndCollationRuleCheck(oracleTable, mysqlT
 					strings.ToUpper(utils.OracleCollationMap[oracleTable.Columns[strings.ToUpper(mysqlColName)].Collation]) {
 					tableColumnsMap[mysqlColName] = mysqlColInfo
 				}
-			} else {
-				tableColumnsMap[mysqlColName] = mysqlColInfo
 			}
 		} else {
 			delColumnsMap[mysqlColName] = mysqlColInfo
