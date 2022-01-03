@@ -706,7 +706,7 @@ func LoadOracleToMySQLTableList(engine *service.Engine, exporterTableSlice []str
 	if err != nil {
 		return []Table{}, partitionTables, temporaryTables, clusteredTables, err
 	}
-	if _, ok := utils.OracleDBCharacterSetMap[characterSet]; !ok {
+	if _, ok := utils.OracleDBCharacterSetMap[strings.Split(characterSet, ".")[1]]; !ok {
 		return []Table{}, partitionTables, temporaryTables, clusteredTables, fmt.Errorf("oracle db character set [%v] isn't support", characterSet)
 	}
 
