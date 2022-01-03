@@ -189,15 +189,9 @@ func NewOracleTableINFO(schemaName, tableName string, engine *service.Engine, so
 
 func getOracleTableColumn(schemaName, tableName string, engine *service.Engine, sourceDBCharacterSet, nlsComp string,
 	sourceTableCollation map[string]string, sourceSchemaCollation string, oraCollation bool) (map[string]Column, string, error) {
-	var OracleCharacterSet string
-	if _, ok := utils.OracleDBCharacterSetMap[strings.ToUpper(sourceDBCharacterSet)]; !ok {
-		return nil, OracleCharacterSet, fmt.Errorf("oracle db character set [%v] isn't support", sourceDBCharacterSet)
-	}
-	OracleCharacterSet = utils.OracleDBCharacterSetMap[strings.ToUpper(sourceDBCharacterSet)]
-
 	columnInfo, err := engine.GetOracleTableColumn(schemaName, tableName, oraCollation)
 	if err != nil {
-		return nil, OracleCharacterSet, err
+		return nil, "", err
 	}
 
 	columns := make(map[string]Column, len(columnInfo))
@@ -236,20 +230,20 @@ func getOracleTableColumn(schemaName, tableName string, engine *service.Engine, 
 				DataDefault:       dataDefault,
 				Comment:           strings.ToUpper(rowCol["COMMENTS"]),
 			},
-			CharacterSet:            strings.ToUpper(OracleCharacterSet),
+			CharacterSet:            strings.ToUpper(sourceDBCharacterSet), // oracle db characterSet only one
 			OracleOriginDataDefault: strings.TrimSpace(rowCol["DATA_DEFAULT"]),
 			MySQLOriginDataDefault:  "", // only mysql
 		}
 
 		columnCollation, err := generateTableColumnCollation(nlsComp, oraCollation, sourceSchemaCollation, sourceTableCollation[strings.ToUpper(tableName)], strings.ToUpper(rowCol["COLLATION"]))
 		if err != nil {
-			return columns, OracleCharacterSet, err
+			return columns, "", err
 		}
 		column.Collation = columnCollation
 
 		columns[strings.ToUpper(rowCol["COLUMN_NAME"])] = column
 	}
-	return columns, OracleCharacterSet, err
+	return columns, strings.ToUpper(sourceDBCharacterSet), err
 }
 
 func getOracleTableIndex(schemaName, tableName string, engine *service.Engine) ([]Index, error) {

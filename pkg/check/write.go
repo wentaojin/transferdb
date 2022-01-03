@@ -56,8 +56,8 @@ func NewDiffWriter(sourceSchemaName, targetSchemaName, tableName,
 	oracleCollation bool,
 	engine *service.Engine, chkFileMW, revFileMW, compFileMW *reverser.FileMW) *DiffWriter {
 	return &DiffWriter{
-		SourceSchemaName:      sourceSchemaName,
-		TargetSchemaName:      targetSchemaName,
+		SourceSchemaName:      strings.ToUpper(sourceSchemaName),
+		TargetSchemaName:      strings.ToUpper(targetSchemaName),
 		TableName:             tableName,
 		SourceDBCharacterSet:  sourceCharacterSet,
 		SourceDBNLSSort:       nlsSort,
