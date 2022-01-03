@@ -356,8 +356,21 @@ func (d *DiffWriter) tableCharacterSetAndCollationRuleCheck(oracleTable, mysqlTa
 	builder.WriteString(fmt.Sprintf("%v\n", t.Render()))
 
 	builder.WriteString("*/\n")
-	builder.WriteString(fmt.Sprintf("ALTER TABLE %s.%s CHARACTER SET = %s, COLLATE = %s;\n", d.TargetSchemaName, d.TableName,
-		strings.ToLower(utils.OracleDBCharacterSetMap[oracleTable.TableCharacterSet]),
+
+	// GBK 处理，统一 UTF8MB4 处理
+	var mysqlCharacterSet string
+	if strings.ToUpper(utils.OracleDBCharacterSetMap[oracleTable.TableCharacterSet]) == "GBK" {
+		mysqlCharacterSet = "UTF8MB4"
+		service.Logger.Warn("check oracle table",
+			zap.String("schema", oracleTable.SchemaName),
+			zap.String("table", oracleTable.TableName),
+			zap.String("characterSet", oracleTable.TableCharacterSet),
+			zap.String("msg", "GBK TO UTF8MB4"))
+	} else {
+		mysqlCharacterSet = utils.OracleDBCharacterSetMap[oracleTable.TableCharacterSet]
+	}
+	builder.WriteString(fmt.Sprintf("ALTER TABLE %s.%s CHARACTER SET %s, COLLATE %s;\n\n", d.TargetSchemaName, d.TableName,
+		strings.ToLower(mysqlCharacterSet),
 		strings.ToLower(utils.OracleCollationMap[oracleTable.TableCollation])))
 
 	return builder.String()
@@ -396,15 +409,29 @@ func (d *DiffWriter) columnCharacterSetAndCollationRuleCheck(oracleTable, mysqlT
 				{d.TableName, mysqlColName,
 					fmt.Sprintf("%s(%s)", mysqlColInfo.DataType, mysqlColInfo.DataLength), "Create Table Column Character Collation"},
 			})
+
+			// GBK 处理，统一 UTF8MB4 处理
+			var mysqlCharacterSet string
+			if strings.ToUpper(utils.OracleDBCharacterSetMap[oracleTable.Columns[strings.ToUpper(mysqlColName)].CharacterSet]) == "GBK" {
+				mysqlCharacterSet = "UTF8MB4"
+				service.Logger.Warn("check oracle table",
+					zap.String("schema", oracleTable.SchemaName),
+					zap.String("table", oracleTable.TableName),
+					zap.String("column", mysqlColName),
+					zap.String("characterSet", oracleTable.Columns[strings.ToUpper(mysqlColName)].CharacterSet),
+					zap.String("msg", "GBK TO UTF8MB4"))
+			} else {
+				mysqlCharacterSet = utils.OracleDBCharacterSetMap[oracleTable.Columns[strings.ToUpper(mysqlColName)].CharacterSet]
+			}
 			sqlStrings = append(sqlStrings, fmt.Sprintf("ALTER TABLE %s.%s MODIFY %s %s(%s) CHARACTER SET %s COLLATE %s;",
 				d.TargetSchemaName, d.TableName, mysqlColName, mysqlColInfo.DataType, mysqlColInfo.DataLength,
-				strings.ToLower(utils.OracleDBCharacterSetMap[oracleTable.Columns[strings.ToUpper(mysqlColName)].CharacterSet]),
+				strings.ToLower(mysqlCharacterSet),
 				strings.ToLower(utils.OracleCollationMap[oracleTable.Columns[strings.ToUpper(mysqlColName)].Collation])))
 		}
 
 		builder.WriteString(fmt.Sprintf("%v\n", t.Render()))
 		builder.WriteString("*/\n")
-		builder.WriteString(strings.Join(sqlStrings, "\n"))
+		builder.WriteString(strings.Join(sqlStrings, "\n") + "\n\n")
 	}
 
 	if len(delColumnsMap) > 0 {
@@ -426,7 +453,7 @@ func (d *DiffWriter) columnCharacterSetAndCollationRuleCheck(oracleTable, mysqlT
 
 		builder.WriteString(fmt.Sprintf("%v\n", t.Render()))
 		builder.WriteString("*/\n")
-		builder.WriteString(strings.Join(sqlStrings, "\n"))
+		builder.WriteString(strings.Join(sqlStrings, "\n") + "\n\n")
 	}
 	return builder.String()
 }
@@ -497,7 +524,7 @@ func (d *DiffWriter) oracleColumnCountsCheck(oracleTable, mysqlTable *Table) (st
 
 		builder.WriteString(fmt.Sprintf("%v\n", t.Render()))
 		builder.WriteString("*/\n")
-		builder.WriteString(strings.Join(sqlStrings, "\n"))
+		builder.WriteString(strings.Join(sqlStrings, "\n") + "\n\n")
 	}
 	return builder.String(), nil
 }
