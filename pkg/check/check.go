@@ -19,8 +19,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
+
+	"github.com/wentaojin/transferdb/utils"
 
 	"github.com/wentaojin/transferdb/pkg/reverser"
 
@@ -77,6 +80,57 @@ func OracleTableToMySQLMappingCheck(engine *service.Engine, cfg *service.CfgFile
 		Writer: fileCompatibility,
 	}
 
+	// oracle 环境信息
+	characterSet, err := engine.GetOracleDBCharacterSet()
+	if err != nil {
+		return err
+	}
+	// oracle db collation
+	nlsSort, err := engine.GetOracleDBCharacterNLSSortCollation()
+	if err != nil {
+		return err
+	}
+	nlsComp, err := engine.GetOracleDBCharacterNLSCompCollation()
+	if err != nil {
+		return err
+	}
+	if _, ok := utils.OracleCollationMap[strings.ToUpper(nlsSort)]; !ok {
+		return fmt.Errorf("oracle db nls sort [%s] isn't support", nlsSort)
+	}
+	if _, ok := utils.OracleCollationMap[strings.ToUpper(nlsComp)]; !ok {
+		return fmt.Errorf("oracle db nls comp [%s] isn't support", nlsComp)
+	}
+	if strings.ToUpper(nlsSort) != strings.ToUpper(nlsComp) {
+		return fmt.Errorf("oracle db nls_sort [%s] and nls_comp [%s] isn't different, need be equal; because mysql db isn't support", nlsSort, nlsComp)
+	}
+
+	// oracle 版本是否存在 collation
+	oraDBVersion, err := engine.GetOracleDBVersion()
+	if err != nil {
+		return err
+	}
+
+	oraCollation := false
+	if utils.VersionOrdinal(oraDBVersion) >= utils.VersionOrdinal(utils.OracleTableColumnCollationDBVersion) {
+		oraCollation = true
+	}
+
+	var (
+		tblCollation    map[string]string
+		schemaCollation string
+	)
+
+	if oraCollation {
+		schemaCollation, err = engine.GetOracleSchemaCollation(strings.ToUpper(cfg.SourceConfig.SchemaName))
+		if err != nil {
+			return err
+		}
+		tblCollation, err = engine.GetOracleTableCollation(strings.ToUpper(cfg.SourceConfig.SchemaName))
+		if err != nil {
+			return err
+		}
+	}
+
 	wp := workpool.New(cfg.AppConfig.Threads)
 
 	for _, table := range exporterTableSlice {
@@ -89,7 +143,10 @@ func OracleTableToMySQLMappingCheck(engine *service.Engine, cfg *service.CfgFile
 		compFile := wrComp
 
 		wp.Do(func() error {
-			if err := NewDiffWriter(sourceSchemaName, targetSchemaName, tableName, e, checkFile, revFile, compFile).DiffOracleAndMySQLTable(); err != nil {
+			if err := NewDiffWriter(sourceSchemaName, targetSchemaName,
+				tableName, characterSet, nlsSort, nlsComp,
+				tblCollation, schemaCollation, oraCollation,
+				e, checkFile, revFile, compFile).DiffOracleAndMySQLTable(); err != nil {
 				return err
 			}
 			return nil

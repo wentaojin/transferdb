@@ -22,6 +22,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/wentaojin/transferdb/utils"
+
 	"github.com/wentaojin/transferdb/service"
 
 	"go.uber.org/zap"
@@ -29,13 +31,18 @@ import (
 
 // 任务
 type Table struct {
-	SourceSchemaName string
-	TargetSchemaName string
-	SourceTableName  string
-	TargetTableName  string
-	SourceTableType  string
-	Overwrite        bool
-	Engine           *service.Engine `json:"-"`
+	SourceSchemaName      string
+	TargetSchemaName      string
+	SourceTableName       string
+	TargetTableName       string
+	OracleCollation       bool
+	SourceSchemaCollation string // 可为空
+	SourceTableCollation  string // 可为空
+	SourceDBNLSSort       string
+	SourceDBNLSComp       string
+	SourceTableType       string
+	Overwrite             bool
+	Engine                *service.Engine `json:"-"`
 }
 
 func (t Table) GenCreateTableSQL(modifyTableName string) (string, error) {
@@ -45,7 +52,7 @@ func (t Table) GenCreateTableSQL(modifyTableName string) (string, error) {
 		return "", err
 	}
 
-	columnMetaSlice, err := t.reverserOracleTableColumnToMySQL()
+	columnMetaSlice, err := t.reverserOracleTableColumnToMySQL(t.OracleCollation)
 	if err != nil {
 		return "", err
 	}
@@ -58,18 +65,51 @@ func (t Table) GenCreateTableSQL(modifyTableName string) (string, error) {
 	var (
 		tableMetas     []string
 		createTableSQL string
+		tableCollation string
 	)
 	tableMetas = append(tableMetas, columnMetaSlice...)
 	tableMetas = append(tableMetas, primaryKeyMetaSlice...)
 	tableMeta := strings.Join(tableMetas, ",\n")
 
-	tableComment := tablesMap[0]["COMMENTS"]
-	if tableComment != "" {
-		createTableSQL = fmt.Sprintf("CREATE TABLE `%s`.`%s` (\n%s\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin  COMMENT='%s';",
-			t.TargetSchemaName, modifyTableName, tableMeta, tableComment)
+	// schema、db、table collation
+	if t.OracleCollation {
+		// table collation
+		if t.SourceTableCollation != "" {
+			if val, ok := utils.OracleCollationMap[t.SourceTableCollation]; ok {
+				tableCollation = val
+			} else {
+				return "", fmt.Errorf("oracle table collation [%v] isn't support", t.SourceTableCollation)
+			}
+		}
+		// schema collation
+		if t.SourceTableCollation == "" && t.SourceSchemaCollation != "" {
+			if val, ok := utils.OracleCollationMap[t.SourceSchemaCollation]; ok {
+				tableCollation = val
+			} else {
+				return "", fmt.Errorf("oracle schema collation [%v] table collation [%v] isn't support", t.SourceSchemaCollation, t.SourceTableCollation)
+			}
+		}
+		if t.SourceTableName == "" && t.SourceSchemaCollation == "" {
+			return "", fmt.Errorf("oracle schema collation [%v] table collation [%v] isn't support", t.SourceSchemaCollation, t.SourceTableCollation)
+		}
 	} else {
-		createTableSQL = fmt.Sprintf("CREATE TABLE `%s`.`%s` (\n%s\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;",
-			t.TargetSchemaName, modifyTableName, tableMeta)
+		// db collation
+		if val, ok := utils.OracleCollationMap[t.SourceDBNLSComp]; ok {
+			tableCollation = val
+		} else {
+			return "", fmt.Errorf("oracle db nls_comp [%v] nls_sort [%v] isn't support", t.SourceDBNLSComp, t.SourceDBNLSSort)
+		}
+	}
+
+	// table 注释
+	tableComment := tablesMap[0]["COMMENTS"]
+
+	if tableComment != "" {
+		createTableSQL = fmt.Sprintf("CREATE TABLE `%s`.`%s` (\n%s\n) ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s COMMENT='%s';",
+			t.TargetSchemaName, modifyTableName, tableMeta, strings.ToLower(utils.MySQLCharacterSet), tableCollation, tableComment)
+	} else {
+		createTableSQL = fmt.Sprintf("CREATE TABLE `%s`.`%s` (\n%s\n) ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s;",
+			t.TargetSchemaName, modifyTableName, tableMeta, strings.ToLower(utils.MySQLCharacterSet), tableCollation)
 	}
 
 	service.Logger.Info("reverse oracle table struct",
@@ -379,33 +419,55 @@ func (t Table) reverserOracleTableUniqueIndexToMySQL(modifyTableName string) ([]
 	return createIndexSQL, compatibilityIndexSQL, err
 }
 
-func (t Table) reverserOracleTableColumnToMySQL() ([]string, error) {
+func (t Table) reverserOracleTableColumnToMySQL(oraCollation bool) ([]string, error) {
 	var (
 		// 字段元数据组
 		columnMetas []string
 	)
 
 	// 获取表数据字段列信息
-	columnsMap, err := t.Engine.GetOracleTableColumn(t.SourceSchemaName, t.SourceTableName)
+	columnsMap, err := t.Engine.GetOracleTableColumn(t.SourceSchemaName, t.SourceTableName, oraCollation)
 	if err != nil {
 		return columnMetas, err
 	}
 
 	// Oracle 表字段数据类型内置映射 MySQL/TiDB 规则转换
 	for _, rowCol := range columnsMap {
-		columnMeta, err := ReverseOracleTableColumnMapRule(
-			t.SourceSchemaName,
-			t.SourceTableName,
-			rowCol["COLUMN_NAME"],
-			rowCol["DATA_TYPE"],
-			rowCol["NULLABLE"],
-			rowCol["COMMENTS"],
-			rowCol["DATA_DEFAULT"],
-			rowCol["DATA_SCALE"],
-			rowCol["DATA_PRECISION"],
-			rowCol["DATA_LENGTH"],
-			t.Engine,
+		var (
+			columnMeta string
+			err        error
 		)
+		if oraCollation {
+			columnMeta, err = ReverseOracleTableColumnMapRule(
+				t.SourceSchemaName,
+				t.SourceTableName,
+				rowCol["COLUMN_NAME"],
+				rowCol["DATA_TYPE"],
+				rowCol["NULLABLE"],
+				rowCol["COMMENTS"],
+				rowCol["DATA_DEFAULT"],
+				rowCol["DATA_SCALE"],
+				rowCol["DATA_PRECISION"],
+				rowCol["DATA_LENGTH"],
+				rowCol["COLLATION"],
+				t.Engine,
+			)
+		} else {
+			columnMeta, err = ReverseOracleTableColumnMapRule(
+				t.SourceSchemaName,
+				t.SourceTableName,
+				rowCol["COLUMN_NAME"],
+				rowCol["DATA_TYPE"],
+				rowCol["NULLABLE"],
+				rowCol["COMMENTS"],
+				rowCol["DATA_DEFAULT"],
+				rowCol["DATA_SCALE"],
+				rowCol["DATA_PRECISION"],
+				rowCol["DATA_LENGTH"],
+				"",
+				t.Engine,
+			)
+		}
 		if err != nil {
 			return columnMetas, err
 		}
@@ -589,7 +651,7 @@ func (t *Table) String() string {
 }
 
 // 加载表列表
-func LoadOracleToMySQLTableList(engine *service.Engine, exporterTableSlice []string, sourceSchema, targetSchema string, overwrite bool) ([]Table, []string, []string, []string, error) {
+func LoadOracleToMySQLTableList(engine *service.Engine, exporterTableSlice []string, sourceSchema, targetSchema, nlsSort, nlsComp string, overwrite bool) ([]Table, []string, []string, []string, error) {
 	startTime := time.Now()
 	service.Logger.Info("load oracle table list start")
 
@@ -639,18 +701,54 @@ func LoadOracleToMySQLTableList(engine *service.Engine, exporterTableSlice []str
 	}
 	service.Logger.Info("get oracle table type finish")
 
+	// oracle 版本是否可指定表、字段 collation
+	// oracle db nls_sort/nls_comp 值需要相等，USING_NLS_COMP 值取 nls_comp
+	oraDBVersion, err := engine.GetOracleDBVersion()
+	if err != nil {
+		return []Table{}, partitionTables, temporaryTables, clusteredTables, err
+	}
+
+	oraCollation := false
+	if utils.VersionOrdinal(oraDBVersion) >= utils.VersionOrdinal(utils.OracleTableColumnCollationDBVersion) {
+		oraCollation = true
+	}
+
+	var (
+		tblCollation    map[string]string
+		schemaCollation string
+	)
+
+	if oraCollation {
+		schemaCollation, err = engine.GetOracleSchemaCollation(sourceSchema)
+		if err != nil {
+			return []Table{}, partitionTables, temporaryTables, clusteredTables, err
+		}
+		tblCollation, err = engine.GetOracleTableCollation(sourceSchema)
+		if err != nil {
+			return []Table{}, partitionTables, temporaryTables, clusteredTables, err
+		}
+	}
+
 	var tables []Table
 	for _, ts := range exporterTableSlice {
 		// 库名、表名规则
-		tables = append(tables, Table{
+		tbl := Table{
 			SourceSchemaName: strings.ToUpper(sourceSchema),
 			TargetSchemaName: strings.ToUpper(targetSchema),
 			SourceTableName:  strings.ToUpper(ts),
 			TargetTableName:  strings.ToUpper(ts),
 			SourceTableType:  tablesMap[ts],
+			SourceDBNLSSort:  nlsSort,
+			SourceDBNLSComp:  nlsComp,
 			Overwrite:        overwrite,
 			Engine:           engine,
-		})
+		}
+		tbl.OracleCollation = oraCollation
+		if oraCollation {
+			tbl.SourceSchemaCollation = schemaCollation
+			tbl.SourceTableCollation = tblCollation[strings.ToUpper(ts)]
+		}
+		tables = append(tables, tbl)
 	}
 
 	return tables, partitionTables, temporaryTables, clusteredTables, nil

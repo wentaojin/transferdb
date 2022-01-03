@@ -21,14 +21,11 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/wentaojin/transferdb/service"
+
 	"github.com/wentaojin/transferdb/utils"
 
 	"github.com/jedib0t/go-pretty/v6/table"
-)
-
-const (
-	DBTypeTiDB  = "TiDB"
-	DBTypeMySQL = "MYSQL"
 )
 
 type ReverseWriter struct {
@@ -58,7 +55,7 @@ func (d *FileMW) Write(b []byte) (n int, err error) {
 }
 
 func NewReverseWriter(t Table, revFileMW, compFileMW *FileMW) (*ReverseWriter, error) {
-	version, err := t.Engine.GetMySQLDBVersion()
+	mysqlVersion, err := t.Engine.GetMySQLDBVersion()
 	if err != nil {
 		return nil, err
 	}
@@ -68,15 +65,15 @@ func NewReverseWriter(t Table, revFileMW, compFileMW *FileMW) (*ReverseWriter, e
 		dbType    string
 	)
 
-	if strings.Contains(version, "TiDB") {
-		dbVersion = version
-		dbType = DBTypeTiDB
+	if strings.Contains(mysqlVersion, utils.TiDBTargetDBType) {
+		dbVersion = mysqlVersion
+		dbType = utils.TiDBTargetDBType
 	} else {
-		dbType = DBTypeMySQL
-		if strings.Contains(version, utils.MySQLVersionDelimiter) {
-			dbVersion = strings.Split(version, utils.MySQLVersionDelimiter)[0]
+		dbType = utils.MySQLTargetDBType
+		if strings.Contains(mysqlVersion, utils.MySQLVersionDelimiter) {
+			dbVersion = strings.Split(mysqlVersion, utils.MySQLVersionDelimiter)[0]
 		} else {
-			dbVersion = version
+			dbVersion = mysqlVersion
 		}
 	}
 
@@ -192,7 +189,7 @@ func (d *ReverseWriter) Reverse() error {
 	}
 
 	// 外键约束、检查约束
-	if d.DBType != DBTypeTiDB {
+	if d.DBType != utils.TiDBTargetDBType {
 		if len(d.CreateFK) > 0 {
 			for _, sql := range d.CreateFK {
 				sqlRev.WriteString(sql + "\n")
@@ -264,8 +261,27 @@ func (d *ReverseWriter) Reverse() error {
 	return nil
 }
 
-func GenCreateSchema(file *FileMW, sourceSchema, targetSchema string) error {
-	var sqlRev strings.Builder
+func GenCreateSchema(file *FileMW, engine *service.Engine, sourceSchema, targetSchema, nlsComp string) error {
+	var (
+		sqlRev          strings.Builder
+		schemaCollation string
+	)
+
+	oraDBVersion, err := engine.GetOracleDBVersion()
+	if err != nil {
+		return err
+	}
+
+	oraCollation := false
+	if utils.VersionOrdinal(oraDBVersion) >= utils.VersionOrdinal(utils.OracleTableColumnCollationDBVersion) {
+		oraCollation = true
+	}
+	if oraCollation {
+		schemaCollation, err = engine.GetOracleSchemaCollation(sourceSchema)
+		if err != nil {
+			return err
+		}
+	}
 
 	sqlRev.WriteString("/*\n")
 	sqlRev.WriteString(fmt.Sprintf(" oracle schema reverse mysql database\n"))
@@ -278,8 +294,18 @@ func GenCreateSchema(file *FileMW, sourceSchema, targetSchema string) error {
 	sqlRev.WriteString(t.Render() + "\n")
 	sqlRev.WriteString("*/\n")
 
-	sqlRev.WriteString(fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s;\n\n", targetSchema))
-	if _, err := fmt.Fprintln(file, sqlRev.String()); err != nil {
+	if oraCollation {
+		if _, ok := utils.OracleCollationMap[strings.ToUpper(schemaCollation)]; !ok {
+			return fmt.Errorf("oracle schema collation [%s] isn't support", schemaCollation)
+		}
+		sqlRev.WriteString(fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s DEFAULT CHARACTER SET %s COLLATE %s;\n\n", strings.ToUpper(targetSchema), strings.ToLower(utils.MySQLCharacterSet), utils.OracleCollationMap[strings.ToUpper(schemaCollation)]))
+	} else {
+		if _, ok := utils.OracleCollationMap[strings.ToUpper(nlsComp)]; !ok {
+			return fmt.Errorf("oracle db nls_comp collation [%s] isn't support", nlsComp)
+		}
+		sqlRev.WriteString(fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s DEFAULT CHARACTER SET %s COLLATE %s;\n\n", strings.ToUpper(targetSchema), strings.ToLower(utils.MySQLCharacterSet), utils.OracleCollationMap[strings.ToUpper(nlsComp)]))
+	}
+	if _, err = fmt.Fprintln(file, sqlRev.String()); err != nil {
 		return err
 	}
 

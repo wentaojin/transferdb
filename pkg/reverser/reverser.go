@@ -23,6 +23,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/wentaojin/transferdb/utils"
+
 	"github.com/xxjwxc/gowp/workpool"
 
 	"github.com/wentaojin/transferdb/service"
@@ -60,8 +62,27 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 		return nil
 	}
 
+	// oracle db collation
+	nlsSort, err := engine.GetOracleDBCharacterNLSSortCollation()
+	if err != nil {
+		return err
+	}
+	nlsComp, err := engine.GetOracleDBCharacterNLSCompCollation()
+	if err != nil {
+		return err
+	}
+	if _, ok := utils.OracleCollationMap[strings.ToUpper(nlsSort)]; !ok {
+		return fmt.Errorf("oracle db nls sort [%s] isn't support", nlsSort)
+	}
+	if _, ok := utils.OracleCollationMap[strings.ToUpper(nlsComp)]; !ok {
+		return fmt.Errorf("oracle db nls comp [%s] isn't support", nlsComp)
+	}
+	if strings.ToUpper(nlsSort) != strings.ToUpper(nlsComp) {
+		return fmt.Errorf("oracle db nls_sort [%s] and nls_comp [%s] isn't different, need be equal; because mysql db isn't support", nlsSort, nlsComp)
+	}
+
 	// 表列表
-	tables, partitionTableList, temporaryTableList, clusteredTableList, err := LoadOracleToMySQLTableList(engine, exporterTableSlice, cfg.SourceConfig.SchemaName, cfg.TargetConfig.SchemaName, cfg.TargetConfig.Overwrite)
+	tables, partitionTableList, temporaryTableList, clusteredTableList, err := LoadOracleToMySQLTableList(engine, exporterTableSlice, cfg.SourceConfig.SchemaName, cfg.TargetConfig.SchemaName, nlsSort, nlsComp, cfg.TargetConfig.Overwrite)
 	if err != nil {
 		return err
 	}
@@ -91,7 +112,7 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 	wrComp := &FileMW{sync.Mutex{}, fileCompatibility}
 
 	// 创建 Schema
-	if err := GenCreateSchema(wrReverse, strings.ToUpper(cfg.SourceConfig.SchemaName), strings.ToUpper(cfg.TargetConfig.SchemaName)); err != nil {
+	if err := GenCreateSchema(wrReverse, engine, strings.ToUpper(cfg.SourceConfig.SchemaName), strings.ToUpper(cfg.TargetConfig.SchemaName), nlsComp); err != nil {
 		return err
 	}
 
@@ -110,12 +131,12 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 		revFileMW := wrReverse
 		compFileMW := wrComp
 		wp.Do(func() error {
-			writer, er := NewReverseWriter(tbl, revFileMW, compFileMW)
-			if er != nil {
-				return er
+			writer, err := NewReverseWriter(tbl, revFileMW, compFileMW)
+			if err != nil {
+				return err
 			}
-			if er = writer.Reverse(); er != nil {
-				return er
+			if err = writer.Reverse(); err != nil {
+				return err
 			}
 
 			return nil

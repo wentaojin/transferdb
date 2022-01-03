@@ -19,6 +19,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/wentaojin/transferdb/utils"
+
 	"github.com/wentaojin/transferdb/pkg/taskflow"
 
 	"github.com/wentaojin/transferdb/service"
@@ -29,6 +31,16 @@ func FullCSVOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service.Engin
 	startTime := time.Now()
 	service.Logger.Info("all full table data csv start",
 		zap.String("schema", cfg.SourceConfig.SchemaName))
+
+	// 判断上游 Oracle 数据库版本
+	// 需要 oracle 11g 及以上
+	oraDBVersion, err := engine.GetOracleDBVersion()
+	if err != nil {
+		return err
+	}
+	if utils.VersionOrdinal(oraDBVersion) < utils.VersionOrdinal(utils.OracleSYNCRequireDBVersion) {
+		return fmt.Errorf("oracle db version [%v] is less than 11g, can't be using transferdb tools", oraDBVersion)
+	}
 
 	// 获取配置文件待同步表列表
 	transferTableSlice, err := taskflow.GetTransferTableSliceByCfg(cfg, engine)

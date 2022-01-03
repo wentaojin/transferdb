@@ -34,24 +34,41 @@ import (
 )
 
 type DiffWriter struct {
-	SourceSchemaName string
-	TargetSchemaName string
-	TableName        string
-	Engine           *service.Engine
-	ChkFileMW        *reverser.FileMW
-	RevFileMW        *reverser.FileMW
-	CompFileMW       *reverser.FileMW
+	SourceSchemaName      string
+	TargetSchemaName      string
+	TableName             string
+	SourceDBCharacterSet  string
+	SourceDBNLSSort       string
+	SourceDBNLSComp       string
+	SourceDBCollation     bool
+	SourceTableCollation  map[string]string
+	SourceSchemaCollation string
+	Engine                *service.Engine
+	ChkFileMW             *reverser.FileMW
+	RevFileMW             *reverser.FileMW
+	CompFileMW            *reverser.FileMW
 }
 
-func NewDiffWriter(sourceSchemaName, targetSchemaName, tableName string, engine *service.Engine, chkFileMW, revFileMW, compFileMW *reverser.FileMW) *DiffWriter {
+func NewDiffWriter(sourceSchemaName, targetSchemaName, tableName,
+	sourceCharacterSet, nlsSort, nlsComp string,
+	sourceTableCollation map[string]string,
+	sourceSchemaCollation string,
+	oracleCollation bool,
+	engine *service.Engine, chkFileMW, revFileMW, compFileMW *reverser.FileMW) *DiffWriter {
 	return &DiffWriter{
-		SourceSchemaName: sourceSchemaName,
-		TargetSchemaName: targetSchemaName,
-		TableName:        tableName,
-		Engine:           engine,
-		ChkFileMW:        chkFileMW,
-		RevFileMW:        revFileMW,
-		CompFileMW:       compFileMW,
+		SourceSchemaName:      sourceSchemaName,
+		TargetSchemaName:      targetSchemaName,
+		TableName:             tableName,
+		SourceDBCharacterSet:  sourceCharacterSet,
+		SourceDBNLSSort:       nlsSort,
+		SourceDBNLSComp:       nlsComp,
+		SourceDBCollation:     oracleCollation,
+		SourceSchemaCollation: sourceSchemaCollation,
+		SourceTableCollation:  sourceTableCollation,
+		Engine:                engine,
+		ChkFileMW:             chkFileMW,
+		RevFileMW:             revFileMW,
+		CompFileMW:            compFileMW,
 	}
 }
 
@@ -75,7 +92,7 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 	}
 	if !isExist {
 		// 表列表
-		reverseTables, partitionTableList, temporaryTableList, clusteredTableList, err := reverser.LoadOracleToMySQLTableList(d.Engine, []string{d.TableName}, d.SourceSchemaName, d.TargetSchemaName, false)
+		reverseTables, partitionTableList, temporaryTableList, clusteredTableList, err := reverser.LoadOracleToMySQLTableList(d.Engine, []string{d.TableName}, d.SourceSchemaName, d.TargetSchemaName, d.SourceDBNLSSort, d.SourceDBNLSComp, false)
 		if err != nil {
 			return err
 		}
@@ -101,7 +118,8 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 		return nil
 	}
 
-	oracleTable, err := NewOracleTableINFO(d.SourceSchemaName, d.TableName, d.Engine)
+	oracleTable, err := NewOracleTableINFO(d.SourceSchemaName, d.TableName, d.Engine, d.SourceDBCharacterSet, d.SourceDBNLSComp,
+		d.SourceTableCollation, d.SourceSchemaCollation, d.SourceDBCollation)
 	if err != nil {
 		return err
 	}
@@ -136,14 +154,25 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 	// 表级别字符集以及排序规则检查
 	service.Logger.Info("check table",
 		zap.String("table character set and collation check", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)))
-	if !strings.Contains(mysqlTable.TableCharacterSet, utils.OracleUTF8CharacterSet) || !strings.Contains(mysqlTable.TableCollation, utils.OracleCollationBin) {
-		builder.WriteString(d.tableCharacterSetRuleCheck(oracleTable, mysqlTable))
+	if mysqlTable.TableCharacterSet != utils.OracleDBCharacterSetMap[oracleTable.TableCharacterSet] ||
+		mysqlTable.TableCollation != strings.ToUpper(utils.OracleCollationMap[oracleTable.TableCollation]) {
+		builder.WriteString(d.tableCharacterSetAndCollationRuleCheck(oracleTable, mysqlTable))
 	}
 
 	// 表字段级别字符集以及排序规则校验 -> 基于原表字段类型以及字符集、排序规则
+	// 下游表字段数检查
 	service.Logger.Info("check table",
 		zap.String("table column character set and collation check", fmt.Sprintf("%s.%s", d.TargetSchemaName, d.TableName)))
-	builder.WriteString(d.columnCharacterSetRuleCheck(oracleTable, mysqlTable))
+	builder.WriteString(d.columnCharacterSetAndCollationRuleCheck(oracleTable, mysqlTable))
+
+	// 上游表字段数检查
+	service.Logger.Info("check table",
+		zap.String("oracle table column counts check", fmt.Sprintf("%s.%s", d.TargetSchemaName, d.TableName)))
+	oracleColumns, err := d.oracleColumnCountsCheck(oracleTable, mysqlTable)
+	if err != nil {
+		return err
+	}
+	builder.WriteString(oracleColumns)
 
 	// 表主键/唯一约束检查
 	service.Logger.Info("check table",
@@ -310,7 +339,7 @@ func (d *DiffWriter) commentRuleCheck(oracleTable, mysqlTable *Table) string {
 	return builder.String()
 }
 
-func (d *DiffWriter) tableCharacterSetRuleCheck(oracleTable, mysqlTable *Table) string {
+func (d *DiffWriter) tableCharacterSetAndCollationRuleCheck(oracleTable, mysqlTable *Table) string {
 	var builder strings.Builder
 	builder.WriteString("/*\n")
 	builder.WriteString(fmt.Sprintf(" oracle and mysql table character set and collation\n"))
@@ -320,32 +349,42 @@ func (d *DiffWriter) tableCharacterSetRuleCheck(oracleTable, mysqlTable *Table) 
 	t.AppendHeader(table.Row{"TABLE", "CHARACTER AND COLLATION", "ORACLE", "MYSQL", "SUGGEST"})
 	t.AppendRows([]table.Row{
 		{d.TableName, "CHARACTER AND COLLATION",
-			fmt.Sprintf("character set[%s] collation[%s]", oracleTable.TableCharacterSet, oracleTable.TableCollation),
-			fmt.Sprintf("character set[%s] collation[%s]", mysqlTable.TableCharacterSet, mysqlTable.TableCollation),
+			fmt.Sprintf("character set [%s] collation [%s]", oracleTable.TableCharacterSet, oracleTable.TableCollation),
+			fmt.Sprintf("character set [%s] collation [%s]", mysqlTable.TableCharacterSet, mysqlTable.TableCollation),
 			"Create Table Character Collation"},
 	})
 	builder.WriteString(fmt.Sprintf("%v\n", t.Render()))
 
 	builder.WriteString("*/\n")
-	builder.WriteString(fmt.Sprintf("ALTER TABLE %s.%s CHARACTER SET = %s, COLLATE = %s;\n", d.TargetSchemaName, d.TableName, utils.MySQLCharacterSet, utils.MySQLCollation))
+	builder.WriteString(fmt.Sprintf("ALTER TABLE %s.%s CHARACTER SET = %s, COLLATE = %s;\n", d.TargetSchemaName, d.TableName,
+		strings.ToLower(utils.OracleDBCharacterSetMap[oracleTable.TableCharacterSet]),
+		strings.ToLower(utils.OracleCollationMap[oracleTable.TableCollation])))
 
 	return builder.String()
 }
 
-func (d *DiffWriter) columnCharacterSetRuleCheck(oracleTable, mysqlTable *Table) string {
+func (d *DiffWriter) columnCharacterSetAndCollationRuleCheck(oracleTable, mysqlTable *Table) string {
 	var builder strings.Builder
+
 	tableColumnsMap := make(map[string]Column)
+	delColumnsMap := make(map[string]Column)
+
 	for mysqlColName, mysqlColInfo := range mysqlTable.Columns {
-		if mysqlColInfo.CharacterSet != "UNKNOWN" || mysqlColInfo.Collation != "UNKNOWN" {
-			if mysqlColInfo.CharacterSet != strings.ToUpper(utils.MySQLCharacterSet) || mysqlColInfo.Collation != strings.ToUpper(utils.MySQLCollation) {
-				tableColumnsMap[mysqlColName] = mysqlColInfo
+		if _, ok := oracleTable.Columns[strings.ToUpper(mysqlColName)]; ok {
+			if mysqlColInfo.CharacterSet != "UNKNOWN" || mysqlColInfo.Collation != "UNKNOWN" {
+				if mysqlColInfo.CharacterSet != strings.ToUpper(utils.OracleDBCharacterSetMap[oracleTable.Columns[strings.ToUpper(mysqlColName)].CharacterSet]) || mysqlColInfo.Collation !=
+					strings.ToUpper(utils.OracleCollationMap[oracleTable.Columns[strings.ToUpper(mysqlColName)].Collation]) {
+					tableColumnsMap[mysqlColName] = mysqlColInfo
+				}
 			}
+		} else {
+			delColumnsMap[mysqlColName] = mysqlColInfo
 		}
 	}
 
-	if len(tableColumnsMap) != 0 {
+	if len(tableColumnsMap) > 0 {
 		builder.WriteString("/*\n")
-		builder.WriteString(fmt.Sprintf(" mysql column character set and collation check, generate created sql\n"))
+		builder.WriteString(fmt.Sprintf(" mysql column character set and collation modify, generate created sql\n"))
 
 		t := table.NewWriter()
 		t.SetStyle(table.StyleLight)
@@ -358,7 +397,31 @@ func (d *DiffWriter) columnCharacterSetRuleCheck(oracleTable, mysqlTable *Table)
 					fmt.Sprintf("%s(%s)", mysqlColInfo.DataType, mysqlColInfo.DataLength), "Create Table Column Character Collation"},
 			})
 			sqlStrings = append(sqlStrings, fmt.Sprintf("ALTER TABLE %s.%s MODIFY %s %s(%s) CHARACTER SET %s COLLATE %s;",
-				d.TargetSchemaName, d.TableName, mysqlColName, mysqlColInfo.DataType, mysqlColInfo.DataLength, utils.MySQLCharacterSet, utils.MySQLCollation))
+				d.TargetSchemaName, d.TableName, mysqlColName, mysqlColInfo.DataType, mysqlColInfo.DataLength,
+				strings.ToLower(utils.OracleDBCharacterSetMap[oracleTable.Columns[strings.ToUpper(mysqlColName)].CharacterSet]),
+				strings.ToLower(utils.OracleCollationMap[oracleTable.Columns[strings.ToUpper(mysqlColName)].Collation])))
+		}
+
+		builder.WriteString(fmt.Sprintf("%v\n", t.Render()))
+		builder.WriteString("*/\n")
+		builder.WriteString(strings.Join(sqlStrings, "\n"))
+	}
+
+	if len(delColumnsMap) > 0 {
+		builder.WriteString("/*\n")
+		builder.WriteString(fmt.Sprintf(" mysql column character set and collation drop [oracle column isn't exist], generate drop sql\n"))
+
+		t := table.NewWriter()
+		t.SetStyle(table.StyleLight)
+		t.AppendHeader(table.Row{"TABLE", "COLUMN", "MYSQL", "SUGGEST"})
+
+		var sqlStrings []string
+		for mysqlColName, mysqlColInfo := range delColumnsMap {
+			t.AppendRows([]table.Row{
+				{d.TableName, mysqlColName,
+					fmt.Sprintf("%s(%s)", mysqlColInfo.DataType, mysqlColInfo.DataLength), "Drop MySQL Table Column"},
+			})
+			sqlStrings = append(sqlStrings, fmt.Sprintf("ALTER TABLE %s.%s DROP COLUMN %s;", d.TargetSchemaName, d.TableName, mysqlColName))
 		}
 
 		builder.WriteString(fmt.Sprintf("%v\n", t.Render()))
@@ -366,6 +429,77 @@ func (d *DiffWriter) columnCharacterSetRuleCheck(oracleTable, mysqlTable *Table)
 		builder.WriteString(strings.Join(sqlStrings, "\n"))
 	}
 	return builder.String()
+}
+
+func (d *DiffWriter) oracleColumnCountsCheck(oracleTable, mysqlTable *Table) (string, error) {
+	var builder strings.Builder
+
+	addColumnsMap := make(map[string]Column)
+
+	for oracleColName, oracleColInfo := range oracleTable.Columns {
+		if _, ok := mysqlTable.Columns[strings.ToUpper(oracleColName)]; !ok {
+			addColumnsMap[oracleColName] = oracleColInfo
+		}
+	}
+	if len(addColumnsMap) > 0 {
+		builder.WriteString("/*\n")
+		builder.WriteString(fmt.Sprintf(" mysql column character set and collation add [mysql column isn't exist], generate add sql\n"))
+
+		t := table.NewWriter()
+		t.SetStyle(table.StyleLight)
+		t.AppendHeader(table.Row{"TABLE", "COLUMN", "MYSQL", "SUGGEST"})
+
+		var sqlStrings []string
+		for oracleColName, oracleColInfo := range addColumnsMap {
+			var (
+				columnMeta string
+				err        error
+			)
+			if d.SourceDBCollation {
+				columnMeta, err = reverser.ReverseOracleTableColumnMapRule(
+					d.SourceSchemaName,
+					d.TableName,
+					oracleColName,
+					oracleColInfo.DataType,
+					oracleColInfo.NULLABLE,
+					oracleColInfo.Comment,
+					oracleColInfo.DataDefault,
+					oracleColInfo.DataScale,
+					oracleColInfo.DataPrecision,
+					oracleColInfo.DataLength,
+					oracleColInfo.Collation,
+					d.Engine)
+			} else {
+				columnMeta, err = reverser.ReverseOracleTableColumnMapRule(
+					d.SourceSchemaName,
+					d.TableName,
+					oracleColName,
+					oracleColInfo.DataType,
+					oracleColInfo.NULLABLE,
+					oracleColInfo.Comment,
+					oracleColInfo.DataDefault,
+					oracleColInfo.DataScale,
+					oracleColInfo.DataPrecision,
+					oracleColInfo.DataLength,
+					"",
+					d.Engine)
+			}
+			if err != nil {
+				return "", err
+			}
+
+			t.AppendRows([]table.Row{
+				{d.TableName, oracleColName,
+					fmt.Sprintf("%s(%s)", oracleColInfo.DataType, oracleColInfo.DataLength), "Add MySQL Table Column"},
+			})
+			sqlStrings = append(sqlStrings, fmt.Sprintf("ALTER TABLE %s.%s ADD COLUMN %s;", d.TargetSchemaName, d.TableName, columnMeta))
+		}
+
+		builder.WriteString(fmt.Sprintf("%v\n", t.Render()))
+		builder.WriteString("*/\n")
+		builder.WriteString(strings.Join(sqlStrings, "\n"))
+	}
+	return builder.String(), nil
 }
 
 func (d *DiffWriter) primaryAndUniqueKeyRuleCheck(oracleTable, mysqlTable *Table) (string, error) {
@@ -587,18 +721,40 @@ func (d *DiffWriter) columnRuleCheck(oracleTable, mysqlTable *Table) (string, er
 			}
 			continue
 		}
-		columnMeta, err := reverser.ReverseOracleTableColumnMapRule(
-			d.SourceSchemaName,
-			d.TableName,
-			oracleColName,
-			oracleColInfo.DataType,
-			oracleColInfo.NULLABLE,
-			oracleColInfo.Comment,
-			oracleColInfo.DataDefault,
-			oracleColInfo.DataScale,
-			oracleColInfo.DataPrecision,
-			oracleColInfo.DataLength,
-			d.Engine)
+
+		var (
+			columnMeta string
+			err        error
+		)
+		if d.SourceDBCollation {
+			columnMeta, err = reverser.ReverseOracleTableColumnMapRule(
+				d.SourceSchemaName,
+				d.TableName,
+				oracleColName,
+				oracleColInfo.DataType,
+				oracleColInfo.NULLABLE,
+				oracleColInfo.Comment,
+				oracleColInfo.DataDefault,
+				oracleColInfo.DataScale,
+				oracleColInfo.DataPrecision,
+				oracleColInfo.DataLength,
+				oracleColInfo.Collation,
+				d.Engine)
+		} else {
+			columnMeta, err = reverser.ReverseOracleTableColumnMapRule(
+				d.SourceSchemaName,
+				d.TableName,
+				oracleColName,
+				oracleColInfo.DataType,
+				oracleColInfo.NULLABLE,
+				oracleColInfo.Comment,
+				oracleColInfo.DataDefault,
+				oracleColInfo.DataScale,
+				oracleColInfo.DataPrecision,
+				oracleColInfo.DataLength,
+				"",
+				d.Engine)
+		}
 		if err != nil {
 			return builder.String(), err
 		}

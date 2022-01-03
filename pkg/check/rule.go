@@ -20,6 +20,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/wentaojin/transferdb/utils"
+
 	"github.com/jedib0t/go-pretty/v6/table"
 )
 
@@ -1026,4 +1028,72 @@ func generateColumnNullCommentDefaultMeta(dataNullable, comments, dataDefault st
 		}
 	}
 	return colMeta
+}
+
+func generateTableColumnCollation(nlsComp string, oraCollation bool, schemaCollation, tableCollation, columnCollation string) (string, error) {
+	var collation string
+	if oraCollation {
+		if columnCollation != "" {
+			if _, ok := utils.OracleCollationMap[strings.ToUpper(columnCollation)]; !ok {
+				return collation,
+					fmt.Errorf("oracle table column collation [%v] isn't support by getColumnCollation", columnCollation)
+			}
+			collation = strings.ToUpper(utils.OracleCollationMap[strings.ToUpper(columnCollation)])
+			return collation, nil
+		}
+		if columnCollation == "" && tableCollation != "" {
+			if _, ok := utils.OracleCollationMap[strings.ToUpper(tableCollation)]; !ok {
+				return collation,
+					fmt.Errorf("oracle table collation [%v] isn't support by getColumnCollation", tableCollation)
+			}
+			collation = strings.ToUpper(utils.OracleCollationMap[strings.ToUpper(tableCollation)])
+			return collation, nil
+		}
+		if columnCollation == "" && tableCollation == "" && schemaCollation != "" {
+			if _, ok := utils.OracleCollationMap[strings.ToUpper(schemaCollation)]; !ok {
+				return collation,
+					fmt.Errorf("oracle schema collation [%v] isn't support by getColumnCollation", schemaCollation)
+			}
+			collation = strings.ToUpper(utils.OracleCollationMap[strings.ToUpper(schemaCollation)])
+			return collation, nil
+		}
+		return collation,
+			fmt.Errorf("oracle schema collation [%v] table collation [%v] column collation [%v] isn't support by getColumnCollation", schemaCollation, tableCollation, columnCollation)
+	} else {
+		if _, ok := utils.OracleCollationMap[strings.ToUpper(nlsComp)]; !ok {
+			return collation, fmt.Errorf("oracle db collation [%v] isn't support by getOracleTableColumn", nlsComp)
+		}
+		collation = strings.ToUpper(utils.OracleCollationMap[strings.ToUpper(nlsComp)])
+		return collation, nil
+	}
+}
+
+func generateTableCollation(nlsComp string, oraCollation bool, schemaCollation, tableCollation string) (string, error) {
+	var collation string
+	if oraCollation {
+		if tableCollation != "" {
+			if _, ok := utils.OracleCollationMap[strings.ToUpper(tableCollation)]; !ok {
+				return collation,
+					fmt.Errorf("oracle table collation [%v] isn't support by getColumnCollation", tableCollation)
+			}
+			collation = strings.ToUpper(utils.OracleCollationMap[strings.ToUpper(tableCollation)])
+			return collation, nil
+		}
+		if tableCollation == "" && schemaCollation != "" {
+			if _, ok := utils.OracleCollationMap[strings.ToUpper(schemaCollation)]; !ok {
+				return collation,
+					fmt.Errorf("oracle schema collation [%v] isn't support by getColumnCollation", schemaCollation)
+			}
+			collation = strings.ToUpper(utils.OracleCollationMap[strings.ToUpper(schemaCollation)])
+			return collation, nil
+		}
+		return collation,
+			fmt.Errorf("oracle schema collation [%v] table collation [%v] isn't support by getColumnCollation", schemaCollation, tableCollation)
+	} else {
+		if _, ok := utils.OracleCollationMap[strings.ToUpper(nlsComp)]; !ok {
+			return collation, fmt.Errorf("oracle db collation [%v] isn't support by getOracleTableColumn", nlsComp)
+		}
+		collation = strings.ToUpper(utils.OracleCollationMap[strings.ToUpper(nlsComp)])
+		return collation, nil
+	}
 }

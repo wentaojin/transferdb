@@ -33,27 +33,63 @@ const (
 var CurrentResetFlag = 0
 
 const (
-	OracleGBKCharacterSet  = "GBK"
-	OracleUTF8CharacterSet = "UTF8"
-	// oracle collation 默认大小写敏感，a != A
-	OracleCollationBin = "BIN"
 	// MySQL 支持 check 约束版本 > 8.0.15
 	MySQLCheckConsVersion = "8.0.15"
 	// MySQL 版本分隔符号
 	MySQLVersionDelimiter = "-"
-	// MySQL 字符集/排序规则
-	MySQLCharacterSet = "utf8mb4"
-	MySQLCollation    = "utf8mb4_bin"
+	// MySQL 字符集
+	MySQLCharacterSet = "UTF8MB4"
 
 	// JSON 格式化某字段
-	ColumnsJSON      = "column"
-	IndexJSON        = "index"
-	PUConstraintJSON = "puk"
-	FKConstraintJSON = "fk"
-	CKConstraintJSON = "ck"
-	PartitionJSON    = "partition"
+	ColumnsJSON      = "COLUMN"
+	IndexJSON        = "INDEX"
+	PUConstraintJSON = "PUK"
+	FKConstraintJSON = "FK"
+	CKConstraintJSON = "CK"
+	PartitionJSON    = "PARTITION"
 
 	// 默认值规则
 	DefaultValueSysdate    = "SYSDATE"
 	DefaultValueSysdateMap = "NOW()"
+
+	// 目标数据库类型
+	TiDBTargetDBType  = "TiDB"
+	MySQLTargetDBType = "MySQL"
+
+	// 数据全量/实时同步 Oracle 版本要求
+	// 要求 oracle 11g 及以上
+	OracleSYNCRequireDBVersion = "11"
+
+	// 允许 Oracle 表、字段 Collation
+	// 需要 oracle 12.2g 及以上
+	OracleTableColumnCollationDBVersion = "12.2"
+
+	// Oracle 用户、表、字段默认使用 DB 排序规则
+	OracleUserTableColumnDefaultCollation = "USING_NLS_COMP"
 )
+
+// MySQL 8.0
+// utf8mb4_0900_as_cs 区分重音、区分大小写的排序规则
+// utf8mb4_0900_ai_ci 不区分重音和不区分大小写的排序规则
+// utf8mb4_0900_as_ci 区分重音、不区分大小写的排序规则
+// Oracle 字段 Collation 映射
+var OracleCollationMap = map[string]string{
+	// ORACLE 12.2 及以上版本
+	// 不区分大小写，但区分重音
+	// MySQL 8.0 ONlY
+	"BINARY_CI": "utf8mb4_0900_as_ci",
+	// 不区分大小写和重音
+	"BINARY_AI": "utf8mb4_general_ci",
+	// 区分大小写和重音，如果不使用扩展名下，该规则是 ORACLE 默认值
+	"BINARY_CS": "utf8mb4_bin",
+	// ORACLE 12.2 以下版本
+	// 区分大小写和重音
+	"BINARY": "utf8mb4_bin",
+}
+
+// ORACLE 字符集映射规则
+var OracleDBCharacterSetMap = map[string]string{
+	"AL32UTF8": "UTF8MB4",
+	"UTF8":     "UTF8MB4",
+	"ZHS16GBK": "GBK",
+}

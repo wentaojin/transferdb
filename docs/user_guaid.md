@@ -21,15 +21,19 @@ TransferDB 使用手册
        4. ORACLE 唯一约束基于唯一索引的字段，下游只会创建唯一索引
        5. ORACLE 字段函数默认值保持上游值，若是下游不支持的默认值，则当手工执行表创建脚本报错
        6. ORACLE FUNCTION-BASED NORMAL、BITMAP 不兼容性索引对象输出到 compatibility_${sourcedb}.sql 文件，并提供 WARN 日志关键字筛选打印
+       7. 表结构以及 Schema 定义转换忽略 Oracle 字符集统一以 utf8mb4 转换，但排序规则会根据 Oracle 排序规则予以规则转换
 
-2. 表结构对比【以 ORACLE 为基准】 
-   1. 对比详情以及相关修复 SQL 语句输出 check_${sourcedb}.sql文件
+2. 表结构对比【以 ORACLE 为基准】
+   1. 表结构对比以 ORACLE 为基准对比
+      1. 若上下游对比不一致，对比详情以及相关修复 SQL 语句输出 check_${sourcedb}.sql 文件
+      2. 若上游字段数少，下游字段数多会自动生成删除 SQL 语句
+      3. 若上游字段数多，下游字段数少会自动生成创建 SQL 语句
    2. 注意事项
-      1. 表结构字段对比以 ORACLE 表结构为基准，若下游表结构字段多会被忽视 
+      1. 表数据类型对比以 TransferDB 内置转换规则为基准，若下游表数据类型与基准不符则输出 
       2. 索引对比会忽略索引名对比，依据索引类型直接对比索引字段是否存在，解决上下游不同索引名，同个索引字段检查不一致问题
-      3. 表数据类型对比以 TransferDB 内置转换规则为基准，若下游表数据类型与基准不符则输出
-      4. ORACLE 字符数据类型 Char / Bytes ，默认 Bytes，MySQL/TiDB 是字符长度，TransferDB 只有当 Scale 数值不一致时才输出不一致
-      5. 表级别字符集检查，采用内置字符集 utf8mb4 检查，若下游表字符集非 utf8mb4 会被检查输出
+      3. ORACLE 字符数据类型 Char / Bytes ，默认 Bytes，MySQL/TiDB 是字符长度，TransferDB 只有当 Scale 数值不一致时才输出不一致
+      4. 字符集检查（only 表），匹配转换 Oracle AL32UTF8 -> UTF8/ ZHS16GBK -> GBK 检查，其他报错不检查
+      5. 排序规则检查（only 表以及字段列），ORACLE 12.2 及以上版本按字段、表维度匹配转换检查，ORACLE 12.2 以下版本按 DB 维度匹配转换检查
       6. 上游表结构存在，下游不存在，自动生成相关表结构语句输出到 reverse_${sourcedb}.sql/compatibility_${sourcedb}.sql 文件
       7. TiDB 数据库排除外键、检查约束对比，MySQL 低版本只检查外键约束，高版本外键、检查约束都对比
 

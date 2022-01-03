@@ -23,6 +23,15 @@ import (
 /*
 	Oracle
 */
+func (e *Engine) GetOracleDBVersion() (string, error) {
+	querySQL := fmt.Sprintf(`select VALUE from NLS_DATABASE_PARAMETERS WHERE PARAMETER='NLS_RDBMS_VERSION'`)
+	_, res, err := Query(e.OracleDB, querySQL)
+	if err != nil {
+		return res[0]["VALUE"], err
+	}
+	return res[0]["VALUE"], nil
+}
+
 func (e *Engine) GetOracleDBCharacterSet() (string, error) {
 	querySQL := fmt.Sprintf(`select userenv('language') AS LANG from dual`)
 	_, res, err := Query(e.OracleDB, querySQL)
@@ -30,6 +39,35 @@ func (e *Engine) GetOracleDBCharacterSet() (string, error) {
 		return res[0]["LANG"], err
 	}
 	return res[0]["LANG"], nil
+}
+
+func (e *Engine) GetOracleDBCharacterNLSCompCollation() (string, error) {
+	querySQL := fmt.Sprintf(`select VALUE from NLS_DATABASE_PARAMETERS WHERE PARAMETER = 'NLS_COMP'`)
+	_, res, err := Query(e.OracleDB, querySQL)
+	if err != nil {
+		return "", err
+	}
+	return res[0]["VALUE"], nil
+}
+
+func (e *Engine) GetOracleDBCharacterNLSSortCollation() (string, error) {
+	querySQL := fmt.Sprintf(`select VALUE from NLS_DATABASE_PARAMETERS WHERE PARAMETER = 'NLS_SORT'`)
+	_, res, err := Query(e.OracleDB, querySQL)
+	if err != nil {
+		return "", err
+	}
+	return res[0]["VALUE"], nil
+}
+
+func (e *Engine) GetOracleSchemaCollation(schemaName string) (string, error) {
+	querySQL := fmt.Sprintf(`SELECT DECODE(DEFAULT_COLLATION,
+'USING_NLS_COMP',SELECT VALUE from NLS_DATABASE_PARAMETERS WHERE PARAMETER = 'NLS_COMP',DEFAULT_COLLATION) DEFAULT_COLLATION
+) FROM DBA_USERS WHERE USERNAME = '%s'`, strings.ToUpper(schemaName))
+	_, res, err := Query(e.OracleDB, querySQL)
+	if err != nil {
+		return "", err
+	}
+	return res[0]["DEFAULT_COLLATION"], nil
 }
 
 func (e *Engine) IsOraclePartitionTable(schemaName, tableName string) (bool, error) {
