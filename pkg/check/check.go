@@ -85,6 +85,10 @@ func OracleTableToMySQLMappingCheck(engine *service.Engine, cfg *service.CfgFile
 	if err != nil {
 		return err
 	}
+	if _, ok := utils.OracleDBCharacterSetMap[characterSet]; !ok {
+		return fmt.Errorf("oracle db character set [%v] isn't support", characterSet)
+	}
+
 	// oracle db collation
 	nlsSort, err := engine.GetOracleDBCharacterNLSSortCollation()
 	if err != nil {

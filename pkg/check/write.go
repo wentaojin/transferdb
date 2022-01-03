@@ -391,13 +391,15 @@ func (d *DiffWriter) columnCharacterSetAndCollationRuleCheck(oracleTable, mysqlT
 	for mysqlColName, mysqlColInfo := range mysqlTable.Columns {
 		if _, ok := oracleTable.Columns[strings.ToUpper(mysqlColName)]; ok {
 			if mysqlColInfo.CharacterSet != "UNKNOWN" || mysqlColInfo.Collation != "UNKNOWN" {
-				if mysqlColInfo.CharacterSet != strings.ToUpper(utils.OracleDBCharacterSetMap[oracleTable.Columns[strings.ToUpper(mysqlColName)].CharacterSet]) || mysqlColInfo.Collation !=
+				// GBK 处理，统一视作 UTF8MB4 处理
+				var oracleCharacterSet string
+				if strings.ToUpper(utils.OracleDBCharacterSetMap[oracleTable.Columns[strings.ToUpper(mysqlColName)].CharacterSet]) == "GBK" {
+					oracleCharacterSet = utils.MySQLCharacterSet
+				} else {
+					oracleCharacterSet = strings.ToUpper(utils.OracleDBCharacterSetMap[oracleTable.Columns[strings.ToUpper(mysqlColName)].CharacterSet])
+				}
+				if mysqlColInfo.CharacterSet != oracleCharacterSet || mysqlColInfo.Collation !=
 					strings.ToUpper(utils.OracleCollationMap[oracleTable.Columns[strings.ToUpper(mysqlColName)].Collation]) {
-					// GBK 处理，统一视作 UTF8MB4 处理
-					if strings.ToUpper(utils.OracleDBCharacterSetMap[oracleTable.Columns[strings.ToUpper(mysqlColName)].CharacterSet]) == "GBK" &&
-						mysqlColInfo.Collation == strings.ToUpper(utils.OracleCollationMap[oracleTable.Columns[strings.ToUpper(mysqlColName)].Collation]) && mysqlColInfo.CharacterSet == utils.MySQLCharacterSet {
-						continue
-					}
 					tableColumnsMap[mysqlColName] = mysqlColInfo
 				}
 			} else {

@@ -701,6 +701,15 @@ func LoadOracleToMySQLTableList(engine *service.Engine, exporterTableSlice []str
 	}
 	service.Logger.Info("get oracle table type finish")
 
+	// oracle 环境信息
+	characterSet, err := engine.GetOracleDBCharacterSet()
+	if err != nil {
+		return []Table{}, partitionTables, temporaryTables, clusteredTables, err
+	}
+	if _, ok := utils.OracleDBCharacterSetMap[characterSet]; !ok {
+		return []Table{}, partitionTables, temporaryTables, clusteredTables, fmt.Errorf("oracle db character set [%v] isn't support", characterSet)
+	}
+
 	// oracle 版本是否可指定表、字段 collation
 	// oracle db nls_sort/nls_comp 值需要相等，USING_NLS_COMP 值取 nls_comp
 	oraDBVersion, err := engine.GetOracleDBVersion()
