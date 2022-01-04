@@ -20,6 +20,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/wentaojin/transferdb/utils"
+
 	"github.com/jedib0t/go-pretty/v6/table"
 )
 
@@ -74,6 +76,18 @@ func OracleTableMapRuleCheck(
 	} else {
 		oracleColumnCharUsed = "unknown"
 	}
+
+	// GBK 处理，统一 UTF8MB4 处理
+	var (
+		mysqlCharacterSet string
+		mysqlCollation    string
+	)
+	if strings.ToUpper(utils.OracleDBCharacterSetMap[oracleColInfo.CharacterSet]) == "GBK" {
+		mysqlCharacterSet = strings.ToLower("UTF8MB4")
+	} else {
+		mysqlCharacterSet = strings.ToLower(utils.OracleDBCharacterSetMap[oracleColInfo.CharacterSet])
+	}
+	mysqlCollation = strings.ToLower(utils.OracleCollationMap[oracleColInfo.Collation])
 
 	oracleDiffColMeta := generateColumnNullCommentDefaultMeta(oracleColInfo.NULLABLE, oracleColInfo.Comment, oracleColInfo.DataDefault)
 	mysqlDiffColMeta := generateColumnNullCommentDefaultMeta(mysqlColInfo.NULLABLE, mysqlColInfo.Comment, mysqlColInfo.DataDefault)
@@ -479,12 +493,14 @@ func OracleTableMapRuleCheck(
 			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
 			fmt.Sprintf("VARCHAR(255) %s", oracleColMeta)}
 
-		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
+		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s CHARACTER SET %s COLLATE %s;\n",
 			targetSchema,
 			tableName,
 			columnName,
 			"VARCHAR(255)",
 			oracleColMeta,
+			mysqlCharacterSet,
+			mysqlCollation,
 		)
 		return fixedMsg, tableRows, nil
 	case "CHARACTER":
@@ -497,12 +513,14 @@ func OracleTableMapRuleCheck(
 				fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
 				fmt.Sprintf("CHAR(%d) %s", oracleDataLength, oracleColMeta)}
 
-			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
+			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s CHARACTER SET %s COLLATE %s;\n",
 				targetSchema,
 				tableName,
 				columnName,
 				fmt.Sprintf("CHAR(%d)", oracleDataLength),
 				oracleColMeta,
+				mysqlCharacterSet,
+				mysqlCollation,
 			)
 			return fixedMsg, tableRows, nil
 		}
@@ -514,12 +532,14 @@ func OracleTableMapRuleCheck(
 			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
 			fmt.Sprintf("VARCHAR(%d) %s", oracleDataLength, oracleColMeta)}
 
-		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
+		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s CHARACTER SET %s COLLATE %s;\n",
 			targetSchema,
 			tableName,
 			columnName,
 			fmt.Sprintf("VARCHAR(%d)", oracleDataLength),
 			oracleColMeta,
+			mysqlCharacterSet,
+			mysqlCollation,
 		)
 		return fixedMsg, tableRows, nil
 	case "LONG":
@@ -531,12 +551,14 @@ func OracleTableMapRuleCheck(
 			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
 			fmt.Sprintf("LONGTEXT %s", oracleColMeta)}
 
-		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
+		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s CHARACTER SET %s COLLATE %s;\n",
 			targetSchema,
 			tableName,
 			columnName,
 			"LONGTEXT",
 			oracleColMeta,
+			mysqlCharacterSet,
+			mysqlCollation,
 		)
 		return fixedMsg, tableRows, nil
 	case "LONG RAW":
@@ -548,12 +570,14 @@ func OracleTableMapRuleCheck(
 			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
 			fmt.Sprintf("LONGBLOB %s", oracleColMeta)}
 
-		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
+		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s CHARACTER SET %s COLLATE %s;\n",
 			targetSchema,
 			tableName,
 			columnName,
 			"LONGBLOB",
 			oracleColMeta,
+			mysqlCharacterSet,
+			mysqlCollation,
 		)
 		return fixedMsg, tableRows, nil
 	case "NCHAR VARYING":
@@ -565,12 +589,14 @@ func OracleTableMapRuleCheck(
 			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
 			fmt.Sprintf("NCHAR VARYING(%d) %s", oracleDataLength, oracleColMeta)}
 
-		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
+		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s CHARACTER SET %s COLLATE %s;\n",
 			targetSchema,
 			tableName,
 			columnName,
 			fmt.Sprintf("NCHAR VARYING(%d)", oracleDataLength),
 			oracleColMeta,
+			mysqlCharacterSet,
+			mysqlCollation,
 		)
 		return fixedMsg, tableRows, nil
 	case "NCLOB":
@@ -582,12 +608,14 @@ func OracleTableMapRuleCheck(
 			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
 			fmt.Sprintf("TEXT %s", oracleColMeta)}
 
-		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
+		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s CHARACTER SET %s COLLATE %s;\n",
 			targetSchema,
 			tableName,
 			columnName,
 			"TEXT",
 			oracleColMeta,
+			mysqlCharacterSet,
+			mysqlCollation,
 		)
 		return fixedMsg, tableRows, nil
 	case "RAW":
@@ -600,12 +628,14 @@ func OracleTableMapRuleCheck(
 				fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
 				fmt.Sprintf("BINARY(%d) %s", oracleDataLength, oracleColMeta)}
 
-			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
+			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s CHARACTER SET %s COLLATE %s;\n",
 				targetSchema,
 				tableName,
 				columnName,
 				fmt.Sprintf("BINARY(%d)", oracleDataLength),
 				oracleColMeta,
+				mysqlCharacterSet,
+				mysqlCollation,
 			)
 			return fixedMsg, tableRows, nil
 		}
@@ -618,12 +648,14 @@ func OracleTableMapRuleCheck(
 			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
 			fmt.Sprintf("VARBINARY(%d) %s", oracleDataLength, oracleColMeta)}
 
-		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
+		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s CHARACTER SET %s COLLATE %s;\n",
 			targetSchema,
 			tableName,
 			columnName,
 			fmt.Sprintf("VARBINARY(%d)", oracleDataLength),
 			oracleColMeta,
+			mysqlCharacterSet,
+			mysqlCollation,
 		)
 		return fixedMsg, tableRows, nil
 	case "ROWID":
@@ -635,12 +667,14 @@ func OracleTableMapRuleCheck(
 			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
 			fmt.Sprintf("CHAR(10) %s", oracleColMeta)}
 
-		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
+		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s CHARACTER SET %s COLLATE %s;\n",
 			targetSchema,
 			tableName,
 			columnName,
 			"CHAR(10)",
 			oracleColMeta,
+			mysqlCharacterSet,
+			mysqlCollation,
 		)
 		return fixedMsg, tableRows, nil
 	case "UROWID":
@@ -652,12 +686,14 @@ func OracleTableMapRuleCheck(
 			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
 			fmt.Sprintf("VARCHAR(%d) %s", oracleDataLength, oracleColMeta)}
 
-		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
+		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s CHARACTER SET %s COLLATE %s;\n",
 			targetSchema,
 			tableName,
 			columnName,
 			fmt.Sprintf("VARCHAR(%d)", oracleDataLength),
 			oracleColMeta,
+			mysqlCharacterSet,
+			mysqlCollation,
 		)
 		return fixedMsg, tableRows, nil
 	case "VARCHAR":
@@ -669,12 +705,14 @@ func OracleTableMapRuleCheck(
 			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
 			fmt.Sprintf("VARCHAR(%d) %s", oracleDataLength, oracleColMeta)}
 
-		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
+		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s CHARACTER SET %s COLLATE %s;\n",
 			targetSchema,
 			tableName,
 			columnName,
 			fmt.Sprintf("VARCHAR(%d)", oracleDataLength),
 			oracleColMeta,
+			mysqlCharacterSet,
+			mysqlCollation,
 		)
 		return fixedMsg, tableRows, nil
 	case "XMLTYPE":
@@ -686,12 +724,14 @@ func OracleTableMapRuleCheck(
 			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
 			fmt.Sprintf("LONGTEXT %s", oracleColMeta)}
 
-		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
+		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s CHARACTER SET %s COLLATE %s;\n",
 			targetSchema,
 			tableName,
 			columnName,
 			"LONGTEXT",
 			oracleColMeta,
+			mysqlCharacterSet,
+			mysqlCollation,
 		)
 		return fixedMsg, tableRows, nil
 
@@ -705,12 +745,14 @@ func OracleTableMapRuleCheck(
 			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
 			fmt.Sprintf("LONGTEXT %s", oracleColMeta)}
 
-		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
+		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s CHARACTER SET %s COLLATE %s;\n",
 			targetSchema,
 			tableName,
 			columnName,
 			"LONGTEXT",
 			oracleColMeta,
+			mysqlCharacterSet,
+			mysqlCollation,
 		)
 		return fixedMsg, tableRows, nil
 	case "BLOB":
@@ -722,12 +764,14 @@ func OracleTableMapRuleCheck(
 			fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
 			fmt.Sprintf("BLOB %s", oracleColMeta)}
 
-		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
+		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s CHARACTER SET %s COLLATE %s;\n",
 			targetSchema,
 			tableName,
 			columnName,
 			"BLOB",
 			oracleColMeta,
+			mysqlCharacterSet,
+			mysqlCollation,
 		)
 		return fixedMsg, tableRows, nil
 
@@ -768,12 +812,14 @@ func OracleTableMapRuleCheck(
 				return fixedMsg, tableRows, nil
 			}
 
-			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
+			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s CHARACTER SET %s COLLATE %s;\n",
 				targetSchema,
 				tableName,
 				columnName,
 				fmt.Sprintf("CHAR(%d)", oracleDataLength),
 				oracleColMeta,
+				mysqlCharacterSet,
+				mysqlCollation,
 			)
 			return fixedMsg, tableRows, nil
 		}
@@ -789,12 +835,14 @@ func OracleTableMapRuleCheck(
 		if mysqlDataType == "VARCHAR" && mysqlDataLength == oracleDataLength && oracleDiffColMeta == mysqlDiffColMeta {
 			return fixedMsg, tableRows, nil
 		}
-		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
+		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s CHARACTER SET %s COLLATE %s;\n",
 			targetSchema,
 			tableName,
 			columnName,
 			fmt.Sprintf("VARCHAR(%d)", oracleDataLength),
 			oracleColMeta,
+			mysqlCharacterSet,
+			mysqlCollation,
 		)
 		return fixedMsg, tableRows, nil
 	case "NCHAR":
@@ -812,12 +860,14 @@ func OracleTableMapRuleCheck(
 				return fixedMsg, tableRows, nil
 			}
 
-			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
+			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s CHARACTER SET %s COLLATE %s;\n",
 				targetSchema,
 				tableName,
 				columnName,
 				fmt.Sprintf("NCHAR(%d)", oracleDataLength),
 				oracleColMeta,
+				mysqlCharacterSet,
+				mysqlCollation,
 			)
 			return fixedMsg, tableRows, nil
 		}
@@ -834,12 +884,14 @@ func OracleTableMapRuleCheck(
 			return fixedMsg, tableRows, nil
 		}
 
-		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
+		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s CHARACTER SET %s COLLATE %s;\n",
 			targetSchema,
 			tableName,
 			columnName,
 			fmt.Sprintf("NVARCHAR(%d)", oracleDataLength),
 			oracleColMeta,
+			mysqlCharacterSet,
+			mysqlCollation,
 		)
 		return fixedMsg, tableRows, nil
 	case "VARCHAR2":
@@ -856,12 +908,14 @@ func OracleTableMapRuleCheck(
 			return fixedMsg, tableRows, nil
 		}
 
-		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
+		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s CHARACTER SET %s COLLATE %s;\n",
 			targetSchema,
 			tableName,
 			columnName,
 			fmt.Sprintf("VARCHAR(%d)", oracleDataLength),
 			oracleColMeta,
+			mysqlCharacterSet,
+			mysqlCollation,
 		)
 		return fixedMsg, tableRows, nil
 	case "NVARCHAR2":
@@ -878,12 +932,14 @@ func OracleTableMapRuleCheck(
 			return fixedMsg, tableRows, nil
 		}
 
-		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
+		fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s CHARACTER SET %s COLLATE %s;\n",
 			targetSchema,
 			tableName,
 			columnName,
 			fmt.Sprintf("NVARCHAR(%d)", oracleDataLength),
 			oracleColMeta,
+			mysqlCharacterSet,
+			mysqlCollation,
 		)
 		return fixedMsg, tableRows, nil
 
@@ -898,12 +954,14 @@ func OracleTableMapRuleCheck(
 				fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
 				fmt.Sprintf("VARCHAR(30) %s", oracleColMeta)}
 
-			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
+			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s CHARACTER SET %s COLLATE %s;\n",
 				targetSchema,
 				tableName,
 				columnName,
 				"VARCHAR(30)",
 				oracleColMeta,
+				mysqlCharacterSet,
+				mysqlCollation,
 			)
 			return fixedMsg, tableRows, nil
 		} else if strings.Contains(oracleDataType, "TIMESTAMP") {
@@ -985,12 +1043,14 @@ func OracleTableMapRuleCheck(
 				fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
 				fmt.Sprintf("TEXT %s", oracleColMeta)}
 
-			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
+			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s CHARACTER SET %s COLLATE %s;\n",
 				targetSchema,
 				tableName,
 				columnName,
 				"TEXT",
 				oracleColMeta,
+				mysqlCharacterSet,
+				mysqlCollation,
 			)
 			return fixedMsg, tableRows, nil
 		}

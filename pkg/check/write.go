@@ -165,8 +165,8 @@ func (d *DiffWriter) DiffOracleAndMySQLTable() error {
 		builder.WriteString(d.tableCharacterSetAndCollationRuleCheck(oracleTable, mysqlTable))
 	}
 
-	// 表字段级别字符集以及排序规则校验 -> 基于原表字段类型以及字符集、排序规则
-	// 下游表字段数检查
+	// 1、表字段级别字符集以及排序规则校验 -> 基于原表字段类型以及字符集、排序规则
+	// 2、下游表字段数检查，多了
 	service.Logger.Info("check table",
 		zap.String("table column character set and collation check", fmt.Sprintf("%s.%s", d.TargetSchemaName, d.TableName)))
 	builder.WriteString(d.columnCharacterSetAndCollationRuleCheck(oracleTable, mysqlTable))
