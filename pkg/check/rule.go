@@ -913,7 +913,7 @@ func OracleTableMapRuleCheck(
 						return "", nil, nil
 					}
 					tableRows = table.Row{tableName, columnName,
-						fmt.Sprintf("%s(%d) %s", oracleDataType, oracleDataScale, oracleColMeta),
+						fmt.Sprintf("%s %s", oracleDataType, oracleColMeta),
 						fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDatetimePrecision, mysqlColMeta),
 						fmt.Sprintf("DATETIME(%d) %s", oracleDataScale, oracleColMeta)}
 
@@ -928,7 +928,7 @@ func OracleTableMapRuleCheck(
 				} else {
 					// mysql/tidb 只支持精度 6，oracle 精度最大是 9，会检查出来但是保持原样
 					tableRows = table.Row{tableName, columnName,
-						fmt.Sprintf("%s(%d) %s", oracleDataType, oracleDataScale, oracleColMeta),
+						fmt.Sprintf("%s %s", oracleDataType, oracleColMeta),
 						fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDatetimePrecision, mysqlColMeta),
 						fmt.Sprintf("DATETIME(%d) %s", 6, oracleColMeta)}
 
@@ -947,7 +947,7 @@ func OracleTableMapRuleCheck(
 						return "", nil, nil
 					}
 					tableRows = table.Row{tableName, columnName,
-						fmt.Sprintf("%s(%d) %s", oracleDataType, oracleDataScale, oracleColMeta),
+						fmt.Sprintf("%s %s", oracleDataType, oracleColMeta),
 						fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDatetimePrecision, mysqlColMeta),
 						fmt.Sprintf("TIMESTAMP(%d) %s", oracleDataScale, oracleColMeta)}
 
@@ -962,7 +962,7 @@ func OracleTableMapRuleCheck(
 				} else {
 					// mysql/tidb 只支持精度 6，oracle 精度最大是 9，会检查出来但是保持原样
 					tableRows = table.Row{tableName, columnName,
-						fmt.Sprintf("%s(%d) %s", oracleDataType, oracleDataScale, oracleColMeta),
+						fmt.Sprintf("%s %s", oracleDataType, oracleColMeta),
 						fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDatetimePrecision, mysqlColMeta),
 						fmt.Sprintf("TIMESTAMP(%d) %s", 6, oracleColMeta)}
 
