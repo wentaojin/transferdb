@@ -63,18 +63,6 @@ type IncrementSyncMeta struct {
 	UpdatedAt        *time.Time `gorm:"type:timestamp;not null on update current_timestamp;default:current_timestamp;comment:'更新时间'" json:"updatedAt"`
 }
 
-func (f *FullSyncMeta) GetFullSyncMetaRecordCounts(schemaName, tableName string, engine *Engine) (int, error) {
-	var count int64
-	if err := engine.GormDB.Model(&FullSyncMeta{}).
-		Where("source_schema_name = ? and source_table_name = ?",
-			strings.ToUpper(schemaName),
-			strings.ToUpper(tableName)).
-		Count(&count).Error; err != nil {
-		return int(count), fmt.Errorf("meta schema table [full_sync_meta] query record count failed: %v", err)
-	}
-	return int(count), nil
-}
-
 func (f *FullSyncMeta) GetFullSyncMetaTableName(schemaName string, engine *Engine) ([]string, error) {
 	var tables []string
 	if err := engine.GormDB.Model(&FullSyncMeta{}).

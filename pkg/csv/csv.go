@@ -104,7 +104,7 @@ func FullCSVOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service.Engin
 	}
 
 	// 判断能否断点续传
-	panicCheckpointTables, err := engine.JudgingCSVCheckpointResume(cfg.SourceConfig.SchemaName, partSyncTableMetas)
+	panicCheckpointTables, err := engine.JudgingCheckpointResume(cfg.SourceConfig.SchemaName, partSyncTableMetas)
 	if err != nil {
 		return err
 	}

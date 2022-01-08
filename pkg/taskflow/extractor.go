@@ -292,10 +292,10 @@ func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceT
 				return err
 			}
 
-			// 清理记录以及更新记录
-			if err = engine.ModifyWaitAndFullSyncTableMetaRecord(
+			// 清理记录
+			if err = engine.ModifyFullSyncTableMetaRecord(
 				cfg.TargetConfig.MetaSchema,
-				cfg.SourceConfig.SchemaName, sourceTableName, meta.RowidSQL, syncMode); err != nil {
+				cfg.SourceConfig.SchemaName, meta.SourceTableName, meta.RowidSQL); err != nil {
 				return err
 			}
 			return nil
@@ -313,6 +313,13 @@ func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceT
 			zap.String("cost", endTime.Sub(startTime).String()))
 		return fmt.Errorf("oracle schema [%s] single full table [%v] data loader failed",
 			cfg.SourceConfig.SchemaName, sourceTableName)
+	}
+
+	// 更新记录
+	if err = engine.ModifyWaitSyncTableMetaRecord(
+		cfg.TargetConfig.MetaSchema,
+		cfg.SourceConfig.SchemaName, sourceTableName, syncMode); err != nil {
+		return err
 	}
 
 	service.Logger.Info("single full table data loader finished",
