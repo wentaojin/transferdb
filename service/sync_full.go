@@ -49,6 +49,23 @@ func (e *Engine) JudgingCheckpointResume(schemaName string, tableMetas []WaitSyn
 	return panicTblFullSlice, nil
 }
 
+func (e *Engine) JudgingCSVCheckpointResume(schemaName string, tableMetas []WaitSyncMeta) ([]string, error) {
+	var panicTblFullSlice []string
+
+	tfm := &FullSyncMeta{}
+	for _, table := range tableMetas {
+		tableArray, err := tfm.GetFullSyncMetaTableName(schemaName, e)
+		if err != nil {
+			return panicTblFullSlice, err
+		}
+
+		if !utils.IsContainString(tableArray, table.SourceTableName) {
+			panicTblFullSlice = append(panicTblFullSlice, table.SourceTableName)
+		}
+	}
+	return panicTblFullSlice, nil
+}
+
 func (e *Engine) IsExistIncrementSyncMetaRecord(schemaName string, transferTableSlice []string) ([]string, []string, error) {
 	var (
 		notExistRecords []string
@@ -93,8 +110,9 @@ func (e *Engine) ModifyWaitAndFullSyncTableMetaRecord(metaSchemaName, sourceSche
 				strings.ToUpper(sourceTableName),
 				syncMode).
 			Update("full_split_times", gorm.Expr("full_split_times - 1")).Error; err != nil {
-			return err
-
+			return fmt.Errorf(
+				`clear mysql meta schema [%s] table [wait_sync_meta] reocrd with source table [%s] failed: %v`,
+				metaSchemaName, sourceTableName, err.Error())
 		}
 		return nil
 	}); err != nil {
@@ -107,6 +125,43 @@ func (e *Engine) ModifyWaitAndFullSyncTableMetaRecord(metaSchemaName, sourceSche
 		zap.String("sql", rowidSQL),
 		zap.String("status", "success"))
 
+	return nil
+}
+
+func (e *Engine) ModifyFullSyncTableMetaRecord(metaSchemaName, sourceSchemaName, sourceTableName, rowidSQL string) error {
+	if err := e.GormDB.Model(FullSyncMeta{}).
+		Where(`source_schema_name = ? AND source_table_name= ? AND upper(rowid_sql)= ?`,
+			strings.ToUpper(sourceSchemaName),
+			strings.ToUpper(sourceTableName),
+			strings.ToUpper(rowidSQL)).Delete(&FullSyncMeta{}).Error; err != nil {
+		return fmt.Errorf(
+			`clear mysql meta schema [%s] table [full_sync_meta] reocrd with source table [%s] failed: %v`,
+			metaSchemaName, sourceTableName, err.Error())
+	}
+	Logger.Info("clear mysql [full_sync_meta] meta",
+		zap.String("schema", sourceSchemaName),
+		zap.String("table", sourceTableName),
+		zap.String("sql", rowidSQL),
+		zap.String("status", "success"))
+	return nil
+}
+
+func (e *Engine) ModifyWaitSyncTableMetaRecord(metaSchemaName, sourceSchemaName, sourceTableName, syncMode string) error {
+	if err := e.GormDB.Model(&WaitSyncMeta{}).
+		Where(`source_schema_name = ? AND source_table_name= ? AND sync_mode = ?`,
+			strings.ToUpper(sourceSchemaName),
+			strings.ToUpper(sourceTableName),
+			syncMode).
+		Update("full_split_times", 0).Error; err != nil {
+		return fmt.Errorf(
+			`clear mysql meta schema [%s] table [wait_sync_meta] reocrd with source table [%s] failed: %v`,
+			metaSchemaName, sourceTableName, err.Error())
+
+	}
+	Logger.Info("update mysql [wait_sync_meta] meta",
+		zap.String("schema", sourceSchemaName),
+		zap.String("table", sourceTableName),
+		zap.String("status", "success"))
 	return nil
 }
 

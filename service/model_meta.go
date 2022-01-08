@@ -75,6 +75,16 @@ func (f *FullSyncMeta) GetFullSyncMetaRecordCounts(schemaName, tableName string,
 	return int(count), nil
 }
 
+func (f *FullSyncMeta) GetFullSyncMetaTableName(schemaName string, engine *Engine) ([]string, error) {
+	var tables []string
+	if err := engine.GormDB.Model(&FullSyncMeta{}).
+		Where("source_schema_name = ?",
+			strings.ToUpper(schemaName)).Distinct().Pluck("source_table_name", &tables).Error; err != nil {
+		return tables, fmt.Errorf("meta schema table [full_sync_meta] query source_table_name record failed: %v", err)
+	}
+	return tables, nil
+}
+
 func (f *IncrementSyncMeta) GetIncrementSyncMetaRecordCounts(schemaName, tableName string, engine *Engine) (int, error) {
 	var count int64
 	if err := engine.GormDB.Model(&IncrementSyncMeta{}).
