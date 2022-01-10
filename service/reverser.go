@@ -226,6 +226,7 @@ func (e *Engine) GetOracleTablePrimaryKey(schemaName string, tableName string) (
    and au.constraint_type = 'P'
    and au.STATUS = 'ENABLED'
    and cu.owner = au.owner
+   and cu.table_name = au.table_name
    and upper(au.table_name) = upper('%s')
    and upper(cu.owner) = upper('%s')
  group by cu.constraint_name`,
