@@ -255,12 +255,7 @@ func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceT
 		return err
 	}
 
-	prepareSQL1 := GenerateMySQLTablePrepareStatement(cfg.TargetConfig.SchemaName, sourceTableName, columns, cfg.AppConfig.InsertBatchSize, safeMode)
-	//batchStmt1, err := engine.MysqlDB.Prepare(prepareSQL1)
-	//if err != nil {
-	//	return err
-	//}
-	//defer batchStmt1.Close()
+	prepareSQL := GenerateMySQLTablePrepareStatement(cfg.TargetConfig.SchemaName, sourceTableName, columns, cfg.AppConfig.InsertBatchSize, safeMode)
 
 	fullSyncMetas, err := engine.GetFullSyncMetaRowIDRecord(cfg.SourceConfig.SchemaName, sourceTableName)
 	if err != nil {
@@ -288,7 +283,7 @@ func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceT
 				meta.SourceTableName, meta.RowidSQL,
 				meta.SourceSchemaName,
 				meta.SourceTableName,
-				prepareSQL1, rowsResult, cfg.AppConfig.InsertBatchSize); err != nil {
+				prepareSQL, rowsResult, cfg.AppConfig.InsertBatchSize); err != nil {
 				return err
 			}
 

@@ -89,6 +89,12 @@ func applierTableFullRecord(engine *service.Engine,
 	// 表行数读取
 	batchBindVars := insertBatchSize * columns
 
+	// prepare SQL
+	batchStmt, err := engine.MysqlDB.Prepare(prepareSQL)
+	if err != nil {
+		return err
+	}
+
 	for rows.Next() {
 		err = rows.Scan(dest...)
 		if err != nil {
@@ -166,7 +172,7 @@ func applierTableFullRecord(engine *service.Engine,
 
 		// batch 写入
 		if len(rowsResult) == batchBindVars {
-			_, err := engine.MysqlDB.Exec(prepareSQL, rowsResult...)
+			_, err := batchStmt.Exec(rowsResult...)
 			if err != nil {
 				return fmt.Errorf("single full table [%s.%s] prepare sql [%v] prepare args [%v] data bulk insert mysql falied: %v",
 					targetSchemaName, targetTableName, prepareSQL, rowsResult, err)
@@ -177,6 +183,10 @@ func applierTableFullRecord(engine *service.Engine,
 	}
 
 	if err = rows.Err(); err != nil {
+		return err
+	}
+
+	if err = batchStmt.Close(); err != nil {
 		return err
 	}
 
