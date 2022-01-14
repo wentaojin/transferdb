@@ -249,14 +249,6 @@ func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceT
 		zap.String("schema", cfg.SourceConfig.SchemaName),
 		zap.String("table", sourceTableName))
 
-	// Prepare
-	columns, err := engine.GetOracleTableColumns(strings.ToUpper(cfg.SourceConfig.SchemaName), strings.ToUpper(sourceTableName))
-	if err != nil {
-		return err
-	}
-
-	prepareSQL := GenerateMySQLTablePrepareStatement(cfg.TargetConfig.SchemaName, sourceTableName, columns, cfg.AppConfig.InsertBatchSize, safeMode)
-
 	fullSyncMetas, err := engine.GetFullSyncMetaRowIDRecord(cfg.SourceConfig.SchemaName, sourceTableName)
 	if err != nil {
 		return err
@@ -283,7 +275,7 @@ func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceT
 				meta.SourceTableName, meta.RowidSQL,
 				meta.SourceSchemaName,
 				meta.SourceTableName,
-				prepareSQL, rowsResult, cfg.AppConfig.InsertBatchSize); err != nil {
+				rowsResult, cfg.AppConfig.InsertBatchSize); err != nil {
 				return err
 			}
 
