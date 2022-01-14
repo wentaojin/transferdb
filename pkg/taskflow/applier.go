@@ -166,10 +166,19 @@ func applierTableFullRecord(engine *service.Engine,
 
 		// batch 写入
 		if len(rowsResult) == batchBindVars {
-			_, err := engine.MysqlDB.Exec(prepareSQL, rowsResult...)
+			stmtInsert, err := engine.MysqlDB.Prepare(prepareSQL)
+			if err != nil {
+				return fmt.Errorf("single full table [%s.%s] prepare sql [%v] db.Prepare Error: %v", targetSchemaName, targetTableName, prepareSQL, err)
+			}
+
+			_, err = stmtInsert.Exec(rowsResult...)
 			if err != nil {
 				return fmt.Errorf("single full table [%s.%s] prepare sql [%v] prepare args [%v] data bulk insert mysql falied: %v",
 					targetSchemaName, targetTableName, prepareSQL, rowsResult, err)
+			}
+
+			if err = stmtInsert.Close(); err != nil {
+				return err
 			}
 			// 数组清空
 			rowsResult = rowsResult[0:0]
