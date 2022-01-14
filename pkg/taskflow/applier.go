@@ -21,6 +21,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/thinkeridea/go-extend/exstrings"
+
 	"github.com/shopspring/decimal"
 	"github.com/wentaojin/transferdb/utils"
 
@@ -58,7 +60,7 @@ func applierTableFullRecord(engine *service.Engine,
 
 	var (
 		err        error
-		rowsResult []interface{}
+		rowsResult []string
 	)
 
 	cols, err := rows.Columns()
@@ -87,13 +89,15 @@ func applierTableFullRecord(engine *service.Engine,
 	}
 
 	// 表行数读取
-	batchBindVars := insertBatchSize * columns
-
 	for rows.Next() {
 		err = rows.Scan(dest...)
 		if err != nil {
 			return err
 		}
+
+		var b strings.Builder
+
+		b.WriteString("(")
 
 		for i, raw := range rawResult {
 			// 注意 Oracle/Mysql NULL VS 空字符串区别
@@ -102,9 +106,9 @@ func applierTableFullRecord(engine *service.Engine,
 			// 按照 Oracle 特性来，转换同步统一转换成 NULL 即可，但需要注意业务逻辑中空字符串得写入，需要变更
 			// Oracle/Mysql 对于 'NULL' 统一字符 NULL 处理，查询出来转成 NULL,所以需要判断处理
 			if raw == nil {
-				rowsResult = append(rowsResult, sql.NullString{})
+				b.WriteString(fmt.Sprintf("%v", sql.NullString{}))
 			} else if string(raw) == "" {
-				rowsResult = append(rowsResult, sql.NullString{})
+				b.WriteString(fmt.Sprintf("%v", sql.NullString{}))
 			} else {
 				switch columnTypes[i] {
 				case "int64":
@@ -112,31 +116,31 @@ func applierTableFullRecord(engine *service.Engine,
 					if err != nil {
 						return err
 					}
-					rowsResult = append(rowsResult, r)
+					b.WriteString(fmt.Sprintf("%v", r))
 				case "uint64":
 					r, err := utils.StrconvUintBitSize(string(raw), 64)
 					if err != nil {
 						return err
 					}
-					rowsResult = append(rowsResult, r)
+					b.WriteString(fmt.Sprintf("%v", r))
 				case "float32":
 					r, err := utils.StrconvFloatBitSize(string(raw), 32)
 					if err != nil {
 						return err
 					}
-					rowsResult = append(rowsResult, r)
+					b.WriteString(fmt.Sprintf("%v", r))
 				case "float64":
 					r, err := utils.StrconvFloatBitSize(string(raw), 64)
 					if err != nil {
 						return err
 					}
-					rowsResult = append(rowsResult, r)
+					b.WriteString(fmt.Sprintf("%v", r))
 				case "rune":
 					r, err := utils.StrconvRune(string(raw))
 					if err != nil {
 						return err
 					}
-					rowsResult = append(rowsResult, r)
+					b.WriteString(fmt.Sprintf("%v", r))
 				default:
 					ok := utils.IsNum(string(raw))
 					if ok {
@@ -149,36 +153,32 @@ func applierTableFullRecord(engine *service.Engine,
 							if err != nil {
 								return err
 							}
-							rowsResult = append(rowsResult, r)
+							b.WriteString(fmt.Sprintf("%v", r))
 						} else {
 							r, err := utils.StrconvFloatBitSize(string(raw), 64)
 							if err != nil {
 								return err
 							}
-							rowsResult = append(rowsResult, r)
+							b.WriteString(fmt.Sprintf("%v", r))
 						}
 					} else {
-						rowsResult = append(rowsResult, string(raw))
+						b.WriteString(string(raw))
 					}
 				}
 			}
 		}
 
-		// batch 写入
-		if len(rowsResult) == batchBindVars {
-			stmtInsert, err := engine.MysqlDB.Prepare(prepareSQL)
-			if err != nil {
-				return fmt.Errorf("single full table [%s.%s] prepare sql [%v] db.Prepare Error: %v", targetSchemaName, targetTableName, prepareSQL, err)
-			}
+		b.WriteString(")")
+		rowsResult = append(rowsResult, b.String())
 
-			_, err = stmtInsert.Exec(rowsResult...)
+		// batch 写入
+		if len(rowsResult) == insertBatchSize {
+			_, err = engine.MysqlDB.Exec(utils.StringsBuilder(
+				GenerateMySQLInsertSQLStatementPrefix(targetSchemaName, targetTableName, cols, safeMode),
+				exstrings.Join(rowsResult, ",")))
 			if err != nil {
 				return fmt.Errorf("single full table [%s.%s] prepare sql [%v] prepare args [%v] data bulk insert mysql falied: %v",
 					targetSchemaName, targetTableName, prepareSQL, rowsResult, err)
-			}
-
-			if err = stmtInsert.Close(); err != nil {
-				return err
 			}
 			// 数组清空
 			rowsResult = rowsResult[0:0]
@@ -193,16 +193,12 @@ func applierTableFullRecord(engine *service.Engine,
 	// 计算占位符
 	rowCounts := len(rowsResult)
 	if rowCounts > 0 {
-		rowBatchCounts := rowCounts / columns
-
-		prepareSQL2 := utils.StringsBuilder(
+		_, err = engine.MysqlDB.Exec(utils.StringsBuilder(
 			GenerateMySQLInsertSQLStatementPrefix(targetSchemaName, targetTableName, cols, safeMode),
-			GenerateMySQLPrepareBindVarStatement(columns, rowBatchCounts))
-
-		_, err = engine.MysqlDB.Exec(prepareSQL2, rowsResult...)
+			exstrings.Join(rowsResult, ",")))
 		if err != nil {
 			return fmt.Errorf("single full table [%s.%s] prepare sql [%v] prepare args [%v] data bulk insert mysql falied: %v",
-				targetSchemaName, targetTableName, prepareSQL2, rowsResult, err)
+				targetSchemaName, targetTableName, prepareSQL, rowsResult, err)
 		}
 	}
 
