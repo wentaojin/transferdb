@@ -21,9 +21,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/thinkeridea/go-extend/exstrings"
 
-	"github.com/shopspring/decimal"
 	"github.com/wentaojin/transferdb/utils"
 
 	"github.com/wentaojin/transferdb/service"
@@ -102,9 +103,9 @@ func applierTableFullRecord(engine *service.Engine,
 			// 按照 Oracle 特性来，转换同步统一转换成 NULL 即可，但需要注意业务逻辑中空字符串得写入，需要变更
 			// Oracle/Mysql 对于 'NULL' 统一字符 NULL 处理，查询出来转成 NULL,所以需要判断处理
 			if raw == nil {
-				rowsResult = append(rowsResult, fmt.Sprintf("%v", sql.NullString{}))
+				rowsResult = append(rowsResult, fmt.Sprintf("%v", `NULL`))
 			} else if string(raw) == "" {
-				rowsResult = append(rowsResult, fmt.Sprintf("%v", sql.NullString{}))
+				rowsResult = append(rowsResult, fmt.Sprintf("%v", `NULL`))
 			} else {
 				switch columnTypes[i] {
 				case "int64":
@@ -158,13 +159,16 @@ func applierTableFullRecord(engine *service.Engine,
 							rowsResult = append(rowsResult, fmt.Sprintf("%v", r))
 						}
 					} else {
-						rowsResult = append(rowsResult, string(raw))
+						rowsResult = append(rowsResult, fmt.Sprintf("'%v'", string(raw)))
 					}
 				}
 			}
 		}
 
 		batchResults = append(batchResults, utils.StringsBuilder("(", exstrings.Join(rowsResult, ","), ")"))
+
+		// 数组清空
+		rowsResult = rowsResult[0:0]
 
 		// batch 写入
 		if len(batchResults) == insertBatchSize {
@@ -173,11 +177,10 @@ func applierTableFullRecord(engine *service.Engine,
 				exstrings.Join(batchResults, ","))
 			_, err = engine.MysqlDB.Exec(insertSql)
 			if err != nil {
-				return fmt.Errorf("single full table [%s.%s] sql [%v] prepare args [%v] data bulk insert mysql falied: %v",
-					targetSchemaName, targetTableName, insertSql, rowsResult, err)
+				return fmt.Errorf("single full table [%s.%s] sql [%v] data bulk insert mysql falied: %v",
+					targetSchemaName, targetTableName, insertSql, err)
 			}
 			// 数组清空
-			rowsResult = rowsResult[0:0]
 			batchResults = batchResults[0:0]
 		}
 	}
@@ -195,8 +198,8 @@ func applierTableFullRecord(engine *service.Engine,
 			exstrings.Join(batchResults, ","))
 		_, err = engine.MysqlDB.Exec(insertSql)
 		if err != nil {
-			return fmt.Errorf("single full table [%s.%s] prepare sql [%v] prepare args [%v] data bulk insert mysql falied: %v",
-				targetSchemaName, targetTableName, insertSql, rowsResult, err)
+			return fmt.Errorf("single full table [%s.%s] prepare sql [%v] data bulk insert mysql falied: %v",
+				targetSchemaName, targetTableName, insertSql, err)
 		}
 	}
 
