@@ -95,9 +95,7 @@ func applierTableFullRecord(engine *service.Engine,
 			return err
 		}
 
-		var b strings.Builder
-
-		b.WriteString("(")
+		var results []string
 
 		for i, raw := range rawResult {
 			// 注意 Oracle/Mysql NULL VS 空字符串区别
@@ -106,9 +104,9 @@ func applierTableFullRecord(engine *service.Engine,
 			// 按照 Oracle 特性来，转换同步统一转换成 NULL 即可，但需要注意业务逻辑中空字符串得写入，需要变更
 			// Oracle/Mysql 对于 'NULL' 统一字符 NULL 处理，查询出来转成 NULL,所以需要判断处理
 			if raw == nil {
-				b.WriteString(fmt.Sprintf("%v", sql.NullString{}))
+				results = append(results, fmt.Sprintf("%v", sql.NullString{}))
 			} else if string(raw) == "" {
-				b.WriteString(fmt.Sprintf("%v", sql.NullString{}))
+				results = append(results, fmt.Sprintf("%v", sql.NullString{}))
 			} else {
 				switch columnTypes[i] {
 				case "int64":
@@ -116,31 +114,31 @@ func applierTableFullRecord(engine *service.Engine,
 					if err != nil {
 						return err
 					}
-					b.WriteString(fmt.Sprintf("%v", r))
+					results = append(results, fmt.Sprintf("%v", r))
 				case "uint64":
 					r, err := utils.StrconvUintBitSize(string(raw), 64)
 					if err != nil {
 						return err
 					}
-					b.WriteString(fmt.Sprintf("%v", r))
+					results = append(results, fmt.Sprintf("%v", r))
 				case "float32":
 					r, err := utils.StrconvFloatBitSize(string(raw), 32)
 					if err != nil {
 						return err
 					}
-					b.WriteString(fmt.Sprintf("%v", r))
+					results = append(results, fmt.Sprintf("%v", r))
 				case "float64":
 					r, err := utils.StrconvFloatBitSize(string(raw), 64)
 					if err != nil {
 						return err
 					}
-					b.WriteString(fmt.Sprintf("%v", r))
+					results = append(results, fmt.Sprintf("%v", r))
 				case "rune":
 					r, err := utils.StrconvRune(string(raw))
 					if err != nil {
 						return err
 					}
-					b.WriteString(fmt.Sprintf("%v", r))
+					results = append(results, fmt.Sprintf("%v", r))
 				default:
 					ok := utils.IsNum(string(raw))
 					if ok {
@@ -153,23 +151,22 @@ func applierTableFullRecord(engine *service.Engine,
 							if err != nil {
 								return err
 							}
-							b.WriteString(fmt.Sprintf("%v", r))
+							results = append(results, fmt.Sprintf("%v", r))
 						} else {
 							r, err := utils.StrconvFloatBitSize(string(raw), 64)
 							if err != nil {
 								return err
 							}
-							b.WriteString(fmt.Sprintf("%v", r))
+							results = append(results, fmt.Sprintf("%v", r))
 						}
 					} else {
-						b.WriteString(string(raw))
+						results = append(results, fmt.Sprintf("%v", string(raw)))
 					}
 				}
 			}
 		}
 
-		b.WriteString(")")
-		rowsResult = append(rowsResult, b.String())
+		rowsResult = append(rowsResult, utils.StringsBuilder("(", exstrings.Join(results, ","), ")"))
 
 		// batch 写入
 		if len(rowsResult) == insertBatchSize {
