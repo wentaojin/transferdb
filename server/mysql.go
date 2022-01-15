@@ -29,8 +29,13 @@ import (
 	"gorm.io/gorm"
 )
 
+const (
+	// 数据库允许最大连接数
+	MysqlMaxConnection = 4096
+)
+
 // 创建 mysql 数据库引擎
-func NewMySQLEnginePrepareDB(mysqlCfg service.TargetConfig, slowQueryThreshold int) (*service.Engine, error) {
+func NewMySQLEnginePrepareDB(mysqlCfg service.TargetConfig, slowQueryThreshold, mysqlMaxOpenConn int) (*service.Engine, error) {
 	// 通用数据库链接池
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&parseTime=True&loc=Local",
 		mysqlCfg.Username, mysqlCfg.Password, mysqlCfg.Host, mysqlCfg.Port)
@@ -57,14 +62,14 @@ func NewMySQLEnginePrepareDB(mysqlCfg service.TargetConfig, slowQueryThreshold i
 		return &service.Engine{}, err
 	}
 
-	engine, err := NewMySQLEngineGeneralDB(mysqlCfg, slowQueryThreshold)
+	engine, err := NewMySQLEngineGeneralDB(mysqlCfg, slowQueryThreshold, mysqlMaxOpenConn)
 	if err != nil {
 		return engine, err
 	}
 	return engine, nil
 }
 
-func NewMySQLEngineGeneralDB(mysqlCfg service.TargetConfig, slowQueryThreshold int) (*service.Engine, error) {
+func NewMySQLEngineGeneralDB(mysqlCfg service.TargetConfig, slowQueryThreshold, mysqlMaxOpenConn int) (*service.Engine, error) {
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?%s",
 		mysqlCfg.Username, mysqlCfg.Password, mysqlCfg.Host, mysqlCfg.Port, mysqlCfg.MetaSchema, mysqlCfg.ConnectParams)
 	// 初始化 gorm 日志记录器
@@ -94,8 +99,13 @@ func NewMySQLEngineGeneralDB(mysqlCfg service.TargetConfig, slowQueryThreshold i
 	if err != nil {
 		return &service.Engine{}, fmt.Errorf("error on ping mysql database connection [meta-schema]: %v", err)
 	}
+
 	sqlDB.SetMaxIdleConns(100)
-	sqlDB.SetMaxOpenConns(1024)
+	if mysqlMaxOpenConn >= MysqlMaxConnection {
+		sqlDB.SetMaxOpenConns(MysqlMaxConnection)
+	} else {
+		sqlDB.SetMaxOpenConns(mysqlMaxOpenConn)
+	}
 	sqlDB.SetConnMaxLifetime(time.Minute * 15)
 
 	return &service.Engine{

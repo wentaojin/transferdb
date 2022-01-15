@@ -49,10 +49,7 @@ func Run(cfg *service.CfgFile, mode string) error {
 		}
 	case "prepare":
 		// 表结构转换 - only prepare 阶段
-		engine, err := NewMySQLEnginePrepareDB(
-			cfg.TargetConfig,
-			cfg.AppConfig.SlowlogThreshold,
-		)
+		engine, err := NewMySQLEnginePrepareDB(cfg.TargetConfig, cfg.AppConfig.SlowlogThreshold, 1024)
 		if err != nil {
 			return err
 		}
@@ -61,7 +58,7 @@ func Run(cfg *service.CfgFile, mode string) error {
 		}
 	case "reverse":
 		// 表结构转换 - reverse 阶段
-		engine, err := NewEngineDB(cfg)
+		engine, err := NewEngineDB(cfg.SourceConfig, cfg.TargetConfig, cfg.AppConfig.SlowlogThreshold, 1024)
 		if err != nil {
 			return err
 		}
@@ -70,7 +67,7 @@ func Run(cfg *service.CfgFile, mode string) error {
 		}
 	case "check":
 		// 表结构校验 - 上下游
-		engine, err := NewEngineDB(cfg)
+		engine, err := NewEngineDB(cfg.SourceConfig, cfg.TargetConfig, cfg.AppConfig.SlowlogThreshold, 1024)
 		if err != nil {
 			return err
 		}
@@ -79,7 +76,9 @@ func Run(cfg *service.CfgFile, mode string) error {
 		}
 	case "full":
 		// 全量数据 ETL 非一致性（基于某个时间点，而是直接基于现有 SCN）抽取，离线环境提供与原库一致性
-		engine, err := NewEngineDB(cfg)
+		engine, err := NewEngineDB(
+			cfg.SourceConfig, cfg.TargetConfig, cfg.AppConfig.SlowlogThreshold,
+			cfg.FullConfig.TableThreads*cfg.FullConfig.SQLThreads*cfg.FullConfig.ApplyThreads)
 		if err != nil {
 			return err
 		}
@@ -88,7 +87,7 @@ func Run(cfg *service.CfgFile, mode string) error {
 		}
 	case "csv":
 		// csv 全量数据导出
-		engine, err := NewEngineDB(cfg)
+		engine, err := NewEngineDB(cfg.SourceConfig, cfg.TargetConfig, cfg.AppConfig.SlowlogThreshold, 1024)
 		if err != nil {
 			return err
 		}
@@ -97,7 +96,9 @@ func Run(cfg *service.CfgFile, mode string) error {
 		}
 	case "all":
 		// 全量 + 增量数据同步阶段 - logminer
-		engine, err := NewEngineDB(cfg)
+		engine, err := NewEngineDB(
+			cfg.SourceConfig, cfg.TargetConfig, cfg.AppConfig.SlowlogThreshold,
+			cfg.FullConfig.TableThreads*cfg.FullConfig.SQLThreads*cfg.FullConfig.ApplyThreads)
 		if err != nil {
 			return err
 		}
@@ -111,19 +112,20 @@ func Run(cfg *service.CfgFile, mode string) error {
 }
 
 // 数据库引擎初始化
-func NewEngineDB(cfg *service.CfgFile) (*service.Engine, error) {
+func NewEngineDB(sourceCfg service.SourceConfig, targetCfg service.TargetConfig, slowlogThreshold, mysqlMaxOpenConn int) (*service.Engine, error) {
 	var (
 		engine *service.Engine
 		oraDB  *sql.DB
 		err    error
 	)
-	oraDB, err = NewOracleDBEngine(cfg.SourceConfig)
+	oraDB, err = NewOracleDBEngine(sourceCfg)
 	if err != nil {
 		return engine, err
 	}
 	engine, err = NewMySQLEngineGeneralDB(
-		cfg.TargetConfig,
-		cfg.AppConfig.SlowlogThreshold)
+		targetCfg,
+		slowlogThreshold,
+		mysqlMaxOpenConn)
 	if err != nil {
 		return engine, err
 	}
