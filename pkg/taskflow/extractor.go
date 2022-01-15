@@ -247,6 +247,21 @@ func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceT
 				return err
 			}
 
+			if len(rowsResult) == 0 {
+				service.Logger.Warn("oracle schema table rowid data return null rows, skip",
+					zap.String("schema", cfg.SourceConfig.SchemaName),
+					zap.String("table", sourceTableName),
+					zap.String("sql", meta.RowidSQL))
+
+				// 清理记录以及更新记录
+				if err = engine.ModifyWaitAndFullSyncTableMetaRecord(
+					cfg.TargetConfig.MetaSchema,
+					cfg.SourceConfig.SchemaName, sourceTableName, meta.RowidSQL, syncMode); err != nil {
+					return err
+				}
+				return nil
+			}
+
 			// 转换/应用 Oracle 数据 -> MySQL
 			prepareSQL1, batchArgs1, prepareSQL2, batchArgs2 := translatorTableFullRecord(
 				cfg.TargetConfig.SchemaName, sourceTableName,

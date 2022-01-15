@@ -68,10 +68,9 @@ enable-checkpoint = true
 chunk-size = 100000
 # 用于初始化表任务并发数【写下游 meta 数据库】
 task-threads = 128
-# 1、单表 SQL 执行并发数，表示同时多少并发 SQL 读取上游表数据，可动态变更
+# 单表 SQL 执行并发数，表示同时多少并发 SQL 读取上游表数据，可动态变更
 sql-threads = 64
-# 1、数据下游并发数
-# 2、每并发处理 chunk-size 行数，根据 insert-batch-size 大小切分提交
+# 每 sql-threads 线程写下游并发数，可动态变更
 apply-threads = 128
 # 关于全量断点恢复
 #   - 若想断点恢复，设置 enable-checkpoint = true,首次一旦运行则 chunk-size 数不能调整，

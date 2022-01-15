@@ -22,6 +22,8 @@ import (
 	"strconv"
 	"strings"
 
+	"gorm.io/gorm"
+
 	"github.com/wentaojin/transferdb/utils"
 
 	"go.uber.org/zap"
@@ -107,6 +109,43 @@ func (e *Engine) ModifyWaitSyncTableMetaRecord(metaSchemaName, sourceSchemaName,
 		zap.String("schema", sourceSchemaName),
 		zap.String("table", sourceTableName),
 		zap.String("status", "success"))
+	return nil
+}
+
+func (e *Engine) ModifyWaitAndFullSyncTableMetaRecord(metaSchemaName, sourceSchemaName, sourceTableName, rowidSQL, syncMode string) error {
+	if err := e.GormDB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(FullSyncMeta{}).
+			Where(`source_schema_name = ? AND source_table_name= ? AND upper(rowid_sql)= ?`,
+				strings.ToUpper(sourceSchemaName),
+				strings.ToUpper(sourceTableName),
+				strings.ToUpper(rowidSQL)).Delete(&FullSyncMeta{}).Error; err != nil {
+			return fmt.Errorf(
+				`delete mysql meta schema [%s] table [full_sync_meta] reocrd with source table [%s] failed: %v`,
+				metaSchemaName, sourceTableName, err.Error())
+		}
+
+		if err := tx.Model(&WaitSyncMeta{}).
+			Where(`source_schema_name = ? AND source_table_name= ? AND sync_mode = ?`,
+				strings.ToUpper(sourceSchemaName),
+				strings.ToUpper(sourceTableName),
+				syncMode).
+			Update("full_split_times", gorm.Expr("full_split_times - 1")).Error; err != nil {
+			fmt.Errorf(
+				`update mysql meta schema [%s] table [wait_sync_meta] reocrd with source table [%s] failed: %v`,
+				metaSchemaName, sourceTableName, err.Error())
+
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	Logger.Info("clear and update mysql meta",
+		zap.String("schema", sourceSchemaName),
+		zap.String("table", sourceTableName),
+		zap.String("sql", rowidSQL),
+		zap.String("status", "success"))
+
 	return nil
 }
 
