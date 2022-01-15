@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/thinkeridea/go-extend/exstrings"
+
 	"github.com/shopspring/decimal"
 
 	"github.com/xxjwxc/gowp/workpool"
@@ -139,69 +141,52 @@ func (e *Engine) IsExistOracleTable(schemaName string, includeTables []string) e
 }
 
 // Preapre 批量 Batch
-func (e *Engine) BatchWriteMySQLTableData(targetSchemaName, targetTableName, insertPrepareSql string, batchArgs [][]interface{}, applyThreads int) error {
-	if len(batchArgs) > 0 {
-		stmtInsert, err := e.MysqlDB.Prepare(insertPrepareSql)
-		if err != nil {
-			return err
-		}
-		defer stmtInsert.Close()
-
+func (e *Engine) BatchWriteMySQLTableData(targetSchemaName, targetTableName, sqlPrefix string, valuesBatchArgs []string, applyThreads int) error {
+	if len(valuesBatchArgs) > 0 {
 		wp := workpool.New(applyThreads)
-		for _, v := range batchArgs {
-			args := v
+		for _, args := range valuesBatchArgs {
+			valArgs := args
 			wp.Do(func() error {
-				_, err = stmtInsert.Exec(args...)
+				insertSql := utils.StringsBuilder(sqlPrefix, valArgs)
+				_, err := e.MysqlDB.Exec(insertSql)
 				if err != nil {
-					return fmt.Errorf("single full table [%s.%s] prepare sql [%v] prepare args [%v] data bulk insert mysql falied: %v",
-						targetSchemaName, targetTableName, insertPrepareSql, args, err)
+					return fmt.Errorf("single full table [%s.%s] sql [%s] data bulk insert mysql falied: %v",
+						targetSchemaName, targetTableName, insertSql, err)
 				}
 				return nil
 			})
 		}
-		if err = wp.Wait(); err != nil {
+		if err := wp.Wait(); err != nil {
 			return fmt.Errorf("single full table [%s.%s] data concurrency bulk insert mysql falied: %v", targetSchemaName, targetTableName, err)
 		}
 	}
 	return nil
 }
 
-// Single 批量 Batch
-func (e *Engine) SingleWriteMySQLTableData(targetSchemaName, targetTableName, insertPrepareSql string, batchArgs [][]interface{}) error {
-	if len(batchArgs) > 0 {
-		for _, arg := range batchArgs {
-			_, err := e.MysqlDB.Exec(insertPrepareSql, arg...)
-			if err != nil {
-				return fmt.Errorf("single full table [%s.%s] prepare sql [%v] prepare args [%v] data bulk insert mysql falied: %v",
-					targetSchemaName, targetTableName, insertPrepareSql, arg, err)
-			}
-		}
-	}
-	return nil
-}
-
 // 获取表字段名以及行数据
-func (e *Engine) GetOracleTableRows(querySQL string) ([]string, []interface{}, error) {
+func (e *Engine) GetOracleTableRows(querySQL string, insertBatchSize int) ([]string, []string, error) {
 	var (
-		err        error
-		rowsResult []interface{}
+		err          error
+		rowsResult   []string
+		rowsTMP      []string
+		batchResults []string
 	)
 	rows, err := e.OracleDB.Query(querySQL)
 	if err != nil {
-		return []string{}, rowsResult, err
+		return []string{}, batchResults, err
 	}
 	defer rows.Close()
 
 	cols, err := rows.Columns()
 	if err != nil {
-		return cols, rowsResult, err
+		return cols, batchResults, err
 	}
 
 	// 用于判断字段值是数字还是字符
 	var columnTypes []string
 	colTypes, err := rows.ColumnTypes()
 	if err != nil {
-		return cols, rowsResult, err
+		return cols, batchResults, err
 	}
 
 	for _, ct := range colTypes {
@@ -221,7 +206,7 @@ func (e *Engine) GetOracleTableRows(querySQL string) ([]string, []interface{}, e
 	for rows.Next() {
 		err = rows.Scan(dest...)
 		if err != nil {
-			return cols, rowsResult, err
+			return cols, batchResults, err
 		}
 
 		for i, raw := range rawResult {
@@ -231,73 +216,89 @@ func (e *Engine) GetOracleTableRows(querySQL string) ([]string, []interface{}, e
 			// 按照 Oracle 特性来，转换同步统一转换成 NULL 即可，但需要注意业务逻辑中空字符串得写入，需要变更
 			// Oracle/Mysql 对于 'NULL' 统一字符 NULL 处理，查询出来转成 NULL,所以需要判断处理
 			if raw == nil {
-				rowsResult = append(rowsResult, sql.NullString{})
+				rowsResult = append(rowsResult, fmt.Sprintf("%v", `NULL`))
 			} else if string(raw) == "" {
-				rowsResult = append(rowsResult, sql.NullString{})
+				rowsResult = append(rowsResult, fmt.Sprintf("%v", `NULL`))
 			} else {
 				switch columnTypes[i] {
 				case "int64":
 					r, err := utils.StrconvIntBitSize(string(raw), 64)
 					if err != nil {
-						return cols, rowsResult, err
+						return cols, batchResults, err
 					}
-					rowsResult = append(rowsResult, r)
+					rowsResult = append(rowsResult, fmt.Sprintf("%v", r))
 				case "uint64":
 					r, err := utils.StrconvUintBitSize(string(raw), 64)
 					if err != nil {
-						return cols, rowsResult, err
+						return cols, batchResults, err
 					}
-					rowsResult = append(rowsResult, r)
+					rowsResult = append(rowsResult, fmt.Sprintf("%v", r))
 				case "float32":
 					r, err := utils.StrconvFloatBitSize(string(raw), 32)
 					if err != nil {
-						return cols, rowsResult, err
+						return cols, batchResults, err
 					}
-					rowsResult = append(rowsResult, r)
+					rowsResult = append(rowsResult, fmt.Sprintf("%v", r))
 				case "float64":
 					r, err := utils.StrconvFloatBitSize(string(raw), 64)
 					if err != nil {
-						return cols, rowsResult, err
+						return cols, batchResults, err
 					}
-					rowsResult = append(rowsResult, r)
+					rowsResult = append(rowsResult, fmt.Sprintf("%v", r))
 				case "rune":
 					r, err := utils.StrconvRune(string(raw))
 					if err != nil {
-						return cols, rowsResult, err
+						return cols, batchResults, err
 					}
-					rowsResult = append(rowsResult, r)
+					rowsResult = append(rowsResult, fmt.Sprintf("%v", r))
 				default:
 					ok := utils.IsNum(string(raw))
 					if ok {
 						r, err := decimal.NewFromString(string(raw))
 						if err != nil {
-							return cols, rowsResult, err
+							return cols, batchResults, err
 						}
 						if r.IsInteger() {
 							r, err := utils.StrconvIntBitSize(string(raw), 64)
 							if err != nil {
-								return cols, rowsResult, err
+								return cols, batchResults, err
 							}
-							rowsResult = append(rowsResult, r)
+							rowsResult = append(rowsResult, fmt.Sprintf("%v", r))
 						} else {
 							r, err := utils.StrconvFloatBitSize(string(raw), 64)
 							if err != nil {
-								return cols, rowsResult, err
+								return cols, batchResults, err
 							}
-							rowsResult = append(rowsResult, r)
+							rowsResult = append(rowsResult, fmt.Sprintf("%v", r))
 						}
 					} else {
-						rowsResult = append(rowsResult, string(raw))
+						rowsResult = append(rowsResult, fmt.Sprintf("'%v'", string(raw)))
 					}
 				}
 			}
+		}
 
+		rowsTMP = append(rowsTMP, utils.StringsBuilder("(", exstrings.Join(rowsResult, ","), ")"))
+
+		// 数组清空
+		rowsResult = rowsResult[0:0]
+
+		// batch 批次
+		if len(rowsTMP) == insertBatchSize {
+			batchResults = append(batchResults, exstrings.Join(rowsTMP, ","))
+			// 数组清空
+			rowsTMP = rowsTMP[0:0]
 		}
 	}
 
 	if err = rows.Err(); err != nil {
-		return cols, rowsResult, err
+		return cols, batchResults, err
 	}
 
-	return cols, rowsResult, nil
+	// 非 batch 批次
+	if len(rowsTMP) > 0 {
+		batchResults = append(batchResults, exstrings.Join(rowsTMP, ","))
+	}
+
+	return cols, batchResults, nil
 }

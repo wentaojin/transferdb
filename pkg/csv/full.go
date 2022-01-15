@@ -73,7 +73,7 @@ func startOracleTableConsumeByCheckpoint(cfg *service.CfgFile, engine *service.E
 		return fmt.Errorf("sync oracle table rows by checkpoint failed: %v", err)
 	}
 	if !wp.IsDone() {
-		return fmt.Errorf("sync oracle table rows by scn failed, please rerunning")
+		return fmt.Errorf("sync oracle table rows by checkpoint failed, please rerunning")
 	}
 	return nil
 }
