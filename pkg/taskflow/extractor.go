@@ -16,7 +16,6 @@ limitations under the License.
 package taskflow
 
 import (
-	"database/sql"
 	"fmt"
 	"strconv"
 	"strings"
@@ -32,11 +31,11 @@ import (
 )
 
 // 捕获全量数据
-func extractorTableFullRecord(engine *service.Engine, sourceSchemaName, sourceTableName, oracleQuery string) (*sql.Rows, error) {
+func extractorTableFullRecord(engine *service.Engine, sourceSchemaName, sourceTableName, oracleQuery string) ([]string, []interface{}, error) {
 	startTime := time.Now()
-	rows, err := engine.OracleDB.Query(oracleQuery)
+	cols, rowsResult, err := engine.GetOracleTableRows(oracleQuery)
 	if err != nil {
-		return rows, fmt.Errorf("get oracle schema [%s] table [%s] record by rowid sql falied: %v", sourceSchemaName, sourceTableName, err)
+		return cols, rowsResult, fmt.Errorf("get oracle schema [%s] table [%s] record by rowid sql falied: %v", sourceSchemaName, sourceTableName, err)
 	}
 
 	endTime := time.Now()
@@ -46,7 +45,7 @@ func extractorTableFullRecord(engine *service.Engine, sourceSchemaName, sourceTa
 		zap.String("rowid sql", oracleQuery),
 		zap.String("cost", endTime.Sub(startTime).String()))
 
-	return rows, nil
+	return cols, rowsResult, nil
 }
 
 // 捕获增量数据
@@ -170,75 +169,55 @@ func filterOracleRedoGreaterOrEqualRecordByTable(
 
 // 1、根据当前表的 SCN 初始化元数据据表
 // 2、根据元数据表记录全量导出导入
-func startOracleTableConsumeBySCN(cfg *service.CfgFile, engine *service.Engine, syncTableInfo []string, syncMode string) error {
-	wp := workpool.New(cfg.FullConfig.TableThreads)
+func initOracleTableConsumeRowID(cfg *service.CfgFile, engine *service.Engine,
+	waitSyncTableInfo []string, syncMode string) error {
+	wp := workpool.New(cfg.FullConfig.TaskThreads)
 
-	for idx, tbl := range syncTableInfo {
+	for idx, tbl := range waitSyncTableInfo {
 		table := tbl
 		workerID := idx
 		wp.Do(func() error {
-			if err := initOracleTableConsumeRowID(cfg, engine, table, table, workerID, syncMode); err != nil {
+			startTime := time.Now()
+			service.Logger.Info("single full table init scn start",
+				zap.String("schema", cfg.SourceConfig.SchemaName),
+				zap.String("table", table))
+
+			// 全量同步前，获取 SCN 以及初始化元数据表
+			globalSCN, err := engine.GetOracleCurrentSnapshotSCN()
+			if err != nil {
 				return err
 			}
-			if err := syncOracleRowsByRowID(cfg, engine, table, syncMode); err != nil {
+
+			if err = engine.InitWaitAndFullSyncMetaRecord(strings.ToUpper(cfg.SourceConfig.SchemaName),
+				table, strings.ToUpper(cfg.TargetConfig.SchemaName), table, workerID, globalSCN,
+				cfg.FullConfig.ChunkSize, cfg.AppConfig.InsertBatchSize, "", syncMode); err != nil {
 				return err
 			}
+
+			endTime := time.Now()
+			service.Logger.Info("single full table init scn finished",
+				zap.String("schema", cfg.SourceConfig.SchemaName),
+				zap.String("table", table),
+				zap.String("cost", endTime.Sub(startTime).String()))
 			return nil
 		})
 	}
+
 	if err := wp.Wait(); err != nil {
 		return err
 	}
 	if !wp.IsDone() {
-		return fmt.Errorf("sync oracle table rows by checkpoint failed, please rerunning")
+		return fmt.Errorf("init oracle table rowid by scn failed, please rerunning")
 	}
-	return nil
-}
-func initOracleTableConsumeRowID(cfg *service.CfgFile, engine *service.Engine,
-	sourceTable, targetTable string, workerID int, syncMode string) error {
-
-	startTime := time.Now()
-	service.Logger.Info("single full table init scn start",
-		zap.String("schema", cfg.SourceConfig.SchemaName),
-		zap.String("table", sourceTable))
-
-	// 全量同步前，获取 SCN 以及初始化元数据表
-	globalSCN, err := engine.GetOracleCurrentSnapshotSCN()
-	if err != nil {
-		return err
-	}
-	if err = engine.InitWaitAndFullSyncMetaRecord(strings.ToUpper(cfg.SourceConfig.SchemaName),
-		sourceTable, strings.ToUpper(cfg.TargetConfig.SchemaName), targetTable, workerID, globalSCN,
-		cfg.FullConfig.ChunkSize, cfg.AppConfig.InsertBatchSize, "", syncMode); err != nil {
-		return err
-	}
-
-	endTime := time.Now()
-	service.Logger.Info("single full table init scn finished",
-		zap.String("schema", cfg.SourceConfig.SchemaName),
-		zap.String("table", sourceTable),
-		zap.String("cost", endTime.Sub(startTime).String()))
 	return nil
 }
 
 // 根据元数据表记录全量导出导入
 func startOracleTableConsumeByCheckpoint(cfg *service.CfgFile, engine *service.Engine, syncTableInfo []string, syncMode string) error {
-	wp := workpool.New(cfg.FullConfig.TableThreads)
-
-	for _, tbl := range syncTableInfo {
-		table := tbl
-		wp.Do(func() error {
-			if err := syncOracleRowsByRowID(cfg, engine, table, syncMode); err != nil {
-				return err
-			}
-			return nil
-		})
-	}
-	if err := wp.Wait(); err != nil {
-		return err
-	}
-	if !wp.IsDone() {
-		return fmt.Errorf("sync oracle table rows by checkpoint failed, please rerunning")
+	for _, table := range syncTableInfo {
+		if err := syncOracleRowsByRowID(cfg, engine, table, syncMode); err != nil {
+			return fmt.Errorf("sync oracle table rows by checkpoint failed, error: %v", err)
+		}
 	}
 	return nil
 }
@@ -260,22 +239,29 @@ func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceT
 		wp.Do(func() error {
 			// 抽取 Oracle 数据
 			var (
-				rowsResult *sql.Rows
+				columnFields []string
+				rowsResult   []interface{}
 			)
-			rowsResult, err = extractorTableFullRecord(engine, cfg.SourceConfig.SchemaName, sourceTableName, meta.RowidSQL)
+			columnFields, rowsResult, err = extractorTableFullRecord(engine, cfg.SourceConfig.SchemaName, sourceTableName, meta.RowidSQL)
 			if err != nil {
 				return err
 			}
 
 			// 转换/应用 Oracle 数据 -> MySQL
-			//batchArgs1, batchArgs2, prepareSQL2 := translatorTableFullRecord(cfg.TargetConfig.SchemaName, sourceTableName,
-			//	meta.RowidSQL, columnFields, rowsResult, cfg.AppConfig.InsertBatchSize, safeMode)
+			prepareSQL1, batchArgs1, prepareSQL2, batchArgs2 := translatorTableFullRecord(
+				cfg.TargetConfig.SchemaName, sourceTableName,
+				meta.RowidSQL, columnFields, rowsResult, cfg.AppConfig.InsertBatchSize, safeMode)
 
-			if err = applierTableFullRecord(engine, cfg.TargetConfig.SchemaName,
-				meta.SourceTableName, meta.RowidSQL,
-				meta.SourceSchemaName,
+			if err = applierTableFullRecord(
+				engine,
+				cfg.TargetConfig.SchemaName,
 				meta.SourceTableName,
-				rowsResult, cfg.AppConfig.InsertBatchSize); err != nil {
+				meta.RowidSQL,
+				cfg.FullConfig.ApplyThreads,
+				prepareSQL1,
+				batchArgs1,
+				prepareSQL2,
+				batchArgs2); err != nil {
 				return err
 			}
 

@@ -16,18 +16,12 @@ limitations under the License.
 package taskflow
 
 import (
-	"database/sql"
 	"fmt"
 	"strings"
 	"time"
 
-	"github.com/shopspring/decimal"
-
-	"github.com/thinkeridea/go-extend/exstrings"
-
-	"github.com/wentaojin/transferdb/utils"
-
 	"github.com/wentaojin/transferdb/service"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/xxjwxc/gowp/workpool"
 
@@ -36,171 +30,38 @@ import (
 
 // 表数据应用 -> 全量任务
 func applierTableFullRecord(engine *service.Engine,
-	targetSchemaName, targetTableName, rowidSQL string,
-	sourceSchemaName, sourceTableName string,
-	rows *sql.Rows,
-	insertBatchSize int) error {
+	targetSchemaName, targetTableName, rowidSQL string, applyThreads int, prepareSQL1 string,
+	prepareArgs1 [][]interface{}, prepareSQL2 string, prepareArgs2 [][]interface{}) error {
 	startTime := time.Now()
 	service.Logger.Info("single full table rowid data applier start",
 		zap.String("schema", targetSchemaName),
 		zap.String("table", targetTableName),
 		zap.String("rowid sql", rowidSQL))
 
-	// Close Rows
-	defer rows.Close()
-
-	// 如果不存在数据记录，直接返回
-	if !rows.Next() {
-		service.Logger.Warn("oracle schema table rowid data return null rows, skip",
-			zap.String("schema", sourceSchemaName),
-			zap.String("table", sourceTableName),
-			zap.String("sql", rowidSQL))
-		return nil
-	}
-
 	var (
-		err          error
-		batchResults []string
-		rowsResult   []string
+		group1, group2 errgroup.Group
+		err            error
 	)
 
-	cols, err := rows.Columns()
-	if err != nil {
-		return err
-	}
-
-	// 用于判断字段值是数字还是字符
-	var columnTypes []string
-	colTypes, err := rows.ColumnTypes()
-	if err != nil {
-		return err
-	}
-
-	for _, ct := range colTypes {
-		// 数据库字段类型 DatabaseTypeName() 映射 go 类型 ScanType()
-		columnTypes = append(columnTypes, ct.ScanType().String())
-	}
-
-	// 数据 Scan
-	columns := len(cols)
-	rawResult := make([][]byte, columns)
-	dest := make([]interface{}, columns)
-	for i := range rawResult {
-		dest[i] = &rawResult[i]
-	}
-
-	// 表行数读取
-	for rows.Next() {
-		err = rows.Scan(dest...)
-		if err != nil {
+	group1.Go(func() error {
+		// 多 batch 并发写
+		if err = engine.BatchWriteMySQLTableData(targetSchemaName, targetTableName, prepareSQL1, prepareArgs1, applyThreads); err != nil {
 			return err
 		}
-
-		for i, raw := range rawResult {
-			// 注意 Oracle/Mysql NULL VS 空字符串区别
-			// Oracle 空字符串与 NULL 归于一类，统一 NULL 处理 （is null 可以查询 NULL 以及空字符串值，空字符串查询无法查询到空字符串值）
-			// Mysql 空字符串与 NULL 非一类，NULL 是 NULL，空字符串是空字符串（is null 只查询 NULL 值，空字符串查询只查询到空字符串值）
-			// 按照 Oracle 特性来，转换同步统一转换成 NULL 即可，但需要注意业务逻辑中空字符串得写入，需要变更
-			// Oracle/Mysql 对于 'NULL' 统一字符 NULL 处理，查询出来转成 NULL,所以需要判断处理
-			if raw == nil {
-				rowsResult = append(rowsResult, fmt.Sprintf("%v", `NULL`))
-			} else if string(raw) == "" {
-				rowsResult = append(rowsResult, fmt.Sprintf("%v", `NULL`))
-			} else {
-				switch columnTypes[i] {
-				case "int64":
-					r, err := utils.StrconvIntBitSize(string(raw), 64)
-					if err != nil {
-						return err
-					}
-					rowsResult = append(rowsResult, fmt.Sprintf("%v", r))
-				case "uint64":
-					r, err := utils.StrconvUintBitSize(string(raw), 64)
-					if err != nil {
-						return err
-					}
-					rowsResult = append(rowsResult, fmt.Sprintf("%v", r))
-				case "float32":
-					r, err := utils.StrconvFloatBitSize(string(raw), 32)
-					if err != nil {
-						return err
-					}
-					rowsResult = append(rowsResult, fmt.Sprintf("%v", r))
-				case "float64":
-					r, err := utils.StrconvFloatBitSize(string(raw), 64)
-					if err != nil {
-						return err
-					}
-					rowsResult = append(rowsResult, fmt.Sprintf("%v", r))
-				case "rune":
-					r, err := utils.StrconvRune(string(raw))
-					if err != nil {
-						return err
-					}
-					rowsResult = append(rowsResult, fmt.Sprintf("%v", r))
-				default:
-					ok := utils.IsNum(string(raw))
-					if ok {
-						r, err := decimal.NewFromString(string(raw))
-						if err != nil {
-							return err
-						}
-						if r.IsInteger() {
-							r, err := utils.StrconvIntBitSize(string(raw), 64)
-							if err != nil {
-								return err
-							}
-							rowsResult = append(rowsResult, fmt.Sprintf("%v", r))
-						} else {
-							r, err := utils.StrconvFloatBitSize(string(raw), 64)
-							if err != nil {
-								return err
-							}
-							rowsResult = append(rowsResult, fmt.Sprintf("%v", r))
-						}
-					} else {
-						rowsResult = append(rowsResult, fmt.Sprintf("'%v'", string(raw)))
-					}
-				}
-			}
+		return nil
+	})
+	group2.Go(func() error {
+		// 单 batch 写
+		if err = engine.SingleWriteMySQLTableData(targetSchemaName, targetTableName, prepareSQL2, prepareArgs2); err != nil {
+			return err
 		}
-
-		batchResults = append(batchResults, utils.StringsBuilder("(", exstrings.Join(rowsResult, ","), ")"))
-
-		// 数组清空
-		rowsResult = rowsResult[0:0]
-
-		// batch 写入
-		if len(batchResults) == insertBatchSize {
-			insertSql := utils.StringsBuilder(
-				GenerateMySQLInsertSQLStatementPrefix(targetSchemaName, targetTableName, cols, safeMode),
-				exstrings.Join(batchResults, ","))
-			_, err = engine.MysqlDB.Exec(insertSql)
-			if err != nil {
-				return fmt.Errorf("single full table [%s.%s] sql [%v] data bulk insert mysql falied: %v",
-					targetSchemaName, targetTableName, insertSql, err)
-			}
-			// 数组清空
-			batchResults = batchResults[0:0]
-		}
-	}
-
-	if err = rows.Err(); err != nil {
+		return nil
+	})
+	if err = group1.Wait(); err != nil {
 		return err
 	}
-
-	// 单条写入
-	// 计算占位符
-	rowCounts := len(batchResults)
-	if rowCounts > 0 {
-		insertSql := utils.StringsBuilder(
-			GenerateMySQLInsertSQLStatementPrefix(targetSchemaName, targetTableName, cols, safeMode),
-			exstrings.Join(batchResults, ","))
-		_, err = engine.MysqlDB.Exec(insertSql)
-		if err != nil {
-			return fmt.Errorf("single full table [%s.%s] prepare sql [%v] data bulk insert mysql falied: %v",
-				targetSchemaName, targetTableName, insertSql, err)
-		}
+	if err = group2.Wait(); err != nil {
+		return err
 	}
 
 	endTime := time.Now()

@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/xxjwxc/gowp/workpool"
 
 	"github.com/wentaojin/transferdb/utils"
@@ -137,21 +139,27 @@ func (e *Engine) IsExistOracleTable(schemaName string, includeTables []string) e
 }
 
 // Preapre 批量 Batch
-func (e *Engine) BatchWriteMySQLTableData(targetSchemaName, targetTableName, insertPrepareSql string, stmtInsert *sql.Stmt, args [][]interface{}, applyThreads int) error {
-	if len(args) > 0 {
+func (e *Engine) BatchWriteMySQLTableData(targetSchemaName, targetTableName, insertPrepareSql string, batchArgs [][]interface{}, applyThreads int) error {
+	if len(batchArgs) > 0 {
+		stmtInsert, err := e.MysqlDB.Prepare(insertPrepareSql)
+		if err != nil {
+			return err
+		}
+		defer stmtInsert.Close()
+
 		wp := workpool.New(applyThreads)
-		for _, v := range args {
-			arg := v
+		for _, v := range batchArgs {
+			args := v
 			wp.Do(func() error {
-				_, err := stmtInsert.Exec(arg...)
+				_, err = stmtInsert.Exec(args...)
 				if err != nil {
 					return fmt.Errorf("single full table [%s.%s] prepare sql [%v] prepare args [%v] data bulk insert mysql falied: %v",
-						targetSchemaName, targetTableName, insertPrepareSql, arg, err)
+						targetSchemaName, targetTableName, insertPrepareSql, args, err)
 				}
 				return nil
 			})
 		}
-		if err := wp.Wait(); err != nil {
+		if err = wp.Wait(); err != nil {
 			return fmt.Errorf("single full table [%s.%s] data concurrency bulk insert mysql falied: %v", targetSchemaName, targetTableName, err)
 		}
 	}
@@ -159,9 +167,9 @@ func (e *Engine) BatchWriteMySQLTableData(targetSchemaName, targetTableName, ins
 }
 
 // Single 批量 Batch
-func (e *Engine) SingleWriteMySQLTableData(targetSchemaName, targetTableName, insertPrepareSql string, args [][]interface{}) error {
-	if len(args) > 0 {
-		for _, arg := range args {
+func (e *Engine) SingleWriteMySQLTableData(targetSchemaName, targetTableName, insertPrepareSql string, batchArgs [][]interface{}) error {
+	if len(batchArgs) > 0 {
+		for _, arg := range batchArgs {
 			_, err := e.MysqlDB.Exec(insertPrepareSql, arg...)
 			if err != nil {
 				return fmt.Errorf("single full table [%s.%s] prepare sql [%v] prepare args [%v] data bulk insert mysql falied: %v",
@@ -172,17 +180,124 @@ func (e *Engine) SingleWriteMySQLTableData(targetSchemaName, targetTableName, in
 	return nil
 }
 
-// 获取表字段名
-func (e *Engine) GetOracleTableColumns(sourceSchema, sourceTable string) ([]string, error) {
-	rows, err := e.OracleDB.Query(utils.StringsBuilder(`SELECT * FROM `, sourceSchema, `.`, sourceTable, ` WHERE 1 = 2`))
+// 获取表字段名以及行数据
+func (e *Engine) GetOracleTableRows(querySQL string) ([]string, []interface{}, error) {
+	var (
+		err        error
+		rowsResult []interface{}
+	)
+	rows, err := e.OracleDB.Query(querySQL)
 	if err != nil {
-		return []string{}, err
+		return []string{}, rowsResult, err
 	}
 	defer rows.Close()
 
 	cols, err := rows.Columns()
 	if err != nil {
-		return cols, err
+		return cols, rowsResult, err
 	}
-	return cols, nil
+
+	// 用于判断字段值是数字还是字符
+	var columnTypes []string
+	colTypes, err := rows.ColumnTypes()
+	if err != nil {
+		return cols, rowsResult, err
+	}
+
+	for _, ct := range colTypes {
+		// 数据库字段类型 DatabaseTypeName() 映射 go 类型 ScanType()
+		columnTypes = append(columnTypes, ct.ScanType().String())
+	}
+
+	// 数据 Scan
+	columns := len(cols)
+	rawResult := make([][]byte, columns)
+	dest := make([]interface{}, columns)
+	for i := range rawResult {
+		dest[i] = &rawResult[i]
+	}
+
+	// 表行数读取
+	for rows.Next() {
+		err = rows.Scan(dest...)
+		if err != nil {
+			return cols, rowsResult, err
+		}
+
+		for i, raw := range rawResult {
+			// 注意 Oracle/Mysql NULL VS 空字符串区别
+			// Oracle 空字符串与 NULL 归于一类，统一 NULL 处理 （is null 可以查询 NULL 以及空字符串值，空字符串查询无法查询到空字符串值）
+			// Mysql 空字符串与 NULL 非一类，NULL 是 NULL，空字符串是空字符串（is null 只查询 NULL 值，空字符串查询只查询到空字符串值）
+			// 按照 Oracle 特性来，转换同步统一转换成 NULL 即可，但需要注意业务逻辑中空字符串得写入，需要变更
+			// Oracle/Mysql 对于 'NULL' 统一字符 NULL 处理，查询出来转成 NULL,所以需要判断处理
+			if raw == nil {
+				rowsResult = append(rowsResult, sql.NullString{})
+			} else if string(raw) == "" {
+				rowsResult = append(rowsResult, sql.NullString{})
+			} else {
+				switch columnTypes[i] {
+				case "int64":
+					r, err := utils.StrconvIntBitSize(string(raw), 64)
+					if err != nil {
+						return cols, rowsResult, err
+					}
+					rowsResult = append(rowsResult, r)
+				case "uint64":
+					r, err := utils.StrconvUintBitSize(string(raw), 64)
+					if err != nil {
+						return cols, rowsResult, err
+					}
+					rowsResult = append(rowsResult, r)
+				case "float32":
+					r, err := utils.StrconvFloatBitSize(string(raw), 32)
+					if err != nil {
+						return cols, rowsResult, err
+					}
+					rowsResult = append(rowsResult, r)
+				case "float64":
+					r, err := utils.StrconvFloatBitSize(string(raw), 64)
+					if err != nil {
+						return cols, rowsResult, err
+					}
+					rowsResult = append(rowsResult, r)
+				case "rune":
+					r, err := utils.StrconvRune(string(raw))
+					if err != nil {
+						return cols, rowsResult, err
+					}
+					rowsResult = append(rowsResult, r)
+				default:
+					ok := utils.IsNum(string(raw))
+					if ok {
+						r, err := decimal.NewFromString(string(raw))
+						if err != nil {
+							return cols, rowsResult, err
+						}
+						if r.IsInteger() {
+							r, err := utils.StrconvIntBitSize(string(raw), 64)
+							if err != nil {
+								return cols, rowsResult, err
+							}
+							rowsResult = append(rowsResult, r)
+						} else {
+							r, err := utils.StrconvFloatBitSize(string(raw), 64)
+							if err != nil {
+								return cols, rowsResult, err
+							}
+							rowsResult = append(rowsResult, r)
+						}
+					} else {
+						rowsResult = append(rowsResult, string(raw))
+					}
+				}
+			}
+
+		}
+	}
+
+	if err = rows.Err(); err != nil {
+		return cols, rowsResult, err
+	}
+
+	return cols, rowsResult, nil
 }

@@ -39,7 +39,7 @@ const (
 // INSERT INTO 语句替换成 REPLACE INTO 语句
 // 转换表数据 -> 全量任务
 func translatorTableFullRecord(
-	targetSchemaName, targetTableName, rowidSQL string, columnFields []string, rowsResult []interface{}, insertBatchSize int, safeMode bool) ([][]interface{}, [][]interface{}, string) {
+	targetSchemaName, targetTableName, rowidSQL string, columnFields []string, rowsResult []interface{}, insertBatchSize int, safeMode bool) (string, [][]interface{}, string, [][]interface{}) {
 	startTime := time.Now()
 	columnCounts := len(columnFields)
 
@@ -58,19 +58,34 @@ func translatorTableFullRecord(
 	rowCounts := actualBindVarsCounts / columnCounts
 
 	var (
+		prepareSQL1 string
+		prepareSQL2 string
 		args1       [][]interface{} // batch
 		args2       [][]interface{} // single
-		prepareSQL2 string
 	)
 	if differenceBinds == 0 {
-		// prepare 写入
+		// batch 写入
 		// 切分 batch
 		args1 = utils.SplitMultipleSlice(rowsResult, int64(splitNums))
+
+		// 计算占位符
+		rowBatchCounts := actualBindVarsCounts / columnCounts / splitNums
+
+		prepareSQL1 = utils.StringsBuilder(
+			GenerateMySQLInsertSQLStatementPrefix(targetSchemaName, targetTableName, columnFields, safeMode),
+			GenerateMySQLPrepareBindVarStatement(columnCounts, rowBatchCounts))
 	} else {
 		if planIntegerBinds > 0 {
-			// prepare 写入
+			// batch 写入
 			// 切分 batch
 			args1 = utils.SplitMultipleSlice(rowsResult[:planIntegerBinds], int64(splitNums))
+
+			// 计算占位符
+			rowBatchCounts := planIntegerBinds / columnCounts / splitNums
+
+			prepareSQL1 = utils.StringsBuilder(
+				GenerateMySQLInsertSQLStatementPrefix(targetSchemaName, targetTableName, columnFields, safeMode),
+				GenerateMySQLPrepareBindVarStatement(columnCounts, rowBatchCounts))
 		}
 
 		// 单次写入
@@ -93,7 +108,7 @@ func translatorTableFullRecord(
 		zap.Bool("write safe mode", safeMode),
 		zap.String("cost", endTime.Sub(startTime).String()))
 
-	return args1, args2, prepareSQL2
+	return prepareSQL1, args1, prepareSQL2, args2
 }
 
 // SQL Prepare 语句

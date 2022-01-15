@@ -113,7 +113,7 @@ func initOracleTableConsumeRowID(cfg *service.CfgFile, engine *service.Engine, w
 		return err
 	}
 	if !wp.IsDone() {
-		return fmt.Errorf("sync oracle table rows by scn failed, please rerunning")
+		return fmt.Errorf("init oracle table rowid by scn failed, please rerunning")
 	}
 	return nil
 }

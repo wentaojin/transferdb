@@ -580,7 +580,11 @@ func startOracleTableFullSync(cfg *service.CfgFile, engine *service.Engine, wait
 		}
 	}
 	if len(waitSyncTableInfo) > 0 {
-		if err := startOracleTableConsumeBySCN(cfg, engine, waitSyncTableInfo, syncMode); err != nil {
+		// 初始化表任务
+		if err := initOracleTableConsumeRowID(cfg, engine, waitSyncTableInfo, FullSyncMode); err != nil {
+			return err
+		}
+		if err := startOracleTableConsumeByCheckpoint(cfg, engine, waitSyncTableInfo, syncMode); err != nil {
 			return err
 		}
 	}
