@@ -56,14 +56,14 @@ func Query(db *sql.DB, querySQL string) ([]string, []map[string]string, error) {
 	)
 	rows, err := db.Query(querySQL)
 	if err != nil {
-		return cols, res, fmt.Errorf("[%v] error on general query SQL [%v] failed", err.Error(), querySQL)
+		return cols, res, fmt.Errorf("general sql [%v] query failed: [%v]", querySQL, err.Error())
 	}
 	defer rows.Close()
 
 	//不确定字段通用查询，自动获取字段名称
 	cols, err = rows.Columns()
 	if err != nil {
-		return cols, res, fmt.Errorf("[%v] error on general query rows.Columns failed", err.Error())
+		return cols, res, fmt.Errorf("general sql [%v] query rows.Columns failed: [%v]", querySQL, err.Error())
 	}
 
 	values := make([][]byte, len(cols))
@@ -75,7 +75,7 @@ func Query(db *sql.DB, querySQL string) ([]string, []map[string]string, error) {
 	for rows.Next() {
 		err = rows.Scan(scans...)
 		if err != nil {
-			return cols, res, fmt.Errorf("[%v] error on general query rows.Scan failed", err.Error())
+			return cols, res, fmt.Errorf("general sql [%v] query rows.Scan failed: [%v]", querySQL, err.Error())
 		}
 
 		row := make(map[string]string)
@@ -96,7 +96,8 @@ func Query(db *sql.DB, querySQL string) ([]string, []map[string]string, error) {
 	}
 
 	if err = rows.Err(); err != nil {
-		return cols, res, err
+		return cols, res, fmt.Errorf("general sql [%v] query rows.Next failed: [%v]", querySQL, err.Error())
+
 	}
 	return cols, res, nil
 }
