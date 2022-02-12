@@ -97,7 +97,7 @@ worker-threads = 3
 # 若需要增量数据同步，则需要 logminer 权限
 username = "marvin"
 password = "marvin"
-host = "172.16.4.182"
+host = "172.16.4.87"
 port = 1521
 service-name = "oratidb"
 # 配置 oracle 连接参数

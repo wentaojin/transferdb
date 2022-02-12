@@ -60,18 +60,17 @@ TransferDB 使用手册
 #### 使用事项
 
 ```
-把 oracle client instantclient-basic-linux.x64-19.8.0.0.0dbru.zip 上传解压，并配置 LD_LIBRARY_PATH 环境变量
-使用方法:
+1、下载 oracle client，参考官网下载地址 https://www.oracle.com/database/technologies/instant-client/linux-x86-64-downloads.html
 
-1、上传解压 instantclient-basic-linux.x64-19.8.0.0.0dbru.zip（该压缩包位于 client 目录） 到指定目录，比如：/data1/soft/client/instantclient_19_8
+2、上传 oracle client 至程序运行服务器，并解压到指定目录，比如：/data1/soft/client/instantclient_19_8
 
-2、查看环境变量 LD_LIBRARY_PATH
+3、配置程序运行环境变量 LD_LIBRARY_PATH
 export LD_LIBRARY_PATH=/data1/soft/client/instantclient_19_8
 echo $LD_LIBRARY_PATH
 
-3、transferdb 配置文件 config.toml 样例位于 conf 目录下，[详情说明](conf/config.toml)
+4、配置 transferdb 参数文件，config.toml 相关参数配置说明见 conf/config.toml
 
-4、表结构转换，[输出示例](conf/reverse_${sourcedb}.sql 以及 conf/compatibility_${sourcedb}.sql)
+5、表结构转换，[输出示例](conf/reverse_${sourcedb}.sql 以及 conf/compatibility_${sourcedb}.sql)
 $ ./transferdb --config config.toml --mode prepare
 $ ./transferdb --config config.toml --mode reverse
 
@@ -82,19 +81,19 @@ $ ./transferdb --config config.toml --mode reverse
 表 [column_rule_map] 用于字段级别自定义转换规则，字段级别优先级高于表级别、高于库级别、高于内置规则
 表 [default_value_map] 用于字段默认值自定义转换规则，优先级适用于全局
 
-5、表结构检查(独立于表结构转换，可单独运行，校验规则使用内置规则，[输出示例](conf/check_${sourcedb}.sql)
+6、表结构检查(独立于表结构转换，可单独运行，校验规则使用内置规则，[输出示例](conf/check_${sourcedb}.sql)
 $ ./transferdb --config config.toml --mode check
 
-6、收集现有 Oracle 数据库内表、索引、分区表、字段长度等信息用于评估迁移成本，[输出示例](conf/gather_info.txt)
+7、收集现有 Oracle 数据库内表、索引、分区表、字段长度等信息用于评估迁移成本，[输出示例](conf/gather_info.txt)
 $ ./transferdb --config config.toml --mode gather
 
-7、数据全量抽数
+8、数据全量抽数
 $ ./transferdb --config config.toml --mode full
 
-8、数据同步（全量 + 增量）
+9、数据同步（全量 + 增量）
 $ ./transferdb --config config.toml --mode all
 
-9、CSV 文件数据导出
+10、CSV 文件数据导出
 $ ./transferdb --config config.toml --mode csv
 ```
 #### ALL 模式同步
