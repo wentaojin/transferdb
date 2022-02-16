@@ -23,7 +23,7 @@ insert-batch-size = 500
 # 是否开启更新元数据库表慢日志，单位毫秒
 slowlog-threshold = 300
 # 任务并发 -- 只用于 reverse/check 模式阶段
-threads = 8
+threads = 64
 # pprof 端口
 pprof-port = ":9696"
 

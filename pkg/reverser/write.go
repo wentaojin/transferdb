@@ -16,6 +16,7 @@ limitations under the License.
 package reverser
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
@@ -259,6 +260,11 @@ func (d *ReverseWriter) Reverse() error {
 		}
 	}
 	return nil
+}
+
+func (d *ReverseWriter) String() string {
+	jsonStr, _ := json.Marshal(d)
+	return string(jsonStr)
 }
 
 func GenCreateSchema(file *FileMW, engine *service.Engine, sourceSchema, targetSchema, nlsComp string) error {

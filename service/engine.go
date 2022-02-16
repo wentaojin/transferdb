@@ -112,6 +112,7 @@ func (e *Engine) InitMysqlEngineDB() error {
 		&WaitSyncMeta{},
 		&FullSyncMeta{},
 		&IncrementSyncMeta{},
+		&TableErrorDetail{},
 	); err != nil {
 		return fmt.Errorf("init mysql engine db data failed: %v", err)
 	}

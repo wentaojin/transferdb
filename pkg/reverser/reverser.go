@@ -25,8 +25,6 @@ import (
 
 	"github.com/wentaojin/transferdb/utils"
 
-	"github.com/xxjwxc/gowp/workpool"
-
 	"github.com/wentaojin/transferdb/service"
 
 	"go.uber.org/zap"
@@ -43,12 +41,6 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 	//	return err
 	//}
 
-	defer func() {
-		endTime := time.Now()
-		service.Logger.Info("reverse table oracle to mysql finished",
-			zap.String("cost", endTime.Sub(startTime).String()))
-	}()
-
 	// 获取待转换表
 	exporterTableSlice, err := cfg.GenerateTables(engine)
 	if err != nil {
@@ -60,6 +52,15 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 		service.Logger.Warn("there are no table objects in the oracle schema",
 			zap.String("schema", cfg.SourceConfig.SchemaName))
 		return nil
+	}
+
+	// 判断 table_error_detail 是否存在错误记录，是否可进行 reverse
+	errorTotals, err := engine.GetTableErrorDetailCount(cfg.SourceConfig.SchemaName)
+	if err != nil {
+		return fmt.Errorf("func [GetTableErrorDetailCount] reverse schema [%s] table task failed, error: %v", strings.ToUpper(cfg.SourceConfig.SchemaName), err)
+	}
+	if errorTotals > 0 {
+		return fmt.Errorf("func [GetTableErrorDetailCount] reverse schema [%s] table task failed, table [table_error_detail] exist failed error, please clear and rerunning", strings.ToUpper(cfg.SourceConfig.SchemaName))
 	}
 
 	// oracle db collation
@@ -123,43 +124,87 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 
 	// 设置工作池
 	// 设置 goroutine 数
+	wg := sync.WaitGroup{}
+	ch := make(chan Table, 1024)
 
-	wp := workpool.New(cfg.AppConfig.Threads)
-
-	for _, t := range tables {
-		tbl := t
-		revFileMW := wrReverse
-		compFileMW := wrComp
-		wp.Do(func() error {
-			writer, err := NewReverseWriter(tbl, revFileMW, compFileMW)
-			if err != nil {
-				return err
+	for c := 0; c < cfg.AppConfig.Threads; c++ {
+		wg.Add(1)
+		go func(revFileMW, compFileMW *FileMW) {
+			defer wg.Done()
+			for t := range ch {
+				writer, err := NewReverseWriter(t, revFileMW, compFileMW)
+				if err != nil {
+					if err = t.Engine.GormDB.Create(&service.TableErrorDetail{
+						SourceSchemaName: t.SourceSchemaName,
+						SourceTableName:  t.SourceTableName,
+						Mode:             "Reverse",
+						Status:           "Failed",
+						Detail:           t.String(),
+						Error:            err.Error(),
+					}).Error; err != nil {
+						service.Logger.Error("reverse table oracle to mysql failed",
+							zap.String("scheme", t.SourceSchemaName),
+							zap.String("table", t.SourceTableName),
+							zap.Error(
+								fmt.Errorf("func [NewReverseWriter] reverse table task failed, detail see [table_error_detail], please rerunning")))
+						panic(
+							fmt.Errorf("func [NewReverseWriter] reverse table task failed, detail see [table_error_detail], please rerunning, error: %v", err))
+					}
+					continue
+				}
+				if err = writer.Reverse(); err != nil {
+					if err = t.Engine.GormDB.Create(&service.TableErrorDetail{
+						SourceSchemaName: t.SourceSchemaName,
+						SourceTableName:  t.SourceTableName,
+						Mode:             "Reverse",
+						Status:           "Failed",
+						Detail:           t.String(),
+						Error:            err.Error(),
+					}).Error; err != nil {
+						service.Logger.Error("reverse table oracle to mysql failed",
+							zap.String("scheme", t.SourceSchemaName),
+							zap.String("table", t.SourceTableName),
+							zap.Error(
+								fmt.Errorf("func [Reverse] reverse table task failed, detail see [table_error_detail], please rerunning")))
+						panic(
+							fmt.Errorf("func [Reverse] reverse table task failed, detail see [table_error_detail], please rerunning, error: %v", err))
+					}
+					continue
+				}
 			}
-			if err = writer.Reverse(); err != nil {
-				return err
-			}
-
-			return nil
-		})
+		}(wrReverse, wrComp)
 	}
-	if err = wp.Wait(); err != nil {
-		return err
+	for _, t := range tables {
+		ch <- t
+	}
+
+	close(ch)
+	wg.Wait()
+
+	errorTotals, err = engine.GetTableErrorDetailCount(cfg.SourceConfig.SchemaName)
+	if err != nil {
+		return fmt.Errorf("func [GetTableErrorDetailCount] reverse schema [%s] table task failed, error: %v", strings.ToUpper(cfg.SourceConfig.SchemaName), err)
 	}
 
 	endTime := time.Now()
-	if !wp.IsDone() {
-		service.Logger.Error("reverse table oracle to mysql failed",
-			zap.String("cost", endTime.Sub(startTime).String()),
-			zap.Error(fmt.Errorf("reverse table task failed, please rerunning")),
-			zap.Error(err))
-		return fmt.Errorf("reverse table task failed, please rerunning, error: %v", err)
-	}
-
 	service.Logger.Info("reverse", zap.String("create table and index output", filepath.Join(pwdDir,
 		fmt.Sprintf("reverse_%s.sql", cfg.SourceConfig.SchemaName))))
 	service.Logger.Info("compatibility", zap.String("maybe exist compatibility output", filepath.Join(pwdDir,
 		fmt.Sprintf("compatibility_%s.sql", cfg.SourceConfig.SchemaName))))
-
+	if errorTotals == 0 {
+		service.Logger.Info("reverse table oracle to mysql finished",
+			zap.Int("table totals", len(tables)),
+			zap.Int("table success", len(tables)),
+			zap.Int("table failed", int(errorTotals)),
+			zap.String("cost", endTime.Sub(startTime).String()))
+	} else {
+		service.Logger.Warn("reverse table oracle to mysql finished",
+			zap.Int("table totals", len(tables)),
+			zap.Int("table success", len(tables)-int(errorTotals)),
+			zap.Int("table failed", int(errorTotals)),
+			zap.String("failed tips", "failed detail, please see table [table_error_detail]"),
+			zap.String("cost", endTime.Sub(startTime).String()))
+	}
 	return nil
 }
 
