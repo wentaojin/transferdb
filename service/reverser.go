@@ -201,6 +201,7 @@ and upper(table_name)=upper('%s')`, strings.ToUpper(schemaName), strings.ToUpper
 //	return queryRes, nil
 //}
 
+// ORACLE XML 限制
 func (e *Engine) GetOracleTableColumn(schemaName string, tableName string, oraCollation bool) ([]map[string]string, error) {
 	var querySQL string
 	if oraCollation {
@@ -212,25 +213,25 @@ func (e *Engine) GetOracleTableColumn(schemaName string, tableName string, oraCo
 	    NVL(t.DATA_PRECISION,0) AS DATA_PRECISION,
 	    NVL(t.DATA_SCALE,0) AS DATA_SCALE,
 		DECODE(t.NULLABLE,'N','N','Y',(SELECT
-	DECODE( COUNT( 1 ), 0, 'Y', 'N' ) 
+	DECODE( COUNT( 1 ), 0, 'Y', 'N' )
 FROM
 	XMLTABLE (
-		'/ROWSET/ROW' PASSING ( SELECT DBMS_XMLGEN.GETXMLTYPE ( 
+		'/ROWSET/ROW' PASSING ( SELECT DBMS_XMLGEN.GETXMLTYPE (
 				q'[SELECT
 				col.COLUMN_NAME,
-				cons.search_condition 
+				cons.search_condition
 				FROM
 				DBA_CONS_COLUMNS col,
-				DBA_CONSTRAINTS cons 
+				DBA_CONSTRAINTS cons
 				WHERE
-				col.OWNER = cons.OWNER 
-				AND col.TABLE_NAME = cons.TABLE_NAME 
-				AND col.CONSTRAINT_NAME = cons.CONSTRAINT_NAME 
-				AND cons.CONSTRAINT_TYPE = 'C' 
-				AND upper(col.OWNER) = '%s' 
+				col.OWNER = cons.OWNER
+				AND col.TABLE_NAME = cons.TABLE_NAME
+				AND col.CONSTRAINT_NAME = cons.CONSTRAINT_NAME
+				AND cons.CONSTRAINT_TYPE = 'C'
+				AND upper(col.OWNER) = '%s'
 				AND upper(col.TABLE_NAME) = '%s']' ) FROM DUAL ) COLUMNS column_name VARCHAR2 ( 30 ) PATH 'COLUMN_NAME',
-		search_condition VARCHAR2 ( 4000 ) 
-	) xs 
+		search_condition VARCHAR2 ( 4000 )
+	) xs
 WHERE
 	xs.COLUMN_NAME = t.COLUMN_NAME AND
 	REPLACE (
@@ -259,25 +260,25 @@ WHERE
 	    NVL(t.DATA_PRECISION,0) AS DATA_PRECISION,
 	    NVL(t.DATA_SCALE,0) AS DATA_SCALE,
 		DECODE(t.NULLABLE,'N','N','Y',(SELECT
-	DECODE( COUNT( 1 ), 0, 'Y', 'N' ) 
+	DECODE( COUNT( 1 ), 0, 'Y', 'N' )
 FROM
 	XMLTABLE (
-		'/ROWSET/ROW' PASSING ( SELECT DBMS_XMLGEN.GETXMLTYPE ( 
+		'/ROWSET/ROW' PASSING ( SELECT DBMS_XMLGEN.GETXMLTYPE (
 				q'[SELECT
 				col.COLUMN_NAME,
-				cons.search_condition 
+				cons.search_condition
 				FROM
 				DBA_CONS_COLUMNS col,
-				DBA_CONSTRAINTS cons 
+				DBA_CONSTRAINTS cons
 				WHERE
-				col.OWNER = cons.OWNER 
-				AND col.TABLE_NAME = cons.TABLE_NAME 
-				AND col.CONSTRAINT_NAME = cons.CONSTRAINT_NAME 
-				AND cons.CONSTRAINT_TYPE = 'C' 
-				AND upper(col.OWNER) = '%s' 
+				col.OWNER = cons.OWNER
+				AND col.TABLE_NAME = cons.TABLE_NAME
+				AND col.CONSTRAINT_NAME = cons.CONSTRAINT_NAME
+				AND cons.CONSTRAINT_TYPE = 'C'
+				AND upper(col.OWNER) = '%s'
 				AND upper(col.TABLE_NAME) = '%s']' ) FROM DUAL ) COLUMNS column_name VARCHAR2 ( 30 ) PATH 'COLUMN_NAME',
-		search_condition VARCHAR2 ( 4000 ) 
-	) xs 
+		search_condition VARCHAR2 ( 4000 )
+	) xs
 WHERE
 	xs.COLUMN_NAME = t.COLUMN_NAME AND
 	REPLACE (

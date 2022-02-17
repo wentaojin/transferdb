@@ -55,12 +55,12 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 	}
 
 	// 判断 table_error_detail 是否存在错误记录，是否可进行 reverse
-	errorTotals, err := engine.GetTableErrorDetailCount(cfg.SourceConfig.SchemaName)
+	errorTotals, err := engine.GetTableErrorDetailCountByMode(cfg.SourceConfig.SchemaName, utils.ReverseMode)
 	if err != nil {
-		return fmt.Errorf("func [GetTableErrorDetailCount] reverse schema [%s] table task failed, error: %v", strings.ToUpper(cfg.SourceConfig.SchemaName), err)
+		return fmt.Errorf("func [GetTableErrorDetailCountByMode] reverse schema [%s] table mode [%s] task failed, error: %v", strings.ToUpper(cfg.SourceConfig.SchemaName), utils.ReverseMode, err)
 	}
 	if errorTotals > 0 {
-		return fmt.Errorf("func [GetTableErrorDetailCount] reverse schema [%s] table task failed, table [table_error_detail] exist failed error, please clear and rerunning", strings.ToUpper(cfg.SourceConfig.SchemaName))
+		return fmt.Errorf("func [GetTableErrorDetailCountByMode] reverse schema [%s] table mode [%s] task failed, table [table_error_detail] exist failed error, please clear and rerunning", strings.ToUpper(cfg.SourceConfig.SchemaName), utils.ReverseMode)
 	}
 
 	// oracle db collation
@@ -125,7 +125,7 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 	// 设置工作池
 	// 设置 goroutine 数
 	wg := sync.WaitGroup{}
-	ch := make(chan Table, 1024)
+	ch := make(chan Table, utils.BufferSize)
 
 	for c := 0; c < cfg.AppConfig.Threads; c++ {
 		wg.Add(1)
@@ -137,13 +137,14 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 					if err = t.Engine.GormDB.Create(&service.TableErrorDetail{
 						SourceSchemaName: t.SourceSchemaName,
 						SourceTableName:  t.SourceTableName,
-						Mode:             "Reverse",
-						Status:           "Failed",
+						RunMode:          utils.ReverseMode,
+						InfoSources:      utils.ReverseMode,
+						RunStatus:        "Failed",
 						Detail:           t.String(),
 						Error:            err.Error(),
 					}).Error; err != nil {
 						service.Logger.Error("reverse table oracle to mysql failed",
-							zap.String("scheme", t.SourceSchemaName),
+							zap.String("schema", t.SourceSchemaName),
 							zap.String("table", t.SourceTableName),
 							zap.Error(
 								fmt.Errorf("func [NewReverseWriter] reverse table task failed, detail see [table_error_detail], please rerunning")))
@@ -156,8 +157,9 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 					if err = t.Engine.GormDB.Create(&service.TableErrorDetail{
 						SourceSchemaName: t.SourceSchemaName,
 						SourceTableName:  t.SourceTableName,
-						Mode:             "Reverse",
-						Status:           "Failed",
+						RunMode:          utils.ReverseMode,
+						InfoSources:      utils.ReverseMode,
+						RunStatus:        "Failed",
 						Detail:           t.String(),
 						Error:            err.Error(),
 					}).Error; err != nil {
@@ -181,9 +183,9 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 	close(ch)
 	wg.Wait()
 
-	errorTotals, err = engine.GetTableErrorDetailCount(cfg.SourceConfig.SchemaName)
+	errorTotals, err = engine.GetTableErrorDetailCountByMode(cfg.SourceConfig.SchemaName, utils.ReverseMode)
 	if err != nil {
-		return fmt.Errorf("func [GetTableErrorDetailCount] reverse schema [%s] table task failed, error: %v", strings.ToUpper(cfg.SourceConfig.SchemaName), err)
+		return fmt.Errorf("func [GetTableErrorDetailCountByMode] reverse schema [%s] mode [%s] table task failed, error: %v", strings.ToUpper(cfg.SourceConfig.SchemaName), utils.ReverseMode, err)
 	}
 
 	endTime := time.Now()

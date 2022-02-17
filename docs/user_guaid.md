@@ -38,6 +38,7 @@ TransferDB 使用手册
       6. 上游表结构存在，下游不存在，自动生成相关表结构语句输出到 reverse_${sourcedb}.sql/compatibility_${sourcedb}.sql 文件
       7. TiDB 数据库排除外键、检查约束对比，MySQL 低版本只检查外键约束，高版本外键、检查约束都对比
       8. MySQL/TiDB timestamp 类型只支持精度 6，oracle 精度最大是 9，会检查出来但是保持原样
+      9. 程序 check 阶段若遇到报错则进程不终止，日志最后会输出警告信息，具体错误表以及对应错误详情见 {元数据库} 内表 [table_error_detail] 数据
 
 
 3. 对象信息收集
@@ -83,6 +84,7 @@ $ ./transferdb --config config.toml --mode reverse
 表 [default_value_map] 用于字段默认值自定义转换规则，优先级适用于全局
 
 6、表结构检查(独立于表结构转换，可单独运行，校验规则使用内置规则，[输出示例](conf/check_${sourcedb}.sql)
+$ ./transferdb --config config.toml --mode prepare
 $ ./transferdb --config config.toml --mode check
 
 7、收集现有 Oracle 数据库内表、索引、分区表、字段长度等信息用于评估迁移成本，[输出示例](conf/gather_info.txt)

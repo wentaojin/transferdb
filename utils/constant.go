@@ -70,6 +70,13 @@ const (
 	// CSV 字符集判断
 	UTF8CharacterSetCSV = "UTF8"
 	GBKCharacterSetCSV  = "GBK"
+
+	// 模式
+	ReverseMode = "Reverse"
+	CheckMode   = "Check"
+
+	// Channel
+	BufferSize = 1024
 )
 
 // MySQL 8.0

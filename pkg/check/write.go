@@ -43,10 +43,10 @@ type DiffWriter struct {
 	SourceDBCollation     bool
 	SourceTableCollation  map[string]string
 	SourceSchemaCollation string
-	Engine                *service.Engine
-	ChkFileMW             *reverser.FileMW
-	RevFileMW             *reverser.FileMW
-	CompFileMW            *reverser.FileMW
+	Engine                *service.Engine  `json:"-"`
+	ChkFileMW             *reverser.FileMW `json:"-"`
+	RevFileMW             *reverser.FileMW `json:"-"`
+	CompFileMW            *reverser.FileMW `json:"-"`
 }
 
 func NewDiffWriter(sourceSchemaName, targetSchemaName, tableName,
@@ -72,51 +72,62 @@ func NewDiffWriter(sourceSchemaName, targetSchemaName, tableName,
 	}
 }
 
+func (d *DiffWriter) String() string {
+	jsonStr, _ := json.Marshal(d)
+	return string(jsonStr)
+}
+
 // 表结构对比
 // 以上游 oracle 表结构信息为基准，对比下游 MySQL 表结构
 // 1、若上游存在，下游不存在，则输出记录，若上游不存在，下游存在，则默认不输出
 // 2、忽略上下游不同索引名、约束名对比，只对比下游是否存在同等约束下同等字段是否存在
 // 3、分区只对比分区类型、分区键、分区表达式等，不对比具体每个分区下的情况
-func (d *DiffWriter) DiffOracleAndMySQLTable() error {
+
+func (d *DiffWriter) CheckTable() (bool, error) {
+	// 判断 MySQL 表是否存在
+	isExist, err := d.Engine.IsExistMySQLTable(d.TargetSchemaName, d.TableName)
+	if err != nil {
+		return false, err
+	}
+	if !isExist {
+		startTime := time.Now()
+		// 表列表
+		reverseTables, partitionTableList, temporaryTableList, clusteredTableList, err := reverser.LoadOracleToMySQLTableList(d.Engine, []string{d.TableName}, d.SourceSchemaName, d.TargetSchemaName, d.SourceDBNLSSort, d.SourceDBNLSComp, false)
+		if err != nil {
+			return false, err
+		}
+
+		// 不兼容项 - 表提示
+		if err = reverser.CompatibilityDBTips(d.CompFileMW, d.SourceSchemaName, partitionTableList, temporaryTableList, clusteredTableList); err != nil {
+			return false, err
+		}
+
+		for _, tbl := range reverseTables {
+			writer, err := reverser.NewReverseWriter(tbl, d.RevFileMW, d.CompFileMW)
+			if err != nil {
+				return false, fmt.Errorf("check mode new table reverse writer failed: %v", err)
+			}
+			if err = writer.Reverse(); err != nil {
+				return false, fmt.Errorf("check mode new table reverse failed: %v", err)
+			}
+		}
+		endTime := time.Now()
+		service.Logger.Warn("table not exists",
+			zap.String("oracle table", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)),
+			zap.String("create mysql table", fmt.Sprintf("%s.%s", d.TargetSchemaName, d.TableName)),
+			zap.String("cost", endTime.Sub(startTime).String()))
+
+		return false, nil
+	}
+	return true, nil
+}
+func (d *DiffWriter) DiffTable() error {
 	startTime := time.Now()
 	service.Logger.Info("check table start",
 		zap.String("oracle table", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)),
 		zap.String("mysql table", fmt.Sprintf("%s.%s", d.TargetSchemaName, d.TableName)))
 
 	var builder strings.Builder
-
-	// 判断 MySQL 表是否存在
-	isExist, err := d.Engine.IsExistMySQLTable(d.TargetSchemaName, d.TableName)
-	if err != nil {
-		return err
-	}
-	if !isExist {
-		// 表列表
-		reverseTables, partitionTableList, temporaryTableList, clusteredTableList, err := reverser.LoadOracleToMySQLTableList(d.Engine, []string{d.TableName}, d.SourceSchemaName, d.TargetSchemaName, d.SourceDBNLSSort, d.SourceDBNLSComp, false)
-		if err != nil {
-			return err
-		}
-
-		// 不兼容项 - 表提示
-		if err = reverser.CompatibilityDBTips(d.CompFileMW, d.SourceSchemaName, partitionTableList, temporaryTableList, clusteredTableList); err != nil {
-			return err
-		}
-
-		for _, tbl := range reverseTables {
-			writer, er := reverser.NewReverseWriter(tbl, d.RevFileMW, d.CompFileMW)
-			if er != nil {
-				return er
-			}
-			if er = writer.Reverse(); er != nil {
-				return er
-			}
-		}
-		service.Logger.Warn("table not exists",
-			zap.String("oracle table", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)),
-			zap.String("create mysql table", fmt.Sprintf("%s.%s", d.TargetSchemaName, d.TableName)))
-
-		return nil
-	}
 
 	oracleTable, err := NewOracleTableINFO(d.SourceSchemaName, d.TableName, d.Engine, d.SourceDBCharacterSet, d.SourceDBNLSComp,
 		d.SourceTableCollation, d.SourceSchemaCollation, d.SourceDBCollation)

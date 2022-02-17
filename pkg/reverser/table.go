@@ -653,11 +653,11 @@ func (t *Table) String() string {
 // 加载表列表
 func LoadOracleToMySQLTableList(engine *service.Engine, exporterTableSlice []string, sourceSchema, targetSchema, nlsSort, nlsComp string, overwrite bool) ([]Table, []string, []string, []string, error) {
 	startTime := time.Now()
-	service.Logger.Info("load oracle table list start")
-
 	defer func() {
 		endTime := time.Now()
 		service.Logger.Info("load oracle table list finished",
+			zap.String("schema", sourceSchema),
+			zap.Int("table totals", len(exporterTableSlice)),
 			zap.String("cost", endTime.Sub(startTime).String()))
 	}()
 
@@ -694,12 +694,15 @@ func LoadOracleToMySQLTableList(engine *service.Engine, exporterTableSlice []str
 			zap.String("suggest", "if necessary, please manually process the tables in the above list"))
 	}
 
-	service.Logger.Info("get oracle table type start")
 	tablesMap, err := engine.GetOracleTableType(sourceSchema)
 	if err != nil {
 		return []Table{}, partitionTables, temporaryTables, clusteredTables, err
 	}
-	service.Logger.Info("get oracle table type finish")
+	endTime := time.Now()
+	service.Logger.Info("get oracle table type finished",
+		zap.String("schema", sourceSchema),
+		zap.Int("table totals", len(exporterTableSlice)),
+		zap.String("cost", endTime.Sub(startTime).String()))
 
 	// oracle 环境信息
 	characterSet, err := engine.GetOracleDBCharacterSet()
