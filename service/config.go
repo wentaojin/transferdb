@@ -18,6 +18,9 @@ package service
 import (
 	"encoding/json"
 	"fmt"
+	"time"
+
+	"go.uber.org/zap"
 
 	"github.com/BurntSushi/toml"
 )
@@ -123,6 +126,7 @@ func (c *CfgFile) configFromFile(file string) error {
 
 // 根据配置文件获取表列表
 func (c *CfgFile) GenerateTables(engine *Engine) ([]string, error) {
+	startTime := time.Now()
 	var (
 		exporterTableSlice []string
 		err                error
@@ -150,6 +154,11 @@ func (c *CfgFile) GenerateTables(engine *Engine) ([]string, error) {
 	if len(exporterTableSlice) == 0 {
 		return exporterTableSlice, fmt.Errorf("exporter table slice can not null from reverse task")
 	}
+	endTime := time.Now()
+	Logger.Info("get oracle to mysql all tables",
+		zap.String("schema", c.SourceConfig.SchemaName),
+		zap.Strings("tables", exporterTableSlice),
+		zap.String("cost", endTime.Sub(startTime).String()))
 	return exporterTableSlice, nil
 }
 

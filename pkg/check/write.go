@@ -92,7 +92,7 @@ func (d *DiffWriter) CheckTable() (bool, error) {
 	if !isExist {
 		startTime := time.Now()
 		// 表列表
-		reverseTables, partitionTableList, temporaryTableList, clusteredTableList, err := reverser.LoadOracleToMySQLTableList(d.Engine, []string{d.TableName}, d.SourceSchemaName, d.TargetSchemaName, d.SourceDBNLSSort, d.SourceDBNLSComp, false)
+		reverseTables, partitionTableList, temporaryTableList, clusteredTableList, err := reverser.LoadOracleToMySQLTableList(d.Engine, []string{d.TableName}, d.SourceSchemaName, d.TargetSchemaName, d.SourceDBNLSSort, d.SourceDBNLSComp, false, 128)
 		if err != nil {
 			return false, err
 		}

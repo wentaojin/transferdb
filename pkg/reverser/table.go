@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/wentaojin/transferdb/utils"
@@ -651,14 +652,17 @@ func (t *Table) String() string {
 }
 
 // 加载表列表
-func LoadOracleToMySQLTableList(engine *service.Engine, exporterTableSlice []string, sourceSchema, targetSchema, nlsSort, nlsComp string, overwrite bool) ([]Table, []string, []string, []string, error) {
-	startTime := time.Now()
+func LoadOracleToMySQLTableList(engine *service.Engine, exporterTableSlice []string, sourceSchema, targetSchema, nlsSort, nlsComp string, overwrite bool, threads int) ([]Table, []string, []string, []string, error) {
+	var tables []Table
+
+	beginTime := time.Now()
 	defer func() {
 		endTime := time.Now()
 		service.Logger.Info("load oracle table list finished",
 			zap.String("schema", sourceSchema),
 			zap.Int("table totals", len(exporterTableSlice)),
-			zap.String("cost", endTime.Sub(startTime).String()))
+			zap.Int("table gens", len(tables)),
+			zap.String("cost", endTime.Sub(beginTime).String()))
 	}()
 
 	// 筛选过滤可能不支持的表类型
@@ -694,17 +698,8 @@ func LoadOracleToMySQLTableList(engine *service.Engine, exporterTableSlice []str
 			zap.String("suggest", "if necessary, please manually process the tables in the above list"))
 	}
 
-	tablesMap, err := engine.GetOracleTableType(sourceSchema)
-	if err != nil {
-		return []Table{}, partitionTables, temporaryTables, clusteredTables, err
-	}
-	endTime := time.Now()
-	service.Logger.Info("get oracle table type finished",
-		zap.String("schema", sourceSchema),
-		zap.Int("table totals", len(exporterTableSlice)),
-		zap.String("cost", endTime.Sub(startTime).String()))
-
 	// oracle 环境信息
+	startTime := time.Now()
 	characterSet, err := engine.GetOracleDBCharacterSet()
 	if err != nil {
 		return []Table{}, partitionTables, temporaryTables, clusteredTables, err
@@ -725,43 +720,117 @@ func LoadOracleToMySQLTableList(engine *service.Engine, exporterTableSlice []str
 		oraCollation = true
 	}
 
+	endTime := time.Now()
+	service.Logger.Info("get oracle db character and version finished",
+		zap.String("schema", sourceSchema),
+		zap.String("db version", oraDBVersion),
+		zap.String("db character", characterSet),
+		zap.Int("table totals", len(exporterTableSlice)),
+		zap.Bool("table collation", oraCollation),
+		zap.String("cost", endTime.Sub(startTime).String()))
+
 	var (
 		tblCollation    map[string]string
 		schemaCollation string
 	)
 
 	if oraCollation {
+		startTime = time.Now()
 		schemaCollation, err = engine.GetOracleSchemaCollation(sourceSchema)
 		if err != nil {
 			return []Table{}, partitionTables, temporaryTables, clusteredTables, err
 		}
-		tblCollation, err = engine.GetOracleTableCollation(sourceSchema)
+		tblCollation, err = engine.GetOracleTableCollation(sourceSchema, schemaCollation)
 		if err != nil {
 			return []Table{}, partitionTables, temporaryTables, clusteredTables, err
 		}
+		endTime = time.Now()
+		service.Logger.Info("get oracle schema and table collation finished",
+			zap.String("schema", sourceSchema),
+			zap.String("db version", oraDBVersion),
+			zap.String("db character", characterSet),
+			zap.Int("table totals", len(exporterTableSlice)),
+			zap.Bool("table collation", oraCollation),
+			zap.String("cost", endTime.Sub(startTime).String()))
 	}
 
-	var tables []Table
-	for _, ts := range exporterTableSlice {
-		// 库名、表名规则
-		tbl := Table{
-			SourceSchemaName: strings.ToUpper(sourceSchema),
-			TargetSchemaName: strings.ToUpper(targetSchema),
-			SourceTableName:  strings.ToUpper(ts),
-			TargetTableName:  strings.ToUpper(ts),
-			SourceTableType:  tablesMap[ts],
-			SourceDBNLSSort:  nlsSort,
-			SourceDBNLSComp:  nlsComp,
-			Overwrite:        overwrite,
-			Engine:           engine,
-		}
-		tbl.OracleCollation = oraCollation
-		if oraCollation {
-			tbl.SourceSchemaCollation = schemaCollation
-			tbl.SourceTableCollation = tblCollation[strings.ToUpper(ts)]
-		}
-		tables = append(tables, tbl)
+	startTime = time.Now()
+	tablesMap, err := engine.GetOracleTableType(sourceSchema)
+	if err != nil {
+		return []Table{}, partitionTables, temporaryTables, clusteredTables, err
 	}
+	endTime = time.Now()
+	service.Logger.Info("get oracle table type finished",
+		zap.String("schema", sourceSchema),
+		zap.String("db version", oraDBVersion),
+		zap.String("db character", characterSet),
+		zap.Int("table totals", len(exporterTableSlice)),
+		zap.Bool("table collation", oraCollation),
+		zap.String("cost", endTime.Sub(startTime).String()))
+
+	startTime = time.Now()
+	wg := &sync.WaitGroup{}
+	chS := make(chan string, utils.BufferSize)
+	chT := make(chan Table, utils.BufferSize)
+
+	c := make(chan struct{})
+
+	// 数据 Append
+	go func(done func()) {
+		for tbl := range chT {
+			tables = append(tables, tbl)
+		}
+		done()
+	}(func() {
+		c <- struct{}{}
+	})
+
+	// 数据 Product
+	go func() {
+		for _, t := range exporterTableSlice {
+			chS <- t
+		}
+		close(chS)
+	}()
+
+	// 数据处理
+	for c := 0; c < threads; c++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for ts := range chS {
+				// 库名、表名规则
+				tbl := Table{
+					SourceSchemaName: strings.ToUpper(sourceSchema),
+					TargetSchemaName: strings.ToUpper(targetSchema),
+					SourceTableName:  strings.ToUpper(ts),
+					TargetTableName:  strings.ToUpper(ts),
+					SourceTableType:  tablesMap[ts],
+					SourceDBNLSSort:  nlsSort,
+					SourceDBNLSComp:  nlsComp,
+					Overwrite:        overwrite,
+					Engine:           engine,
+				}
+				tbl.OracleCollation = oraCollation
+				if oraCollation {
+					tbl.SourceSchemaCollation = schemaCollation
+					tbl.SourceTableCollation = tblCollation[strings.ToUpper(ts)]
+				}
+				chT <- tbl
+			}
+		}()
+	}
+
+	wg.Wait()
+	close(chT)
+	<-c
+
+	endTime = time.Now()
+	service.Logger.Info("gen oracle slice table finished",
+		zap.String("schema", sourceSchema),
+		zap.Int("table totals", len(exporterTableSlice)),
+		zap.Int("table gens", len(tables)),
+		zap.String("cost", endTime.Sub(startTime).String()))
 
 	return tables, partitionTables, temporaryTables, clusteredTables, nil
 }

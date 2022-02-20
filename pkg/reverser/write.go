@@ -21,6 +21,9 @@ import (
 	"io"
 	"strings"
 	"sync"
+	"time"
+
+	"go.uber.org/zap"
 
 	"github.com/wentaojin/transferdb/service"
 
@@ -268,6 +271,7 @@ func (d *ReverseWriter) String() string {
 }
 
 func GenCreateSchema(file *FileMW, engine *service.Engine, sourceSchema, targetSchema, nlsComp string) error {
+	startTime := time.Now()
 	var (
 		sqlRev          strings.Builder
 		schemaCollation string
@@ -314,11 +318,16 @@ func GenCreateSchema(file *FileMW, engine *service.Engine, sourceSchema, targetS
 	if _, err = fmt.Fprintln(file, sqlRev.String()); err != nil {
 		return err
 	}
+	endTime := time.Now()
+	service.Logger.Info("output oracle to mysql schema create sql",
+		zap.String("schema", sourceSchema),
+		zap.String("cost", endTime.Sub(startTime).String()))
 
 	return nil
 }
 
 func CompatibilityDBTips(file *FileMW, sourceSchema string, partition, temporary, clustered []string) error {
+	startTime := time.Now()
 	// 兼容提示
 	if len(partition) > 0 || len(temporary) > 0 || len(clustered) > 0 {
 		var sqlComp strings.Builder
@@ -356,5 +365,10 @@ func CompatibilityDBTips(file *FileMW, sourceSchema string, partition, temporary
 			return err
 		}
 	}
+	endTime := time.Now()
+	service.Logger.Info("output oracle to mysql compatibility tips",
+		zap.String("schema", sourceSchema),
+		zap.String("cost", endTime.Sub(startTime).String()))
+
 	return nil
 }

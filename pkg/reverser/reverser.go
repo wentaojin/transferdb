@@ -46,7 +46,6 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 	if err != nil {
 		return err
 	}
-	service.Logger.Info("get oracle to mysql all tables", zap.Strings("tables", exporterTableSlice))
 
 	if len(exporterTableSlice) == 0 {
 		service.Logger.Warn("there are no table objects in the oracle schema",
@@ -83,7 +82,7 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 	}
 
 	// 表列表
-	tables, partitionTableList, temporaryTableList, clusteredTableList, err := LoadOracleToMySQLTableList(engine, exporterTableSlice, cfg.SourceConfig.SchemaName, cfg.TargetConfig.SchemaName, nlsSort, nlsComp, cfg.TargetConfig.Overwrite)
+	tables, partitionTableList, temporaryTableList, clusteredTableList, err := LoadOracleToMySQLTableList(engine, exporterTableSlice, cfg.SourceConfig.SchemaName, cfg.TargetConfig.SchemaName, nlsSort, nlsComp, cfg.TargetConfig.Overwrite, cfg.AppConfig.Threads)
 	if err != nil {
 		return err
 	}
@@ -126,6 +125,13 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 	// 设置 goroutine 数
 	wg := sync.WaitGroup{}
 	ch := make(chan Table, utils.BufferSize)
+
+	go func() {
+		for _, t := range tables {
+			ch <- t
+		}
+		close(ch)
+	}()
 
 	for c := 0; c < cfg.AppConfig.Threads; c++ {
 		wg.Add(1)
@@ -176,11 +182,7 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 			}
 		}(wrReverse, wrComp)
 	}
-	for _, t := range tables {
-		ch <- t
-	}
 
-	close(ch)
 	wg.Wait()
 
 	errorTotals, err = engine.GetTableErrorDetailCountByMode(cfg.SourceConfig.SchemaName, utils.ReverseMode)

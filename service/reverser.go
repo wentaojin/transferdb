@@ -17,6 +17,7 @@ package service
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/wentaojin/transferdb/utils"
@@ -107,103 +108,9 @@ and upper(table_name)=upper('%s')`, strings.ToUpper(schemaName), strings.ToUpper
 	return res, nil
 }
 
-//func (e *Engine) GetOracleTableColumn(schemaName string, tableName string, oraCollation bool) ([]map[string]string, error) {
-//	var querySQL string
-//
-//	if oraCollation {
-//		querySQL = fmt.Sprintf(`select t.COLUMN_NAME,
-//	    t.DATA_TYPE,
-//		 t.CHAR_LENGTH,
-//		 NVL(t.CHAR_USED,'UNKNOWN') CHAR_USED,
-//	    NVL(t.DATA_LENGTH,0) AS DATA_LENGTH,
-//	    NVL(t.DATA_PRECISION,0) AS DATA_PRECISION,
-//	    NVL(t.DATA_SCALE,0) AS DATA_SCALE,
-//		t.NULLABLE,
-//	    t.DATA_DEFAULT,
-//		DECODE(t.COLLATION,'USING_NLS_COMP',(SELECT VALUE from NLS_DATABASE_PARAMETERS WHERE PARAMETER = 'NLS_COMP'),t.COLLATION) COLLATION,
-//	    c.COMMENTS
-//	from dba_tab_columns t, dba_col_comments c
-//	where t.table_name = c.table_name
-//	and t.column_name = c.column_name
-//	and t.owner = c.owner
-//	and upper(t.owner) = upper('%s')
-//	and upper(t.table_name) = upper('%s')
-//	order by t.COLUMN_ID`,
-//			strings.ToUpper(schemaName),
-//			strings.ToUpper(tableName))
-//	} else {
-//		querySQL = fmt.Sprintf(`select t.COLUMN_NAME,
-//	    t.DATA_TYPE,
-//		 t.CHAR_LENGTH,
-//		 NVL(t.CHAR_USED,'UNKNOWN') CHAR_USED,
-//	    NVL(t.DATA_LENGTH,0) AS DATA_LENGTH,
-//	    NVL(t.DATA_PRECISION,0) AS DATA_PRECISION,
-//	    NVL(t.DATA_SCALE,0) AS DATA_SCALE,
-//		t.NULLABLE,
-//	    t.DATA_DEFAULT,
-//	    c.COMMENTS
-//	from dba_tab_columns t, dba_col_comments c
-//	where t.table_name = c.table_name
-//	and t.column_name = c.column_name
-//	and t.owner = c.owner
-//	and upper(t.owner) = upper('%s')
-//	and upper(t.table_name) = upper('%s')
-//	order by t.COLUMN_ID`,
-//			strings.ToUpper(schemaName),
-//			strings.ToUpper(tableName))
-//	}
-//
-//	_, queryRes, err := Query(e.OracleDB, querySQL)
-//	if err != nil {
-//		return queryRes, err
-//	}
-//	if len(queryRes) == 0 {
-//		return queryRes, fmt.Errorf("oracle table [%s.%s] column info cann't be null", schemaName, tableName)
-//	}
-//
-//	// check constraints notnull
-//	// search_condition long datatype
-//	_, condRes, err := Query(e.OracleDB, fmt.Sprintf(`SELECT
-//				col.COLUMN_NAME,
-//				cons.SEARCH_CONDITION
-//				FROM
-//				DBA_CONS_COLUMNS col,
-//				DBA_CONSTRAINTS cons
-//				WHERE
-//				col.OWNER = cons.OWNER
-//				AND col.TABLE_NAME = cons.TABLE_NAME
-//				AND col.CONSTRAINT_NAME = cons.CONSTRAINT_NAME
-//				AND cons.CONSTRAINT_TYPE = 'C'
-//				AND upper(col.OWNER) = '%s'
-//				AND upper(col.TABLE_NAME) = '%s'`, strings.ToUpper(schemaName), strings.ToUpper(tableName)))
-//	if err != nil {
-//		return queryRes, err
-//	}
-//
-//	if len(condRes) == 0 {
-//		return queryRes, nil
-//	}
-//
-//	rep, err := regexp.Compile(`(^.*)(?i:IS NOT NULL)`)
-//	if err != nil {
-//		return queryRes, fmt.Errorf("check notnull constraint regexp complile failed: %v", err)
-//	}
-//	for _, r := range queryRes {
-//		for _, c := range condRes {
-//			if r["COLUMN_NAME"] == c["COLUMN_NAME"] && r["NULLABLE"] == "Y" {
-//				// 检查约束非空检查
-//				if rep.MatchString(c["SEARCH_CONDITION"]) {
-//					r["NULLABLE"] = "N"
-//				}
-//			}
-//		}
-//	}
-//	return queryRes, nil
-//}
-
-// ORACLE XML 限制
 func (e *Engine) GetOracleTableColumn(schemaName string, tableName string, oraCollation bool) ([]map[string]string, error) {
 	var querySQL string
+
 	if oraCollation {
 		querySQL = fmt.Sprintf(`select t.COLUMN_NAME,
 	    t.DATA_TYPE,
@@ -212,31 +119,7 @@ func (e *Engine) GetOracleTableColumn(schemaName string, tableName string, oraCo
 	    NVL(t.DATA_LENGTH,0) AS DATA_LENGTH,
 	    NVL(t.DATA_PRECISION,0) AS DATA_PRECISION,
 	    NVL(t.DATA_SCALE,0) AS DATA_SCALE,
-		DECODE(t.NULLABLE,'N','N','Y',(SELECT
-	DECODE( COUNT( 1 ), 0, 'Y', 'N' )
-FROM
-	XMLTABLE (
-		'/ROWSET/ROW' PASSING ( SELECT DBMS_XMLGEN.GETXMLTYPE (
-				q'[SELECT
-				col.COLUMN_NAME,
-				cons.search_condition
-				FROM
-				DBA_CONS_COLUMNS col,
-				DBA_CONSTRAINTS cons
-				WHERE
-				col.OWNER = cons.OWNER
-				AND col.TABLE_NAME = cons.TABLE_NAME
-				AND col.CONSTRAINT_NAME = cons.CONSTRAINT_NAME
-				AND cons.CONSTRAINT_TYPE = 'C'
-				AND upper(col.OWNER) = '%s'
-				AND upper(col.TABLE_NAME) = '%s']' ) FROM DUAL ) COLUMNS column_name VARCHAR2 ( 30 ) PATH 'COLUMN_NAME',
-		search_condition VARCHAR2 ( 4000 )
-	) xs
-WHERE
-	xs.COLUMN_NAME = t.COLUMN_NAME AND
-	REPLACE (
-		REPLACE ( upper( xs.search_condition ), ' ', '' ),'"',	'' 	) LIKE '%%' || upper( t.column_name ) || 'ISNOTNULL' || '%%')
-			 ) NULLABLE,
+		t.NULLABLE,
 	    t.DATA_DEFAULT,
 		DECODE(t.COLLATION,'USING_NLS_COMP',(SELECT VALUE from NLS_DATABASE_PARAMETERS WHERE PARAMETER = 'NLS_COMP'),t.COLLATION) COLLATION,
 	    c.COMMENTS
@@ -248,8 +131,6 @@ WHERE
 	and upper(t.table_name) = upper('%s')
 	order by t.COLUMN_ID`,
 			strings.ToUpper(schemaName),
-			strings.ToUpper(tableName),
-			strings.ToUpper(schemaName),
 			strings.ToUpper(tableName))
 	} else {
 		querySQL = fmt.Sprintf(`select t.COLUMN_NAME,
@@ -259,31 +140,7 @@ WHERE
 	    NVL(t.DATA_LENGTH,0) AS DATA_LENGTH,
 	    NVL(t.DATA_PRECISION,0) AS DATA_PRECISION,
 	    NVL(t.DATA_SCALE,0) AS DATA_SCALE,
-		DECODE(t.NULLABLE,'N','N','Y',(SELECT
-	DECODE( COUNT( 1 ), 0, 'Y', 'N' )
-FROM
-	XMLTABLE (
-		'/ROWSET/ROW' PASSING ( SELECT DBMS_XMLGEN.GETXMLTYPE (
-				q'[SELECT
-				col.COLUMN_NAME,
-				cons.search_condition
-				FROM
-				DBA_CONS_COLUMNS col,
-				DBA_CONSTRAINTS cons
-				WHERE
-				col.OWNER = cons.OWNER
-				AND col.TABLE_NAME = cons.TABLE_NAME
-				AND col.CONSTRAINT_NAME = cons.CONSTRAINT_NAME
-				AND cons.CONSTRAINT_TYPE = 'C'
-				AND upper(col.OWNER) = '%s'
-				AND upper(col.TABLE_NAME) = '%s']' ) FROM DUAL ) COLUMNS column_name VARCHAR2 ( 30 ) PATH 'COLUMN_NAME',
-		search_condition VARCHAR2 ( 4000 )
-	) xs
-WHERE
-	xs.COLUMN_NAME = t.COLUMN_NAME AND
-	REPLACE (
-		REPLACE ( upper( xs.search_condition ), ' ', '' ),'"',	'' 	) LIKE '%%' || upper( t.column_name ) || 'ISNOTNULL' || '%%')
-			 ) NULLABLE,
+		t.NULLABLE,
 	    t.DATA_DEFAULT,
 	    c.COMMENTS
 	from dba_tab_columns t, dba_col_comments c
@@ -294,20 +151,164 @@ WHERE
 	and upper(t.table_name) = upper('%s')
 	order by t.COLUMN_ID`,
 			strings.ToUpper(schemaName),
-			strings.ToUpper(tableName),
-			strings.ToUpper(schemaName),
 			strings.ToUpper(tableName))
 	}
 
-	_, res, err := Query(e.OracleDB, querySQL)
+	_, queryRes, err := Query(e.OracleDB, querySQL)
 	if err != nil {
-		return res, err
+		return queryRes, err
 	}
-	if len(res) == 0 {
-		return res, fmt.Errorf("oracle table [%s.%s] column info cann't be null", schemaName, tableName)
+	if len(queryRes) == 0 {
+		return queryRes, fmt.Errorf("oracle table [%s.%s] column info cann't be null", schemaName, tableName)
 	}
-	return res, nil
+
+	// check constraints notnull
+	// search_condition long datatype
+	_, condRes, err := Query(e.OracleDB, fmt.Sprintf(`SELECT
+				col.COLUMN_NAME,
+				cons.SEARCH_CONDITION
+				FROM
+				DBA_CONS_COLUMNS col,
+				DBA_CONSTRAINTS cons
+				WHERE
+				col.OWNER = cons.OWNER
+				AND col.TABLE_NAME = cons.TABLE_NAME
+				AND col.CONSTRAINT_NAME = cons.CONSTRAINT_NAME
+				AND cons.CONSTRAINT_TYPE = 'C'
+				AND upper(col.OWNER) = '%s'
+				AND upper(col.TABLE_NAME) = '%s'`, strings.ToUpper(schemaName), strings.ToUpper(tableName)))
+	if err != nil {
+		return queryRes, err
+	}
+
+	if len(condRes) == 0 {
+		return queryRes, nil
+	}
+
+	rep, err := regexp.Compile(`(^.*)(?i:IS NOT NULL)`)
+	if err != nil {
+		return queryRes, fmt.Errorf("check notnull constraint regexp complile failed: %v", err)
+	}
+	for _, r := range queryRes {
+		for _, c := range condRes {
+			if r["COLUMN_NAME"] == c["COLUMN_NAME"] && r["NULLABLE"] == "Y" {
+				// 检查约束非空检查
+				if rep.MatchString(c["SEARCH_CONDITION"]) {
+					r["NULLABLE"] = "N"
+				}
+			}
+		}
+	}
+	return queryRes, nil
 }
+
+// ORACLE XML 限制
+// func (e *Engine) GetOracleTableColumn(schemaName string, tableName string, oraCollation bool) ([]map[string]string, error) {
+//	var querySQL string
+//	if oraCollation {
+//		querySQL = fmt.Sprintf(`select t.COLUMN_NAME,
+//	    t.DATA_TYPE,
+//		 t.CHAR_LENGTH,
+//		 NVL(t.CHAR_USED,'UNKNOWN') CHAR_USED,
+//	    NVL(t.DATA_LENGTH,0) AS DATA_LENGTH,
+//	    NVL(t.DATA_PRECISION,0) AS DATA_PRECISION,
+//	    NVL(t.DATA_SCALE,0) AS DATA_SCALE,
+//		DECODE(t.NULLABLE,'N','N','Y',(SELECT
+//	DECODE( COUNT( 1 ), 0, 'Y', 'N' )
+//FROM
+//	XMLTABLE (
+//		'/ROWSET/ROW' PASSING ( SELECT DBMS_XMLGEN.GETXMLTYPE (
+//				q'[SELECT
+//				col.COLUMN_NAME,
+//				cons.search_condition
+//				FROM
+//				DBA_CONS_COLUMNS col,
+//				DBA_CONSTRAINTS cons
+//				WHERE
+//				col.OWNER = cons.OWNER
+//				AND col.TABLE_NAME = cons.TABLE_NAME
+//				AND col.CONSTRAINT_NAME = cons.CONSTRAINT_NAME
+//				AND cons.CONSTRAINT_TYPE = 'C'
+//				AND upper(col.OWNER) = '%s'
+//				AND upper(col.TABLE_NAME) = '%s']' ) FROM DUAL ) COLUMNS column_name VARCHAR2 ( 30 ) PATH 'COLUMN_NAME',
+//		search_condition VARCHAR2 ( 4000 )
+//	) xs
+//WHERE
+//	xs.COLUMN_NAME = t.COLUMN_NAME AND
+//	REPLACE (
+//		REPLACE ( upper( xs.search_condition ), ' ', '' ),'"',	'' 	) LIKE '%%' || upper( t.column_name ) || 'ISNOTNULL' || '%%')
+//			 ) NULLABLE,
+//	    t.DATA_DEFAULT,
+//		DECODE(t.COLLATION,'USING_NLS_COMP',(SELECT VALUE from NLS_DATABASE_PARAMETERS WHERE PARAMETER = 'NLS_COMP'),t.COLLATION) COLLATION,
+//	    c.COMMENTS
+//	from dba_tab_columns t, dba_col_comments c
+//	where t.table_name = c.table_name
+//	and t.column_name = c.column_name
+//	and t.owner = c.owner
+//	and upper(t.owner) = upper('%s')
+//	and upper(t.table_name) = upper('%s')
+//	order by t.COLUMN_ID`,
+//			strings.ToUpper(schemaName),
+//			strings.ToUpper(tableName),
+//			strings.ToUpper(schemaName),
+//			strings.ToUpper(tableName))
+//	} else {
+//		querySQL = fmt.Sprintf(`select t.COLUMN_NAME,
+//	    t.DATA_TYPE,
+//		 t.CHAR_LENGTH,
+//		 NVL(t.CHAR_USED,'UNKNOWN') CHAR_USED,
+//	    NVL(t.DATA_LENGTH,0) AS DATA_LENGTH,
+//	    NVL(t.DATA_PRECISION,0) AS DATA_PRECISION,
+//	    NVL(t.DATA_SCALE,0) AS DATA_SCALE,
+//		DECODE(t.NULLABLE,'N','N','Y',(SELECT
+//	DECODE( COUNT( 1 ), 0, 'Y', 'N' )
+//FROM
+//	XMLTABLE (
+//		'/ROWSET/ROW' PASSING ( SELECT DBMS_XMLGEN.GETXMLTYPE (
+//				q'[SELECT
+//				col.COLUMN_NAME,
+//				cons.search_condition
+//				FROM
+//				DBA_CONS_COLUMNS col,
+//				DBA_CONSTRAINTS cons
+//				WHERE
+//				col.OWNER = cons.OWNER
+//				AND col.TABLE_NAME = cons.TABLE_NAME
+//				AND col.CONSTRAINT_NAME = cons.CONSTRAINT_NAME
+//				AND cons.CONSTRAINT_TYPE = 'C'
+//				AND upper(col.OWNER) = '%s'
+//				AND upper(col.TABLE_NAME) = '%s']' ) FROM DUAL ) COLUMNS column_name VARCHAR2 ( 30 ) PATH 'COLUMN_NAME',
+//		search_condition VARCHAR2 ( 4000 )
+//	) xs
+//WHERE
+//	xs.COLUMN_NAME = t.COLUMN_NAME AND
+//	REPLACE (
+//		REPLACE ( upper( xs.search_condition ), ' ', '' ),'"',	'' 	) LIKE '%%' || upper( t.column_name ) || 'ISNOTNULL' || '%%')
+//			 ) NULLABLE,
+//	    t.DATA_DEFAULT,
+//	    c.COMMENTS
+//	from dba_tab_columns t, dba_col_comments c
+//	where t.table_name = c.table_name
+//	and t.column_name = c.column_name
+//	and t.owner = c.owner
+//	and upper(t.owner) = upper('%s')
+//	and upper(t.table_name) = upper('%s')
+//	order by t.COLUMN_ID`,
+//			strings.ToUpper(schemaName),
+//			strings.ToUpper(tableName),
+//			strings.ToUpper(schemaName),
+//			strings.ToUpper(tableName))
+//	}
+//
+//	_, res, err := Query(e.OracleDB, querySQL)
+//	if err != nil {
+//		return res, err
+//	}
+//	if len(res) == 0 {
+//		return res, fmt.Errorf("oracle table [%s.%s] column info cann't be null", schemaName, tableName)
+//	}
+//	return res, nil
+//}
 
 func (e *Engine) GetOracleTablePrimaryKey(schemaName string, tableName string) ([]map[string]string, error) {
 	// for the primary key of an Engine table, you can use the following command to set whether the primary key takes effect.
@@ -641,7 +642,7 @@ func (e *Engine) GetOracleTable(schemaName string) ([]string, error) {
 	return tables, nil
 }
 
-func (e *Engine) GetOracleTableCollation(schemaName string) (map[string]string, error) {
+func (e *Engine) GetOracleTableCollation(schemaName, schemaCollation string) (map[string]string, error) {
 	var err error
 
 	tablesMap := make(map[string]string)
@@ -652,11 +653,7 @@ func (e *Engine) GetOracleTableCollation(schemaName string) (map[string]string, 
 	}
 	for _, r := range res {
 		if strings.ToUpper(r["DEFAULT_COLLATION"]) == utils.OracleUserTableColumnDefaultCollation {
-			collation, err := e.GetOracleSchemaCollation(schemaName)
-			if err != nil {
-				return tablesMap, err
-			}
-			tablesMap[strings.ToUpper(r["TABLE_NAME"])] = strings.ToUpper(collation)
+			tablesMap[strings.ToUpper(r["TABLE_NAME"])] = strings.ToUpper(schemaCollation)
 		} else {
 			tablesMap[strings.ToUpper(r["TABLE_NAME"])] = strings.ToUpper(r["DEFAULT_COLLATION"])
 		}

@@ -27,10 +27,12 @@ func main() {
 	oraCfg := service.SourceConfig{
 		Username:      "marvin",
 		Password:      "marvin",
-		ConnectString: "172.16.4.184:8066/orcl?connect_timeout=2",
+		Host:          "172.16.4.87",
+		Port:          1521,
+		ServiceName:   "oratidb",
+		ConnectParams: "poolMinSessions=10&poolMaxSessions=1000&poolWaitTimeout=60s&poolSessionMaxLifetime=1h&poolSessionTimeout=5m&poolIncrement=10&timezone=Local",
 		SessionParams: []string{"alter session set nls_date_format = 'yyyy-mm-dd hh24:mi:ss'"},
 		SchemaName:    "marvin",
-		Timezone:      "UTC",
 		IncludeTable:  nil,
 		ExcludeTable:  nil,
 	}
@@ -42,31 +44,35 @@ func main() {
 	engine := service.Engine{
 		OracleDB: sqlDB,
 	}
-	col, res, err := service.Query(engine.OracleDB, `select t.COLUMN_NAME,
-	     t.DATA_TYPE,
-			 t.CHAR_LENGTH, 
-			 NVL(t.CHAR_USED,'UNKNOWN') CHAR_USED,
-	     NVL(t.DATA_LENGTH,0) AS DATA_LENGTH,
-	     NVL(t.DATA_PRECISION,0) AS DATA_PRECISION,
-	     NVL(t.DATA_SCALE,0) AS DATA_SCALE,
-	     t.NULLABLE,
-	     t.DATA_DEFAULT,
-	     c.COMMENTS
-	from dba_tab_columns t, dba_col_comments c
-	where t.table_name = c.table_name
-	 and t.column_name = c.column_name
-     and t.owner = c.owner
-	 and upper(t.table_name) = upper('unique_test')
-	 and upper(t.owner) = upper('marvin')
-    order by t.COLUMN_ID`)
-	if err != nil {
-		fmt.Println(err)
-	}
-	fmt.Println(col)
-	for _, r := range res {
-		if r["DATA_DEFAULT"] == "" || r["COMMENTS"] == "" {
-			fmt.Println(r)
+
+	for i := 0; i < 5500; i++ {
+		_, _, err := service.Query(engine.OracleDB, fmt.Sprintf(`CREATE TABLE "MARVIN"."STS%d" (	
+	"DNO" VARCHAR2(10) CONSTRAINT "NN_STS_DNO%d" NOT NULL ENABLE, 
+	"YEAR" NUMBER(4,0) CONSTRAINT "NN_STS_YEAR%d" NOT NULL ENABLE, 
+	"IPNO" NUMBER(2,0), 
+	"CPNO" NUMBER(2,0), 
+	"NPNO" NUMBER(2,0), 
+	"STATE" VARCHAR2(1), 
+	"SNO" VARCHAR2(2) CONSTRAINT "NN_STS_SNO%d" NOT NULL ENABLE, 
+	"OLD_FLAG" VARCHAR2(1), 
+	"VOU_CHECK_FLAG" VARCHAR2(1), 
+	 CONSTRAINT "CK_STS_IPNO2%d" CHECK (ipno<=13) ENABLE, 
+	 CONSTRAINT "CK_STS_STATE%d" CHECK (state IN ('Y','N')) ENABLE, 
+	 CONSTRAINT "CK_STS_OLD_FLAG%d" CHECK (old_flag in  ('Y','N')) ENABLE, 
+	 CONSTRAINT "CK_STS_NPNO2%d" CHECK (npno<=13) ENABLE, 
+	 CONSTRAINT "CK_STS_NPNO1%d" CHECK (npno>=1) ENABLE, 
+	 CONSTRAINT "CK_STS_IPNO1%d" CHECK (ipno>=1) ENABLE, 
+	 CONSTRAINT "CK_STS_CPNO2%d" CHECK (cpno<=13) ENABLE, 
+	 CONSTRAINT "CK_STS_CPNO1%d" CHECK (cpno>=1) ENABLE)`, i, i, i, i, i, i, i, i, i, i, i, i))
+		if err != nil {
+			panic(err)
+		}
+
+		_, _, err = service.Query(engine.OracleDB, fmt.Sprintf(`CREATE UNIQUE INDEX "MARVIN"."PK_STS%d" ON "MARVIN"."STS%d" ("DNO", "YEAR", "SNO")`, i, i))
+
+		_, _, err = service.Query(engine.OracleDB, fmt.Sprintf(`ALTER TABLE "MARVIN"."STS%d" ADD CONSTRAINT "PK_STS%d" PRIMARY KEY ("DNO", "YEAR", "SNO")`, i, i))
+		if err != nil {
+			panic(err)
 		}
 	}
-
 }

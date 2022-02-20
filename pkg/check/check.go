@@ -88,6 +88,7 @@ func OracleTableToMySQLMappingCheck(engine *service.Engine, cfg *service.CfgFile
 	}
 
 	// oracle 环境信息
+	beginTime := time.Now()
 	characterSet, err := engine.GetOracleDBCharacterSet()
 	if err != nil {
 		return err
@@ -125,6 +126,14 @@ func OracleTableToMySQLMappingCheck(engine *service.Engine, cfg *service.CfgFile
 	if utils.VersionOrdinal(oraDBVersion) >= utils.VersionOrdinal(utils.OracleTableColumnCollationDBVersion) {
 		oraCollation = true
 	}
+	finishTime := time.Now()
+	service.Logger.Info("get oracle db character and version finished",
+		zap.String("schema", cfg.SourceConfig.SchemaName),
+		zap.String("db version", oraDBVersion),
+		zap.String("db character", characterSet),
+		zap.Int("table totals", len(exporterTableSlice)),
+		zap.Bool("table collation", oraCollation),
+		zap.String("cost", finishTime.Sub(beginTime).String()))
 
 	var (
 		tblCollation    map[string]string
@@ -132,20 +141,36 @@ func OracleTableToMySQLMappingCheck(engine *service.Engine, cfg *service.CfgFile
 	)
 
 	if oraCollation {
+		beginTime = time.Now()
 		schemaCollation, err = engine.GetOracleSchemaCollation(strings.ToUpper(cfg.SourceConfig.SchemaName))
 		if err != nil {
 			return err
 		}
-		tblCollation, err = engine.GetOracleTableCollation(strings.ToUpper(cfg.SourceConfig.SchemaName))
+		tblCollation, err = engine.GetOracleTableCollation(strings.ToUpper(cfg.SourceConfig.SchemaName), schemaCollation)
 		if err != nil {
 			return err
 		}
+		finishTime = time.Now()
+		service.Logger.Info("get oracle schema and table collation finished",
+			zap.String("schema", cfg.SourceConfig.SchemaName),
+			zap.String("db version", oraDBVersion),
+			zap.String("db character", characterSet),
+			zap.Int("table totals", len(exporterTableSlice)),
+			zap.Bool("table collation", oraCollation),
+			zap.String("cost", finishTime.Sub(beginTime).String()))
 	}
 
 	// 设置工作池
 	// 设置 goroutine 数
 	wg := sync.WaitGroup{}
 	ch := make(chan string, utils.BufferSize)
+
+	go func() {
+		for _, t := range exporterTableSlice {
+			ch <- t
+		}
+		close(ch)
+	}()
 
 	for c := 0; c < cfg.AppConfig.Threads; c++ {
 		wg.Add(1)
@@ -210,11 +235,6 @@ func OracleTableToMySQLMappingCheck(engine *service.Engine, cfg *service.CfgFile
 			engine, wrCheck, wrReverse, wrComp)
 	}
 
-	for _, t := range exporterTableSlice {
-		ch <- t
-	}
-
-	close(ch)
 	wg.Wait()
 
 	checkError, err := engine.GetTableErrorDetailCountBySources(cfg.SourceConfig.SchemaName, utils.CheckMode, utils.CheckMode)

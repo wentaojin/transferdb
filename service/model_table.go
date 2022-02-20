@@ -24,9 +24,9 @@ import (
 // 用于 reverse 和 check 模式
 type TableErrorDetail struct {
 	ID               uint       `gorm:"primary_key;autoIncrement;comment:'自增编号'" json:"id"`
-	SourceSchemaName string     `gorm:"not null;index:unique_schema_table_mode,unique;comment:'源端 schema'" json:"source_schema_name"`
-	SourceTableName  string     `gorm:"not null;index:unique_schema_table_mode,unique;comment:'源端表名'" json:"source_table_name"`
-	RunMode          string     `gorm:"not null;index:unique_schema_table_mode,unique;comment:'运行模式'" json:"run_mode"`
+	SourceSchemaName string     `gorm:"not null;index:idx_schema_table_mode;comment:'源端 schema'" json:"source_schema_name"`
+	SourceTableName  string     `gorm:"not null;index:idx_schema_table_mode;comment:'源端表名'" json:"source_table_name"`
+	RunMode          string     `gorm:"not null;index:idx_schema_table_mode;comment:'运行模式'" json:"run_mode"`
 	InfoSources      string     `gorm:"not null;comment:'信息来源'" json:"info_sources"`
 	RunStatus        string     `gorm:"not null;comment:'运行状态'" json:"run_status"`
 	Detail           string     `gorm:"not null;comment:'信息详情'" json:"detail"`
