@@ -1,0 +1,217 @@
+{{ define "report_schema" }}
+<a name="max_active_session_counts"></a>
+<font size="+2" face="Arial,Helvetica,Geneva,sans-serif" color="#336699">
+    <b>max_active_session_counts</b>
+</font><hr align="left" width="260">
+
+<li class="comment">
+    The database schema table/partition/subpartition size overview.
+</li>
+<table width="90%" border="1">
+    <tr>
+        <th class="noLink">Rownum</th>
+        <th class="noLink">DBID</th>
+        <th class="noLink">Instance Number</th>
+        <th class="noLink">Sample ID</th>
+        <th class="noLink">Sample Time</th>
+        <th class="noLink">Session Counts</th>
+    </tr>
+    {{ range .ListSchemaActiveSession }}
+    <tr>
+        <td class="noLink" align="center" >{{ .Rownum }}</td>
+        <td class="noLink" align="center">{{ .DBID }}</td>
+        <td class="noLink" align="center">{{ .InstanceNumber }}</td>
+        <td class="noLink" align="center">{{ .SampleID }}</td>
+        <td class="noLink" align="center">{{ .SampleTime }}</td>
+        <td class="noLink" align="center">{{ .SessionCounts }}</td>
+    </tr>
+    {{ end }}
+</table>
+&nbsp;
+<center>[<a class="noLink" href="#top">Top</a>]</center>
+
+<a name="schema_table_size"></a>
+<font size="+2" face="Arial,Helvetica,Geneva,sans-serif" color="#336699">
+    <b>schema_table_size</b>
+</font><hr align="left" width="260">
+
+<li class="comment">
+    The database schema table/partition/subpartition size overview.
+</li>
+<table width="90%" border="1">
+    <tr>
+        <th class="noLink">Schema</th>
+        <th class="noLink">Table Size/GB</th>
+        <th class="noLink">Index Size/GB</th>
+        <th class="noLink">Lob Table Size/GB</th>
+        <th class="noLink">Lob Index Size/GB</th>
+        <th class="noLink">ALL Tables Rows</th>
+    </tr>
+    {{ range .ListSchemaTableSizeData }}
+        <tr>
+            <td class="noLink" align="center" >{{ .Schema }}</td>
+            <td class="noLink" align="center">{{ .TableSize }}</td>
+            <td class="noLink" align="center">{{ .IndexSize }}</td>
+            <td class="noLink" align="center">{{ .LobTableSize }}</td>
+            <td class="noLink" align="center">{{ .LobIndexSize }}</td>
+            <td class="noLink" align="center">{{ .AllTablesRows }}</td>
+        </tr>
+    {{ end }}
+</table>
+&nbsp;
+<center>[<a class="noLink" href="#top">Top</a>]</center>
+
+<a name="schema_table_rows_top10"></a>
+<font size="+2" face="Arial,Helvetica,Geneva,sans-serif" color="#336699">
+    <b>schema_table_rows_top10</b>
+</font><hr align="left" width="260">
+
+<li class="comment">
+    The schema table data size top 10 overview.
+</li>
+<table width="90%" border="1">
+    <tr>
+        <th class="noLink">Schema</th>
+        <th class="noLink">Table Name</th>
+        <th class="noLink">Table Type</th>
+        <th class="noLink">Table Size/GB</th>
+    </tr>
+    {{ range .ListSchemaTableRowsTOP }}
+    <tr>
+        <td class="noLink" align="center">{{ .Schema }}</td>
+        <td class="noLink" align="center">{{ .TableName }}</td>
+        <td class="noLink" align="center">{{ .TableType }}</td>
+        <td class="noLink" align="center">{{ .TableSize }}</td>
+    </tr>
+    {{ end }}
+</table>
+&nbsp;
+<center>[<a class="noLink" href="#top">Top</a>]</center>
+
+<a name="schema_object_counts"></a>
+<font size="+2" face="Arial,Helvetica,Geneva,sans-serif" color="#336699">
+    <b>schema_object_counts</b>
+</font><hr align="left" width="260">
+
+<li class="comment">
+    The database schema object type counts overview.
+</li>
+<table width="90%" border="1">
+    <tr>
+        <th class="noLink">Schema</th>
+        <th class="noLink">Object Type</th>
+        <th class="noLink">Counts</th>
+    </tr>
+    {{ range .ListSchemaTableObjectCounts }}
+    <tr>
+        <td class="noLink" align="center">{{ .Schema }}</td>
+        <td class="noLink" align="center">{{ .ObjectType }}</td>
+        <td class="noLink" align="center">{{ .Counts }}</td>
+    </tr>
+    {{ end }}
+</table>
+&nbsp;
+<center>[<a class="noLink" href="#top">Top</a>]</center>
+
+<a name="schema_partition_type"></a>
+<font size="+2" face="Arial,Helvetica,Geneva,sans-serif" color="#336699">
+    <b>schema_partition_type</b>
+</font><hr align="left" width="260">
+
+<li class="comment">
+    The database schema table partition type overview.
+</li>
+<table width="90%" border="1">
+    <tr>
+        <th class="noLink">Schema</th>
+        <th class="noLink">Table Name</th>
+        <th class="noLink">Partition Type</th>
+        <th class="noLink">SubPartition Type</th>
+    </tr>
+    {{ range .ListSchemaTablePartitionType }}
+    <tr>
+        <td class="noLink" align="center">{{ .Schema }}</td>
+        <td class="noLink" align="center">{{ .TableName }}</td>
+        <td class="noLink" align="center">{{ .PartitionType }}</td>
+        <td class="noLink" align="center">{{ .SubPartitionType }}</td>
+    </tr>
+    {{ end }}
+</table>
+&nbsp;
+<center>[<a class="noLink" href="#top">Top</a>]</center>
+
+<a name="schema_column_type"></a>
+<font size="+2" face="Arial,Helvetica,Geneva,sans-serif" color="#336699">
+    <b>schema_column_type</b>
+</font><hr align="left" width="260">
+
+<li class="comment">
+    The database schema column type and max data length overview.
+</li>
+<table width="90%" border="1">
+    <tr>
+        <th class="noLink">Schema</th>
+        <th class="noLink">Data Type</th>
+        <th class="noLink">Counts</th>
+        <th class="noLink">Max Data Length</th>
+    </tr>
+    {{ range .ListSchemaTableColumnTypeAndMaxLength }}
+    <tr>
+        <td class="noLink" align="center">{{ .Schema }}</td>
+        <td class="noLink" align="center">{{ .DataType }}</td>
+        <td class="noLink" align="center">{{ .Counts }}</td>
+        <td class="noLink" align="center">{{ .MaxDataLength }}</td>
+    </tr>
+    {{ end }}
+</table>
+&nbsp;
+<center>[<a class="noLink" href="#top">Top</a>]</center>
+
+<a name="avg_row_length_top10_by_statistics"></a>
+<font size="+2" face="Arial,Helvetica,Geneva,sans-serif" color="#336699">
+    <b>avg_row_length_top10_by_statistics</b>
+</font><hr align="left" width="260">
+
+<li class="comment">
+    The database schema table avg row length top 10 overview.
+</li>
+<table width="90%" border="1">
+    <tr>
+        <th class="noLink">Schema</th>
+        <th class="noLink">Table Name</th>
+        <th class="noLink">Avg Row Length/Bytes</th>
+    </tr>
+    {{ range .ListSchemaTableAvgRowLength }}
+    <tr>
+        <td class="noLink" align="center">{{ .Schema }}</td>
+        <td class="noLink" align="center">{{ .TableName }}</td>
+        <td class="noLink" align="center">{{ .AvgRowLength }}</td>
+    </tr>
+    {{ end }}
+</table>
+&nbsp;
+<center>[<a class="noLink" href="#top">Top</a>]</center>
+
+<a name="schema_temporary_table_counts"></a>
+<font size="+2" face="Arial,Helvetica,Geneva,sans-serif" color="#336699">
+    <b>schema_temporary_table_counts</b>
+</font><hr align="left" width="260">
+
+<li class="comment">
+    The database schema temporary table counts overview.
+</li>
+<table width="90%" border="1">
+    <tr>
+        <th class="noLink">Schema</th>
+        <th class="noLink">Counts</th>
+    </tr>
+    {{ range .ListSchemaTemporaryTableCounts }}
+    <tr>
+        <td class="noLink" align="center">{{ .Schema }}</td>
+        <td class="noLink" align="center">{{ .Counts }}</td>
+    </tr>
+    {{ end }}
+</table>
+&nbsp;
+<center>[<a class="noLink" href="#top">Top</a>]</center>
+{{ end }}

@@ -116,6 +116,19 @@ func (e *Engine) GetOracleMemoryGB() (string, error) {
 	return res[0]["MEM_GB"], nil
 }
 
+func (e *Engine) GetOracleMaxActiveSessionCount() ([]map[string]string, error) {
+	_, res, err := Query(e.OracleDB, `select rownum,a.* from (
+select /*+ parallel 8 */
+dbid, instance_number, sample_id, sample_time, count(*) session_count
+  from dba_hist_active_sess_history t
+group by dbid, instance_number, sample_id, sample_time
+order by session_count desc nulls last) a where rownum <=5`)
+	if err != nil {
+		return res, err
+	}
+	return res, nil
+}
+
 func (e *Engine) GetOracleSchemaOverview(schemaName []string) ([]map[string]string, error) {
 	var (
 		userSQL string

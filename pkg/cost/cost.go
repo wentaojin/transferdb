@@ -101,264 +101,225 @@ func OracleMigrateMySQLCostEvaluate(engine *service.Engine, cfg *service.CfgFile
 	for _, usernameMap := range usernameMapArray {
 		usernameArray = append(usernameArray, fmt.Sprintf("'%s'", usernameMap["USERNAME"]))
 	}
-	var builder strings.Builder
 
 	service.Logger.Info("gather database schema array", zap.Strings("schema", usernameArray))
 
-	service.Logger.Info("gather database overview", zap.Strings("schema", usernameArray))
-
-	overviewOracle, err := GatherOracleOverview(usernameArray, engine)
+	pwdDir, err := os.Getwd()
 	if err != nil {
 		return err
 	}
 
-	if overviewOracle != "" {
-		builder.WriteString(overviewOracle)
-	}
-
-	service.Logger.Info("gather database type", zap.Strings("schema", usernameArray))
-
-	typeOracle, err := GatherOracleType(usernameArray, engine)
+	fileName := fmt.Sprintf("report_%s.html", cfg.SourceConfig.SchemaName)
+	file, err := os.OpenFile(filepath.Join(pwdDir, fileName), os.O_WRONLY|os.O_CREATE|os.O_APPEND|os.O_TRUNC, 0666)
 	if err != nil {
 		return err
 	}
-	if typeOracle != "" {
-		builder.WriteString(typeOracle)
-	}
+	defer file.Close()
 
-	service.Logger.Info("gather database check", zap.Strings("schema", usernameArray))
-	checkOracle, err := GatherOracleCheck(usernameArray, engine)
+	beginTime := time.Now()
+	reportOverview, reportSchema, err := GatherOracleOverview(usernameArray, engine, cfg.SourceConfig.Username, fileName)
 	if err != nil {
 		return err
 	}
-	if checkOracle != "" {
-		builder.WriteString(checkOracle)
+	finishedTime := time.Now()
+	service.Logger.Info("gather database overview",
+		zap.Strings("schema", usernameArray),
+		zap.String("cost", finishedTime.Sub(beginTime).String()))
+
+	beginTime = time.Now()
+	reportType, err := GatherOracleType(usernameArray, engine)
+	if err != nil {
+		return err
+	}
+	finishedTime = time.Now()
+	service.Logger.Info("gather database type",
+		zap.Strings("schema", usernameArray),
+		zap.String("cost", finishedTime.Sub(beginTime).String()))
+
+	beginTime = time.Now()
+	reportCheck, err := GatherOracleCheck(usernameArray, engine)
+	if err != nil {
+		return err
+	}
+	finishedTime = time.Now()
+	service.Logger.Info("gather database check",
+		zap.Strings("schema", usernameArray),
+		zap.String("cost", finishedTime.Sub(beginTime).String()))
+
+	if err = GenNewHTMLReport(reportOverview, reportSchema, reportType, reportCheck, file); err != nil {
+		return err
 	}
 
 	endTime := time.Now()
-	if builder.String() != "" {
-		pwdDir, err := os.Getwd()
-		if err != nil {
-			return err
-		}
-		file, err := os.OpenFile(filepath.Join(pwdDir, "gather_info.txt"),
-			os.O_WRONLY|os.O_CREATE|os.O_APPEND|os.O_TRUNC, 0666)
-		if err != nil {
-			return err
-		}
-		defer file.Close()
-
-		service.Logger.Info("cost", zap.String("output", filepath.Join(pwdDir, "gather_info.txt")))
-
-		_, err = file.WriteString(builder.String())
-		if err != nil {
-			return err
-		}
-		if err := file.Sync(); err != nil {
-			return err
-		}
-		service.Logger.Info("evaluate oracle migrate mysql cost finished",
-			zap.String("cost", endTime.Sub(startTime).String()),
-			zap.String("output", filepath.Join(pwdDir, "gather_info.txt")))
-		return nil
-	}
-
 	service.Logger.Info("evaluate oracle migrate mysql cost finished",
 		zap.String("cost", endTime.Sub(startTime).String()),
-		zap.String("output", "no output"))
+		zap.String("output", filepath.Join(pwdDir, fileName)))
 	return nil
 }
 
-func GatherOracleOverview(schemaName []string, engine *service.Engine) (string, error) {
-	var builder strings.Builder
-	dbOverview, err := GatherOracleDBOverview(engine)
+func GatherOracleOverview(schemaName []string, engine *service.Engine, reportUser, reportName string) (*ReportOverview, *ReportSchema, error) {
+
+	reportOverview, err := GatherOracleDBOverview(engine, reportName, reportUser)
 	if err != nil {
-		return "", err
+		return &ReportOverview{}, &ReportSchema{}, err
 	}
-	if dbOverview != "" {
-		builder.WriteString(dbOverview + "\n")
-	}
-	schemaOverview, err := GatherOracleSchemaOverview(schemaName, engine)
+
+	listActiveSessionCount, err := GatherOracleMaxActiveSessionCount(engine)
 	if err != nil {
-		return "", err
+		return &ReportOverview{}, &ReportSchema{}, err
 	}
-	if schemaOverview != "" {
-		builder.WriteString(schemaOverview + "\n")
-	}
-	tableRowTop, err := GatherOracleSchemaTableRowsTOP(schemaName, engine)
+
+	listSchemaTableSizeData, err := GatherOracleSchemaOverview(schemaName, engine)
 	if err != nil {
-		return "", err
+		return &ReportOverview{}, &ReportSchema{}, err
 	}
-	if tableRowTop != "" {
-		builder.WriteString(tableRowTop + "\n")
-	}
-	objectOverview, err := GatherOracleSchemaObjectOverview(schemaName, engine)
+
+	listSchemaTableRowsTOP, err := GatherOracleSchemaTableRowsTOP(schemaName, engine)
 	if err != nil {
-		return "", err
+		return &ReportOverview{}, &ReportSchema{}, err
 	}
-	if objectOverview != "" {
-		builder.WriteString(objectOverview + "\n")
-	}
-	partitionType, err := GatherOracleSchemaPartitionType(schemaName, engine)
+
+	listSchemaObject, err := GatherOracleSchemaObjectOverview(schemaName, engine)
 	if err != nil {
-		return "", err
+		return &ReportOverview{}, &ReportSchema{}, err
 	}
-	if partitionType != "" {
-		builder.WriteString(partitionType + "\n")
-	}
-	columnType, err := GatherOracleSchemaColumnTypeAndMaxLength(schemaName, engine)
+
+	listPartitionType, err := GatherOracleSchemaPartitionType(schemaName, engine)
 	if err != nil {
-		return "", err
+		return &ReportOverview{}, &ReportSchema{}, err
 	}
-	if columnType != "" {
-		builder.WriteString(columnType + "\n")
-	}
-	tableRow, err := GatherOracleSchemaTableAvgRowLength(schemaName, engine)
+
+	listColumnType, err := GatherOracleSchemaColumnTypeAndMaxLength(schemaName, engine)
 	if err != nil {
-		return "", err
+		return &ReportOverview{}, &ReportSchema{}, err
 	}
-	if tableRow != "" {
-		builder.WriteString(tableRow + "\n")
-	}
-	temporary, err := GatherOracleSchemaTemporaryTable(schemaName, engine)
+
+	listTableRow, err := GatherOracleSchemaTableAvgRowLength(schemaName, engine)
 	if err != nil {
-		return "", err
+		return &ReportOverview{}, &ReportSchema{}, err
 	}
-	if temporary != "" {
-		builder.WriteString(temporary + "\n")
+
+	listTemporary, err := GatherOracleSchemaTemporaryTable(schemaName, engine)
+	if err != nil {
+		return &ReportOverview{}, &ReportSchema{}, err
 	}
-	return builder.String(), nil
+
+	return reportOverview, &ReportSchema{
+		ListSchemaActiveSession:               listActiveSessionCount,
+		ListSchemaTableSizeData:               listSchemaTableSizeData,
+		ListSchemaTableRowsTOP:                listSchemaTableRowsTOP,
+		ListSchemaTableObjectCounts:           listSchemaObject,
+		ListSchemaTablePartitionType:          listPartitionType,
+		ListSchemaTableColumnTypeAndMaxLength: listColumnType,
+		ListSchemaTableAvgRowLength:           listTableRow,
+		ListSchemaTemporaryTableCounts:        listTemporary,
+	}, nil
 }
 
-func GatherOracleType(schemaName []string, engine *service.Engine) (string, error) {
-	var builder strings.Builder
-	indexType, err := GatherOracleSchemaIndexType(schemaName, engine)
+func GatherOracleType(schemaName []string, engine *service.Engine) (*ReportType, error) {
+
+	listIndexType, err := GatherOracleSchemaIndexType(schemaName, engine)
 	if err != nil {
-		return "", err
-	}
-	if indexType != "" {
-		builder.WriteString(indexType + "\n")
-	}
-	constraintType, err := GatherOracleConstraintType(schemaName, engine)
-	if err != nil {
-		return "", err
-	}
-	if constraintType != "" {
-		builder.WriteString(constraintType + "\n")
+		return &ReportType{}, err
 	}
 
-	codeType, err := GatherOracleSchemeCodeType(schemaName, engine)
+	listConstraintType, err := GatherOracleConstraintType(schemaName, engine)
 	if err != nil {
-		return "", err
+		return &ReportType{}, err
 	}
-	if codeType != "" {
-		builder.WriteString(codeType + "\n")
-	}
-	synonym, err := GatherOracleSchemaSynonymType(schemaName, engine)
+
+	listCodeType, err := GatherOracleSchemeCodeType(schemaName, engine)
 	if err != nil {
-		return "", err
+		return &ReportType{}, err
 	}
-	if synonym != "" {
-		builder.WriteString(synonym + "\n")
+
+	listSynonymType, err := GatherOracleSchemaSynonymType(schemaName, engine)
+	if err != nil {
+		return &ReportType{}, err
 	}
-	return builder.String(), nil
+
+	return &ReportType{
+		ListSchemaIndexType:      listIndexType,
+		ListSchemaConstraintType: listConstraintType,
+		ListSchemaCodeType:       listCodeType,
+		ListSchemaSynonymType:    listSynonymType,
+	}, nil
 }
 
-func GatherOracleCheck(schemaName []string, engine *service.Engine) (string, error) {
-	var builer strings.Builder
-	tableCounts, err := GatherOraclePartitionTableCountsCheck(schemaName, engine)
+func GatherOracleCheck(schemaName []string, engine *service.Engine) (*ReportCheck, error) {
+
+	listPartitionTableCountsCK, err := GatherOraclePartitionTableCountsCheck(schemaName, engine)
 	if err != nil {
-		return "", err
-	}
-	if tableCounts != "" {
-		builer.WriteString(tableCounts + "\n")
-	}
-	tableCounts, err = GatherOracleTableRowLengthCheck(schemaName, engine)
-	if err != nil {
-		return "", err
-	}
-	if tableCounts != "" {
-		builer.WriteString(tableCounts + "\n")
-	}
-	tableCounts, err = GatherOracleTableIndexRowLengthCheck(schemaName, engine)
-	if err != nil {
-		return "", err
-	}
-	if tableCounts != "" {
-		builer.WriteString(tableCounts + "\n")
+		return &ReportCheck{}, err
 	}
 
-	tableCounts, err = GatherOracleTableColumnCountsCheck(schemaName, engine)
+	listTableRowLengthCK, err := GatherOracleTableRowLengthCheck(schemaName, engine)
 	if err != nil {
-		return "", err
-	}
-	if tableCounts != "" {
-		builer.WriteString(tableCounts + "\n")
+		return &ReportCheck{}, err
 	}
 
-	tableCounts, err = GatherOracleTableIndexCountsCheck(schemaName, engine)
+	ListIndexRowLengthCK, err := GatherOracleTableIndexRowLengthCheck(schemaName, engine)
 	if err != nil {
-		return "", err
-	}
-	if tableCounts != "" {
-		builer.WriteString(tableCounts + "\n")
+		return &ReportCheck{}, err
 	}
 
-	tableCounts, err = GatherOracleTableNumberTypeCheck(schemaName, engine)
+	listTableColumnCountsCK, err := GatherOracleTableColumnCountsCheck(schemaName, engine)
 	if err != nil {
-		return "", err
-	}
-	if tableCounts != "" {
-		builer.WriteString(tableCounts + "\n")
+		return &ReportCheck{}, err
 	}
 
-	tableCounts, err = GatherOracleUsernameLengthCheck(schemaName, engine)
+	listTableIndexCountsCK, err := GatherOracleTableIndexCountsCheck(schemaName, engine)
 	if err != nil {
-		return "", err
-	}
-	if tableCounts != "" {
-		builer.WriteString(tableCounts + "\n")
+		return &ReportCheck{}, err
 	}
 
-	tableCounts, err = GatherOracleTableNameLengthCheck(schemaName, engine)
+	listTableNumberCK, err := GatherOracleTableNumberTypeCheck(schemaName, engine)
 	if err != nil {
-		return "", err
-	}
-	if tableCounts != "" {
-		builer.WriteString(tableCounts + "\n")
+		return &ReportCheck{}, err
 	}
 
-	tableCounts, err = GatherOracleColumnNameLengthCheck(schemaName, engine)
+	listUsernameCK, err := GatherOracleUsernameLengthCheck(schemaName, engine)
 	if err != nil {
-		return "", err
-	}
-	if tableCounts != "" {
-		builer.WriteString(tableCounts + "\n")
+		return &ReportCheck{}, err
 	}
 
-	tableCounts, err = GatherOracleIndexNameLengthCheck(schemaName, engine)
+	listTableNameLengthCK, err := GatherOracleTableNameLengthCheck(schemaName, engine)
 	if err != nil {
-		return "", err
-	}
-	if tableCounts != "" {
-		builer.WriteString(tableCounts + "\n")
+		return &ReportCheck{}, err
 	}
 
-	tableCounts, err = GatherOracleViewNameLengthCheck(schemaName, engine)
+	listColumnLengthCK, err := GatherOracleColumnNameLengthCheck(schemaName, engine)
 	if err != nil {
-		return "", err
-	}
-	if tableCounts != "" {
-		builer.WriteString(tableCounts + "\n")
+		return &ReportCheck{}, err
 	}
 
-	tableCounts, err = GatherOracleSequenceNameLengthCheck(schemaName, engine)
+	listIndexLengthCK, err := GatherOracleIndexNameLengthCheck(schemaName, engine)
 	if err != nil {
-		return "", err
-	}
-	if tableCounts != "" {
-		builer.WriteString(tableCounts + "\n")
+		return &ReportCheck{}, err
 	}
 
-	return builer.String(), err
+	listViewLengthCK, err := GatherOracleViewNameLengthCheck(schemaName, engine)
+	if err != nil {
+		return &ReportCheck{}, err
+	}
+
+	listSeqLength, err := GatherOracleSequenceNameLengthCheck(schemaName, engine)
+	if err != nil {
+		return &ReportCheck{}, err
+	}
+
+	return &ReportCheck{
+		ListSchemaPartitionTableCountsCheck:  listPartitionTableCountsCK,
+		ListSchemaTableRowLengthCheck:        listTableRowLengthCK,
+		ListSchemaTableIndexRowLengthCheck:   ListIndexRowLengthCK,
+		ListSchemaTableColumnCountsCheck:     listTableColumnCountsCK,
+		ListSchemaIndexCountsCheck:           listTableIndexCountsCK,
+		ListSchemaTableNumberTypeCheck:       listTableNumberCK,
+		ListUsernameLengthCheck:              listUsernameCK,
+		ListSchemaTableNameLengthCheck:       listTableNameLengthCK,
+		ListSchemaTableColumnNameLengthCheck: listColumnLengthCK,
+		ListSchemaTableIndexNameLengthCheck:  listIndexLengthCK,
+		ListSchemaViewNameLengthCheck:        listViewLengthCK,
+		ListSchemaSequenceNameLengthCheck:    listSeqLength,
+	}, err
 }

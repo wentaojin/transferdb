@@ -27,799 +27,571 @@ import (
 /*
 	Oracle Database Overview
 */
-func GatherOracleDBOverview(engine *service.Engine) (string, error) {
+func GatherOracleDBOverview(engine *service.Engine, reportName, reportUser string) (*ReportOverview, error) {
 	dbName, platformID, platformName, err := engine.GetOracleDBName()
 	if err != nil {
-		return "", err
+		return &ReportOverview{}, err
 	}
 
 	globalName, err := engine.GetOracleGlobalName()
 	if err != nil {
-		return "", err
+		return &ReportOverview{}, err
 	}
 	dbBlockSize, clusterDatabase, CLusterDatabaseInstance, characterSet, err := engine.GetOracleParameters()
 	if err != nil {
-		return "", err
+		return &ReportOverview{}, err
 	}
 
 	instanceRes, err := engine.GetOracleInstance()
 	if err != nil {
-		return "", err
+		return &ReportOverview{}, err
 	}
 
 	dataSize, err := engine.GetOracleDataTotal()
 	if err != nil {
-		return "", err
+		return &ReportOverview{}, err
 	}
 
 	hostCPU, err := engine.GetOracleNumCPU()
 	if err != nil {
-		return "", err
+		return &ReportOverview{}, err
 	}
 	memorySize, err := engine.GetOracleMemoryGB()
 	if err != nil {
-		return "", err
+		return &ReportOverview{}, err
 	}
-	t := table.NewWriter()
-	t.SetStyle(table.StyleLight)
-	t.Style().Title.Align = text.AlignCenter
-	t.Style().Options.SeparateRows = true
-	t.AppendHeader(table.Row{"Database Overview", "Database Overview"}, table.RowConfig{AutoMerge: true})
 
-	t.AppendRows([]table.Row{
-		{"Host Name", instanceRes[0]["HOST_NAME"]},
-		{"Platform Name/ID", fmt.Sprintf("%s/%s", platformName, platformID)},
-		{"Database Name", dbName},
-		{"Global Database Name", globalName},
-		{"Clustered Database", clusterDatabase},
-		{"Clustered Database Instances", CLusterDatabaseInstance},
-		{"Instance Name", instanceRes[0]["INSTANCE_NAME"]},
-		{"Instance Number", instanceRes[0]["INSTANCE_NUMBER"]},
-		{"Thread Number", instanceRes[0]["THREAD_NUMBER"]},
-		{"Database Block Size(KB)", dbBlockSize},
-		{"Database Total Used Size(GB)", dataSize},
-		{"Host Cpus(single)", hostCPU},
-		{"Host Mem(GB)", memorySize},
-		{"Character Set", characterSet},
-	})
-
-	t.SetCaption("The database overview.\n")
-
-	return t.Render(), nil
+	return &ReportOverview{
+		ReportName:        reportName,
+		ReportUser:        reportUser,
+		HostName:          instanceRes[0]["HOST_NAME"],
+		PlatformName:      fmt.Sprintf("%s/%s", platformName, platformID),
+		DBName:            dbName,
+		GlobalDBName:      globalName,
+		ClusterDB:         clusterDatabase,
+		ClusterDBInstance: CLusterDatabaseInstance,
+		InstanceName:      instanceRes[0]["INSTANCE_NAME"],
+		InstanceNumber:    instanceRes[0]["INSTANCE_NUMBER"],
+		ThreadNumber:      instanceRes[0]["THREAD_NUMBER"],
+		BlockSize:         dbBlockSize,
+		TotalUsedSize:     dataSize,
+		HostCPUS:          hostCPU,
+		HostMem:           memorySize,
+		CharacterSet:      characterSet}, nil
 }
 
-func GatherOracleSchemaOverview(schemaName []string, engine *service.Engine) (string, error) {
+func GatherOracleSchemaOverview(schemaName []string, engine *service.Engine) ([]ListSchemaTableSizeData, error) {
 	overview, err := engine.GetOracleSchemaOverview(schemaName)
 	if err != nil {
-		return "", err
+		return []ListSchemaTableSizeData{}, err
 	}
 
 	if len(overview) == 0 {
-		return "", err
+		return []ListSchemaTableSizeData{}, err
 	}
-	t := table.NewWriter()
-	t.SetStyle(table.StyleLight)
-	t.Style().Title.Align = text.AlignCenter
-	t.Style().Options.SeparateRows = true
-	t.AppendHeader(table.Row{"Schema Overview", "Schema Overview", "Schema Overview", "Schema Overview", "Schema Overview", "Schema Overview"}, table.RowConfig{AutoMerge: true})
 
-	t.AppendHeader(table.Row{"Schema", "Table Size/GB", "Index Size/GB", "Lob Table Size/GB", "Lob Index Size/GB", "ALL Tables ROWS"})
-
-	var tableRows []table.Row
+	var listData []ListSchemaTableSizeData
 	for _, ow := range overview {
-		tableRows = append(tableRows, table.Row{
-			ow["SCHEMA"], ow["TABLE"], ow["INDEX"], ow["LOBTABLE"], ow["LOBINDEX"], ow["ROWCOUNT"],
+		listData = append(listData, ListSchemaTableSizeData{
+			Schema:        ow["SCHEMA"],
+			TableSize:     ow["TABLE"],
+			IndexSize:     ow["INDEX"],
+			LobTableSize:  ow["LOBTABLE"],
+			LobIndexSize:  ow["LOBINDEX"],
+			AllTablesRows: ow["ROWCOUNT"],
 		})
 	}
-	t.AppendRows(tableRows)
 
-	t.SetCaption("The database schema table/partition/subpartition size overview.\n")
-
-	return t.Render(), nil
+	return listData, nil
 }
 
-func GatherOracleSchemaTableRowsTOP(schemaName []string, engine *service.Engine) (string, error) {
+func GatherOracleMaxActiveSessionCount(engine *service.Engine) ([]ListSchemaActiveSession, error) {
+	listActiveSession, err := engine.GetOracleMaxActiveSessionCount()
+	if err != nil {
+		return []ListSchemaActiveSession{}, err
+	}
+
+	if len(listActiveSession) == 0 {
+		return []ListSchemaActiveSession{}, err
+	}
+
+	var listData []ListSchemaActiveSession
+	for _, ow := range listActiveSession {
+		listData = append(listData, ListSchemaActiveSession{
+			Rownum:         ow["ROWNUM"],
+			DBID:           ow["DBID"],
+			InstanceNumber: ow["INSTANCE_NUMBER"],
+			SampleID:       ow["SAMPLE_ID"],
+			SampleTime:     ow["SAMPLE_TIME"],
+			SessionCounts:  ow["SESSION_COUNT"],
+		})
+	}
+
+	return listData, nil
+}
+
+func GatherOracleSchemaTableRowsTOP(schemaName []string, engine *service.Engine) ([]ListSchemaTableRowsTOP, error) {
 	overview, err := engine.GetOracleSchemaTableRowsTOP(schemaName)
 	if err != nil {
-		return "", nil
+		return []ListSchemaTableRowsTOP{}, err
 	}
 	if len(overview) == 0 {
-		return "", err
+		return []ListSchemaTableRowsTOP{}, err
 	}
 
-	t := table.NewWriter()
-	t.SetStyle(table.StyleLight)
-	t.Style().Title.Align = text.AlignCenter
-	t.Style().Options.SeparateRows = true
-	t.AppendHeader(table.Row{"Table TOP 10", "Table TOP 10", "Table TOP 10", "Table TOP 10"}, table.RowConfig{AutoMerge: true})
-
-	t.AppendHeader(table.Row{"Schema", "Table NAME", "Table Type", "Table Size/GB"})
-
-	var tableRows []table.Row
+	var listData []ListSchemaTableRowsTOP
 	for _, ow := range overview {
-		tableRows = append(tableRows, table.Row{
-			ow["SCHEMA"], ow["SEGMENT_NAME"], ow["SEGMENT_TYPE"], ow["TABLE_SIZE"],
+		listData = append(listData, ListSchemaTableRowsTOP{
+			Schema:    ow["SCHEMA"],
+			TableName: ow["SEGMENT_NAME"],
+			TableType: ow["SEGMENT_TYPE"],
+			TableSize: ow["TABLE_SIZE"],
 		})
 	}
-	t.AppendRows(tableRows)
 
-	t.SetColumnConfigs([]table.ColumnConfig{
-		{Number: 1, AutoMerge: true},
-	})
-
-	t.SetCaption("The schema table data size top 10 overview.\n")
-
-	return t.Render(), nil
+	return listData, nil
 }
 
-func GatherOracleSchemaObjectOverview(schemaName []string, engine *service.Engine) (string, error) {
+func GatherOracleSchemaObjectOverview(schemaName []string, engine *service.Engine) ([]ListSchemaTableObjectCounts, error) {
 	overview, err := engine.GetOracleObjectTypeOverview(schemaName)
 	if err != nil {
-		return "", nil
+		return []ListSchemaTableObjectCounts{}, err
 	}
 
 	if len(overview) == 0 {
-		return "", err
+		return []ListSchemaTableObjectCounts{}, err
 	}
 
-	t := table.NewWriter()
-	t.SetStyle(table.StyleLight)
-	t.Style().Title.Align = text.AlignCenter
-	t.Style().Options.SeparateRows = true
-	t.AppendHeader(table.Row{"Object Overview", "Object Overview", "Object Overview"}, table.RowConfig{AutoMerge: true})
-
-	t.AppendHeader(table.Row{"Schema", "Object_Type", "Counts"})
-
-	var tableRows []table.Row
+	var listData []ListSchemaTableObjectCounts
 	for _, ow := range overview {
-		tableRows = append(tableRows, table.Row{
-			ow["OWNER"], ow["OBJECT_TYPE"], ow["COUNT"],
+		listData = append(listData, ListSchemaTableObjectCounts{
+			Schema:     ow["OWNER"],
+			ObjectType: ow["OBJECT_TYPE"],
+			Counts:     ow["COUNT"],
 		})
+
 	}
-	t.AppendRows(tableRows)
 
-	t.SetColumnConfigs([]table.ColumnConfig{
-		{Number: 1, AutoMerge: true},
-	})
-
-	t.SetCaption("The database schema object type overview.\n")
-
-	return t.Render(), nil
+	return listData, nil
 
 }
 
-func GatherOracleSchemaPartitionType(schemaName []string, engine *service.Engine) (string, error) {
+func GatherOracleSchemaPartitionType(schemaName []string, engine *service.Engine) ([]ListSchemaTablePartitionType, error) {
 	partitionInfo, err := engine.GetOraclePartitionObjectType(schemaName)
 	if err != nil {
-		return "", err
+		return []ListSchemaTablePartitionType{}, err
 	}
 
 	if len(partitionInfo) == 0 {
-		return "", err
+		return []ListSchemaTablePartitionType{}, err
 	}
 
-	t := table.NewWriter()
-	t.SetStyle(table.StyleLight)
-	t.Style().Title.Align = text.AlignCenter
-	t.Style().Options.SeparateRows = true
-	t.AppendHeader(table.Row{"Partition Type", "Partition Type", "Partition Type", "Partition Type"}, table.RowConfig{AutoMerge: true})
-
-	t.AppendHeader(table.Row{"Schema", "Table Name", "Partition Type", "SubPartition Type"})
-
-	var tableRows []table.Row
+	var listData []ListSchemaTablePartitionType
 	for _, ow := range partitionInfo {
-		tableRows = append(tableRows, table.Row{
-			ow["OWNER"], ow["TABLE_NAME"], ow["PARTITIONING_TYPE"], ow["SUBPARTITIONING_TYPE"],
+		listData = append(listData, ListSchemaTablePartitionType{
+			Schema:           ow["OWNER"],
+			TableName:        ow["TABLE_NAME"],
+			PartitionType:    ow["PARTITIONING_TYPE"],
+			SubPartitionType: ow["SUBPARTITIONING_TYPE"],
 		})
+
 	}
-	t.AppendRows(tableRows)
 
-	t.SetColumnConfigs([]table.ColumnConfig{
-		{Number: 1, AutoMerge: true},
-	})
-
-	t.SetCaption("The database schema partition type overview.\n")
-
-	return t.Render(), nil
+	return listData, nil
 }
 
-func GatherOracleSchemaColumnTypeAndMaxLength(schemaName []string, engine *service.Engine) (string, error) {
+func GatherOracleSchemaColumnTypeAndMaxLength(schemaName []string, engine *service.Engine) ([]ListSchemaTableColumnTypeAndMaxLength, error) {
 	columnInfo, err := engine.GetOracleColumnTypeAndMaxLength(schemaName)
 	if err != nil {
-		return "", err
+		return []ListSchemaTableColumnTypeAndMaxLength{}, err
 	}
 
 	if len(columnInfo) == 0 {
-		return "", err
+		return []ListSchemaTableColumnTypeAndMaxLength{}, err
 	}
 
-	t := table.NewWriter()
-	t.SetStyle(table.StyleLight)
-	t.Style().Title.Align = text.AlignCenter
-	t.Style().Options.SeparateRows = true
-	t.AppendHeader(table.Row{"Column Object Type", "Column Object Type", "Column Object Type", "Column Object Type"}, table.RowConfig{AutoMerge: true})
-
-	t.AppendHeader(table.Row{"Schema", "Data Type", "Counts", "Max Data Length"})
-
-	var tableRows []table.Row
+	var listData []ListSchemaTableColumnTypeAndMaxLength
 	for _, ow := range columnInfo {
-		tableRows = append(tableRows, table.Row{
-			ow["OWNER"], ow["DATA_TYPE"], ow["COUNT"], ow["MAX_DATA_LENGTH"],
+		listData = append(listData, ListSchemaTableColumnTypeAndMaxLength{
+			Schema:        ow["OWNER"],
+			DataType:      ow["DATA_TYPE"],
+			Counts:        ow["COUNT"],
+			MaxDataLength: ow["MAX_DATA_LENGTH"],
 		})
 	}
-	t.AppendRows(tableRows)
 
-	t.SetColumnConfigs([]table.ColumnConfig{
-		{Number: 1, AutoMerge: true},
-	})
-
-	t.SetCaption("The database schema column type and max data length overview.\n")
-
-	return t.Render(), nil
+	return listData, nil
 }
 
-func GatherOracleSchemaTableAvgRowLength(schemaName []string, engine *service.Engine) (string, error) {
+func GatherOracleSchemaTableAvgRowLength(schemaName []string, engine *service.Engine) ([]ListSchemaTableAvgRowLength, error) {
 	synonymInfo, err := engine.GetOracleAvgRowLength(schemaName)
 	if err != nil {
-		return "", err
+		return []ListSchemaTableAvgRowLength{}, err
 	}
 
 	if len(synonymInfo) == 0 {
-		return "", err
+		return []ListSchemaTableAvgRowLength{}, err
 	}
 
-	t := table.NewWriter()
-	t.SetStyle(table.StyleLight)
-	t.Style().Title.Align = text.AlignCenter
-	t.Style().Options.SeparateRows = true
-	t.AppendHeader(table.Row{"Avg Row Length TOP 10/By Statistics", "Avg Row Length TOP 10/By Statistics", "Avg Row Length TOP 10 /By Statistics"}, table.RowConfig{AutoMerge: true})
-
-	t.AppendHeader(table.Row{"Schema", "Table Name", "Avg Row Length/Bytes"})
-
-	var tableRows []table.Row
+	var listData []ListSchemaTableAvgRowLength
 	for _, ow := range synonymInfo {
-		tableRows = append(tableRows, table.Row{
-			ow["OWNER"], ow["TABLE_NAME"], ow["AVG_ROW_LEN"],
+		listData = append(listData, ListSchemaTableAvgRowLength{
+			Schema:       ow["OWNER"],
+			TableName:    ow["TABLE_NAME"],
+			AvgRowLength: ow["AVG_ROW_LEN"],
 		})
 	}
-	t.AppendRows(tableRows)
 
-	t.SetColumnConfigs([]table.ColumnConfig{
-		{Number: 1, AutoMerge: true},
-	})
-
-	t.SetCaption("The database schema table avg row length top 10 overview.\n")
-
-	return t.Render(), nil
+	return listData, nil
 }
 
-func GatherOracleSchemaTemporaryTable(schemaName []string, engine *service.Engine) (string, error) {
+func GatherOracleSchemaTemporaryTable(schemaName []string, engine *service.Engine) ([]ListSchemaTemporaryTableCounts, error) {
 	synonymInfo, err := engine.GetOracleTemporaryTable(schemaName)
 	if err != nil {
-		return "", err
+		return []ListSchemaTemporaryTableCounts{}, err
 	}
 
 	if len(synonymInfo) == 0 {
-		return "", err
+		return []ListSchemaTemporaryTableCounts{}, err
 	}
-	t := table.NewWriter()
-	t.SetStyle(table.StyleLight)
-	t.Style().Title.Align = text.AlignCenter
-	t.Style().Options.SeparateRows = true
-	t.AppendHeader(table.Row{"Temporary Table", "Temporary Table"}, table.RowConfig{AutoMerge: true})
 
-	t.AppendHeader(table.Row{"Schema", "COUNT"})
-
-	var tableRows []table.Row
+	var listData []ListSchemaTemporaryTableCounts
 	for _, ow := range synonymInfo {
-		tableRows = append(tableRows, table.Row{
-			ow["OWNER"], ow["COUNT"],
+		listData = append(listData, ListSchemaTemporaryTableCounts{
+			Schema: ow["OWNER"],
+			Counts: ow["COUNT"],
 		})
 	}
-	t.AppendRows(tableRows)
 
-	t.SetColumnConfigs([]table.ColumnConfig{
-		{Number: 1, AutoMerge: true},
-	})
-
-	t.SetCaption("The database schema temporary table counts overview.\n")
-
-	return t.Render(), nil
+	return listData, nil
 }
 
 /*
 	Oracle Database Type
 */
-func GatherOracleSchemaIndexType(schemaName []string, engine *service.Engine) (string, error) {
+func GatherOracleSchemaIndexType(schemaName []string, engine *service.Engine) ([]ListSchemaIndexType, error) {
 	columnInfo, err := engine.GetOracleIndexType(schemaName)
 	if err != nil {
-		return "", err
+		return []ListSchemaIndexType{}, err
 	}
 
 	if len(columnInfo) == 0 {
-		return "", err
+		return []ListSchemaIndexType{}, err
 	}
 
-	t := table.NewWriter()
-	t.SetStyle(table.StyleLight)
-	t.Style().Title.Align = text.AlignCenter
-	t.Style().Options.SeparateRows = true
-	t.AppendHeader(table.Row{"Index Object Type", "Index Object Type", "Index Object Type"}, table.RowConfig{AutoMerge: true})
-
-	t.AppendHeader(table.Row{"Schema", "Index Type", "Counts"})
-
-	var tableRows []table.Row
+	var listData []ListSchemaIndexType
 	for _, ow := range columnInfo {
-		tableRows = append(tableRows, table.Row{
-			ow["OWNER"], ow["INDEX_TYPE"], ow["COUNT"],
+		listData = append(listData, ListSchemaIndexType{
+			Schema:    ow["OWNER"],
+			IndexType: ow["INDEX_TYPE"],
+			Counts:    ow["COUNT"],
 		})
 	}
-	t.AppendRows(tableRows)
 
-	t.SetColumnConfigs([]table.ColumnConfig{
-		{Number: 1, AutoMerge: true},
-	})
-
-	t.SetCaption("The database schema index type and counts overview.\n")
-
-	return t.Render(), nil
+	return listData, nil
 }
 
-func GatherOracleConstraintType(schemaName []string, engine *service.Engine) (string, error) {
+func GatherOracleConstraintType(schemaName []string, engine *service.Engine) ([]ListSchemaConstraintType, error) {
 	columnInfo, err := engine.GetOracleConstraintType(schemaName)
 	if err != nil {
-		return "", err
+		return []ListSchemaConstraintType{}, err
 	}
 
 	if len(columnInfo) == 0 {
-		return "", err
+		return []ListSchemaConstraintType{}, err
 	}
 
-	t := table.NewWriter()
-	t.SetStyle(table.StyleLight)
-	t.Style().Title.Align = text.AlignCenter
-	t.Style().Options.SeparateRows = true
-	t.AppendHeader(table.Row{"Constraint Object Type", "Constraint Object Type", "Constraint Object Type"}, table.RowConfig{AutoMerge: true})
-
-	t.AppendHeader(table.Row{"Schema", "Constraint Type", "Counts"})
-
-	var tableRows []table.Row
+	var listData []ListSchemaConstraintType
 	for _, ow := range columnInfo {
-		tableRows = append(tableRows, table.Row{
-			ow["OWNER"], ow["CONSTRAINT_TYPE"], ow["COUNT"],
+		listData = append(listData, ListSchemaConstraintType{
+			Schema:         ow["OWNER"],
+			ConstraintType: ow["CONSTRAINT_TYPE"],
+			Counts:         ow["COUNT"],
 		})
 	}
-	t.AppendRows(tableRows)
 
-	t.SetColumnConfigs([]table.ColumnConfig{
-		{Number: 1, AutoMerge: true},
-	})
-
-	t.SetCaption("The database schema constraint type and counts overview.\n")
-
-	return t.Render(), nil
+	return listData, nil
 }
 
-func GatherOracleSchemeCodeType(schemaName []string, engine *service.Engine) (string, error) {
+func GatherOracleSchemeCodeType(schemaName []string, engine *service.Engine) ([]ListSchemaCodeType, error) {
 	synonymInfo, err := engine.GetOracleCodeObject(schemaName)
 	if err != nil {
-		return "", err
+		return []ListSchemaCodeType{}, err
 	}
 
 	if len(synonymInfo) == 0 {
-		return "", err
+		return []ListSchemaCodeType{}, err
 	}
 
-	t := table.NewWriter()
-	t.SetStyle(table.StyleLight)
-	t.Style().Title.Align = text.AlignCenter
-	t.Style().Options.SeparateRows = true
-	t.AppendHeader(table.Row{"Code Object Type", "Code Object Type", "Code Object Type", "Code Object Type"}, table.RowConfig{AutoMerge: true})
-
-	t.AppendHeader(table.Row{"Schema", "NAME", "TYPE", "Code Total LINES"})
-
-	var tableRows []table.Row
+	var listData []ListSchemaCodeType
 	for _, ow := range synonymInfo {
-		tableRows = append(tableRows, table.Row{
-			ow["OWNER"], ow["NAME"], ow["TYPE"], ow["LINES"],
+		listData = append(listData, ListSchemaCodeType{
+			Schema:   ow["OWNER"],
+			CodeName: ow["NAME"],
+			CodeType: ow["TYPE"],
+			Counts:   ow["LINES"],
 		})
 	}
-	t.AppendRows(tableRows)
 
-	t.SetColumnConfigs([]table.ColumnConfig{
-		{Number: 1, AutoMerge: true},
-	})
-
-	t.SetCaption("The database schema code type and total lines overview.\n")
-
-	return t.Render(), nil
+	return listData, nil
 }
 
-func GatherOracleSchemaSynonymType(schemaName []string, engine *service.Engine) (string, error) {
+func GatherOracleSchemaSynonymType(schemaName []string, engine *service.Engine) ([]ListSchemaSynonymType, error) {
 	synonymInfo, err := engine.GetOracleSynonymObjectType(schemaName)
 	if err != nil {
-		return "", err
+		return []ListSchemaSynonymType{}, err
 	}
 
 	if len(synonymInfo) == 0 {
-		return "", err
+		return []ListSchemaSynonymType{}, err
 	}
 
-	t := table.NewWriter()
-	t.SetStyle(table.StyleLight)
-	t.Style().Title.Align = text.AlignCenter
-	t.Style().Options.SeparateRows = true
-	t.AppendHeader(table.Row{"Synonym Object Type", "Synonym Object Type", "Synonym Object Type"}, table.RowConfig{AutoMerge: true})
-
-	t.AppendHeader(table.Row{"Owner", "Table_Owner", "Count"})
-
-	var tableRows []table.Row
+	var listData []ListSchemaSynonymType
 	for _, ow := range synonymInfo {
-		tableRows = append(tableRows, table.Row{
-			ow["OWNER"], ow["TABLE_OWNER"], ow["COUNT"],
+		listData = append(listData, ListSchemaSynonymType{
+			Schema:     ow["OWNER"],
+			TableOwner: ow["TABLE_OWNER"],
+			Counts:     ow["COUNT"],
 		})
+
 	}
-	t.AppendRows(tableRows)
 
-	t.SetColumnConfigs([]table.ColumnConfig{
-		{Number: 1, AutoMerge: true},
-	})
-
-	t.SetCaption("The database schema synonym type and counts overview.\n")
-
-	return t.Render(), nil
+	return listData, nil
 }
 
 /*
 	Oracle Database Check
 */
-func GatherOraclePartitionTableCountsCheck(schemaName []string, engine *service.Engine) (string, error) {
+func GatherOraclePartitionTableCountsCheck(schemaName []string, engine *service.Engine) ([]ListSchemaPartitionTableCountsCheck, error) {
 	synonymInfo, err := engine.GetOraclePartitionTableOver1024(schemaName)
 	if err != nil {
-		return "", err
+		return []ListSchemaPartitionTableCountsCheck{}, err
 	}
 
 	if len(synonymInfo) == 0 {
-		return "", err
+		return []ListSchemaPartitionTableCountsCheck{}, err
 	}
-	t := table.NewWriter()
-	t.SetStyle(table.StyleLight)
-	t.Style().Title.Align = text.AlignCenter
-	t.Style().Options.SeparateRows = true
-	t.AppendHeader(table.Row{"Partition Table Over 1024", "Partition Table Over 1024", "Partition Table Over 1024"}, table.RowConfig{AutoMerge: true})
 
-	t.AppendHeader(table.Row{"Schema", "Table Name", "Partition Counts"})
-
-	var tableRows []table.Row
+	var listData []ListSchemaPartitionTableCountsCheck
 	for _, ow := range synonymInfo {
-		tableRows = append(tableRows, table.Row{
-			ow["OWNER"], ow["TABLE_NAME"], ow["PARTITION_COUNT"],
+		listData = append(listData, ListSchemaPartitionTableCountsCheck{
+			Schema:          ow["OWNER"],
+			TableName:       ow["TABLE_NAME"],
+			PartitionCounts: ow["PARTITION_COUNT"],
 		})
 	}
-	t.AppendRows(tableRows)
 
-	t.SetColumnConfigs([]table.ColumnConfig{
-		{Number: 1, AutoMerge: true},
-	})
-
-	t.SetCaption("The database schema partition table counts overview.\n")
-
-	return t.Render(), nil
+	return listData, nil
 }
 
-func GatherOracleTableRowLengthCheck(schemaName []string, engine *service.Engine) (string, error) {
+func GatherOracleTableRowLengthCheck(schemaName []string, engine *service.Engine) ([]ListSchemaTableRowLengthCheck, error) {
 	synonymInfo, err := engine.GetOracleTableRowLengthOver6M(schemaName)
 	if err != nil {
-		return "", err
+		return []ListSchemaTableRowLengthCheck{}, err
 	}
 
 	if len(synonymInfo) == 0 {
-		return "", err
+		return []ListSchemaTableRowLengthCheck{}, err
 	}
-	t := table.NewWriter()
-	t.SetStyle(table.StyleLight)
-	t.Style().Title.Align = text.AlignCenter
-	t.Style().Options.SeparateRows = true
-	t.AppendHeader(table.Row{"Table Row Length Over 6M", "Table Row Length Over 6M", "Table Row Length Over 6M"}, table.RowConfig{AutoMerge: true})
 
-	t.AppendHeader(table.Row{"Schema", "Table Name", "Avg Row Length/Bytes"})
-
-	var tableRows []table.Row
+	var listData []ListSchemaTableRowLengthCheck
 	for _, ow := range synonymInfo {
-		tableRows = append(tableRows, table.Row{
-			ow["OWNER"], ow["TABLE_NAME"], ow["AVG_ROW_LEN"],
+		listData = append(listData, ListSchemaTableRowLengthCheck{
+			Schema:       ow["OWNER"],
+			TableName:    ow["TABLE_NAME"],
+			AvgRowLength: ow["AVG_ROW_LEN"],
 		})
 	}
-	t.AppendRows(tableRows)
 
-	t.SetColumnConfigs([]table.ColumnConfig{
-		{Number: 1, AutoMerge: true},
-	})
-
-	t.SetCaption("The database schema table avg row length over 6M overview.\n")
-
-	return t.Render(), nil
+	return listData, nil
 }
 
-func GatherOracleTableIndexRowLengthCheck(schemaName []string, engine *service.Engine) (string, error) {
+func GatherOracleTableIndexRowLengthCheck(schemaName []string, engine *service.Engine) ([]ListSchemaTableIndexRowLengthCheck, error) {
 	synonymInfo, err := engine.GetOracleTableIndexLengthOver3072(schemaName)
 	if err != nil {
-		return "", err
+		return []ListSchemaTableIndexRowLengthCheck{}, err
 	}
 
 	if len(synonymInfo) == 0 {
-		return "", err
+		return []ListSchemaTableIndexRowLengthCheck{}, err
 	}
 
-	t := table.NewWriter()
-	t.SetStyle(table.StyleLight)
-	t.Style().Title.Align = text.AlignCenter
-	t.Style().Options.SeparateRows = true
-	t.AppendHeader(table.Row{"Index Column Length Over 3072", "Index Column Length Over 3072", "Index Column Length Over 3072", "Index Column Length Over 3072"}, table.RowConfig{AutoMerge: true})
-
-	t.AppendHeader(table.Row{"Schema", "Table Name", "Index Name", "Column Length"})
-
-	var tableRows []table.Row
+	var listData []ListSchemaTableIndexRowLengthCheck
 	for _, ow := range synonymInfo {
-		tableRows = append(tableRows, table.Row{
-			ow["INDEX_OWNER"], ow["TABLE_NAME"], ow["INDEX_NAME"], ow["COUNT"],
+		listData = append(listData, ListSchemaTableIndexRowLengthCheck{
+			Schema:       ow["INDEX_OWNER"],
+			TableName:    ow["TABLE_NAME"],
+			IndexName:    ow["INDEX_NAME"],
+			ColumnLength: ow["COUNT"],
 		})
 	}
-	t.AppendRows(tableRows)
 
-	t.SetColumnConfigs([]table.ColumnConfig{
-		{Number: 1, AutoMerge: true},
-	})
-
-	t.SetCaption("The database schema table index column length over 3072 overview.\n")
-
-	return t.Render(), nil
+	return listData, nil
 }
 
-func GatherOracleTableColumnCountsCheck(schemaName []string, engine *service.Engine) (string, error) {
+func GatherOracleTableColumnCountsCheck(schemaName []string, engine *service.Engine) ([]ListSchemaTableAndIndexCountsCheck, error) {
 	synonymInfo, err := engine.GetOracleTableColumnCountsOver512(schemaName)
 	if err != nil {
-		return "", err
+		return []ListSchemaTableAndIndexCountsCheck{}, err
 	}
 
 	if len(synonymInfo) == 0 {
-		return "", err
+		return []ListSchemaTableAndIndexCountsCheck{}, err
 	}
-	t := table.NewWriter()
-	t.SetStyle(table.StyleLight)
-	t.Style().Title.Align = text.AlignCenter
-	t.Style().Options.SeparateRows = true
-	t.AppendHeader(table.Row{"Table Column Counts Over 512", "Table Column Counts Over 512", "Table Column Counts Over 512"}, table.RowConfig{AutoMerge: true})
 
-	t.AppendHeader(table.Row{"Schema", "Table Name", "Counts"})
-
-	var tableRows []table.Row
+	var listData []ListSchemaTableAndIndexCountsCheck
 	for _, ow := range synonymInfo {
-		tableRows = append(tableRows, table.Row{
-			ow["OWNER"], ow["TABLE_NAME"], ow["COUNT"],
+		listData = append(listData, ListSchemaTableAndIndexCountsCheck{
+			Schema:    ow["OWNER"],
+			TableName: ow["TABLE_NAME"],
+			Counts:    ow["COUNT"],
 		})
 	}
-	t.AppendRows(tableRows)
 
-	t.SetColumnConfigs([]table.ColumnConfig{
-		{Number: 1, AutoMerge: true},
-	})
-
-	t.SetCaption("The database schema table column counts over 512 overview.\n")
-
-	return t.Render(), nil
+	return listData, nil
 }
 
-func GatherOracleTableIndexCountsCheck(schemaName []string, engine *service.Engine) (string, error) {
+func GatherOracleTableIndexCountsCheck(schemaName []string, engine *service.Engine) ([]ListSchemaTableAndIndexCountsCheck, error) {
 	synonymInfo, err := engine.GetOracleTableIndexCountsOver64(schemaName)
 	if err != nil {
-		return "", err
+		return []ListSchemaTableAndIndexCountsCheck{}, err
 	}
 
 	if len(synonymInfo) == 0 {
-		return "", err
+		return []ListSchemaTableAndIndexCountsCheck{}, err
 	}
 
-	t := table.NewWriter()
-	t.SetStyle(table.StyleLight)
-	t.Style().Title.Align = text.AlignCenter
-	t.Style().Options.SeparateRows = true
-	t.AppendHeader(table.Row{"Table Index Counts Over 64", "Table Index Counts Over 64", "Table Index Counts Over 64"}, table.RowConfig{AutoMerge: true})
-
-	t.AppendHeader(table.Row{"Schema", "Table Name", "Counts"})
-
-	var tableRows []table.Row
+	var listData []ListSchemaTableAndIndexCountsCheck
 	for _, ow := range synonymInfo {
-		tableRows = append(tableRows, table.Row{
-			ow["TABLE_OWNER"], ow["TABLE_NAME"], ow["COUNT"],
+		listData = append(listData, ListSchemaTableAndIndexCountsCheck{
+			Schema:    ow["TABLE_OWNER"],
+			TableName: ow["TABLE_NAME"],
+			Counts:    ow["COUNT"],
 		})
 	}
-	t.AppendRows(tableRows)
 
-	t.SetColumnConfigs([]table.ColumnConfig{
-		{Number: 1, AutoMerge: true},
-	})
-
-	t.SetCaption("The database schema table index counts over 64 overview.\n")
-
-	return t.Render(), nil
+	return listData, nil
 }
 
-func GatherOracleTableNumberTypeCheck(schemaName []string, engine *service.Engine) (string, error) {
+func GatherOracleTableNumberTypeCheck(schemaName []string, engine *service.Engine) ([]ListSchemaTableNumberTypeCheck, error) {
 	synonymInfo, err := engine.GetOracleTableNumberTypeCheck(schemaName)
 	if err != nil {
-		return "", err
+		return []ListSchemaTableNumberTypeCheck{}, err
 	}
 
 	if len(synonymInfo) == 0 {
-		return "", err
+		return []ListSchemaTableNumberTypeCheck{}, err
 	}
 
-	t := table.NewWriter()
-	t.SetStyle(table.StyleLight)
-	t.Style().Title.Align = text.AlignCenter
-	t.Style().Options.SeparateRows = true
-	t.AppendHeader(table.Row{"Table Number Type Check", "Table Number Type Check", "Table Number Type Check", "Table Number Type Check", "Table Number Type Check"}, table.RowConfig{AutoMerge: true})
-
-	t.AppendHeader(table.Row{"Schema", "Table Name", "Column Name", "Data Precision", "Data Scale"})
-
-	var tableRows []table.Row
+	var listData []ListSchemaTableNumberTypeCheck
 	for _, ow := range synonymInfo {
-		tableRows = append(tableRows, table.Row{
-			ow["OWNER"], ow["TABLE_NAME"], ow["COLUMN_NAME"], ow["DATA_PRECISION"], ow["DATA_SCALE"],
+		listData = append(listData, ListSchemaTableNumberTypeCheck{
+			Schema:        ow["OWNER"],
+			TableName:     ow["TABLE_NAME"],
+			ColumnName:    ow["COLUMN_NAME"],
+			DataPrecision: ow["DATA_PRECISION"],
+			DataScale:     ow["DATA_SCALE"],
 		})
 	}
-	t.AppendRows(tableRows)
 
-	t.SetColumnConfigs([]table.ColumnConfig{
-		{Number: 1, AutoMerge: true},
-	})
-	t.SetCaption("The database number type has no scale check, and the Oracle non-scale number type can store integer and floating-point numbers at the same time. The specific type of storage needs to be confirmed with the development. Stored integers can be converted to bigint, and stored floating-point numbers can be converted to the corresponding decimal type.\n")
-
-	return t.Render(), nil
+	return listData, nil
 }
 
-func GatherOracleUsernameLengthCheck(schemaName []string, engine *service.Engine) (string, error) {
+func GatherOracleUsernameLengthCheck(schemaName []string, engine *service.Engine) ([]ListUsernameLengthCheck, error) {
 	synonymInfo, err := engine.GetOracleUsernameLength(schemaName)
 	if err != nil {
-		return "", err
+		return []ListUsernameLengthCheck{}, err
 	}
 
 	if len(synonymInfo) == 0 {
-		return "", err
+		return []ListUsernameLengthCheck{}, err
 	}
-	t := table.NewWriter()
-	t.SetStyle(table.StyleLight)
-	t.Style().Title.Align = text.AlignCenter
-	t.Style().Options.SeparateRows = true
-	t.AppendHeader(table.Row{"Username Length Check", "Username Length Check", "Username Length Check"}, table.RowConfig{AutoMerge: true})
 
-	t.AppendHeader(table.Row{"Schema", "ACCOUNT_STATUS", "CREATED"})
-
-	var tableRows []table.Row
+	var listData []ListUsernameLengthCheck
 	for _, ow := range synonymInfo {
-		tableRows = append(tableRows, table.Row{
-			ow["USERNAME"], ow["ACCOUNT_STATUS"], ow["CREATED"],
+		listData = append(listData, ListUsernameLengthCheck{
+			Schema:        ow["USERNAME"],
+			AccountStatus: ow["ACCOUNT_STATUS"],
+			Created:       ow["CREATED"],
 		})
 	}
-	t.AppendRows(tableRows)
 
-	t.SetColumnConfigs([]table.ColumnConfig{
-		{Number: 1, AutoMerge: true},
-	})
-	t.SetCaption("The length of the database user name is greater than 64.\n")
-
-	return t.Render(), nil
+	return listData, nil
 }
 
-func GatherOracleTableNameLengthCheck(schemaName []string, engine *service.Engine) (string, error) {
+func GatherOracleTableNameLengthCheck(schemaName []string, engine *service.Engine) ([]ListSchemaTableNameLengthCheck, error) {
 	synonymInfo, err := engine.GetOracleTableNameLength(schemaName)
 	if err != nil {
-		return "", err
+		return []ListSchemaTableNameLengthCheck{}, err
 	}
 
 	if len(synonymInfo) == 0 {
-		return "", err
+		return []ListSchemaTableNameLengthCheck{}, err
 	}
-	t := table.NewWriter()
-	t.SetStyle(table.StyleLight)
-	t.Style().Title.Align = text.AlignCenter
-	t.Style().Options.SeparateRows = true
-	t.AppendHeader(table.Row{"Table Name Length Check", "Table Name Length Check"}, table.RowConfig{AutoMerge: true})
 
-	t.AppendHeader(table.Row{"Schema", "Table Name"})
-
-	var tableRows []table.Row
+	var listData []ListSchemaTableNameLengthCheck
 	for _, ow := range synonymInfo {
-		tableRows = append(tableRows, table.Row{
-			ow["OWNER"], ow["TABLE_NAME"],
+		listData = append(listData, ListSchemaTableNameLengthCheck{
+			Schema:    ow["OWNER"],
+			TableName: ow["TABLE_NAME"],
 		})
 	}
-	t.AppendRows(tableRows)
 
-	t.SetColumnConfigs([]table.ColumnConfig{
-		{Number: 1, AutoMerge: true},
-	})
-	t.SetCaption("The length of the database table name is greater than 64.\n")
-
-	return t.Render(), nil
+	return listData, nil
 }
 
-func GatherOracleColumnNameLengthCheck(schemaName []string, engine *service.Engine) (string, error) {
+func GatherOracleColumnNameLengthCheck(schemaName []string, engine *service.Engine) ([]ListSchemaTableColumnNameLengthCheck, error) {
 	synonymInfo, err := engine.GetOracleTableColumnNameLength(schemaName)
 	if err != nil {
-		return "", err
+		return []ListSchemaTableColumnNameLengthCheck{}, err
 	}
 
 	if len(synonymInfo) == 0 {
-		return "", err
+		return []ListSchemaTableColumnNameLengthCheck{}, err
 	}
 
-	t := table.NewWriter()
-	t.SetStyle(table.StyleLight)
-	t.Style().Title.Align = text.AlignCenter
-	t.Style().Options.SeparateRows = true
-	t.AppendHeader(table.Row{"Table Column Name Length Check", "Table Column Name Length Check"}, table.RowConfig{AutoMerge: true})
-
-	t.AppendHeader(table.Row{"Schema", "Table Name", "Column Name"})
-
-	var tableRows []table.Row
+	var listData []ListSchemaTableColumnNameLengthCheck
 	for _, ow := range synonymInfo {
-		tableRows = append(tableRows, table.Row{
-			ow["OWNER"], ow["TABLE_NAME"], ow["COLUMN_NAME"],
+		listData = append(listData, ListSchemaTableColumnNameLengthCheck{
+			Schema:     ow["OWNER"],
+			TableName:  ow["TABLE_NAME"],
+			ColumnName: ow["COLUMN_NAME"],
 		})
 	}
-	t.AppendRows(tableRows)
 
-	t.SetColumnConfigs([]table.ColumnConfig{
-		{Number: 1, AutoMerge: true},
-	})
-	t.SetCaption("The length of the database table column name is greater than 64.\n")
-
-	return t.Render(), nil
+	return listData, nil
 }
 
-func GatherOracleIndexNameLengthCheck(schemaName []string, engine *service.Engine) (string, error) {
+func GatherOracleIndexNameLengthCheck(schemaName []string, engine *service.Engine) ([]ListSchemaTableIndexNameLengthCheck, error) {
 	synonymInfo, err := engine.GetOracleTableIndexNameLength(schemaName)
 	if err != nil {
-		return "", err
+		return []ListSchemaTableIndexNameLengthCheck{}, err
 	}
 
 	if len(synonymInfo) == 0 {
-		return "", err
+		return []ListSchemaTableIndexNameLengthCheck{}, err
 	}
-	t := table.NewWriter()
-	t.SetStyle(table.StyleLight)
-	t.Style().Title.Align = text.AlignCenter
-	t.Style().Options.SeparateRows = true
-	t.AppendHeader(table.Row{"Table Index Name Length Check", "Table Index Name Length Check", "Table Index Name Length Check"}, table.RowConfig{AutoMerge: true})
 
-	t.AppendHeader(table.Row{"Schema", "Table Name", "Index Name"})
-
-	var tableRows []table.Row
+	var listData []ListSchemaTableIndexNameLengthCheck
 	for _, ow := range synonymInfo {
-		tableRows = append(tableRows, table.Row{
-			ow["INDEX_OWNER"], ow["TABLE_NAME"], ow["INDEX_NAME"],
+		listData = append(listData, ListSchemaTableIndexNameLengthCheck{
+			Schema:    ow["INDEX_OWNER"],
+			TableName: ow["TABLE_NAME"],
+			IndexName: ow["INDEX_NAME"],
 		})
 	}
-	t.AppendRows(tableRows)
 
-	t.SetColumnConfigs([]table.ColumnConfig{
-		{Number: 1, AutoMerge: true},
-	})
-	t.SetCaption("The length of the database table index name is greater than 64.\n")
-
-	return t.Render(), nil
+	return listData, nil
 }
 
-func GatherOracleViewNameLengthCheck(schemaName []string, engine *service.Engine) (string, error) {
+func GatherOracleViewNameLengthCheck(schemaName []string, engine *service.Engine) ([]ListSchemaViewNameLengthCheck, error) {
 	synonymInfo, err := engine.GetOracleTableViewNameLength(schemaName)
 	if err != nil {
-		return "", err
+		return []ListSchemaViewNameLengthCheck{}, err
 	}
 
 	if len(synonymInfo) == 0 {
-		return "", err
+		return []ListSchemaViewNameLengthCheck{}, err
 	}
 	t := table.NewWriter()
 	t.SetStyle(table.StyleLight)
@@ -829,51 +601,36 @@ func GatherOracleViewNameLengthCheck(schemaName []string, engine *service.Engine
 
 	t.AppendHeader(table.Row{"Schema", "View Name", "Read Only"})
 
-	var tableRows []table.Row
+	var listData []ListSchemaViewNameLengthCheck
 	for _, ow := range synonymInfo {
-		tableRows = append(tableRows, table.Row{
-			ow["OWNER"], ow["VIEW_NAME"], ow["READ_ONLY"],
+		listData = append(listData, ListSchemaViewNameLengthCheck{
+			Schema:   ow["OWNER"],
+			ViewName: ow["VIEW_NAME"],
+			ReadOnly: ow["READ_ONLY"],
 		})
 	}
-	t.AppendRows(tableRows)
 
-	t.SetColumnConfigs([]table.ColumnConfig{
-		{Number: 1, AutoMerge: true},
-	})
-	t.SetCaption("The length of the database table view name is greater than 64.\n")
-
-	return t.Render(), nil
+	return listData, nil
 }
 
-func GatherOracleSequenceNameLengthCheck(schemaName []string, engine *service.Engine) (string, error) {
+func GatherOracleSequenceNameLengthCheck(schemaName []string, engine *service.Engine) ([]ListSchemaSequenceNameLengthCheck, error) {
 	synonymInfo, err := engine.GetOracleTableSequenceNameLength(schemaName)
 	if err != nil {
-		return "", err
+		return []ListSchemaSequenceNameLengthCheck{}, err
 	}
 
 	if len(synonymInfo) == 0 {
-		return "", err
+		return []ListSchemaSequenceNameLengthCheck{}, err
 	}
-	t := table.NewWriter()
-	t.SetStyle(table.StyleLight)
-	t.Style().Title.Align = text.AlignCenter
-	t.Style().Options.SeparateRows = true
-	t.AppendHeader(table.Row{"Table Sequence Name Length Check", "Table Sequence Name Length Check", "Table Sequence Name Length Check"}, table.RowConfig{AutoMerge: true})
 
-	t.AppendHeader(table.Row{"Schema", "Sequence Name", "Order Flag"})
-
-	var tableRows []table.Row
+	var listData []ListSchemaSequenceNameLengthCheck
 	for _, ow := range synonymInfo {
-		tableRows = append(tableRows, table.Row{
-			ow["SEQUENCE_OWNER"], ow["SEQUENCE_NAME"], ow["ORDER_FLAG"],
+		listData = append(listData, ListSchemaSequenceNameLengthCheck{
+			Schema:       ow["SEQUENCE_OWNER"],
+			SequenceName: ow["SEQUENCE_NAME"],
+			OrderFlag:    ow["ORDER_FLAG"],
 		})
 	}
-	t.AppendRows(tableRows)
 
-	t.SetColumnConfigs([]table.ColumnConfig{
-		{Number: 1, AutoMerge: true},
-	})
-	t.SetCaption("The length of the database table sequence name is greater than 64.\n")
-
-	return t.Render(), nil
+	return listData, nil
 }

@@ -1,0 +1,49 @@
+{{ define "report_header" }}
+<!-- template header -->
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" lang="en" />
+    <title>TransferDB</title>
+    <!-- 样式文件 -->
+    <style type="text/css">
+    body              {font:10pt Arial,Helvetica,sans-serif; color:black; background:White;}
+    p                 {font:10pt Arial,Helvetica,sans-serif; color:black; background:White;}
+    comment           {font: 8pt Arial,Helvetica,Geneva,sans-serif; color:black; background:background; margin-top:0pt; margin-bottom:0pt; vertical-align:top;}
+    table,tr,td       {font:10pt Arial,Helvetica,sans-serif; color:Black; background:#FFFFCC; padding:0px 0px 0px 0px; margin:0px 0px 0px 0px;}
+    th                {font:bold 10pt Arial,Helvetica,sans-serif; color:White; background:#0066cc; padding:0px 0px 0px 0px;}
+    h1                {font:bold 12pt Arial,Helvetica,Geneva,sans-serif; color:#336699; background-color:#0066cc; border-bottom:1px solid #cccc99; margin-top:0pt; margin-bottom:0pt; padding:0px 0px 0px 0px;}
+    h2                {font:bold 10pt Arial,Helvetica,Geneva,sans-serif; color:#336699; background-color:White; margin-top:4pt; margin-bottom:0pt;}
+    a                 {font:10pt Arial,Helvetica,sans-serif; color:#663300; margin-top:0pt; margin-bottom:0pt; vertical-align:top;}
+    a.link            {font:10pt Arial,Helvetica,sans-serif; color:#663300; margin-top:0pt; margin-bottom:0pt; vertical-align:top;}
+    a.static          {font:10pt Arial,Helvetica,sans-serif; color:#663300; margin-top:0pt; margin-bottom:0pt; vertical-align:top;}
+    a.noLink          {font:10pt Arial,Helvetica,sans-serif; color:#663300; text-decoration: none; margin-top:0pt; margin-bottom:0pt; vertical-align:top;}
+    a.noLinkBlue      {font:10pt Arial,Helvetica,sans-serif; color:#0000ff; text-decoration: none; margin-top:0pt; margin-bottom:0pt; vertical-align:top;}
+    a.noLinkDarkBlue  {font:10pt Arial,Helvetica,sans-serif; color:#000099; text-decoration: none; margin-top:0pt; margin-bottom:0pt; vertical-align:top;}
+    a.noLinkRed       {font:10pt Arial,Helvetica,sans-serif; color:#ff0000; text-decoration: none; margin-top:0pt; margin-bottom:0pt; vertical-align:top;}
+    a.noLinkDarkRed   {font:10pt Arial,Helvetica,sans-serif; color:#990000; text-decoration: none; margin-top:0pt; margin-bottom:0pt; vertical-align:top;}
+    a.noLinkGreen     {font:10pt Arial,Helvetica,sans-serif; color:#00ff00; text-decoration: none; margin-top:0pt; margin-bottom:0pt; vertical-align:top;}
+    a.noLinkDarkGreen {font:10pt Arial,Helvetica,sans-serif; color:#009900; text-decoration: none; margin-top:0pt; margin-bottom:0pt; vertical-align:top;}
+    </style>
+</head>
+{{ end }}
+
+<!-- template body -->
+{{ define "report_body" }}
+<body>
+<a name=top></a>
+<font size=+3 color=darkgreen><b>Migration Cost Evaluate For ORACLE</b></font><hr><p>&nbsp;
+{{ end }}
+
+    <!-- content --->
+    {{ template "report_overview" }}
+    {{ template "report_index" }}
+    {{ template "report_schema" }}
+    {{ template "report_type" }}
+    {{ template "report_check" }}
+
+<!-- template footer -->
+{{ define "report_footer" }}
+</body>
+</html>
+{{ end }}

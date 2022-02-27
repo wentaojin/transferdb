@@ -1,0 +1,305 @@
+{{ define "report_check" }}
+<a name="schema_table_partition_counts_over1024"></a>
+<font size="+2" face="Arial,Helvetica,Geneva,sans-serif" color="#336699">
+    <b>schema_table_partition_counts_over1024</b>
+</font><hr align="left" width="260">
+
+<li class="comment">
+    The database schema partition table counts overview.
+</li>
+<table width="90%" border="1">
+    <tr>
+        <th class="noLink">Schema</th>
+        <th class="noLink">Table Name</th>
+        <th class="noLink">Partition Counts</th>
+    </tr>
+    {{ range .ListSchemaPartitionTableCountsCheck }}
+    <tr>
+        <td class="noLink" align="center" >{{ .Schema }}</td>
+        <td class="noLink" align="center">{{ .TableName }}</td>
+        <td class="noLink" align="center">{{ .PartitionCounts }}</td>
+    </tr>
+    {{ end }}
+</table>
+&nbsp;
+<center>[<a class="noLink" href="#top">Top</a>]</center>
+
+<a name="schema_table_avg_row_length_over6M"></a>
+<font size="+2" face="Arial,Helvetica,Geneva,sans-serif" color="#336699">
+    <b>schema_table_avg_row_length_over6M</b>
+</font><hr align="left" width="260">
+
+<li class="comment">
+    The database schema table avg row length over 6M overview.
+</li>
+<table width="90%" border="1">
+    <tr>
+        <th class="noLink">Schema</th>
+        <th class="noLink">Table Name</th>
+        <th class="noLink">Avg Row Length/Bytes</th>
+    </tr>
+    {{ range .ListSchemaTableRowLengthCheck }}
+    <tr>
+        <td class="noLink" align="center" >{{ .Schema }}</td>
+        <td class="noLink" align="center">{{ .TableName }}</td>
+        <td class="noLink" align="center">{{ .AvgRowLength }}</td>
+    </tr>
+    {{ end }}
+</table>
+&nbsp;
+<center>[<a class="noLink" href="#top">Top</a>]</center>
+
+<a name="schema_table_index_column_over3072"></a>
+<font size="+2" face="Arial,Helvetica,Geneva,sans-serif" color="#336699">
+    <b>schema_table_index_column_over3072</b>
+</font><hr align="left" width="260">
+
+<li class="comment">
+    The database schema table index column length over 3072 overview.
+</li>
+<table width="90%" border="1">
+    <tr>
+        <th class="noLink">Schema</th>
+        <th class="noLink">Table Name</th>
+        <th class="noLink">Index Name</th>
+        <th class="noLink">Column Length</th>
+    </tr>
+    {{ range .ListSchemaTableIndexRowLengthCheck }}
+    <tr>
+        <td class="noLink" align="center" >{{ .Schema }}</td>
+        <td class="noLink" align="center">{{ .TableName }}</td>
+        <td class="noLink" align="center">{{ .IndexName }}</td>
+        <td class="noLink" align="center">{{ .ColumnLength }}</td>
+    </tr>
+    {{ end }}
+</table>
+&nbsp;
+<center>[<a class="noLink" href="#top">Top</a>]</center>
+
+<a name="schema_table_column_counts_over512"></a>
+<font size="+2" face="Arial,Helvetica,Geneva,sans-serif" color="#336699">
+    <b>schema_table_column_counts_over512</b>
+</font><hr align="left" width="260">
+
+<li class="comment">
+    The database schema table column counts over 512 overview.
+</li>
+<table width="90%" border="1">
+    <tr>
+        <th class="noLink">Schema</th>
+        <th class="noLink">Table Name</th>
+        <th class="noLink">Counts</th>
+    </tr>
+    {{ range .ListSchemaTableColumnCountsCheck }}
+    <tr>
+        <td class="noLink" align="center" >{{ .Schema }}</td>
+        <td class="noLink" align="center">{{ .TableName }}</td>
+        <td class="noLink" align="center">{{ .Counts }}</td>
+    </tr>
+    {{ end }}
+</table>
+&nbsp;
+<center>[<a class="noLink" href="#top">Top</a>]</center>
+
+<a name="schema_table_index_counts_over64"></a>
+<font size="+2" face="Arial,Helvetica,Geneva,sans-serif" color="#336699">
+    <b>schema_table_index_counts_over64</b>
+</font><hr align="left" width="260">
+
+<li class="comment">
+    The database schema table index counts over 64 overview.
+</li>
+<table width="90%" border="1">
+    <tr>
+        <th class="noLink">Schema</th>
+        <th class="noLink">Table Name</th>
+        <th class="noLink">Counts</th>
+    </tr>
+    {{ range .ListSchemaIndexCountsCheck }}
+    <tr>
+        <td class="noLink" align="center" >{{ .Schema }}</td>
+        <td class="noLink" align="center">{{ .TableName }}</td>
+        <td class="noLink" align="center">{{ .Counts }}</td>
+    </tr>
+    {{ end }}
+</table>
+&nbsp;
+<center>[<a class="noLink" href="#top">Top</a>]</center>
+
+<a name="schema_table_number_column"></a>
+<font size="+2" face="Arial,Helvetica,Geneva,sans-serif" color="#336699">
+    <b>schema_table_number_column</b>
+</font><hr align="left" width="260">
+
+<li class="comment">
+    The database number type has no scale check, and the Oracle non-scale number type can store integer and floating-point numbers at the same time. The specific type of storage needs to be confirmed with the development. Stored integers can be converted to bigint, and stored floating-point numbers can be converted to the corresponding decimal type.
+</li>
+<table width="90%" border="1">
+    <tr>
+        <th class="noLink">Schema</th>
+        <th class="noLink">Table Name</th>
+        <th class="noLink">Column Name</th>
+        <th class="noLink">Data Precision</th>
+        <th class="noLink">Data Scale</th>
+    </tr>
+    {{ range .ListSchemaTableNumberTypeCheck }}
+    <tr>
+        <td class="noLink" align="center" >{{ .Schema }}</td>
+        <td class="noLink" align="center">{{ .TableName }}</td>
+        <td class="noLink" align="center">{{ .ColumnName }}</td>
+        <td class="noLink" align="center">{{ .DataPrecision }}</td>
+        <td class="noLink" align="center">{{ .DataScale }}</td>
+    </tr>
+    {{ end }}
+</table>
+&nbsp;
+<center>[<a class="noLink" href="#top">Top</a>]</center>
+
+<a name="schema_username_length_over64"></a>
+<font size="+2" face="Arial,Helvetica,Geneva,sans-serif" color="#336699">
+    <b>schema_username_length_over64</b>
+</font><hr align="left" width="260">
+
+<li class="comment">
+    The length of the database username is greater than 64.
+</li>
+<table width="90%" border="1">
+    <tr>
+        <th class="noLink">Schema</th>
+        <th class="noLink">Account Status</th>
+        <th class="noLink">Created</th>
+    </tr>
+    {{ range .ListUsernameLengthCheck }}
+    <tr>
+        <td class="noLink" align="center" >{{ .Schema }}</td>
+        <td class="noLink" align="center">{{ .AccountStatus }}</td>
+        <td class="noLink" align="center">{{ .Created }}</td>
+    </tr>
+    {{ end }}
+</table>
+&nbsp;
+<center>[<a class="noLink" href="#top">Top</a>]</center>
+
+<a name="schema_tablename_length_over64"></a>
+<font size="+2" face="Arial,Helvetica,Geneva,sans-serif" color="#336699">
+    <b>schema_tablename_length_over64</b>
+</font><hr align="left" width="260">
+
+<li class="comment">
+    The length of the database table name is greater than 64.
+</li>
+<table width="90%" border="1">
+    <tr>
+        <th class="noLink">Schema</th>
+        <th class="noLink">Table Name</th>
+    </tr>
+    {{ range .ListSchemaTableNameLengthCheck }}
+    <tr>
+        <td class="noLink" align="center" >{{ .Schema }}</td>
+        <td class="noLink" align="center">{{ .TableName }}</td>
+    </tr>
+    {{ end }}
+</table>
+&nbsp;
+<center>[<a class="noLink" href="#top">Top</a>]</center>
+
+<a name="schema_columnname_length_over64"></a>
+<font size="+2" face="Arial,Helvetica,Geneva,sans-serif" color="#336699">
+    <b>schema_columnname_length_over64</b>
+</font><hr align="left" width="260">
+
+<li class="comment">
+    The length of the database table column name is greater than 64.
+</li>
+<table width="90%" border="1">
+    <tr>
+        <th class="noLink">Schema</th>
+        <th class="noLink">Table Name</th>
+        <th class="noLink">Column Name</th>
+    </tr>
+    {{ range .ListSchemaTableColumnNameLengthCheck }}
+    <tr>
+        <td class="noLink" align="center" >{{ .Schema }}</td>
+        <td class="noLink" align="center">{{ .TableName }}</td>
+        <td class="noLink" align="center">{{ .ColumnName }}</td>
+    </tr>
+    {{ end }}
+</table>
+&nbsp;
+<center>[<a class="noLink" href="#top">Top</a>]</center>
+
+<a name="schema_indexname_length_over64"></a>
+<font size="+2" face="Arial,Helvetica,Geneva,sans-serif" color="#336699">
+    <b>schema_indexname_length_over64</b>
+</font><hr align="left" width="260">
+
+<li class="comment">
+    The length of the database table index name is greater than 64.
+</li>
+<table width="90%" border="1">
+    <tr>
+        <th class="noLink">Schema</th>
+        <th class="noLink">Table Name</th>
+        <th class="noLink">Index Name</th>
+    </tr>
+    {{ range .ListSchemaTableIndexNameLengthCheck }}
+    <tr>
+        <td class="noLink" align="center" >{{ .Schema }}</td>
+        <td class="noLink" align="center">{{ .TableName }}</td>
+        <td class="noLink" align="center">{{ .IndexName }}</td>
+    </tr>
+    {{ end }}
+</table>
+&nbsp;
+<center>[<a class="noLink" href="#top">Top</a>]</center>
+
+<a name="schema_viewname_length_over64"></a>
+<font size="+2" face="Arial,Helvetica,Geneva,sans-serif" color="#336699">
+    <b>schema_viewname_length_over64</b>
+</font><hr align="left" width="260">
+
+<li class="comment">
+    The length of the database table view name is greater than 64.
+</li>
+<table width="90%" border="1">
+    <tr>
+        <th class="noLink">Schema</th>
+        <th class="noLink">View Name</th>
+        <th class="noLink">Read Only</th>
+    </tr>
+    {{ range .ListSchemaViewNameLengthCheck }}
+    <tr>
+        <td class="noLink" align="center" >{{ .Schema }}</td>
+        <td class="noLink" align="center">{{ .ViewName }}</td>
+        <td class="noLink" align="center">{{ .ReadOnly }}</td>
+    </tr>
+    {{ end }}
+</table>
+&nbsp;
+<center>[<a class="noLink" href="#top">Top</a>]</center>
+
+<a name="schema_sequencename_length_over64"></a>
+<font size="+2" face="Arial,Helvetica,Geneva,sans-serif" color="#336699">
+    <b>schema_sequencename_length_over64</b>
+</font><hr align="left" width="260">
+
+<li class="comment">
+    The length of the database table sequence name is greater than 64.
+</li>
+<table width="90%" border="1">
+    <tr>
+        <th class="noLink">Schema</th>
+        <th class="noLink">Sequence Name</th>
+        <th class="noLink">Order Flag</th>
+    </tr>
+    {{ range .ListSchemaSequenceNameLengthCheck }}
+    <tr>
+        <td class="noLink" align="center" >{{ .Schema }}</td>
+        <td class="noLink" align="center">{{ .SequenceName }}</td>
+        <td class="noLink" align="center">{{ .OrderFlag }}</td>
+    </tr>
+    {{ end }}
+</table>
+&nbsp;
+<center>[<a class="noLink" href="#top">Top</a>]</center>
+{{ end }}
