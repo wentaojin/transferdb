@@ -1,4 +1,4 @@
-.PHONY: build gather prepare reverse check all full csv gotool clean help
+.PHONY: build gather prepare reverse check all full csv diff gotool clean help
 
 CMDPATH="./cmd"
 BINARYPATH="bin/transferdb"
@@ -44,6 +44,9 @@ check: gotool
 
 all: gotool
 	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode all
+
+diff: gotool
+	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode diff
 
 full: gotool
 	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode full

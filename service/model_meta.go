@@ -18,7 +18,6 @@ package service
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/wentaojin/transferdb/utils"
 
@@ -27,40 +26,37 @@ import (
 
 // 同步元数据表
 type WaitSyncMeta struct {
-	ID               uint       `gorm:"primary_key;autoIncrement;comment:'自增编号'" json:"id"`
-	SourceSchemaName string     `gorm:"not null;index:idx_schema_table,unique;comment:'源端 schema'" json:"source_schema_name"`
-	SourceTableName  string     `gorm:"not null;index:idx_schema_table,unique;comment:'源端表名'" json:"source_table_name"`
-	SyncMode         string     `gorm:"not null;index:idx_sync_mode;comment:'同步模式'" json:"sync_mode"`
-	FullGlobalSCN    int        `gorm:"comment:'全量全局 SCN'" json:"full_global_scn"`
-	FullSplitTimes   int        `gorm:"comment:'全量任务切分 SQL 次数'" json:"full_split_times"`
-	IsPartition      string     `gorm:"comment:'是否是分区表'" json:"is_partition"` // 同步转换统一转换成非分区表，此处只做标志
-	CreatedAt        *time.Time `gorm:"type:timestamp;not null;default:current_timestamp;comment:'创建时间'" json:"createdAt"`
-	UpdatedAt        *time.Time `gorm:"type:timestamp;not null on update current_timestamp;default:current_timestamp;comment:'更新时间'" json:"updatedAt"`
+	ID               uint   `gorm:"primary_key;autoIncrement;comment:'自增编号'" json:"id"`
+	SourceSchemaName string `gorm:"not null;index:idx_schema_table,unique;comment:'源端 schema'" json:"source_schema_name"`
+	SourceTableName  string `gorm:"not null;index:idx_schema_table,unique;comment:'源端表名'" json:"source_table_name"`
+	SyncMode         string `gorm:"not null;index:idx_sync_mode;comment:'同步模式'" json:"sync_mode"`
+	FullGlobalSCN    int    `gorm:"comment:'全量全局 SCN'" json:"full_global_scn"`
+	FullSplitTimes   int    `gorm:"comment:'全量任务切分 SQL 次数'" json:"full_split_times"`
+	IsPartition      string `gorm:"comment:'是否是分区表'" json:"is_partition"` // 同步转换统一转换成非分区表，此处只做标志
+	BaseModel
 }
 
 // 全量同步元数据表
 type FullSyncMeta struct {
-	ID               uint       `gorm:"primary_key;autoIncrement;comment:'自增编号'" json:"id"`
-	SourceSchemaName string     `gorm:"not null;index:idx_schema_table_rowid;comment:'源端 schema'" json:"source_schema_name"`
-	SourceTableName  string     `gorm:"not null;index:idx_schema_table_rowid;comment:'源端表名'" json:"source_table_name"`
-	GlobalSCN        int        `gorm:"comment:'全局 SCN'" json:"global_scn"`
-	RowidSQL         string     `gorm:"not null;index:idx_schema_table_rowid;comment:'表 rowid 切分SQL'" json:"rowid_sql"`
-	IsPartition      string     `gorm:"comment:'是否是分区表'" json:"is_partition"` // 同步转换统一转换成非分区表，此处只做标志
-	CSVFile          string     `gorm:"comment:'csv 文件名'" json:"csv_file"`
-	CreatedAt        *time.Time `gorm:"type:timestamp;not null;default:current_timestamp;comment:'创建时间'" json:"createdAt"`
-	UpdatedAt        *time.Time `gorm:"type:timestamp;not null on update current_timestamp;default:current_timestamp;comment:'更新时间'" json:"updatedAt"`
+	ID               uint   `gorm:"primary_key;autoIncrement;comment:'自增编号'" json:"id"`
+	SourceSchemaName string `gorm:"not null;index:idx_schema_table_rowid;comment:'源端 schema'" json:"source_schema_name"`
+	SourceTableName  string `gorm:"not null;index:idx_schema_table_rowid;comment:'源端表名'" json:"source_table_name"`
+	GlobalSCN        int    `gorm:"comment:'全局 SCN'" json:"global_scn"`
+	RowidSQL         string `gorm:"not null;index:idx_schema_table_rowid;comment:'表 rowid 切分SQL'" json:"rowid_sql"`
+	IsPartition      string `gorm:"comment:'是否是分区表'" json:"is_partition"` // 同步转换统一转换成非分区表，此处只做标志
+	CSVFile          string `gorm:"comment:'csv 文件名'" json:"csv_file"`
+	BaseModel
 }
 
 // 增量同步元数据表
 type IncrementSyncMeta struct {
-	ID               uint       `gorm:"primary_key;autoIncrement;comment:'自增编号'" json:"id"`
-	GlobalSCN        int        `gorm:"comment:'全局 SCN'" json:"global_scn"`
-	SourceSchemaName string     `gorm:"not null;index:unique_schema_table,unique;comment:'源端 schema'" json:"source_schema_name"`
-	SourceTableName  string     `gorm:"not null;index:unique_schema_table,unique;comment:'源端表名'" json:"source_table_name"`
-	SourceTableSCN   int        `gorm:"comment:'表同步 SCN'" json:"source_table_scn"`
-	IsPartition      string     `gorm:"comment:'是否是分区表'" json:"is_partition"` // 同步转换统一转换成非分区表，此处只做标志
-	CreatedAt        *time.Time `gorm:"type:timestamp;not null;default:current_timestamp;comment:'创建时间'" json:"createdAt"`
-	UpdatedAt        *time.Time `gorm:"type:timestamp;not null on update current_timestamp;default:current_timestamp;comment:'更新时间'" json:"updatedAt"`
+	ID               uint   `gorm:"primary_key;autoIncrement;comment:'自增编号'" json:"id"`
+	GlobalSCN        int    `gorm:"comment:'全局 SCN'" json:"global_scn"`
+	SourceSchemaName string `gorm:"not null;index:unique_schema_table,unique;comment:'源端 schema'" json:"source_schema_name"`
+	SourceTableName  string `gorm:"not null;index:unique_schema_table,unique;comment:'源端表名'" json:"source_table_name"`
+	SourceTableSCN   int    `gorm:"comment:'表同步 SCN'" json:"source_table_scn"`
+	IsPartition      string `gorm:"comment:'是否是分区表'" json:"is_partition"` // 同步转换统一转换成非分区表，此处只做标志
+	BaseModel
 }
 
 func (f *FullSyncMeta) GetFullSyncMetaTableName(schemaName string, engine *Engine) ([]string, error) {

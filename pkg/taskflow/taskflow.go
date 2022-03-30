@@ -117,7 +117,7 @@ func FullSyncOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service.Engi
 	}
 
 	// 判断能否断点续传
-	panicCheckpointTables, err := engine.JudgingCheckpointResume(cfg.SourceConfig.SchemaName, partSyncTableMetas)
+	panicCheckpointTables, err := engine.JudgingCheckpointResume(cfg.SourceConfig.SchemaName, partSyncTableMetas, FullSyncMode)
 	if err != nil {
 		return err
 	}
@@ -279,7 +279,7 @@ func syncOracleFullTableRecordToMySQLUsingAllMode(cfg *service.CfgFile, engine *
 	}
 
 	// 判断能否断点续传
-	panicCheckpointTables, err := engine.JudgingCheckpointResume(cfg.SourceConfig.SchemaName, partSyncTableMetas)
+	panicCheckpointTables, err := engine.JudgingCheckpointResume(cfg.SourceConfig.SchemaName, partSyncTableMetas, syncMode)
 	if err != nil {
 		return err
 	}

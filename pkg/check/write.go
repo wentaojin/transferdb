@@ -41,7 +41,7 @@ type DiffWriter struct {
 	SourceDBNLSSort       string
 	SourceDBNLSComp       string
 	SourceDBCollation     bool
-	SourceTableCollation  map[string]string
+	SourceTableCollation  string
 	SourceSchemaCollation string
 	Engine                *service.Engine  `json:"-"`
 	ChkFileMW             *reverser.FileMW `json:"-"`
@@ -64,7 +64,7 @@ func NewDiffWriter(sourceSchemaName, targetSchemaName, tableName,
 		SourceDBNLSComp:       nlsComp,
 		SourceDBCollation:     oracleCollation,
 		SourceSchemaCollation: sourceSchemaCollation,
-		SourceTableCollation:  sourceTableCollation,
+		SourceTableCollation:  sourceTableCollation[strings.ToUpper(tableName)],
 		Engine:                engine,
 		ChkFileMW:             chkFileMW,
 		RevFileMW:             revFileMW,

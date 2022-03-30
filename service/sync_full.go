@@ -32,20 +32,35 @@ import (
 // 该函数只应用于全量同步模式或者 ALL 同步模式
 // 1、断点续传判断，判断是否可进行断点续传
 // 2、判断是否存在未初始化元信息的表
-func (e *Engine) JudgingCheckpointResume(schemaName string, tableMetas []WaitSyncMeta) ([]string, error) {
+func (e *Engine) JudgingCheckpointResume(schemaName string, tableMetas []WaitSyncMeta, syncMode string) ([]string, error) {
 	var panicTblFullSlice []string
 
-	tfm := &FullSyncMeta{}
-	for _, table := range tableMetas {
-		tableArray, err := tfm.GetFullSyncMetaTableName(schemaName, e)
-		if err != nil {
-			return panicTblFullSlice, err
-		}
+	if syncMode == utils.DiffMode {
+		tfm := &DataDiffMeta{}
+		for _, table := range tableMetas {
+			tableArray, err := tfm.GetDataDiffMetaTableName(schemaName, e)
+			if err != nil {
+				return panicTblFullSlice, err
+			}
 
-		if !utils.IsContainString(tableArray, table.SourceTableName) {
-			panicTblFullSlice = append(panicTblFullSlice, table.SourceTableName)
+			if !utils.IsContainString(tableArray, table.SourceTableName) {
+				panicTblFullSlice = append(panicTblFullSlice, table.SourceTableName)
+			}
+		}
+	} else {
+		tfm := &FullSyncMeta{}
+		for _, table := range tableMetas {
+			tableArray, err := tfm.GetFullSyncMetaTableName(schemaName, e)
+			if err != nil {
+				return panicTblFullSlice, err
+			}
+
+			if !utils.IsContainString(tableArray, table.SourceTableName) {
+				panicTblFullSlice = append(panicTblFullSlice, table.SourceTableName)
+			}
 		}
 	}
+
 	return panicTblFullSlice, nil
 }
 
@@ -158,6 +173,18 @@ func (e *Engine) TruncateFullSyncTableMetaRecord(metaSchemaName string) error {
 	Logger.Info("truncate table full meta record",
 		zap.String("schema", metaSchemaName),
 		zap.String("table", "full_sync_meta"),
+		zap.String("status", "success"))
+	return nil
+}
+
+func (e *Engine) TruncateDataDiffMetaRecord(metaSchemaName string) error {
+	if err := e.GormDB.Exec(fmt.Sprintf("TRUNCATE TABLE %s.data_diff_meta", metaSchemaName)).Error; err != nil {
+		return fmt.Errorf("truncate mysql meta schema table [data_diff_meta] reocrd failed: %v", err.Error())
+	}
+
+	Logger.Info("truncate table data diff meta record",
+		zap.String("schema", metaSchemaName),
+		zap.String("table", "data_diff_meta"),
 		zap.String("status", "success"))
 	return nil
 }

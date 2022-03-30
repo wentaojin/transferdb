@@ -123,13 +123,13 @@ func (t *Table) String(jsonType string) string {
 	Oracle
 */
 func NewOracleTableINFO(schemaName, tableName string, engine *service.Engine, sourceCharacterSet, nlsComp string,
-	sourceTableCollation map[string]string, sourceSchemaCollation string, oracleCollation bool) (*Table, error) {
+	sourceTableCollation, sourceSchemaCollation string, oracleCollation bool) (*Table, error) {
 	oraTable := &Table{
 		SchemaName: schemaName,
 		TableName:  tableName,
 	}
 	// table collation
-	tableCollation, err := generateTableCollation(nlsComp, oracleCollation, sourceSchemaCollation, sourceTableCollation[strings.ToUpper(tableName)])
+	tableCollation, err := generateTableCollation(nlsComp, oracleCollation, sourceSchemaCollation, sourceTableCollation)
 	if err != nil {
 		return oraTable, err
 	}
@@ -140,18 +140,18 @@ func NewOracleTableINFO(schemaName, tableName string, engine *service.Engine, so
 	}
 	oraTable.TableComment = strings.ToUpper(commentInfo[0]["COMMENTS"])
 
-	columns, OracleCharacterSet, err := getOracleTableColumn(schemaName, tableName, engine,
+	columns, OracleCharacterSet, err := GetOracleTableColumn(schemaName, tableName, engine,
 		strings.Split(sourceCharacterSet, ".")[1], nlsComp, sourceTableCollation, sourceSchemaCollation, oracleCollation)
 	if err != nil {
 		return oraTable, err
 	}
 
-	indexes, err := getOracleTableIndex(schemaName, tableName, engine)
+	indexes, err := GetOracleTableIndex(schemaName, tableName, engine)
 	if err != nil {
 		return oraTable, err
 	}
 
-	puConstraints, fkConstraints, ckConstraints, err := getOracleConstraint(schemaName, tableName, engine)
+	puConstraints, fkConstraints, ckConstraints, err := GetOracleConstraint(schemaName, tableName, engine)
 	if err != nil {
 		return oraTable, err
 	}
@@ -187,8 +187,8 @@ func NewOracleTableINFO(schemaName, tableName string, engine *service.Engine, so
 	return oraTable, nil
 }
 
-func getOracleTableColumn(schemaName, tableName string, engine *service.Engine, sourceDBCharacterSet, nlsComp string,
-	sourceTableCollation map[string]string, sourceSchemaCollation string, oraCollation bool) (map[string]Column, string, error) {
+func GetOracleTableColumn(schemaName, tableName string, engine *service.Engine, sourceDBCharacterSet, nlsComp string,
+	sourceTableCollation string, sourceSchemaCollation string, oraCollation bool) (map[string]Column, string, error) {
 	columnInfo, err := engine.GetOracleTableColumn(schemaName, tableName, oraCollation)
 	if err != nil {
 		return nil, "", err
@@ -235,7 +235,7 @@ func getOracleTableColumn(schemaName, tableName string, engine *service.Engine, 
 			MySQLOriginDataDefault:  "", // only mysql
 		}
 
-		columnCollation, err := generateTableColumnCollation(nlsComp, oraCollation, sourceSchemaCollation, sourceTableCollation[strings.ToUpper(tableName)], strings.ToUpper(rowCol["COLLATION"]))
+		columnCollation, err := generateTableColumnCollation(nlsComp, oraCollation, sourceSchemaCollation, sourceTableCollation, strings.ToUpper(rowCol["COLLATION"]))
 		if err != nil {
 			return columns, "", err
 		}
@@ -246,7 +246,7 @@ func getOracleTableColumn(schemaName, tableName string, engine *service.Engine, 
 	return columns, strings.ToUpper(sourceDBCharacterSet), err
 }
 
-func getOracleTableIndex(schemaName, tableName string, engine *service.Engine) ([]Index, error) {
+func GetOracleTableIndex(schemaName, tableName string, engine *service.Engine) ([]Index, error) {
 	var indexes []Index
 
 	indexInfo, err := engine.GetOracleTableNormalIndex(schemaName, tableName)
@@ -288,7 +288,7 @@ func getOracleTableIndex(schemaName, tableName string, engine *service.Engine) (
 	return indexes, nil
 }
 
-func getOracleConstraint(schemaName, tableName string, engine *service.Engine) ([]ConstraintPUKey, []ConstraintForeign, []ConstraintCheck, error) {
+func GetOracleConstraint(schemaName, tableName string, engine *service.Engine) ([]ConstraintPUKey, []ConstraintForeign, []ConstraintCheck, error) {
 	var (
 		puConstraints []ConstraintPUKey
 		fkConstraints []ConstraintForeign

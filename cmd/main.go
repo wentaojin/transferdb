@@ -33,7 +33,7 @@ import (
 
 var (
 	conf    = flag.String("config", "config.toml", "specify the configuration file, default is config.toml")
-	mode    = flag.String("mode", "", "specify the program running mode: [prepare reverse full all]")
+	mode    = flag.String("mode", "", "specify the program running mode: [prepare reverse gather full csv all check diff]")
 	version = flag.Bool("version", false, "view transferdb version info")
 )
 

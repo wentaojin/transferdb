@@ -34,6 +34,7 @@ type CfgFile struct {
 	SourceConfig SourceConfig `toml:"source" json:"source"`
 	TargetConfig TargetConfig `toml:"target" json:"target"`
 	LogConfig    LogConfig    `toml:"log" json:"log"`
+	DiffConfig   DiffConfig   `toml:"diff" json:"diff"`
 }
 
 type AppConfig struct {
@@ -41,6 +42,22 @@ type AppConfig struct {
 	SlowlogThreshold int    `toml:"slowlog-threshold" json:"slowlog-threshold"`
 	Threads          int    `toml:"threads" json:"threads"`
 	PprofPort        string `toml:"pprof-port" json:"pprof-port"`
+}
+
+type DiffConfig struct {
+	ChunkSize         int           `toml:"chunk-size" json:"chunk-size"`
+	DiffThreads       int           `toml:"diff-threads" json:"diff-threads"`
+	OnlyCheckRows     bool          `toml:"only-check-rows" json:"only-check-rows"`
+	EnableCheckpoint  bool          `toml:"enable-checkpoint" json:"enable-checkpoint"`
+	IgnoreStructCheck bool          `toml:"ignore-struct-check" json:"ignore-struct-check"`
+	FixSqlFile        string        `toml:"fix-sql-file" json:"fix-sql-file"`
+	TableConfig       []TableConfig `toml:"table-config" json:"table-config"`
+}
+
+type TableConfig struct {
+	SourceTable string `toml:"source-table" json:"source-table"`
+	IndexFields string `toml:"index-fields" json:"index-fields"`
+	Where       string `toml:"where" json:"where"`
 }
 
 type CSVConfig struct {

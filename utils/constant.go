@@ -74,6 +74,7 @@ const (
 	// 模式
 	ReverseMode = "Reverse"
 	CheckMode   = "Check"
+	DiffMode    = "Diff"
 
 	// Channel
 	BufferSize = 1024

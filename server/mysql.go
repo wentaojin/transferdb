@@ -50,6 +50,12 @@ func NewMySQLEnginePrepareDB(mysqlCfg service.TargetConfig, slowQueryThreshold, 
 			SingularTable: true, // 使用单数表名
 		},
 	})
+
+	// gorm2.0 time.Time 字符串格式化
+	// 回调方法 Register
+	gormDB.Callback().Create().Before("gorm:create").Register("gorm:update_time_stamp", service.UpdateTimeStampForCreateCallback)
+	gormDB.Callback().Update().Before("gorm:update").Register("gorm:update_time_stamp", service.UpdateTimeStampForUpdateCallback)
+
 	if err != nil {
 		return &service.Engine{}, fmt.Errorf("error on initializing mysql database connection [no-schema]: %v", err)
 	}
@@ -93,6 +99,11 @@ func NewMySQLEngineGeneralDB(mysqlCfg service.TargetConfig, slowQueryThreshold, 
 	if err != nil {
 		return &service.Engine{}, fmt.Errorf("error on initializing mysql database connection [meta-schema]: %v", err)
 	}
+
+	// gorm2.0 time.Time 字符串格式化
+	// 回调方法 Register
+	gormDB.Callback().Create().Before("gorm:create").Register("gorm:update_time_stamp", service.UpdateTimeStampForCreateCallback)
+	gormDB.Callback().Update().Before("gorm:update").Register("gorm:update_time_stamp", service.UpdateTimeStampForUpdateCallback)
 
 	// 初始化数据库连接池
 	sqlDB, err := gormDB.DB()

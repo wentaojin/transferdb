@@ -27,6 +27,30 @@ threads = 256
 # pprof 端口
 pprof-port = ":9696"
 
+[diff]
+chunk-size = 1000
+# 检查数据并发数
+diff-threads = 4
+# 只检查数据行数
+# 设置 true 代表只检查数据行数，设置 false 代表使用 checksum 数据对比以及输出对应差异数据
+only-check-rows = false
+# 断点续检，代表从上次 checkpoint 开始检查
+enable-checkpoint = true
+# 忽略表结构、collation 以及 character 检查，数据校验是否校验表结构，以上游表结构为准
+ignore-struct-check = true
+# 差异修复 SQL 文件, ONLY 用于下游数据库变更修复
+fix-sql-file = "fix.sql"
+
+# diff 某些表单独配置 -> 源端表
+#[[table-config]]
+# 源端表
+#source-table = "marvin"
+# 指定 NUMBER 类型字段，必须带索引
+#index-fields = "id"
+# 指定检查数据范围或者查询条件
+# where 优先级高于 index-fields
+#where = "age > 10 AND age< 20"
+
 [csv]
 # CSV 文件是否包含表头
 header = true
@@ -108,7 +132,7 @@ session-params = ["alter session set nls_date_format = 'yyyy-mm-dd hh24:mi:ss'"]
 schema-name = "marvin"
 # 源端迁移任务表（只用于 prepare/reverse/check/all/full 阶段，gather 阶段不适用，gather 只适用于 schema 级别）
 # include-table 和 exclude-table 不能同时配置，两者只能配置一个,如果两个都没配置则 Schema 内表全迁移
-include-table = []
+include-table = ['pw']
 exclude-table = []
 
 # 只用于 prepare/reverse/check/all/full 阶段，gather 阶段不适用
@@ -119,7 +143,8 @@ password = "marvin"
 host = "172.16.4.207"
 port = 4000
 # mysql 链接参数
-connect-params = "charset=utf8mb4&parseTime=True&loc=Local&multiStatements=true"
+# 数据对比 diff 功能，数据库时间字符串化，'2022-03-30T15:06:09+08:00' 无法对比，数据库连接参数禁止配置 parseTime=True&loc=Local
+connect-params = "charset=utf8mb4&multiStatements=true"
 # 目标端元数据库
 # CREATE DATABASE IF NOT EXIST db_meta
 meta-schema = "db_meta"

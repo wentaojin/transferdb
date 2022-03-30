@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/wentaojin/transferdb/pkg/diff"
+
 	"github.com/wentaojin/transferdb/pkg/csv"
 
 	"github.com/wentaojin/transferdb/pkg/cost"
@@ -44,7 +46,7 @@ func Run(cfg *service.CfgFile, mode string) error {
 		if err != nil {
 			return err
 		}
-		if err := cost.OracleMigrateMySQLCostEvaluate(&service.Engine{OracleDB: engine}, cfg); err != nil {
+		if err = cost.OracleMigrateMySQLCostEvaluate(&service.Engine{OracleDB: engine}, cfg); err != nil {
 			return err
 		}
 	case "prepare":
@@ -53,7 +55,7 @@ func Run(cfg *service.CfgFile, mode string) error {
 		if err != nil {
 			return err
 		}
-		if err := prepare.TransferDBEnvPrepare(engine); err != nil {
+		if err = prepare.TransferDBEnvPrepare(engine); err != nil {
 			return err
 		}
 	case "reverse":
@@ -62,7 +64,7 @@ func Run(cfg *service.CfgFile, mode string) error {
 		if err != nil {
 			return err
 		}
-		if err := reverser.ReverseOracleToMySQLTable(engine, cfg); err != nil {
+		if err = reverser.ReverseOracleToMySQLTable(engine, cfg); err != nil {
 			return err
 		}
 	case "check":
@@ -71,7 +73,16 @@ func Run(cfg *service.CfgFile, mode string) error {
 		if err != nil {
 			return err
 		}
-		if err := check.OracleTableToMySQLMappingCheck(engine, cfg); err != nil {
+		if err = check.OracleTableToMySQLMappingCheck(engine, cfg); err != nil {
+			return err
+		}
+	case "diff":
+		// 数据校验 - 以上游为准
+		engine, err := NewEngineDB(cfg.SourceConfig, cfg.TargetConfig, cfg.AppConfig.SlowlogThreshold, 1024)
+		if err != nil {
+			return err
+		}
+		if err = diff.OracleDiffMySQLTable(engine, cfg); err != nil {
 			return err
 		}
 	case "full":
@@ -82,7 +93,7 @@ func Run(cfg *service.CfgFile, mode string) error {
 		if err != nil {
 			return err
 		}
-		if err := taskflow.FullSyncOracleTableRecordToMySQL(cfg, engine); err != nil {
+		if err = taskflow.FullSyncOracleTableRecordToMySQL(cfg, engine); err != nil {
 			return err
 		}
 	case "csv":
@@ -102,7 +113,7 @@ func Run(cfg *service.CfgFile, mode string) error {
 		if err != nil {
 			return err
 		}
-		if err := taskflow.IncrementSyncOracleTableRecordToMySQL(cfg, engine); err != nil {
+		if err = taskflow.IncrementSyncOracleTableRecordToMySQL(cfg, engine); err != nil {
 			return err
 		}
 	default:

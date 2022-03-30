@@ -18,8 +18,13 @@ package service
 import (
 	"database/sql"
 	"fmt"
+	"hash/crc32"
 	"strings"
+	"sync/atomic"
 
+	"github.com/scylladb/go-set/strset"
+
+	"github.com/scylladb/go-set"
 	"github.com/thinkeridea/go-extend/exstrings"
 
 	"github.com/shopspring/decimal"
@@ -113,6 +118,7 @@ func (e *Engine) InitMysqlEngineDB() error {
 		&FullSyncMeta{},
 		&IncrementSyncMeta{},
 		&TableErrorDetail{},
+		&DataDiffMeta{},
 	); err != nil {
 		return fmt.Errorf("init mysql engine db data failed: %v", err)
 	}
@@ -165,7 +171,7 @@ func (e *Engine) BatchWriteMySQLTableData(targetSchemaName, targetTableName, sql
 	return nil
 }
 
-// 获取表字段名以及行数据
+// 获取表字段名以及行数据 -> 用于FULL/ALL
 func (e *Engine) GetOracleTableRows(querySQL string, insertBatchSize int) ([]string, []string, error) {
 	var (
 		err          error
@@ -303,4 +309,274 @@ func (e *Engine) GetOracleTableRows(querySQL string, insertBatchSize int) ([]str
 	}
 
 	return cols, batchResults, nil
+}
+
+// 获取数据行 -> 用于 DIFF
+func (e *Engine) GetOracleDataRowStrings(querySQL string) ([]string, *strset.Set, uint32, error) {
+	var (
+		cols     []string
+		rowsTMP  []string
+		rows     *sql.Rows
+		err      error
+		crc32SUM uint32
+	)
+
+	var crc32Value uint32 = 0
+
+	stringSet := set.NewStringSet()
+
+	rows, err = e.OracleDB.Query(querySQL)
+	if err != nil {
+		return cols, stringSet, crc32Value, fmt.Errorf("general sql [%v] query failed: [%v]", querySQL, err.Error())
+	}
+
+	defer rows.Close()
+
+	// 用于判断字段值是数字还是字符
+	var columnTypes []string
+	colTypes, err := rows.ColumnTypes()
+	if err != nil {
+		return cols, stringSet, crc32Value, err
+	}
+
+	for _, ct := range colTypes {
+		// 数据库字段类型 DatabaseTypeName() 映射 go 类型 ScanType()
+		columnTypes = append(columnTypes, ct.ScanType().String())
+	}
+
+	//不确定字段通用查询，自动获取字段名称
+	cols, err = rows.Columns()
+	if err != nil {
+		return cols, stringSet, crc32Value, fmt.Errorf("general sql [%v] query rows.Columns failed: [%v]", querySQL, err.Error())
+	}
+
+	rawResult := make([][]byte, len(cols))
+	scans := make([]interface{}, len(cols))
+	for i := range rawResult {
+		scans[i] = &rawResult[i]
+	}
+
+	for rows.Next() {
+		err = rows.Scan(scans...)
+		if err != nil {
+			return cols, stringSet, crc32Value, fmt.Errorf("general sql [%v] query rows.Scan failed: [%v]", querySQL, err.Error())
+		}
+
+		for i, raw := range rawResult {
+			// ORACLE/MySQL 空字符串以及 NULL 统一NULL处理，忽略 MySQL 空字符串与 NULL 区别
+			if raw == nil {
+				rowsTMP = append(rowsTMP, fmt.Sprintf("%v", `NULL`))
+			} else if string(raw) == "" {
+				rowsTMP = append(rowsTMP, fmt.Sprintf("%v", `NULL`))
+			} else {
+				switch columnTypes[i] {
+				case "int64":
+					r, err := utils.StrconvIntBitSize(string(raw), 64)
+					if err != nil {
+						return cols, stringSet, crc32Value, err
+					}
+					rowsTMP = append(rowsTMP, fmt.Sprintf("%v", r))
+				case "uint64":
+					r, err := utils.StrconvUintBitSize(string(raw), 64)
+					if err != nil {
+						return cols, stringSet, crc32Value, err
+					}
+					rowsTMP = append(rowsTMP, fmt.Sprintf("%v", r))
+				case "float32":
+					r, err := utils.StrconvFloatBitSize(string(raw), 32)
+					if err != nil {
+						return cols, stringSet, crc32Value, err
+					}
+					rowsTMP = append(rowsTMP, fmt.Sprintf("%v", r))
+				case "float64":
+					r, err := utils.StrconvFloatBitSize(string(raw), 64)
+					if err != nil {
+						return cols, stringSet, crc32Value, err
+					}
+					rowsTMP = append(rowsTMP, fmt.Sprintf("%v", r))
+				case "rune":
+					r, err := utils.StrconvRune(string(raw))
+					if err != nil {
+						return cols, stringSet, crc32Value, err
+					}
+					rowsTMP = append(rowsTMP, fmt.Sprintf("%v", r))
+				default:
+					ok := utils.IsNum(string(raw))
+					if ok {
+						r, err := decimal.NewFromString(string(raw))
+						if err != nil {
+							return cols, stringSet, crc32Value, err
+						}
+						if r.IsInteger() {
+							r, err := utils.StrconvIntBitSize(string(raw), 64)
+							if err != nil {
+								return cols, stringSet, crc32Value, err
+							}
+							rowsTMP = append(rowsTMP, fmt.Sprintf("%v", r))
+						} else {
+							r, err := utils.StrconvFloatBitSize(string(raw), 64)
+							if err != nil {
+								return cols, stringSet, crc32Value, err
+							}
+							rowsTMP = append(rowsTMP, fmt.Sprintf("%v", r))
+						}
+					} else {
+						rowsTMP = append(rowsTMP, fmt.Sprintf("'%v'", string(raw)))
+					}
+				}
+			}
+		}
+
+		rowS := exstrings.Join(rowsTMP, ",")
+
+		// 计算 CRC32
+		crc32SUM = atomic.AddUint32(&crc32Value, crc32.ChecksumIEEE([]byte(rowS)))
+		stringSet.Add(rowS)
+
+		// 数组清空
+		rowsTMP = rowsTMP[0:0]
+	}
+
+	if err = rows.Err(); err != nil {
+		return cols, stringSet, crc32Value, fmt.Errorf("general sql [%v] query rows.Next failed: [%v]", querySQL, err.Error())
+	}
+
+	return cols, stringSet, crc32SUM, err
+}
+
+func (e *Engine) GetMySQLDataRowStrings(querySQL string) ([]string, *strset.Set, uint32, error) {
+	var (
+		cols     []string
+		rowsTMP  []string
+		rows     *sql.Rows
+		err      error
+		crc32SUM uint32
+	)
+	var crc32Value uint32 = 0
+
+	stringSet := set.NewStringSet()
+
+	rows, err = e.MysqlDB.Query(querySQL)
+	if err != nil {
+		return cols, stringSet, crc32Value, fmt.Errorf("general sql [%v] query failed: [%v]", querySQL, err.Error())
+	}
+
+	defer rows.Close()
+
+	//不确定字段通用查询，自动获取字段名称
+	cols, err = rows.Columns()
+	if err != nil {
+		return cols, stringSet, crc32Value, fmt.Errorf("general sql [%v] query rows.Columns failed: [%v]", querySQL, err.Error())
+	}
+
+	// 用于判断字段值是数字还是字符
+	var columnTypes []string
+	colTypes, err := rows.ColumnTypes()
+	if err != nil {
+		return cols, stringSet, crc32Value, err
+	}
+
+	for _, ct := range colTypes {
+		// 数据库字段类型 DatabaseTypeName() 映射 go 类型 ScanType()
+		columnTypes = append(columnTypes, ct.ScanType().String())
+	}
+
+	//不确定字段通用查询，自动获取字段名称
+	cols, err = rows.Columns()
+	if err != nil {
+		return cols, stringSet, crc32Value, fmt.Errorf("general sql [%v] query rows.Columns failed: [%v]", querySQL, err.Error())
+	}
+
+	rawResult := make([][]byte, len(cols))
+	scans := make([]interface{}, len(cols))
+	for i := range rawResult {
+		scans[i] = &rawResult[i]
+	}
+
+	for rows.Next() {
+		err = rows.Scan(scans...)
+		if err != nil {
+			return cols, stringSet, crc32Value, fmt.Errorf("general sql [%v] query rows.Scan failed: [%v]", querySQL, err.Error())
+		}
+
+		for i, raw := range rawResult {
+			// ORACLE/MySQL 空字符串以及 NULL 统一NULL处理，忽略 MySQL 空字符串与 NULL 区别
+			if raw == nil {
+				rowsTMP = append(rowsTMP, fmt.Sprintf("%v", `NULL`))
+			} else if string(raw) == "" {
+				rowsTMP = append(rowsTMP, fmt.Sprintf("%v", `NULL`))
+			} else {
+				switch columnTypes[i] {
+				case "int64":
+					r, err := utils.StrconvIntBitSize(string(raw), 64)
+					if err != nil {
+						return cols, stringSet, crc32Value, err
+					}
+					rowsTMP = append(rowsTMP, fmt.Sprintf("%v", r))
+				case "uint64":
+					r, err := utils.StrconvUintBitSize(string(raw), 64)
+					if err != nil {
+						return cols, stringSet, crc32Value, err
+					}
+					rowsTMP = append(rowsTMP, fmt.Sprintf("%v", r))
+				case "float32":
+					r, err := utils.StrconvFloatBitSize(string(raw), 32)
+					if err != nil {
+						return cols, stringSet, crc32Value, err
+					}
+					rowsTMP = append(rowsTMP, fmt.Sprintf("%v", r))
+				case "float64":
+					r, err := utils.StrconvFloatBitSize(string(raw), 64)
+					if err != nil {
+						return cols, stringSet, crc32Value, err
+					}
+					rowsTMP = append(rowsTMP, fmt.Sprintf("%v", r))
+				case "rune":
+					r, err := utils.StrconvRune(string(raw))
+					if err != nil {
+						return cols, stringSet, crc32Value, err
+					}
+					rowsTMP = append(rowsTMP, fmt.Sprintf("%v", r))
+				default:
+					ok := utils.IsNum(string(raw))
+					if ok {
+						r, err := decimal.NewFromString(string(raw))
+						if err != nil {
+							return cols, stringSet, crc32Value, err
+						}
+						if r.IsInteger() {
+							r, err := utils.StrconvIntBitSize(string(raw), 64)
+							if err != nil {
+								return cols, stringSet, crc32Value, err
+							}
+							rowsTMP = append(rowsTMP, fmt.Sprintf("%v", r))
+						} else {
+							r, err := utils.StrconvFloatBitSize(string(raw), 64)
+							if err != nil {
+								return cols, stringSet, crc32Value, err
+							}
+							rowsTMP = append(rowsTMP, fmt.Sprintf("%v", r))
+						}
+					} else {
+						rowsTMP = append(rowsTMP, fmt.Sprintf("'%v'", string(raw)))
+					}
+				}
+			}
+		}
+
+		rowS := exstrings.Join(rowsTMP, ",")
+
+		// 计算 CRC32
+		crc32SUM = atomic.AddUint32(&crc32Value, crc32.ChecksumIEEE([]byte(rowS)))
+		stringSet.Add(rowS)
+
+		// 数组清空
+		rowsTMP = rowsTMP[0:0]
+	}
+
+	if err = rows.Err(); err != nil {
+		return cols, stringSet, crc32Value, fmt.Errorf("general sql [%v] query rows.Next failed: [%v]", querySQL, err.Error())
+	}
+
+	return cols, stringSet, crc32SUM, err
 }

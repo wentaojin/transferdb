@@ -40,11 +40,10 @@ TransferDB 使用手册
       8. MySQL/TiDB timestamp 类型只支持精度 6，oracle 精度最大是 9，会检查出来但是保持原样
       9. 程序 check 阶段若遇到报错则进程不终止，日志最后会输出警告信息，具体错误表以及对应错误详情见 {元数据库} 内表 [table_error_detail] 数据
 
-
 3. 对象信息收集
    1. 收集现有 ORACLE 数据库内表、索引、分区表、字段长度等信息，输出类似 AWR 报告 report_${sourcedb}.html 文件，用于评估迁移至 MySQL/TiDB 成本
 
-4. 支持数据同步【ORACLE 11g 及以上版本】 
+4. 数据同步【ORACLE 11g 及以上版本】 
    1. 数据同步需要存在主键或者唯一键
    2. 数据同步无论 FULL / ALL 模式需要注意时间格式，ORACLE date 格式复杂，同步前可先简单验证下迁移时间格式是否存在问题，transferdb timezone PICK 数据库操作系统的时区
    3. FULL 模式【全量数据导出导入】
@@ -58,6 +57,22 @@ TransferDB 使用手册
       3. ALL 模式同步权限以及要求详情见下【ALL 模式同步】
 
 5. CSV 文件数据导出【ORACLE 11g 及以上版本】
+
+6. 数据校验【ORACLE 11g 及以上版本】
+   1. 数据校验以及表结构校验以上游 ORACLE 数据库为基准，上游数据存在，下游不存在则新增，下游数据存在，上游数据不存在则删除，输出文件以参数配置 fix-sql-file 命名
+   2. 数据校验上游 ORACLE 数据库（主键/唯一键/唯一索引 + NUMBER 类型字段）
+      1. 表必须带有主键/唯一键/唯一索引，可以是任意类型的，否则可能出现数据对比不准，如果表不存在主键或唯一键则预检查直接报错中断
+      2. 表必须带有 NUMBER 类型字段，NUMBER 类型字段可以是主键、唯一键、唯一索引或者普通索引
+            1. 优先主键/唯一建/唯一索引，其次普通索引
+            2. 如果未配置 where 且表 pk/uk/index 不存在 number 字段则预检查直接报错中断
+   3. 可选只对比数据行数 VS 对比详情产生修复文件，只对比数据行将不会输出详情修复文件
+   4. 可选自定义某张表自定义 where/index-fields 参数配置
+      1. 配置文件参数 where 优先级高于 index-fields，仅当两个都配置时，以 where 为准且忽略是否存在索引
+   5. 可选断点续传
+      1. 断点续传期间，配置文件可能涉及迁移表变更的配置不得更改，否则会因迁移表数不一致，而自动判定无法断点续传 
+      2. 断点续传失败，可通过配置 enable-checkpoint = false 自动清理断点，重新数据校验对比
+   6. 数据校验功能，需要将数据库时间字符串化，'2022-03-30T15:06:09+08:00' 无法对比，数据库连接参数需禁止配置 parseTime=True&loc=Local
+   7. 除预检查阶段外，程序 diff 数据校验阶段若遇到报错则进程不终止，日志最后会输出警告信息，具体错误表以及对应错误详情见 {元数据库} 内表 [table_error_detail] 数据
 
 #### 使用事项
 
@@ -98,6 +113,10 @@ $ ./transferdb --config config.toml --mode all
 
 10、CSV 文件数据导出
 $ ./transferdb --config config.toml --mode csv
+
+11、数据校验
+$ ./transferdb --config config.toml --mode prepare
+$ ./transferdb --config config.toml --mode diff
 ```
 #### ALL 模式同步
 ```sql
