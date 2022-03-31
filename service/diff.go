@@ -62,7 +62,7 @@ func (e *Engine) InitDataDiffMetaRecordByNUMBER(sourceSchema, sourceTable, sourc
 			SourceTableName:  strings.ToUpper(sourceTable),
 			SourceColumnInfo: sourceColumnInfo,
 			TargetColumnInfo: targetColumnInfo,
-			Where:            "1 = 1",
+			Range:            "1 = 1",
 			NumberColumn:     "",
 			IsPartition:      isPartition,
 		}).Error; err != nil {
@@ -117,7 +117,7 @@ func (e *Engine) InitDataDiffMetaRecordByWhere(sourceSchema, sourceTable, source
 		SourceTableName:  strings.ToUpper(sourceTable),
 		SourceColumnInfo: sourceColumnInfo,
 		TargetColumnInfo: targetColumnInfo,
-		Where:            whereS,
+		Range:            whereS,
 		NumberColumn:     "",
 		IsPartition:      isPartition,
 	}).Error; err != nil {
@@ -179,7 +179,8 @@ func (e *Engine) GetOracleTableChunksByNUMBER(taskName, sourceSchema, sourceTabl
 	insertBatchSize int, isPartition string) (int, error) {
 	var rowCount int
 
-	querySQL := utils.StringsBuilder(`SELECT '%s BETWEEN ''' || start_id || ''' AND ''' || end_id || '''' CMD FROM user_parallel_execute_chunks WHERE  task_name = '`, taskName, `' ORDER BY chunk_id`)
+	querySQL := utils.StringsBuilder(`SELECT '`, numberColName, ` BETWEEN ' || start_id || ' AND ' || end_id || '' CMD 
+FROM user_parallel_execute_chunks WHERE  task_name = '`, taskName, `' ORDER BY chunk_id`)
 
 	_, res, err := Query(e.OracleDB, querySQL)
 	if err != nil {
@@ -199,7 +200,7 @@ func (e *Engine) GetOracleTableChunksByNUMBER(taskName, sourceSchema, sourceTabl
 			SourceTableName:  strings.ToUpper(sourceTable),
 			SourceColumnInfo: sourceColumnInfo,
 			TargetColumnInfo: targetColumnInfo,
-			Where:            "1 = 1",
+			Range:            "1 = 1",
 			NumberColumn:     "",
 			IsPartition:      isPartition,
 		}).Error; err != nil {
@@ -216,7 +217,7 @@ func (e *Engine) GetOracleTableChunksByNUMBER(taskName, sourceSchema, sourceTabl
 			SourceTableName:  strings.ToUpper(sourceTable),
 			SourceColumnInfo: sourceColumnInfo,
 			TargetColumnInfo: targetColumnInfo,
-			Where:            r["CMD"],
+			Range:            r["CMD"],
 			NumberColumn:     numberColName,
 			IsPartition:      isPartition,
 		})

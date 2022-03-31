@@ -78,6 +78,10 @@ func (e *Engine) InitDefaultValueMap() error {
 		if err := e.GormDB.Create(&DefaultValueMap{
 			SourceDefaultValue: utils.DefaultValueSysdate,
 			TargetDefaultValue: utils.DefaultValueSysdateMap,
+			BaseModel: BaseModel{
+				CreatedAt: getCurrentTime(),
+				UpdatedAt: getCurrentTime(),
+			},
 		}).Error; err != nil {
 			return err
 		}

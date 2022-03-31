@@ -109,6 +109,16 @@ func (e *Engine) ModifyFullSyncTableMetaRecord(metaSchemaName, sourceSchemaName,
 }
 
 func (e *Engine) ModifyWaitSyncTableMetaRecord(metaSchemaName, sourceSchemaName, sourceTableName, syncMode string) error {
+	// 若 diff 数据校验表存在错误，skip 更新
+	if syncMode == utils.DiffMode {
+		errTotal, err := e.GetTableErrorDetailCountByTableMode(sourceSchemaName, sourceTableName, utils.DiffMode)
+		if err != nil {
+			return err
+		}
+		if errTotal >= 1 {
+			return nil
+		}
+	}
 	if err := e.GormDB.Model(&WaitSyncMeta{}).
 		Where(`source_schema_name = ? AND source_table_name= ? AND sync_mode = ?`,
 			strings.ToUpper(sourceSchemaName),

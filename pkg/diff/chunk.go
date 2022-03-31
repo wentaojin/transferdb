@@ -36,7 +36,7 @@ type Diff struct {
 	SourceSchema                string
 	SourceTable                 string
 	IndexFields                 string
-	Where                       string
+	Range                       string
 	SourceCharacterSet, NlsComp string
 	SourceTableCollation        string
 	SourceSchemaCollation       string
@@ -76,7 +76,7 @@ func NewDiff(cfg *service.CfgFile, engine *service.Engine, exportTableSlice []st
 		}
 		if _, ok := tableCFG[strings.ToUpper(t)]; ok {
 			d.IndexFields = tableCFG[strings.ToUpper(t)].IndexFields
-			d.Where = tableCFG[strings.ToUpper(t)].Where
+			d.Range = tableCFG[strings.ToUpper(t)].Range
 		}
 		diffTables = append(diffTables, d)
 	}
@@ -104,15 +104,15 @@ func (d *Diff) SplitChunk(workerID int) error {
 	if d.OnlyCheckRows {
 		// SELECT COUNT(*) FROM TAB WHERE 1=1
 		if err = d.Engine.InitDataDiffMetaRecordByWhere(d.SourceSchema, d.SourceTable,
-			sourceColumnInfo, targetColumnInfo, "1=1", d.SyncMode, globalSCN); err != nil {
+			sourceColumnInfo, targetColumnInfo, "1 = 1", d.SyncMode, globalSCN); err != nil {
 			return err
 		}
 		return nil
 	}
 
-	if !d.OnlyCheckRows && d.Where != "" {
+	if !d.OnlyCheckRows && d.Range != "" {
 		if err = d.Engine.InitDataDiffMetaRecordByWhere(d.SourceSchema, d.SourceTable,
-			sourceColumnInfo, targetColumnInfo, d.Where, d.SyncMode, globalSCN); err != nil {
+			sourceColumnInfo, targetColumnInfo, d.Range, d.SyncMode, globalSCN); err != nil {
 			return err
 		}
 		return nil

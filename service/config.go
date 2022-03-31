@@ -57,7 +57,7 @@ type DiffConfig struct {
 type TableConfig struct {
 	SourceTable string `toml:"source-table" json:"source-table"`
 	IndexFields string `toml:"index-fields" json:"index-fields"`
-	Where       string `toml:"where" json:"where"`
+	Range       string `toml:"range" json:"range"`
 }
 
 type CSVConfig struct {

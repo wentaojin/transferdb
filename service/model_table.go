@@ -62,3 +62,13 @@ func (e *Engine) GetTableErrorDetailDistinctCountByMode(schemaName, runMode stri
 	}
 	return totals, nil
 }
+
+func (e *Engine) GetTableErrorDetailCountByTableMode(schemaName, tableName, runMode string) (int64, error) {
+	var totals int64
+	if err := e.GormDB.Model(&TableErrorDetail{}).
+		Where(`source_schema_name = ? AND source_table_name = ? AND run_mode = ?`, strings.ToUpper(schemaName), strings.ToUpper(tableName), runMode).
+		Count(&totals).Error; err != nil {
+		return totals, err
+	}
+	return totals, nil
+}

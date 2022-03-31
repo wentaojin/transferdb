@@ -16,8 +16,6 @@ limitations under the License.
 package service
 
 import (
-	"errors"
-	"log"
 	"time"
 
 	"gorm.io/gorm"
@@ -28,33 +26,14 @@ type BaseModel struct {
 	UpdatedAt string `gorm:"type:timestamp;not null;comment:'更新时间'" json:"updatedAt"`
 }
 
-func UpdateTimeStampForCreateCallback(db *gorm.DB) {
-	if db.Statement.Schema != nil {
-		currentTime := getCurrentTime()
-		SetSchemaFieldValue(db, "CreatedAt", currentTime)
-		SetSchemaFieldValue(db, "UpdatedAt", currentTime)
-	}
+func (v *BaseModel) BeforeCreate(db *gorm.DB) (err error) {
+	db.Statement.SetColumn("CreatedAt", getCurrentTime())
+	db.Statement.SetColumn("UpdatedAt", getCurrentTime())
+	return nil
 }
 
-func UpdateTimeStampForUpdateCallback(db *gorm.DB) {
-	// if _, ok := db.Statement.Settings.Load("gorm:update_time_stamp"); ok {
-	if db.Statement.Schema != nil {
-		currentTime := getCurrentTime()
-		db.Statement.SetColumn("UpdatedAt", currentTime)
-	}
-}
-
-func SetSchemaFieldValue(db *gorm.DB, fieldName string, value interface{}) error {
-	field := db.Statement.Schema.LookUpField(fieldName)
-	if field == nil {
-		return errors.New("can't find the field")
-	}
-	err := field.Set(db.Statement.ReflectValue, value)
-	if err != nil {
-		log.Println("schema field set err:", err)
-		return err
-	}
-
+func (v *BaseModel) BeforeUpdate(db *gorm.DB) (err error) {
+	db.Statement.SetColumn("UpdatedAt", getCurrentTime())
 	return nil
 }
 

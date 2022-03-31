@@ -48,8 +48,8 @@ fix-sql-file = "fix.sql"
 # 指定 NUMBER 类型字段，必须带索引
 #index-fields = "id"
 # 指定检查数据范围或者查询条件
-# where 优先级高于 index-fields
-#where = "age > 10 AND age< 20"
+# range 优先级高于 index-fields
+#range = "age > 10 AND age< 20"
 
 [csv]
 # CSV 文件是否包含表头
@@ -143,7 +143,7 @@ password = "marvin"
 host = "172.16.4.207"
 port = 4000
 # mysql 链接参数
-# 数据对比 diff 功能，数据库时间字符串化，'2022-03-30T15:06:09+08:00' 无法对比，数据库连接参数禁止配置 parseTime=True&loc=Local
+# 数据库时间字符串化，'2022-03-30T15:06:09+08:00' -> '2022-03-30T15:06:09'，数据库连接参数禁止配置 parseTime=True&loc=Local
 connect-params = "charset=utf8mb4&multiStatements=true"
 # 目标端元数据库
 # CREATE DATABASE IF NOT EXIST db_meta

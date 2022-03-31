@@ -362,7 +362,7 @@ func startTableDiffByCheckpoint(cfg *service.CfgFile, engine *service.Engine, pa
 					}
 
 					// 清理记录
-					if err = engine.DeleteDataDiffMeta(meta.SourceSchemaName, meta.SourceTableName, meta.Where); err != nil {
+					if err = engine.DeleteDataDiffMeta(meta.SourceSchemaName, meta.SourceTableName, meta.Range); err != nil {
 						if err = e.GormDB.Create(&service.TableErrorDetail{
 							SourceSchemaName: meta.SourceSchemaName,
 							SourceTableName:  meta.SourceTableName,
@@ -494,7 +494,7 @@ func startTableDiffByNormal(cfg *service.CfgFile, engine *service.Engine, waitSy
 					}
 
 					// 清理记录
-					if err = engine.DeleteDataDiffMeta(meta.SourceSchemaName, meta.SourceTableName, meta.Where); err != nil {
+					if err = engine.DeleteDataDiffMeta(meta.SourceSchemaName, meta.SourceTableName, meta.Range); err != nil {
 						if err = e.GormDB.Create(&service.TableErrorDetail{
 							SourceSchemaName: meta.SourceSchemaName,
 							SourceTableName:  meta.SourceTableName,
@@ -522,6 +522,7 @@ func startTableDiffByNormal(cfg *service.CfgFile, engine *service.Engine, waitSy
 		wg.Wait()
 
 		// 更新记录
+
 		if err = engine.ModifyWaitSyncTableMetaRecord(
 			cfg.TargetConfig.MetaSchema,
 			cfg.SourceConfig.SchemaName, d.SourceTable, utils.DiffMode); err != nil {
@@ -652,17 +653,17 @@ func Report(targetSchema string, dm service.DataDiffMeta, engine *service.Engine
 	var oraQuery, mysqlQuery string
 	if dm.NumberColumn == "" {
 		oraQuery = utils.StringsBuilder(
-			"SELECT ", dm.SourceColumnInfo, " FROM ", dm.SourceSchemaName, ".", dm.SourceTableName, " WHERE ", dm.Where)
+			"SELECT ", dm.SourceColumnInfo, " FROM ", dm.SourceSchemaName, ".", dm.SourceTableName, " WHERE ", dm.Range)
 
 		mysqlQuery = utils.StringsBuilder(
-			"SELECT ", dm.TargetColumnInfo, " FROM ", targetSchema, ".", dm.SourceTableName, " WHERE ", dm.Where)
+			"SELECT ", dm.TargetColumnInfo, " FROM ", targetSchema, ".", dm.SourceTableName, " WHERE ", dm.Range)
 	} else {
 		oraQuery = utils.StringsBuilder(
-			"SELECT ", dm.SourceColumnInfo, " FROM ", dm.SourceSchemaName, ".", dm.SourceTableName, " WHERE ", dm.Where,
+			"SELECT ", dm.SourceColumnInfo, " FROM ", dm.SourceSchemaName, ".", dm.SourceTableName, " WHERE ", dm.Range,
 			" ORDER BY ", dm.NumberColumn, " DESC")
 
 		mysqlQuery = utils.StringsBuilder(
-			"SELECT ", dm.TargetColumnInfo, " FROM ", targetSchema, ".", dm.SourceTableName, " WHERE ", dm.Where,
+			"SELECT ", dm.TargetColumnInfo, " FROM ", targetSchema, ".", dm.SourceTableName, " WHERE ", dm.Range,
 			" ORDER BY ", dm.NumberColumn, " DESC")
 	}
 
@@ -693,9 +694,6 @@ func Report(targetSchema string, dm service.DataDiffMeta, engine *service.Engine
 	//上游不存在，下游不存在 Skip
 	//上游存在，下游不存在 INSERT 下游
 	//上游不存在，下游存在 DELETE 下游
-
-	fmt.Println(oraStringSet)
-	fmt.Println(mysqlStringSet)
 
 	var fixSQL strings.Builder
 	// 判断上游数据是否多
