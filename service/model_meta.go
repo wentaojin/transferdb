@@ -27,9 +27,9 @@ import (
 // 同步元数据表
 type WaitSyncMeta struct {
 	ID               uint   `gorm:"primary_key;autoIncrement;comment:'自增编号'" json:"id"`
-	SourceSchemaName string `gorm:"not null;index:idx_schema_table,unique;comment:'源端 schema'" json:"source_schema_name"`
-	SourceTableName  string `gorm:"not null;index:idx_schema_table,unique;comment:'源端表名'" json:"source_table_name"`
-	SyncMode         string `gorm:"not null;index:idx_sync_mode;comment:'同步模式'" json:"sync_mode"`
+	SourceSchemaName string `gorm:"not null;index:idx_schema_table_mode,unique;comment:'源端 schema'" json:"source_schema_name"`
+	SourceTableName  string `gorm:"not null;index:idx_schema_table_mode,unique;comment:'源端表名'" json:"source_table_name"`
+	SyncMode         string `gorm:"not null;index:idx_schema_table_mode;unique;comment:'同步模式'" json:"sync_mode"`
 	FullGlobalSCN    int    `gorm:"comment:'全量全局 SCN'" json:"full_global_scn"`
 	FullSplitTimes   int    `gorm:"comment:'全量任务切分 SQL 次数'" json:"full_split_times"`
 	IsPartition      string `gorm:"comment:'是否是分区表'" json:"is_partition"` // 同步转换统一转换成非分区表，此处只做标志
