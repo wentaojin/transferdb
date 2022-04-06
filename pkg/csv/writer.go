@@ -18,6 +18,7 @@ package csv
 import (
 	"bufio"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -38,10 +39,10 @@ type FileWriter struct {
 	SourceTable   string
 	Columns       []string
 	RowidSQL      string
-	Rows          *sql.Rows
+	Rows          *sql.Rows `json:"-"`
 	OutDir        string
 	FileName      string
-	Engine        *service.Engine
+	Engine        *service.Engine `json:"-"`
 	service.CSVConfig
 }
 
@@ -106,17 +107,8 @@ func (f *FileWriter) write(w io.Writer) error {
 		}
 	}
 
-	// Close Rows
-	defer f.Rows.Close()
-
-	// 如果不存在数据记录，直接返回
-	if !f.Rows.Next() {
-		service.Logger.Warn("oracle schema table rowid data return null rows, skip",
-			zap.String("schema", f.SourceSchema),
-			zap.String("table", f.SourceTable),
-			zap.String("sql", f.RowidSQL))
-		return nil
-	}
+	// 统计行数
+	var rowCount int
 
 	// 数据 SCAN
 	columns := len(f.Columns)
@@ -128,6 +120,8 @@ func (f *FileWriter) write(w io.Writer) error {
 
 	// 表行数读取
 	for f.Rows.Next() {
+		rowCount = rowCount + 1
+
 		var results []string
 
 		err := f.Rows.Scan(dest...)
@@ -194,5 +188,22 @@ func (f *FileWriter) write(w io.Writer) error {
 		return fmt.Errorf("failed to flush data row to csv %w", err)
 	}
 
+	// Close Rows
+	if err := f.Rows.Close(); err != nil {
+		return err
+	}
+
+	service.Logger.Info("oracle schema table rowid data rows",
+		zap.String("schema", f.SourceSchema),
+		zap.String("table", f.SourceTable),
+		zap.Int("rows", rowCount),
+		zap.String("rowid sql", f.RowidSQL),
+		zap.String("detail", f.String()))
+
 	return nil
+}
+
+func (f *FileWriter) String() string {
+	jsonStr, _ := json.Marshal(f)
+	return string(jsonStr)
 }

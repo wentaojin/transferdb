@@ -28,9 +28,9 @@ threads = 256
 pprof-port = ":9696"
 
 [diff]
-chunk-size = 1000
+chunk-size = 50000
 # 检查数据并发数
-diff-threads = 4
+diff-threads = 128
 # 只检查数据行数
 # 设置 true 代表只检查数据行数，设置 false 代表使用 checksum 数据对比以及输出对应差异数据
 only-check-rows = false
@@ -70,6 +70,7 @@ charset = "utf8"
 # 4、建议是 insert-batch-size 整数倍
 rows = 100000
 # 数据文件输出目录, 所有表数据输出文件目录，需要磁盘空间充足
+# 目录格式：/data1/${target_dbname}/${table_name}
 output-dir = "/data1"
 # 用于初始化表任务并发数【写下游 meta 数据库】
 task-threads = 128
