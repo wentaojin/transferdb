@@ -24,6 +24,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/wentaojin/transferdb/pkg/reverser"
+
 	"github.com/wentaojin/transferdb/pkg/taskflow"
 
 	"github.com/scylladb/go-set/strset"
@@ -226,9 +228,11 @@ func OracleDiffMySQLTable(engine *service.Engine, cfg *service.CfgFile) error {
 	}
 	defer fixSqlFile.Close()
 
+	fixFileMW := &reverser.FileMW{Mutex: sync.Mutex{}, Writer: fixSqlFile}
+
 	// 数据对比
 	if err = StartTableDiff(partSyncTableInfo, waitSyncTableInfo, cfg, engine,
-		characterSet, nlsComp, tblCollation, schemaCollation, oraCollation, fixSqlFile); err != nil {
+		characterSet, nlsComp, tblCollation, schemaCollation, oraCollation, fixFileMW); err != nil {
 		return err
 	}
 
@@ -259,15 +263,15 @@ func OracleDiffMySQLTable(engine *service.Engine, cfg *service.CfgFile) error {
 }
 
 func StartTableDiff(partSyncTableInfo, waitSyncTableInfo []string, cfg *service.CfgFile, engine *service.Engine,
-	characterSet string, nlsComp string, tblCollation map[string]string, schemaCollation string, oraCollation bool, fixSqlFile *os.File) error {
+	characterSet string, nlsComp string, tblCollation map[string]string, schemaCollation string, oraCollation bool, fixFileMW *reverser.FileMW) error {
 	// 优先存在断点的表同步
 	if len(partSyncTableInfo) > 0 {
-		if err := startTableDiffByCheckpoint(cfg, engine, partSyncTableInfo, characterSet, nlsComp, tblCollation, schemaCollation, oraCollation, fixSqlFile); err != nil {
+		if err := startTableDiffByCheckpoint(cfg, engine, partSyncTableInfo, characterSet, nlsComp, tblCollation, schemaCollation, oraCollation, fixFileMW); err != nil {
 			return err
 		}
 	}
 	if len(waitSyncTableInfo) > 0 {
-		if err := startTableDiffByNormal(cfg, engine, waitSyncTableInfo, characterSet, nlsComp, tblCollation, schemaCollation, oraCollation, fixSqlFile); err != nil {
+		if err := startTableDiffByNormal(cfg, engine, waitSyncTableInfo, characterSet, nlsComp, tblCollation, schemaCollation, oraCollation, fixFileMW); err != nil {
 			return err
 		}
 	}
@@ -276,7 +280,7 @@ func StartTableDiff(partSyncTableInfo, waitSyncTableInfo []string, cfg *service.
 
 // 断点校验
 func startTableDiffByCheckpoint(cfg *service.CfgFile, engine *service.Engine, partSyncTableInfo []string,
-	characterSet string, nlsComp string, tblCollation map[string]string, schemaCollation string, oraCollation bool, fixSqlFile *os.File) error {
+	characterSet string, nlsComp string, tblCollation map[string]string, schemaCollation string, oraCollation bool, fixFileMW *reverser.FileMW) error {
 	// 预检查
 	if err := PreDiffCheck(partSyncTableInfo, cfg, engine); err != nil {
 		return err
@@ -311,7 +315,7 @@ func startTableDiffByCheckpoint(cfg *service.CfgFile, engine *service.Engine, pa
 
 		for c := 0; c < cfg.DiffConfig.DiffThreads; c++ {
 			wg.Add(1)
-			go func(targetSchema string, e *service.Engine, fixSqlFile *os.File) {
+			go func(targetSchema string, e *service.Engine, fixFileMW *reverser.FileMW) {
 				defer wg.Done()
 				for meta := range ch {
 					// 数据对比报告
@@ -339,7 +343,7 @@ func startTableDiffByCheckpoint(cfg *service.CfgFile, engine *service.Engine, pa
 
 					// fixSQL 文件写入
 					if r != "" {
-						if _, err = fmt.Fprintln(fixSqlFile, r); err != nil {
+						if _, err = fmt.Fprintln(fixFileMW, r); err != nil {
 							if err = e.GormDB.Create(&service.TableErrorDetail{
 								SourceSchemaName: meta.SourceSchemaName,
 								SourceTableName:  meta.SourceTableName,
@@ -384,7 +388,7 @@ func startTableDiffByCheckpoint(cfg *service.CfgFile, engine *service.Engine, pa
 					}
 
 				}
-			}(cfg.TargetConfig.SchemaName, engine, fixSqlFile)
+			}(cfg.TargetConfig.SchemaName, engine, fixFileMW)
 		}
 
 		wg.Wait()
@@ -407,7 +411,7 @@ func startTableDiffByCheckpoint(cfg *service.CfgFile, engine *service.Engine, pa
 
 // 正常校验
 func startTableDiffByNormal(cfg *service.CfgFile, engine *service.Engine, waitSyncTableInfo []string,
-	characterSet string, nlsComp string, tblCollation map[string]string, schemaCollation string, oraCollation bool, fixSqlFile *os.File) error {
+	characterSet string, nlsComp string, tblCollation map[string]string, schemaCollation string, oraCollation bool, fixFileMW *reverser.FileMW) error {
 	// 预检查
 	if err := PreDiffCheck(waitSyncTableInfo, cfg, engine); err != nil {
 		return err
@@ -443,7 +447,7 @@ func startTableDiffByNormal(cfg *service.CfgFile, engine *service.Engine, waitSy
 
 		for c := 0; c < cfg.DiffConfig.DiffThreads; c++ {
 			wg.Add(1)
-			go func(targetSchema string, e *service.Engine, fixSqlFile *os.File) {
+			go func(targetSchema string, e *service.Engine, fixFileMW *reverser.FileMW) {
 				defer wg.Done()
 				for meta := range ch {
 					// 数据对比报告
@@ -471,7 +475,7 @@ func startTableDiffByNormal(cfg *service.CfgFile, engine *service.Engine, waitSy
 
 					// fixSQL 文件写入
 					if r != "" {
-						if _, err = fmt.Fprintln(fixSqlFile, r); err != nil {
+						if _, err = fmt.Fprintln(fixFileMW, r); err != nil {
 							if err = e.GormDB.Create(&service.TableErrorDetail{
 								SourceSchemaName: meta.SourceSchemaName,
 								SourceTableName:  meta.SourceTableName,
@@ -516,7 +520,7 @@ func startTableDiffByNormal(cfg *service.CfgFile, engine *service.Engine, waitSy
 					}
 
 				}
-			}(cfg.TargetConfig.SchemaName, engine, fixSqlFile)
+			}(cfg.TargetConfig.SchemaName, engine, fixFileMW)
 		}
 
 		wg.Wait()
@@ -677,7 +681,20 @@ func Report(targetSchema string, dm service.DataDiffMeta, engine *service.Engine
 		return "", fmt.Errorf("get mysql data row strings failed: %v", err)
 	}
 
-	service.Logger.Info("oracle table chunk diff equal",
+	// 数据相同
+	if oraCrc32Val == mysqlCrc32Val {
+		service.Logger.Info("oracle table chunk diff equal",
+			zap.String("oracle schema", dm.SourceSchemaName),
+			zap.String("mysql schema", targetSchema),
+			zap.String("table", dm.SourceTableName),
+			zap.Uint32("oracle crc32 values", oraCrc32Val),
+			zap.Uint32("mysql crc32 values", mysqlCrc32Val),
+			zap.String("oracle sql", oraQuery),
+			zap.String("mysql sql", mysqlQuery))
+		return "", nil
+	}
+
+	service.Logger.Info("oracle table chunk diff isn't equal",
 		zap.String("oracle schema", dm.SourceSchemaName),
 		zap.String("mysql schema", targetSchema),
 		zap.String("table", dm.SourceTableName),
@@ -685,10 +702,6 @@ func Report(targetSchema string, dm service.DataDiffMeta, engine *service.Engine
 		zap.Uint32("mysql crc32 values", mysqlCrc32Val),
 		zap.String("oracle sql", oraQuery),
 		zap.String("mysql sql", mysqlQuery))
-	// 数据相同
-	if oraCrc32Val == mysqlCrc32Val {
-		return "", nil
-	}
 
 	//上游存在，下游存在 Skip
 	//上游不存在，下游不存在 Skip
