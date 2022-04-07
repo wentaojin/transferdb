@@ -10,8 +10,7 @@ Features
 - ORACLE 数据库对象信息收集
 - ORACLE 数据库全量/CSV 数据迁移
 - ORACLE 数据库实时同步【实验性】
-- ORACLE、MySQL/TiDB 数据校验【Beta】
-
+- ORACLE、MySQL/TiDB 数据校验
 
 Quick Start
 -----------

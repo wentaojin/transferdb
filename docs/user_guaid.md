@@ -113,7 +113,7 @@ $ ./transferdb --config config.toml --mode all
 10、CSV 文件数据导出
 $ ./transferdb --config config.toml --mode csv
 
-11、数据校验
+11、数据校验，[输出示例](docs/fix.sql)
 $ ./transferdb --config config.toml --mode prepare
 $ ./transferdb --config config.toml --mode diff
 ```
