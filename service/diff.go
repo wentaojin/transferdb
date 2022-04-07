@@ -238,7 +238,7 @@ FROM user_parallel_execute_chunks WHERE  task_name = '`, taskName, `' ORDER BY c
 			SourceTableName:  strings.ToUpper(sourceTable),
 			SourceColumnInfo: sourceColumnInfo,
 			TargetColumnInfo: targetColumnInfo,
-			Range:            utils.StringsBuilder(numberColName, " <= ", r["START_ID"]),
+			Range:            utils.StringsBuilder(numberColName, " < ", r["START_ID"]),
 			NumberColumn:     numberColName,
 			IsPartition:      isPartition,
 		})
@@ -247,7 +247,7 @@ FROM user_parallel_execute_chunks WHERE  task_name = '`, taskName, `' ORDER BY c
 			SourceTableName:  strings.ToUpper(sourceTable),
 			SourceColumnInfo: sourceColumnInfo,
 			TargetColumnInfo: targetColumnInfo,
-			Range:            utils.StringsBuilder(numberColName, " >= ", res[0]["END_ID"]),
+			Range:            utils.StringsBuilder(numberColName, " > ", res[0]["END_ID"]),
 			NumberColumn:     numberColName,
 			IsPartition:      isPartition,
 		})

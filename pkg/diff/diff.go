@@ -24,6 +24,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jedib0t/go-pretty/v6/table"
+
 	"github.com/wentaojin/transferdb/pkg/reverser"
 
 	"github.com/wentaojin/transferdb/pkg/taskflow"
@@ -712,6 +714,22 @@ func Report(targetSchema string, dm service.DataDiffMeta, engine *service.Engine
 	// 判断上游数据是否多
 	sourceMore := strset.Difference(oraStringSet, mysqlStringSet).List()
 	if len(sourceMore) > 0 {
+		fixSQL.WriteString("/*\n")
+		fixSQL.WriteString(fmt.Sprintf(" oracle table [%s.%s] chunk data rows are more \n", dm.SourceSchemaName, dm.SourceTableName))
+
+		sw := table.NewWriter()
+		sw.SetStyle(table.StyleLight)
+		sw.AppendHeader(table.Row{"DATABASE", "DATA COUNTS SQL", "CRC32"})
+		sw.AppendRows([]table.Row{
+			{"ORACLE",
+				utils.StringsBuilder("SELECT COUNT(1)", " FROM ", dm.SourceSchemaName, ".", dm.SourceTableName, " WHERE ", dm.Range),
+				oraCrc32Val},
+			{"MySQL", utils.StringsBuilder(
+				"SELECT COUNT(1)", " FROM ", targetSchema, ".", dm.SourceTableName, " WHERE ", dm.Range),
+				mysqlCrc32Val},
+		})
+		fixSQL.WriteString(fmt.Sprintf("%v\n", sw.Render()))
+		fixSQL.WriteString("*/\n")
 		insertPrefix := utils.StringsBuilder("INSERT INTO ", targetSchema, ".", dm.SourceTableName, " (", strings.Join(oraColumns, ","), ") VALUES (")
 		for _, s := range sourceMore {
 			fixSQL.WriteString(fmt.Sprintf("%v;\n", utils.StringsBuilder(insertPrefix, s, ")")))
@@ -721,6 +739,22 @@ func Report(targetSchema string, dm service.DataDiffMeta, engine *service.Engine
 	// 判断下游数据是否多
 	targetMore := strset.Difference(mysqlStringSet, oraStringSet).List()
 	if len(targetMore) > 0 {
+		fixSQL.WriteString("/*\n")
+		fixSQL.WriteString(fmt.Sprintf(" mysql table [%s.%s] chunk data rows are more \n", targetSchema, dm.SourceTableName))
+
+		sw := table.NewWriter()
+		sw.SetStyle(table.StyleLight)
+		sw.AppendHeader(table.Row{"DATABASE", "DATA COUNTS SQL", "CRC32"})
+		sw.AppendRows([]table.Row{
+			{"ORACLE",
+				utils.StringsBuilder("SELECT COUNT(1)", " FROM ", dm.SourceSchemaName, ".", dm.SourceTableName, " WHERE ", dm.Range),
+				oraCrc32Val},
+			{"MySQL", utils.StringsBuilder(
+				"SELECT COUNT(1)", " FROM ", targetSchema, ".", dm.SourceTableName, " WHERE ", dm.Range),
+				mysqlCrc32Val},
+		})
+		fixSQL.WriteString(fmt.Sprintf("%v\n", sw.Render()))
+		fixSQL.WriteString("*/\n")
 		deletePrefix := utils.StringsBuilder("DELETE FROM ", targetSchema, ".", dm.SourceTableName, " WHERE ")
 		for _, t := range targetMore {
 			var whereCond []string
