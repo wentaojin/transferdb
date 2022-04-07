@@ -1,5 +1,5 @@
 /*
- oracle table [MARVIN.MARVIN3] chunk data rows are more 
+ mysql table [MARVIN.MARVIN3] chunk data rows are less
 ┌──────────┬──────────────────────────────────────────────────────────────────┬────────────┐
 │ DATABASE │ DATA COUNTS SQL                                                  │      CRC32 │
 ├──────────┼──────────────────────────────────────────────────────────────────┼────────────┤
