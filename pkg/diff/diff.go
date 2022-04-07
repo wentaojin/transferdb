@@ -715,7 +715,7 @@ func Report(targetSchema string, dm service.DataDiffMeta, engine *service.Engine
 	sourceMore := strset.Difference(oraStringSet, mysqlStringSet).List()
 	if len(sourceMore) > 0 {
 		fixSQL.WriteString("/*\n")
-		fixSQL.WriteString(fmt.Sprintf(" mysql table [%s.%s] chunk data rows are less \n", dm.SourceSchemaName, dm.SourceTableName))
+		fixSQL.WriteString(fmt.Sprintf(" mysql table [%s.%s] chunk data rows are less \n", targetSchema, dm.SourceTableName))
 
 		sw := table.NewWriter()
 		sw.SetStyle(table.StyleLight)
