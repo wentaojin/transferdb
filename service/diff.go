@@ -226,7 +226,7 @@ FROM user_parallel_execute_chunks WHERE  task_name = '`, taskName, `' ORDER BY c
 	// 防止上游数据少，下游数据多超上游数据边界
 	// 获取最小以及最大 Number Column 字段
 	querySQL = utils.StringsBuilder(`SELECT * FROM `,
-		`(SELECT MIX(start_id) START_ID, MAX(end_id) END_ID FROM user_parallel_execute_chunks WHERE  task_name = '`, taskName, `')`, ` WHERE ROWNUM = 1`)
+		`(SELECT MIN(start_id) START_ID, MAX(end_id) END_ID FROM user_parallel_execute_chunks WHERE task_name = '`, taskName, `')`, ` WHERE ROWNUM = 1`)
 	_, res, err = Query(e.OracleDB, querySQL)
 	if err != nil {
 		return rowCount, err
