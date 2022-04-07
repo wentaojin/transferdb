@@ -223,8 +223,38 @@ FROM user_parallel_execute_chunks WHERE  task_name = '`, taskName, `' ORDER BY c
 		})
 	}
 
+	// 防止上游数据少，下游数据多超上游数据边界
+	// 获取最小以及最大 Number Column 字段
+	querySQL = utils.StringsBuilder(`SELECT * FROM `,
+		`(SELECT MIX(start_id) START_ID, MAX(end_id) END_ID FROM user_parallel_execute_chunks WHERE  task_name = '`, taskName, `')`, ` WHERE ROWNUM = 1`)
+	_, res, err = Query(e.OracleDB, querySQL)
+	if err != nil {
+		return rowCount, err
+	}
+
+	for _, r := range res {
+		fullMetas = append(fullMetas, DataDiffMeta{
+			SourceSchemaName: strings.ToUpper(sourceSchema),
+			SourceTableName:  strings.ToUpper(sourceTable),
+			SourceColumnInfo: sourceColumnInfo,
+			TargetColumnInfo: targetColumnInfo,
+			Range:            utils.StringsBuilder(numberColName, " <= ", r["START_ID"]),
+			NumberColumn:     numberColName,
+			IsPartition:      isPartition,
+		})
+		fullMetas = append(fullMetas, DataDiffMeta{
+			SourceSchemaName: strings.ToUpper(sourceSchema),
+			SourceTableName:  strings.ToUpper(sourceTable),
+			SourceColumnInfo: sourceColumnInfo,
+			TargetColumnInfo: targetColumnInfo,
+			Range:            utils.StringsBuilder(numberColName, " >= ", res[0]["END_ID"]),
+			NumberColumn:     numberColName,
+			IsPartition:      isPartition,
+		})
+	}
+
 	// 元数据库信息 batch 写入
-	if err := e.GormDB.CreateInBatches(&fullMetas, insertBatchSize).Error; err != nil {
+	if err = e.GormDB.CreateInBatches(&fullMetas, insertBatchSize).Error; err != nil {
 		return len(res), fmt.Errorf("gorm create table [%s.%s] data_diff_meta [batch size]failed: %v", sourceSchema, sourceTable, err)
 	}
 
