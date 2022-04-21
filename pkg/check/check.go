@@ -43,6 +43,16 @@ func OracleTableToMySQLMappingCheck(engine *service.Engine, cfg *service.CfgFile
 		return err
 	}
 
+	// 判断下游数据库是否存在 oracle 表
+	mysqlTables, err := engine.GetMySQLTable(cfg.TargetConfig.SchemaName)
+	if err != nil {
+		return err
+	}
+	ok, noExistTables := utils.IsSubsetString(mysqlTables, exporterTableSlice)
+	if !ok {
+		return fmt.Errorf("oracle tables %v isn't exist in the mysqldb schema [%v], please create", noExistTables, cfg.TargetConfig.SchemaName)
+	}
+
 	// 判断 table_error_detail 是否存在错误记录，是否可进行 check
 	errorTotals, err := engine.GetTableErrorDetailCountByMode(cfg.SourceConfig.SchemaName, utils.CheckMode)
 	if err != nil {
@@ -63,29 +73,9 @@ func OracleTableToMySQLMappingCheck(engine *service.Engine, cfg *service.CfgFile
 	}
 	defer fileCheck.Close()
 
-	fileReverse, err := os.OpenFile(filepath.Join(pwdDir, fmt.Sprintf("reverse_%s.sql", cfg.SourceConfig.SchemaName)), os.O_WRONLY|os.O_CREATE|os.O_APPEND|os.O_TRUNC, 0666)
-	if err != nil {
-		return err
-	}
-	defer fileReverse.Close()
-
-	fileCompatibility, err := os.OpenFile(filepath.Join(pwdDir, fmt.Sprintf("compatibility_%s.sql", cfg.SourceConfig.SchemaName)), os.O_WRONLY|os.O_CREATE|os.O_APPEND|os.O_TRUNC, 0666)
-	if err != nil {
-		return err
-	}
-	defer fileCompatibility.Close()
-
 	wrCheck := &reverser.FileMW{
 		Mutex:  sync.Mutex{},
 		Writer: fileCheck}
-	wrReverse := &reverser.FileMW{
-		Mutex:  sync.Mutex{},
-		Writer: fileReverse,
-	}
-	wrComp := &reverser.FileMW{
-		Mutex:  sync.Mutex{},
-		Writer: fileCompatibility,
-	}
 
 	// oracle 环境信息
 	beginTime := time.Now()
@@ -177,19 +167,19 @@ func OracleTableToMySQLMappingCheck(engine *service.Engine, cfg *service.CfgFile
 		go func(
 			sourceSchemaName, targetSchemaName, characterSet, nlsSort, nlsComp string,
 			tblCollation map[string]string, schemaCollation string,
-			oraCollation bool, engine *service.Engine, cfg *service.CfgFile, wrCheck, wrReverse, weComp *reverser.FileMW) {
+			oraCollation bool, engine *service.Engine, cfg *service.CfgFile, wrCheck *reverser.FileMW) {
 			defer wg.Done()
 			for t := range ch {
 				wr := NewDiffWriter(sourceSchemaName, targetSchemaName, t, characterSet,
 					nlsSort, nlsComp, tblCollation, schemaCollation, oraCollation,
-					engine, cfg, wrCheck, wrReverse, weComp)
-				ok, err := wr.CheckTable()
-				if err != nil {
+					engine, cfg, wrCheck)
+
+				if err = wr.DiffTable(); err != nil {
 					if err = engine.GormDB.Create(&service.TableErrorDetail{
 						SourceSchemaName: strings.ToUpper(sourceSchemaName),
 						SourceTableName:  t,
 						RunMode:          utils.CheckMode,
-						InfoSources:      utils.ReverseMode,
+						InfoSources:      utils.CheckMode,
 						RunStatus:        "Failed",
 						Detail:           wr.String(),
 						Error:            err.Error(),
@@ -198,72 +188,37 @@ func OracleTableToMySQLMappingCheck(engine *service.Engine, cfg *service.CfgFile
 							zap.String("schema", strings.ToUpper(sourceSchemaName)),
 							zap.String("table", t),
 							zap.Error(
-								fmt.Errorf("func [CheckTable] check table task failed, detail see [table_error_detail], please rerunning")))
+								fmt.Errorf("func [DiffTable] check table task failed, detail see [table_error_detail], please rerunning")))
 						panic(
-							fmt.Errorf("func [CheckTable] check table task failed, detail see [table_error_detail], please rerunning, error: %v", err))
+							fmt.Errorf("func [DiffTable] check table task failed, detail see [table_error_detail], please rerunning, error: %v", err))
 					}
 					continue
-				}
-
-				if ok {
-					if err = wr.DiffTable(); err != nil {
-						if err = engine.GormDB.Create(&service.TableErrorDetail{
-							SourceSchemaName: strings.ToUpper(sourceSchemaName),
-							SourceTableName:  t,
-							RunMode:          utils.CheckMode,
-							InfoSources:      utils.CheckMode,
-							RunStatus:        "Failed",
-							Detail:           wr.String(),
-							Error:            err.Error(),
-						}).Error; err != nil {
-							service.Logger.Error("check table oracle to mysql failed",
-								zap.String("schema", strings.ToUpper(sourceSchemaName)),
-								zap.String("table", t),
-								zap.Error(
-									fmt.Errorf("func [DiffTable] check table task failed, detail see [table_error_detail], please rerunning")))
-							panic(
-								fmt.Errorf("func [DiffTable] check table task failed, detail see [table_error_detail], please rerunning, error: %v", err))
-						}
-						continue
-					}
 				}
 			}
 
 		}(cfg.SourceConfig.SchemaName, cfg.TargetConfig.SchemaName, characterSet, nlsSort, nlsComp, tblCollation, schemaCollation, oraCollation,
-			engine, cfg, wrCheck, wrReverse, wrComp)
+			engine, cfg, wrCheck)
 	}
 
 	wg.Wait()
 
-	checkError, err := engine.GetTableErrorDetailCountBySources(cfg.SourceConfig.SchemaName, utils.CheckMode, utils.CheckMode)
-	if err != nil {
-		return fmt.Errorf("func [GetTableErrorDetailCountBySources] check schema [%s] mode [%s] table task failed, error: %v", strings.ToUpper(cfg.SourceConfig.SchemaName), utils.CheckMode, err)
-	}
-
-	reverseError, err := engine.GetTableErrorDetailCountBySources(cfg.SourceConfig.SchemaName, utils.CheckMode, utils.ReverseMode)
+	checkError, err := engine.GetTableErrorDetailCountByMode(cfg.SourceConfig.SchemaName, utils.CheckMode)
 	if err != nil {
 		return fmt.Errorf("func [GetTableErrorDetailCountBySources] check schema [%s] mode [%s] table task failed, error: %v", strings.ToUpper(cfg.SourceConfig.SchemaName), utils.CheckMode, err)
 	}
 
 	endTime := time.Now()
 	service.Logger.Info("check", zap.String("output", filepath.Join(pwdDir, fmt.Sprintf("check_%s.sql", cfg.SourceConfig.SchemaName))))
-	if checkError == 0 && reverseError == 0 {
+	if checkError == 0 {
 		service.Logger.Info("check table oracle to mysql finished",
 			zap.Int("table totals", len(exporterTableSlice)),
 			zap.Int("table success", len(exporterTableSlice)),
 			zap.Int("table failed", 0),
 			zap.String("cost", endTime.Sub(startTime).String()))
 	} else {
-		if reverseError > 0 {
-			service.Logger.Info("reverse", zap.String("create table and index output", filepath.Join(pwdDir,
-				fmt.Sprintf("reverse_%s.sql", cfg.SourceConfig.SchemaName))))
-			service.Logger.Info("compatibility", zap.String("maybe exist compatibility output", filepath.Join(pwdDir,
-				fmt.Sprintf("compatibility_%s.sql", cfg.SourceConfig.SchemaName))))
-		}
 		service.Logger.Warn("check table oracle to mysql finished",
 			zap.Int("table totals", len(exporterTableSlice)),
-			zap.Int("table success", len(exporterTableSlice)-int(checkError)-int(reverseError)),
-			zap.Int("reverse failed", int(reverseError)),
+			zap.Int("table success", len(exporterTableSlice)-int(checkError)),
 			zap.Int("check failed", int(checkError)),
 			zap.String("failed tips", "failed detail, please see table [table_error_detail]"),
 			zap.String("cost", endTime.Sub(startTime).String()))

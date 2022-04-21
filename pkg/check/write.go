@@ -46,8 +46,6 @@ type DiffWriter struct {
 	Engine                *service.Engine  `json:"-"`
 	Cfg                   *service.CfgFile `json:"-"`
 	ChkFileMW             *reverser.FileMW `json:"-"`
-	RevFileMW             *reverser.FileMW `json:"-"`
-	CompFileMW            *reverser.FileMW `json:"-"`
 }
 
 func NewDiffWriter(sourceSchemaName, targetSchemaName, tableName,
@@ -55,7 +53,7 @@ func NewDiffWriter(sourceSchemaName, targetSchemaName, tableName,
 	sourceTableCollation map[string]string,
 	sourceSchemaCollation string,
 	oracleCollation bool,
-	engine *service.Engine, cfg *service.CfgFile, chkFileMW, revFileMW, compFileMW *reverser.FileMW) *DiffWriter {
+	engine *service.Engine, cfg *service.CfgFile, chkFileMW *reverser.FileMW) *DiffWriter {
 	return &DiffWriter{
 		SourceSchemaName:      strings.ToUpper(sourceSchemaName),
 		TargetSchemaName:      strings.ToUpper(targetSchemaName),
@@ -69,8 +67,6 @@ func NewDiffWriter(sourceSchemaName, targetSchemaName, tableName,
 		Engine:                engine,
 		Cfg:                   cfg,
 		ChkFileMW:             chkFileMW,
-		RevFileMW:             revFileMW,
-		CompFileMW:            compFileMW,
 	}
 }
 
@@ -84,46 +80,6 @@ func (d *DiffWriter) String() string {
 // 1、若上游存在，下游不存在，则输出记录，若上游不存在，下游存在，则默认不输出
 // 2、忽略上下游不同索引名、约束名对比，只对比下游是否存在同等约束下同等字段是否存在
 // 3、分区只对比分区类型、分区键、分区表达式等，不对比具体每个分区下的情况
-
-func (d *DiffWriter) CheckTable() (bool, error) {
-	// 判断 MySQL 表是否存在
-	isExist, err := d.Engine.IsExistMySQLTable(d.TargetSchemaName, d.TableName)
-	if err != nil {
-		return false, err
-	}
-	if !isExist {
-		startTime := time.Now()
-		// 表列表
-		reverseTables, partitionTableList, temporaryTableList, clusteredTableList, err := reverser.LoadOracleToMySQLTableList(
-			d.Engine, d.Cfg, []string{d.TableName}, d.SourceDBNLSSort, d.SourceDBNLSComp)
-		if err != nil {
-			return false, err
-		}
-
-		// 不兼容项 - 表提示
-		if err = reverser.CompatibilityDBTips(d.CompFileMW, d.SourceSchemaName, partitionTableList, temporaryTableList, clusteredTableList); err != nil {
-			return false, err
-		}
-
-		for _, tbl := range reverseTables {
-			writer, err := reverser.NewReverseWriter(tbl, d.RevFileMW, d.CompFileMW)
-			if err != nil {
-				return false, fmt.Errorf("check mode new table reverse writer failed: %v", err)
-			}
-			if err = writer.Reverse(); err != nil {
-				return false, fmt.Errorf("check mode new table reverse failed: %v", err)
-			}
-		}
-		endTime := time.Now()
-		service.Logger.Warn("table not exists",
-			zap.String("oracle table", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)),
-			zap.String("create mysql table", fmt.Sprintf("%s.%s", d.TargetSchemaName, d.TableName)),
-			zap.String("cost", endTime.Sub(startTime).String()))
-
-		return false, nil
-	}
-	return true, nil
-}
 func (d *DiffWriter) DiffTable() error {
 	startTime := time.Now()
 	service.Logger.Info("check table start",

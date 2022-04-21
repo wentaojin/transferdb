@@ -35,10 +35,9 @@ TransferDB 使用手册
       3. ORACLE 字符数据类型 Char / Bytes ，默认 Bytes，MySQL/TiDB 是字符长度，TransferDB 只有当 Scale 数值不一致时才输出不一致
       4. 字符集检查（only 表），匹配转换 Oracle AL32UTF8 -> UTF8MB4/ ZHS16GBK -> GBK 检查，ORACLE GBK 统一视作 UTF8MB4 检查，其他暂不支持检查
       5. 排序规则检查（only 表以及字段列），ORACLE 12.2 及以上版本按字段、表维度匹配转换检查，ORACLE 12.2 以下版本按 DB 维度匹配转换检查
-      6. 上游表结构存在，下游不存在，自动生成相关表结构语句输出到 reverse_${sourcedb}.sql/compatibility_${sourcedb}.sql 文件
-      7. TiDB 数据库排除外键、检查约束对比，MySQL 低版本只检查外键约束，高版本外键、检查约束都对比
-      8. MySQL/TiDB timestamp 类型只支持精度 6，oracle 精度最大是 9，会检查出来但是保持原样
-      9. 程序 check 阶段若遇到报错则进程不终止，日志最后会输出警告信息，具体错误表以及对应错误详情见 {元数据库} 内表 [table_error_detail] 数据
+      6. TiDB 数据库排除外键、检查约束对比，MySQL 低版本只检查外键约束，高版本外键、检查约束都对比
+      7. MySQL/TiDB timestamp 类型只支持精度 6，oracle 精度最大是 9，会检查出来但是保持原样
+      8. 程序 check 阶段若遇到报错则进程不终止，日志最后会输出警告信息，具体错误表以及对应错误详情见 {元数据库} 内表 [table_error_detail] 数据
 
 3. 对象信息收集
    1. 收集现有 ORACLE 数据库内表、索引、分区表、字段长度等信息，输出类似 AWR 报告 report_${sourcedb}.html 文件，用于评估迁移至 MySQL/TiDB 成本

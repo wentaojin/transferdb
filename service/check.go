@@ -334,13 +334,17 @@ func (e *Engine) GetMySQLPartitionTableINFO(schemaName, tableName string) ([]map
 	return res, nil
 }
 
-func (e *Engine) IsExistMySQLTable(schemaName, tableName string) (bool, error) {
-	_, res, err := Query(e.MysqlDB, fmt.Sprintf(`SELECT COUNT(1) COUNT FROM INFORMATION_SCHEMA.TABLES where UPPER(TABLE_SCHEMA) = '%s' AND UPPER(TABLE_NAME) = '%s'`, strings.ToUpper(schemaName), strings.ToUpper(tableName)))
+func (e *Engine) GetMySQLTable(schemaName string) ([]string, error) {
+	_, res, err := Query(e.MysqlDB, fmt.Sprintf(`SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES where UPPER(TABLE_SCHEMA) = '%s'`, strings.ToUpper(schemaName)))
 	if err != nil {
-		return false, err
+		return []string{}, err
 	}
-	if res[0]["COUNT"] == "0" {
-		return false, nil
+	var tables []string
+	if len(res) > 0 {
+		for _, r := range res {
+			tables = append(tables, r["TABLE_NAME"])
+		}
 	}
-	return true, nil
+
+	return tables, nil
 }
