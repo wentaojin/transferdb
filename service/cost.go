@@ -660,9 +660,9 @@ func (e *Engine) GetOracleTableRowLengthOver6M(schemaName []string) ([]map[strin
 func (e *Engine) GetOracleTableIndexLengthOver3072(schemaName []string) ([]map[string]string, error) {
 	var sql string
 	if len(schemaName) == 0 {
-		sql = `select INDEX_OWNER,INDEX_NAME,TABLE_NAME,sum(COLUMN_LENGTH) COUNT  from dba_ind_columns where TABLE_OWNER not in ('HR','DVF','DVSYS','LBACSYS','MDDATA','OLAPSYS','ORDPLUGINS','ORDDATA','MDSYS','SI_INFORMTN_SCHEMA','ORDSYS','CTXSYS','OJVMSYS','WMSYS','ANONYMOUS','XDB','GGSYS','GSMCATUSER','APPQOSSYS','DBSNMP','SYS$UMF','ORACLE_OCM','DBSFWUSER','REMOTE_SCHEDULER_AGENT','XS$NULL','DIP','GSMROOTUSER','GSMADMIN_INTERNAL','GSMUSER','OUTLN','SYSBACKUP','SYSDG','SYSTEM','SYSRAC','AUDSYS','SYSKM','SYS') group by INDEX_OWNER,INDEX_NAME,TABLE_NAME  having sum(COLUMN_LENGTH) > 3072`
+		sql = `select INDEX_OWNER,INDEX_NAME,TABLE_NAME,sum(COLUMN_LENGTH)*4 COUNT  from dba_ind_columns where TABLE_OWNER not in ('HR','DVF','DVSYS','LBACSYS','MDDATA','OLAPSYS','ORDPLUGINS','ORDDATA','MDSYS','SI_INFORMTN_SCHEMA','ORDSYS','CTXSYS','OJVMSYS','WMSYS','ANONYMOUS','XDB','GGSYS','GSMCATUSER','APPQOSSYS','DBSNMP','SYS$UMF','ORACLE_OCM','DBSFWUSER','REMOTE_SCHEDULER_AGENT','XS$NULL','DIP','GSMROOTUSER','GSMADMIN_INTERNAL','GSMUSER','OUTLN','SYSBACKUP','SYSDG','SYSTEM','SYSRAC','AUDSYS','SYSKM','SYS') group by INDEX_OWNER,INDEX_NAME,TABLE_NAME  having sum(COLUMN_LENGTH)*4 > 3072`
 	} else {
-		sql = fmt.Sprintf(`select INDEX_OWNER,INDEX_NAME,TABLE_NAME,sum(COLUMN_LENGTH) COUNT from dba_ind_columns where TABLE_OWNER IN (%s) group by INDEX_OWNER,INDEX_NAME,TABLE_NAME  having sum(COLUMN_LENGTH) > 3072`, strings.Join(schemaName, ","))
+		sql = fmt.Sprintf(`select INDEX_OWNER,INDEX_NAME,TABLE_NAME,sum(COLUMN_LENGTH)*4 COUNT from dba_ind_columns where TABLE_OWNER IN (%s) group by INDEX_OWNER,INDEX_NAME,TABLE_NAME  having sum(COLUMN_LENGTH)*4 > 3072`, strings.Join(schemaName, ","))
 	}
 
 	_, res, err := Query(e.OracleDB, sql)
