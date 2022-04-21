@@ -35,6 +35,7 @@ type Table struct {
 	SourceSchemaName      string
 	TargetSchemaName      string
 	SourceTableName       string
+	TargetDBType          string
 	TargetTableName       string
 	OracleCollation       bool
 	SourceSchemaCollation string // 可为空
@@ -652,8 +653,10 @@ func (t *Table) String() string {
 }
 
 // 加载表列表
-func LoadOracleToMySQLTableList(engine *service.Engine, exporterTableSlice []string, sourceSchema, targetSchema, nlsSort, nlsComp string, overwrite bool, threads int) ([]Table, []string, []string, []string, error) {
+func LoadOracleToMySQLTableList(engine *service.Engine, cfg *service.CfgFile, exporterTableSlice []string, nlsSort, nlsComp string) ([]Table, []string, []string, []string, error) {
 	var tables []Table
+
+	sourceSchema := strings.ToUpper(cfg.SourceConfig.SchemaName)
 
 	beginTime := time.Now()
 	defer func() {
@@ -794,7 +797,7 @@ func LoadOracleToMySQLTableList(engine *service.Engine, exporterTableSlice []str
 	}()
 
 	// 数据处理
-	for c := 0; c < threads; c++ {
+	for c := 0; c < cfg.AppConfig.Threads; c++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -802,13 +805,14 @@ func LoadOracleToMySQLTableList(engine *service.Engine, exporterTableSlice []str
 				// 库名、表名规则
 				tbl := Table{
 					SourceSchemaName: strings.ToUpper(sourceSchema),
-					TargetSchemaName: strings.ToUpper(targetSchema),
+					TargetSchemaName: strings.ToUpper(cfg.TargetConfig.SchemaName),
 					SourceTableName:  strings.ToUpper(ts),
+					TargetDBType:     strings.ToUpper(cfg.TargetConfig.DBType),
 					TargetTableName:  strings.ToUpper(ts),
 					SourceTableType:  tablesMap[ts],
 					SourceDBNLSSort:  nlsSort,
 					SourceDBNLSComp:  nlsComp,
-					Overwrite:        overwrite,
+					Overwrite:        cfg.TargetConfig.Overwrite,
 					Engine:           engine,
 				}
 				tbl.OracleCollation = oraCollation

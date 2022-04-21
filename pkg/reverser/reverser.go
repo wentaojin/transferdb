@@ -82,7 +82,8 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 	}
 
 	// 表列表
-	tables, partitionTableList, temporaryTableList, clusteredTableList, err := LoadOracleToMySQLTableList(engine, exporterTableSlice, cfg.SourceConfig.SchemaName, cfg.TargetConfig.SchemaName, nlsSort, nlsComp, cfg.TargetConfig.Overwrite, cfg.AppConfig.Threads)
+	tables, partitionTableList, temporaryTableList, clusteredTableList, err := LoadOracleToMySQLTableList(
+		engine, cfg, exporterTableSlice, nlsSort, nlsComp)
 	if err != nil {
 		return err
 	}

@@ -64,16 +64,11 @@ func NewReverseWriter(t Table, revFileMW, compFileMW *FileMW) (*ReverseWriter, e
 		return nil, err
 	}
 
-	var (
-		dbVersion string
-		dbType    string
-	)
+	var dbVersion string
 
-	if strings.Contains(mysqlVersion, utils.TiDBTargetDBType) {
+	if strings.ToUpper(t.TargetDBType) == utils.TiDBTargetDBType {
 		dbVersion = mysqlVersion
-		dbType = utils.TiDBTargetDBType
 	} else {
-		dbType = utils.MySQLTargetDBType
 		if strings.Contains(mysqlVersion, utils.MySQLVersionDelimiter) {
 			dbVersion = strings.Split(mysqlVersion, utils.MySQLVersionDelimiter)[0]
 		} else {
@@ -121,7 +116,7 @@ func NewReverseWriter(t Table, revFileMW, compFileMW *FileMW) (*ReverseWriter, e
 	}
 
 	return &ReverseWriter{
-		DBType:            dbType,
+		DBType:            t.TargetDBType,
 		DBVersion:         dbVersion,
 		CreateTable:       tableStruct,
 		CreateUK:          ukSQL,

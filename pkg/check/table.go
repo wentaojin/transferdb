@@ -347,7 +347,7 @@ func GetOracleConstraint(schemaName, tableName string, engine *service.Engine) (
 /*
 	MySQL
 */
-func NewMySQLTableINFO(schemaName, tableName string, engine *service.Engine) (*Table, string, error) {
+func NewMySQLTableINFO(schemaName, tableName, targetDBType string, engine *service.Engine) (*Table, string, error) {
 	mysqlTable := &Table{
 		SchemaName: schemaName,
 		TableName:  tableName,
@@ -360,7 +360,7 @@ func NewMySQLTableINFO(schemaName, tableName string, engine *service.Engine) (*T
 
 	// 是否 TiDB 版本
 	isTiDB := false
-	if strings.Contains(version, "TiDB") {
+	if strings.ToUpper(targetDBType) == utils.TiDBTargetDBType {
 		isTiDB = true
 	}
 

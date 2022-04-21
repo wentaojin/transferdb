@@ -140,11 +140,13 @@ exclude-table = []
 
 # 只用于 prepare/reverse/check/all/full 阶段，gather 阶段不适用
 [target]
-# 目标端 mysql 连接串
+# 数据库类型，only mysql/tidb
+db-type = "tidb"
+# 目标端连接串
 username = "marvin"
 password = "marvin"
 host = "172.16.4.207"
-port = 3900
+port = 4000
 # mysql 链接参数
 # 数据库时间字符串化，'2022-03-30T15:06:09+08:00' -> '2022-03-30T15:06:09'，数据库连接参数禁止配置 parseTime=True&loc=Local
 connect-params = "charset=utf8mb4&multiStatements=true"

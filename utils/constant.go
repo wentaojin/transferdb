@@ -53,8 +53,8 @@ const (
 	DefaultValueSysdateMap = "NOW()"
 
 	// 目标数据库类型
-	TiDBTargetDBType  = "TiDB"
-	MySQLTargetDBType = "MySQL"
+	TiDBTargetDBType  = "TIDB"
+	MySQLTargetDBType = "MYSQL"
 
 	// 数据全量/实时同步 Oracle 版本要求
 	// 要求 oracle 11g 及以上

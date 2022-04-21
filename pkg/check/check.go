@@ -177,13 +177,12 @@ func OracleTableToMySQLMappingCheck(engine *service.Engine, cfg *service.CfgFile
 		go func(
 			sourceSchemaName, targetSchemaName, characterSet, nlsSort, nlsComp string,
 			tblCollation map[string]string, schemaCollation string,
-			oraCollation bool, engine *service.Engine, wrCheck, wrReverse, weComp *reverser.FileMW) {
+			oraCollation bool, engine *service.Engine, cfg *service.CfgFile, wrCheck, wrReverse, weComp *reverser.FileMW) {
 			defer wg.Done()
 			for t := range ch {
-				wr := NewDiffWriter(sourceSchemaName, targetSchemaName,
-					t, characterSet, nlsSort, nlsComp,
-					tblCollation, schemaCollation, oraCollation,
-					engine, wrCheck, wrReverse, weComp)
+				wr := NewDiffWriter(sourceSchemaName, targetSchemaName, t, characterSet,
+					nlsSort, nlsComp, tblCollation, schemaCollation, oraCollation,
+					engine, cfg, wrCheck, wrReverse, weComp)
 				ok, err := wr.CheckTable()
 				if err != nil {
 					if err = engine.GormDB.Create(&service.TableErrorDetail{
@@ -230,9 +229,8 @@ func OracleTableToMySQLMappingCheck(engine *service.Engine, cfg *service.CfgFile
 				}
 			}
 
-		}(cfg.SourceConfig.SchemaName, cfg.TargetConfig.SchemaName,
-			characterSet, nlsSort, nlsComp, tblCollation, schemaCollation, oraCollation,
-			engine, wrCheck, wrReverse, wrComp)
+		}(cfg.SourceConfig.SchemaName, cfg.TargetConfig.SchemaName, characterSet, nlsSort, nlsComp, tblCollation, schemaCollation, oraCollation,
+			engine, cfg, wrCheck, wrReverse, wrComp)
 	}
 
 	wg.Wait()

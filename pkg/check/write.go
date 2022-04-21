@@ -44,6 +44,7 @@ type DiffWriter struct {
 	SourceTableCollation  string
 	SourceSchemaCollation string
 	Engine                *service.Engine  `json:"-"`
+	Cfg                   *service.CfgFile `json:"-"`
 	ChkFileMW             *reverser.FileMW `json:"-"`
 	RevFileMW             *reverser.FileMW `json:"-"`
 	CompFileMW            *reverser.FileMW `json:"-"`
@@ -54,7 +55,7 @@ func NewDiffWriter(sourceSchemaName, targetSchemaName, tableName,
 	sourceTableCollation map[string]string,
 	sourceSchemaCollation string,
 	oracleCollation bool,
-	engine *service.Engine, chkFileMW, revFileMW, compFileMW *reverser.FileMW) *DiffWriter {
+	engine *service.Engine, cfg *service.CfgFile, chkFileMW, revFileMW, compFileMW *reverser.FileMW) *DiffWriter {
 	return &DiffWriter{
 		SourceSchemaName:      strings.ToUpper(sourceSchemaName),
 		TargetSchemaName:      strings.ToUpper(targetSchemaName),
@@ -66,6 +67,7 @@ func NewDiffWriter(sourceSchemaName, targetSchemaName, tableName,
 		SourceSchemaCollation: sourceSchemaCollation,
 		SourceTableCollation:  sourceTableCollation[strings.ToUpper(tableName)],
 		Engine:                engine,
+		Cfg:                   cfg,
 		ChkFileMW:             chkFileMW,
 		RevFileMW:             revFileMW,
 		CompFileMW:            compFileMW,
@@ -92,7 +94,8 @@ func (d *DiffWriter) CheckTable() (bool, error) {
 	if !isExist {
 		startTime := time.Now()
 		// 表列表
-		reverseTables, partitionTableList, temporaryTableList, clusteredTableList, err := reverser.LoadOracleToMySQLTableList(d.Engine, []string{d.TableName}, d.SourceSchemaName, d.TargetSchemaName, d.SourceDBNLSSort, d.SourceDBNLSComp, false, 128)
+		reverseTables, partitionTableList, temporaryTableList, clusteredTableList, err := reverser.LoadOracleToMySQLTableList(
+			d.Engine, d.Cfg, []string{d.TableName}, d.SourceDBNLSSort, d.SourceDBNLSComp)
 		if err != nil {
 			return false, err
 		}
@@ -135,13 +138,13 @@ func (d *DiffWriter) DiffTable() error {
 		return err
 	}
 
-	mysqlTable, mysqlVersion, err := NewMySQLTableINFO(d.TargetSchemaName, d.TableName, d.Engine)
+	mysqlTable, mysqlVersion, err := NewMySQLTableINFO(d.TargetSchemaName, d.TableName, d.Cfg.TargetConfig.DBType, d.Engine)
 	if err != nil {
 		return err
 	}
 
 	isTiDB := false
-	if strings.Contains(mysqlVersion, "TiDB") {
+	if strings.ToUpper(d.Cfg.TargetConfig.DBType) == utils.TiDBTargetDBType {
 		isTiDB = true
 	}
 
