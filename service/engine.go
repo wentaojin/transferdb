@@ -27,8 +27,6 @@ import (
 	"github.com/scylladb/go-set"
 	"github.com/thinkeridea/go-extend/exstrings"
 
-	"github.com/shopspring/decimal"
-
 	"github.com/xxjwxc/gowp/workpool"
 
 	"github.com/wentaojin/transferdb/utils"
@@ -171,7 +169,7 @@ func (e *Engine) BatchWriteMySQLTableData(targetSchemaName, targetTableName, sql
 	return nil
 }
 
-// 获取表字段名以及行数据 -> 用于FULL/ALL
+// 获取表字段名以及行数据 -> 用于 FULL/ALL
 func (e *Engine) GetOracleTableRows(querySQL string, insertBatchSize int) ([]string, []string, error) {
 	var (
 		err          error
@@ -260,28 +258,7 @@ func (e *Engine) GetOracleTableRows(querySQL string, insertBatchSize int) ([]str
 					}
 					rowsResult = append(rowsResult, fmt.Sprintf("%v", r))
 				default:
-					ok := utils.IsNum(string(raw))
-					if ok {
-						r, err := decimal.NewFromString(string(raw))
-						if err != nil {
-							return cols, batchResults, err
-						}
-						if r.IsInteger() {
-							r, err := utils.StrconvIntBitSize(string(raw), 64)
-							if err != nil {
-								return cols, batchResults, err
-							}
-							rowsResult = append(rowsResult, fmt.Sprintf("%v", r))
-						} else {
-							r, err := utils.StrconvFloatBitSize(string(raw), 64)
-							if err != nil {
-								return cols, batchResults, err
-							}
-							rowsResult = append(rowsResult, fmt.Sprintf("%v", r))
-						}
-					} else {
-						rowsResult = append(rowsResult, fmt.Sprintf("'%v'", string(raw)))
-					}
+					rowsResult = append(rowsResult, fmt.Sprintf("'%v'", string(raw)))
 				}
 			}
 		}
@@ -401,28 +378,7 @@ func (e *Engine) GetOracleDataRowStrings(querySQL string) ([]string, *strset.Set
 					}
 					rowsTMP = append(rowsTMP, fmt.Sprintf("%v", r))
 				default:
-					ok := utils.IsNum(string(raw))
-					if ok {
-						r, err := decimal.NewFromString(string(raw))
-						if err != nil {
-							return cols, stringSet, crc32Value, err
-						}
-						if r.IsInteger() {
-							r, err := utils.StrconvIntBitSize(string(raw), 64)
-							if err != nil {
-								return cols, stringSet, crc32Value, err
-							}
-							rowsTMP = append(rowsTMP, fmt.Sprintf("%v", r))
-						} else {
-							r, err := utils.StrconvFloatBitSize(string(raw), 64)
-							if err != nil {
-								return cols, stringSet, crc32Value, err
-							}
-							rowsTMP = append(rowsTMP, fmt.Sprintf("%v", r))
-						}
-					} else {
-						rowsTMP = append(rowsTMP, fmt.Sprintf("'%v'", string(raw)))
-					}
+					rowsTMP = append(rowsTMP, fmt.Sprintf("'%v'", string(raw)))
 				}
 			}
 		}
@@ -538,28 +494,7 @@ func (e *Engine) GetMySQLDataRowStrings(querySQL string) ([]string, *strset.Set,
 					}
 					rowsTMP = append(rowsTMP, fmt.Sprintf("%v", r))
 				default:
-					ok := utils.IsNum(string(raw))
-					if ok {
-						r, err := decimal.NewFromString(string(raw))
-						if err != nil {
-							return cols, stringSet, crc32Value, err
-						}
-						if r.IsInteger() {
-							r, err := utils.StrconvIntBitSize(string(raw), 64)
-							if err != nil {
-								return cols, stringSet, crc32Value, err
-							}
-							rowsTMP = append(rowsTMP, fmt.Sprintf("%v", r))
-						} else {
-							r, err := utils.StrconvFloatBitSize(string(raw), 64)
-							if err != nil {
-								return cols, stringSet, crc32Value, err
-							}
-							rowsTMP = append(rowsTMP, fmt.Sprintf("%v", r))
-						}
-					} else {
-						rowsTMP = append(rowsTMP, fmt.Sprintf("'%v'", string(raw)))
-					}
+					rowsTMP = append(rowsTMP, fmt.Sprintf("'%v'", string(raw)))
 				}
 			}
 		}

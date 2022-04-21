@@ -103,12 +103,23 @@ func (f *FileWriter) write(w io.Writer) error {
 	writer := bufio.NewWriter(w)
 	if f.Header {
 		if _, err := writer.WriteString(utils.StringsBuilder(exstrings.Join(f.Columns, f.Separator), f.Terminator)); err != nil {
-			return fmt.Errorf("failed to write headers: %w", err)
+			return fmt.Errorf("failed to write headers: %v", err)
 		}
 	}
 
 	// 统计行数
 	var rowCount int
+
+	var columnTypes []string
+	colTypes, err := f.Rows.ColumnTypes()
+	if err != nil {
+		return fmt.Errorf("failed to csv get rows columnTypes: %v", err)
+	}
+
+	for _, ct := range colTypes {
+		// 数据库字段类型 DatabaseTypeName() 映射 go 类型 ScanType()
+		columnTypes = append(columnTypes, ct.ScanType().String())
+	}
 
 	// 数据 SCAN
 	columns := len(f.Columns)
@@ -124,12 +135,12 @@ func (f *FileWriter) write(w io.Writer) error {
 
 		var results []string
 
-		err := f.Rows.Scan(dest...)
+		err = f.Rows.Scan(dest...)
 		if err != nil {
 			return err
 		}
 
-		for _, raw := range rawResult {
+		for i, raw := range rawResult {
 			// 注意 Oracle/Mysql NULL VS 空字符串区别
 			// Oracle 空字符串与 NULL 归于一类，统一 NULL 处理 （is null 可以查询 NULL 以及空字符串值，空字符串查询无法查询到空字符串值）
 			// Mysql 空字符串与 NULL 非一类，NULL 是 NULL，空字符串是空字符串（is null 只查询 NULL 值，空字符串查询只查询到空字符串值）
@@ -140,10 +151,38 @@ func (f *FileWriter) write(w io.Writer) error {
 			} else if string(raw) == "" {
 				results = append(results, "NULL")
 			} else {
-				ok := utils.IsNum(string(raw))
-				if ok {
-					results = append(results, string(raw))
-				} else {
+				switch columnTypes[i] {
+				case "int64":
+					r, err := utils.StrconvIntBitSize(string(raw), 64)
+					if err != nil {
+						return err
+					}
+					results = append(results, fmt.Sprintf("%v", r))
+				case "uint64":
+					r, err := utils.StrconvUintBitSize(string(raw), 64)
+					if err != nil {
+						return err
+					}
+					results = append(results, fmt.Sprintf("%v", r))
+				case "float32":
+					r, err := utils.StrconvFloatBitSize(string(raw), 32)
+					if err != nil {
+						return err
+					}
+					results = append(results, fmt.Sprintf("%v", r))
+				case "float64":
+					r, err := utils.StrconvFloatBitSize(string(raw), 64)
+					if err != nil {
+						return err
+					}
+					results = append(results, fmt.Sprintf("%v", r))
+				case "rune":
+					r, err := utils.StrconvRune(string(raw))
+					if err != nil {
+						return err
+					}
+					results = append(results, fmt.Sprintf("%v", r))
+				default:
 					var (
 						by []byte
 						bs string

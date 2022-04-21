@@ -80,9 +80,8 @@ TransferDB 使用手册
 
 2、上传 oracle client 至程序运行服务器，并解压到指定目录，比如：/data1/soft/client/instantclient_19_8
 
-3、配置程序运行环境变量 LD_LIBRARY_PATH
-export LD_LIBRARY_PATH=/data1/soft/client/instantclient_19_8
-echo $LD_LIBRARY_PATH
+3、配置 transferdb config.toml 参数文件, oracle instance client 参数 lib-dir
+lib-dir = "/data1/soft/client/instantclient_19_8"
 
 4、配置 transferdb 参数文件，config.toml 相关参数配置说明见 conf/config.toml
 
