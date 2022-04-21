@@ -98,6 +98,7 @@ type SourceConfig struct {
 	Host          string   `toml:"host" json:"host"`
 	Port          int      `toml:"port" json:"port"`
 	ServiceName   string   `toml:"service-name" json:"service-name"`
+	LibDir        string   `toml:"lib-dir" json:"lib-dir"`
 	ConnectParams string   `toml:"connect-params" json:"connect-params"`
 	SessionParams []string `toml:"session-params" json:"session-params"`
 	SchemaName    string   `toml:"schema-name" json:"schema-name"`

@@ -44,6 +44,7 @@ func NewOracleDBEngine(oraCfg service.SourceConfig) (*sql.DB, error) {
 	}
 
 	oraDSN.OnInitStmts = oraCfg.SessionParams
+	oraDSN.LibDir = oraCfg.LibDir
 
 	sqlDB := sql.OpenDB(godror.NewConnector(oraDSN))
 	sqlDB.SetMaxIdleConns(0)
