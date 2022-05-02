@@ -151,7 +151,6 @@ password = "marvin"
 host = "172.16.4.207"
 port = 4000
 # mysql 链接参数
-# 数据库时间字符串化，'2022-03-30T15:06:09+08:00' -> '2022-03-30T15:06:09'，数据库连接参数禁止配置 parseTime=True&loc=Local
 connect-params = "charset=utf8mb4&multiStatements=true&parseTime=True&loc=Local"
 # 目标端元数据库
 # CREATE DATABASE IF NOT EXIST db_meta
