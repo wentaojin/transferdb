@@ -12,6 +12,7 @@ require (
 	github.com/pingcap/tidb v1.1.0-beta.0.20200630082100-328b6d0a955c
 	github.com/pkg/errors v0.9.1
 	github.com/scylladb/go-set v1.0.2
+	github.com/shopspring/decimal v1.3.1
 	github.com/stretchr/testify v1.7.0 // indirect
 	github.com/thinkeridea/go-extend v1.3.2
 	github.com/xxjwxc/gowp v0.0.0-20200603141413-57c3ba7108be

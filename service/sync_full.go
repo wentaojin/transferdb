@@ -226,7 +226,7 @@ func (e *Engine) TruncateMySQLTableRecord(targetSchemaName string, tableName str
 	return nil
 }
 
-func (e *Engine) InitWaitAndFullSyncMetaRecord(sourceSchema, sourceTable, targetSchema, targetTable string, workerID, globalSCN int, chunkSize, insertBatchSize int,
+func (e *Engine) InitWaitAndFullSyncMetaRecord(sourceSchema, sourceTable, sourceColumnInfo, targetSchema, targetTable string, workerID, globalSCN int, chunkSize, insertBatchSize int,
 	csvDataDir, syncMode string) error {
 	tableRows, isPartition, err := e.getOracleTableRowsByStatistics(sourceSchema, sourceTable)
 	if err != nil {
@@ -235,7 +235,7 @@ func (e *Engine) InitWaitAndFullSyncMetaRecord(sourceSchema, sourceTable, target
 
 	// 统计信息数据行数 0，直接全表扫
 	if tableRows == 0 {
-		sql := utils.StringsBuilder(`SELECT * FROM `, sourceSchema, `.`, sourceTable)
+		sql := utils.StringsBuilder(`SELECT `, sourceColumnInfo, ` FROM `, sourceSchema, `.`, sourceTable)
 		Logger.Warn("get oracle table rows",
 			zap.String("schema", sourceSchema),
 			zap.String("table", sourceTable),
@@ -286,7 +286,7 @@ func (e *Engine) InitWaitAndFullSyncMetaRecord(sourceSchema, sourceTable, target
 		return err
 	}
 
-	rowCounts, err := e.GetOracleTableChunksByRowID(taskName, strings.ToUpper(sourceSchema), strings.ToUpper(sourceTable),
+	rowCounts, err := e.GetOracleTableChunksByRowID(taskName, strings.ToUpper(sourceSchema), strings.ToUpper(sourceTable), sourceColumnInfo,
 		strings.ToUpper(targetSchema), strings.ToUpper(targetTable), globalSCN, insertBatchSize, csvDataDir, isPartition)
 	if err != nil {
 		return err
@@ -513,10 +513,10 @@ END;`)
 	return nil
 }
 
-func (e *Engine) GetOracleTableChunksByRowID(taskName, sourceSchema, sourceTable, targetSchema, targetTable string, globalSCN, insertBatchSize int, csvDataDir, isPartition string) (int, error) {
+func (e *Engine) GetOracleTableChunksByRowID(taskName, sourceSchema, sourceTable, sourceColumnInfo, targetSchema, targetTable string, globalSCN, insertBatchSize int, csvDataDir, isPartition string) (int, error) {
 	var rowCount int
 
-	querySQL := utils.StringsBuilder(`SELECT 'SELECT * FROM `, sourceSchema, `.`, sourceTable, ` WHERE ROWID BETWEEN ''' || start_rowid || ''' AND ''' || end_rowid || '''' CMD FROM user_parallel_execute_chunks WHERE  task_name = '`, taskName, `' ORDER BY chunk_id`)
+	querySQL := utils.StringsBuilder(`SELECT 'SELECT `, sourceColumnInfo, ` FROM `, sourceSchema, `.`, sourceTable, ` WHERE ROWID BETWEEN ''' || start_rowid || ''' AND ''' || end_rowid || '''' CMD FROM user_parallel_execute_chunks WHERE  task_name = '`, taskName, `' ORDER BY chunk_id`)
 
 	_, res, err := Query(e.OracleDB, querySQL)
 	if err != nil {
@@ -525,7 +525,7 @@ func (e *Engine) GetOracleTableChunksByRowID(taskName, sourceSchema, sourceTable
 
 	// 判断数据是否存在，跳过 full_sync_meta 记录，更新 wait_sync_meta 记录，无需同步
 	if len(res) == 0 {
-		querySQL = utils.StringsBuilder(`SELECT * FROM `, sourceSchema, `.`, sourceTable)
+		querySQL = utils.StringsBuilder(`SELECT `, sourceColumnInfo, ` FROM `, sourceSchema, `.`, sourceTable)
 		Logger.Warn("get oracle table rowids rows",
 			zap.String("schema", sourceSchema),
 			zap.String("table", sourceSchema),
@@ -614,4 +614,56 @@ func (e *Engine) getOracleTableRowsByStatistics(schemaName, tableName string) (i
 			fmt.Sprintf("%s.%s", schemaName, tableName), err)
 	}
 	return numRows, res[0]["PARTITIONED"], nil
+}
+
+func (e *Engine) AdjustTableSelectColumn(schemaName, tableName string, oraCollation bool) (string, error) {
+	columnInfo, err := e.GetOracleTableColumn(schemaName, tableName, oraCollation)
+	if err != nil {
+		return "", err
+	}
+
+	var columnNames []string
+
+	for _, rowCol := range columnInfo {
+		switch strings.ToUpper(rowCol["DATA_TYPE"]) {
+		// 数字
+		case "NUMBER":
+			columnNames = append(columnNames, rowCol["COLUMN_NAME"])
+		case "DECIMAL", "DEC", "DOUBLE PRECISION", "FLOAT", "INTEGER", "INT", "REAL", "NUMERIC", "BINARY_FLOAT", "BINARY_DOUBLE", "SMALLINT":
+			columnNames = append(columnNames, rowCol["COLUMN_NAME"])
+		// 字符
+		case "BFILE", "CHARACTER", "LONG", "NCHAR VARYING", "ROWID", "UROWID", "VARCHAR", "XMLTYPE", "CHAR", "NCHAR", "NVARCHAR2", "NCLOB", "CLOB":
+			columnNames = append(columnNames, rowCol["COLUMN_NAME"])
+		// 二进制
+		case "BLOB", "LONG RAW", "RAW":
+			columnNames = append(columnNames, rowCol["COLUMN_NAME"])
+		// 时间
+		case "DATE":
+			columnNames = append(columnNames, utils.StringsBuilder("TO_CHAR(", rowCol["COLUMN_NAME"], ",'yyyy-MM-dd HH24:mi:ss') AS ", rowCol["COLUMN_NAME"]))
+		// 默认其他类型
+		default:
+			if strings.Contains(rowCol["DATA_TYPE"], "INTERVAL") {
+				columnNames = append(columnNames, utils.StringsBuilder("TO_CHAR(", rowCol["COLUMN_NAME"], ") AS ", rowCol["COLUMN_NAME"]))
+			} else if strings.Contains(rowCol["DATA_TYPE"], "TIMESTAMP") {
+				dataScale, err := strconv.Atoi(rowCol["DATA_SCALE"])
+				if err != nil {
+					return "", err
+				}
+				if dataScale == 0 {
+					columnNames = append(columnNames, utils.StringsBuilder("TO_CHAR(", rowCol["COLUMN_NAME"], ",'yyyy-mm-dd hh24:mi:ss') AS ", rowCol["COLUMN_NAME"]))
+				} else if dataScale < 0 && dataScale <= 6 {
+					columnNames = append(columnNames, utils.StringsBuilder("TO_CHAR(", rowCol["COLUMN_NAME"],
+						",'yyyy-mm-dd hh24:mi:ss.ff", rowCol["DATA_SCALE"], "') AS ", rowCol["COLUMN_NAME"]))
+				} else {
+					columnNames = append(columnNames, utils.StringsBuilder("TO_CHAR(", rowCol["COLUMN_NAME"], ",'yyyy-mm-dd hh24:mi:ss.ff6') AS ", rowCol["COLUMN_NAME"]))
+				}
+
+			} else {
+				columnNames = append(columnNames, rowCol["COLUMN_NAME"])
+			}
+		}
+
+	}
+
+	return strings.Join(columnNames, ","), nil
 }

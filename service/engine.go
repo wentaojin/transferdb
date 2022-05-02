@@ -18,11 +18,10 @@ package service
 import (
 	"database/sql"
 	"fmt"
+	"github.com/scylladb/go-set/strset"
 	"hash/crc32"
 	"strings"
 	"sync/atomic"
-
-	"github.com/scylladb/go-set/strset"
 
 	"github.com/scylladb/go-set"
 	"github.com/thinkeridea/go-extend/exstrings"
@@ -31,6 +30,7 @@ import (
 
 	"github.com/wentaojin/transferdb/utils"
 
+	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
 )
 
@@ -170,7 +170,7 @@ func (e *Engine) BatchWriteMySQLTableData(targetSchemaName, targetTableName, sql
 }
 
 // 获取表字段名以及行数据 -> 用于 FULL/ALL
-func (e *Engine) GetOracleTableRows(querySQL string, insertBatchSize int) ([]string, []string, error) {
+func (e *Engine) GetOracleTableRowsData(querySQL string, insertBatchSize int) ([]string, []string, error) {
 	var (
 		err          error
 		rowsResult   []string
@@ -189,7 +189,10 @@ func (e *Engine) GetOracleTableRows(querySQL string, insertBatchSize int) ([]str
 	}
 
 	// 用于判断字段值是数字还是字符
-	var columnTypes []string
+	var (
+		columnTypes   []string
+		databaseTypes []string
+	)
 	colTypes, err := rows.ColumnTypes()
 	if err != nil {
 		return cols, batchResults, err
@@ -198,6 +201,7 @@ func (e *Engine) GetOracleTableRows(querySQL string, insertBatchSize int) ([]str
 	for _, ct := range colTypes {
 		// 数据库字段类型 DatabaseTypeName() 映射 go 类型 ScanType()
 		columnTypes = append(columnTypes, ct.ScanType().String())
+		databaseTypes = append(databaseTypes, ct.DatabaseTypeName())
 	}
 
 	// 数据 Scan
@@ -257,6 +261,27 @@ func (e *Engine) GetOracleTableRows(querySQL string, insertBatchSize int) ([]str
 						return cols, batchResults, err
 					}
 					rowsResult = append(rowsResult, fmt.Sprintf("%v", r))
+				case "godror.Number":
+					r, err := decimal.NewFromString(string(raw))
+					if err != nil {
+						return cols, rowsResult, err
+					}
+					if r.IsInteger() {
+						si, err := utils.StrconvIntBitSize(string(raw), 64)
+						if err != nil {
+							return cols, rowsResult, err
+						}
+						rowsResult = append(rowsResult, fmt.Sprintf("%v", si))
+					} else {
+						rf, err := utils.StrconvFloatBitSize(string(raw), 64)
+						if err != nil {
+							return cols, rowsResult, err
+						}
+						rowsResult = append(rowsResult, fmt.Sprintf("%v", rf))
+					}
+				case "[]uint8":
+					// Raw、Long Raw 二进制数据
+					rowsResult = append(rowsResult, fmt.Sprintf("BINARY('%v')", string(raw)))
 				default:
 					rowsResult = append(rowsResult, fmt.Sprintf("'%v'", string(raw)))
 				}

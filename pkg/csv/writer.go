@@ -20,6 +20,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"github.com/shopspring/decimal"
 	"io"
 	"os"
 	"strings"
@@ -182,6 +183,28 @@ func (f *FileWriter) write(w io.Writer) error {
 						return err
 					}
 					results = append(results, fmt.Sprintf("%v", r))
+				case "godror.Number":
+					r, err := decimal.NewFromString(string(raw))
+					if err != nil {
+						return err
+					}
+					if r.IsInteger() {
+						si, err := utils.StrconvIntBitSize(string(raw), 64)
+						if err != nil {
+							return err
+						}
+						results = append(results, fmt.Sprintf("%v", si))
+					} else {
+						rf, err := utils.StrconvFloatBitSize(string(raw), 64)
+						if err != nil {
+							return err
+						}
+						results = append(results, fmt.Sprintf("%v", rf))
+					}
+				// TODO: 二进制数据类型如何处理
+				//case "[]uint8":
+				//	// Raw、Long Raw 二进制数据
+				//	rowsResult = append(rowsResult, fmt.Sprintf("BINARY('%v')", string(raw)))
 				default:
 					var (
 						by []byte

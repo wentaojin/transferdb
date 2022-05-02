@@ -160,17 +160,17 @@ func AdjustTableSelectColumn(e *service.Engine, schemaName, tableName string, so
 			sourceColumnInfo = append(sourceColumnInfo, colName)
 			targetColumnInfo = append(targetColumnInfo, colName)
 		// 字符
-		case "BFILE", "CHARACTER", "LONG", "LONG RAW", "NCHAR VARYING", "ROWID", "UROWID", "VARCHAR", "XMLTYPE", "CHAR", "NCHAR", "NVARCHAR2":
+		case "BFILE", "CHARACTER", "LONG", "NCHAR VARYING", "ROWID", "UROWID", "VARCHAR", "XMLTYPE", "CHAR", "NCHAR", "NVARCHAR2", "NCLOB", "CLOB":
 			sourceColumnInfo = append(sourceColumnInfo, colName)
 			targetColumnInfo = append(targetColumnInfo, colName)
 		// 二进制
-		case "CLOB", "BLOB", "NCLOB":
+		case "BLOB", "LONG RAW", "RAW":
 			sourceColumnInfo = append(sourceColumnInfo, colName)
 			targetColumnInfo = append(targetColumnInfo, colName)
 		// 时间
 		case "DATE":
 			sourceColumnInfo = append(sourceColumnInfo, utils.StringsBuilder("TO_CHAR(", colName, ",'yyyy-MM-dd HH24:mi:ss') AS ", colName))
-			targetColumnInfo = append(targetColumnInfo, colName)
+			targetColumnInfo = append(targetColumnInfo, utils.StringsBuilder("DATE_FORMAT(", colName, ",'%Y-%m-%d %H:%i:%s') AS ", colName))
 		// 默认其他类型
 		default:
 			if strings.Contains(colsInfo.DataType, "INTERVAL") {

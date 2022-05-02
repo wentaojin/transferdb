@@ -17,8 +17,8 @@ package main
 
 import (
 	"fmt"
-
 	"github.com/wentaojin/transferdb/service"
+	"github.com/wentaojin/transferdb/utils"
 
 	"github.com/wentaojin/transferdb/server"
 )
@@ -27,10 +27,11 @@ func main() {
 	oraCfg := service.SourceConfig{
 		Username:      "marvin",
 		Password:      "marvin",
-		Host:          "172.16.4.87",
+		Host:          "172.16.4.207",
 		Port:          1521,
-		ServiceName:   "oratidb",
-		ConnectParams: "poolMinSessions=10&poolMaxSessions=1000&poolWaitTimeout=60s&poolSessionMaxLifetime=1h&poolSessionTimeout=5m&poolIncrement=10&timezone=Asia/Shanghai",
+		ServiceName:   "helowin",
+		ConnectParams: "poolMinSessions=10&poolMaxSessions=1000&poolWaitTimeout=60s&poolSessionMaxLifetime=1h&poolSessionTimeout=5m&poolIncrement=1",
+		Timezone:      "Local",
 		SessionParams: []string{},
 		SchemaName:    "marvin",
 		IncludeTable:  nil,
@@ -76,7 +77,13 @@ func main() {
 	//	}
 	//}
 
-	_, r2, err := engine.GetOracleTableRows(`select * from marvin.marvin12`, 1)
+	// Date/Timestamp/Interval Year/Day 字段类型格式化
+	sourceColumnInfo, err := engine.AdjustTableSelectColumn("marvin", "marvin11", false)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	_, r2, err := engine.GetOracleTableRowsData(utils.StringsBuilder(`select `, sourceColumnInfo, ` from marvin.marvin11`), 1)
 	if err != nil {
 		fmt.Println(err)
 	}

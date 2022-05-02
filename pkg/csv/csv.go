@@ -41,6 +41,10 @@ func FullCSVOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service.Engin
 	if utils.VersionOrdinal(oraDBVersion) < utils.VersionOrdinal(utils.OracleSYNCRequireDBVersion) {
 		return fmt.Errorf("oracle db version [%v] is less than 11g, can't be using transferdb tools", oraDBVersion)
 	}
+	oracleCollation := false
+	if utils.VersionOrdinal(oraDBVersion) >= utils.VersionOrdinal(utils.OracleTableColumnCollationDBVersion) {
+		oracleCollation = true
+	}
 
 	// 获取配置文件待同步表列表
 	transferTableSlice, err := taskflow.GetTransferTableSliceByCfg(cfg, engine)
@@ -119,7 +123,7 @@ func FullCSVOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service.Engin
 	}
 
 	// 启动全量 CSV 任务
-	if err = startOracleTableFullCSV(cfg, engine, waitSyncTableInfo, partSyncTableInfo, taskflow.FullSyncMode); err != nil {
+	if err = startOracleTableFullCSV(cfg, engine, waitSyncTableInfo, partSyncTableInfo, taskflow.FullSyncMode, oracleCollation); err != nil {
 		return err
 	}
 

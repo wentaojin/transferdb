@@ -50,6 +50,10 @@ func FullSyncOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service.Engi
 	if utils.VersionOrdinal(oraDBVersion) < utils.VersionOrdinal(utils.OracleSYNCRequireDBVersion) {
 		return fmt.Errorf("oracle db version [%v] is less than 11g, can't be using transferdb tools", oraDBVersion)
 	}
+	oracleCollation := false
+	if utils.VersionOrdinal(oraDBVersion) >= utils.VersionOrdinal(utils.OracleTableColumnCollationDBVersion) {
+		oracleCollation = true
+	}
 
 	// 获取配置文件待同步表列表
 	transferTableSlice, err := GetTransferTableSliceByCfg(cfg, engine)
@@ -132,7 +136,7 @@ func FullSyncOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service.Engi
 	}
 
 	// 启动全量同步任务
-	if err = startOracleTableFullSync(cfg, engine, waitSyncTableInfo, partSyncTableInfo, FullSyncMode); err != nil {
+	if err = startOracleTableFullSync(cfg, engine, waitSyncTableInfo, partSyncTableInfo, FullSyncMode, oracleCollation); err != nil {
 		return err
 	}
 
@@ -157,6 +161,10 @@ func IncrementSyncOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service
 	}
 	if utils.VersionOrdinal(oraDBVersion) < utils.VersionOrdinal(utils.OracleSYNCRequireDBVersion) {
 		return fmt.Errorf("oracle db version [%v] is less than 11g, can't be using transferdb tools", oraDBVersion)
+	}
+	oracleCollation := false
+	if utils.VersionOrdinal(oraDBVersion) >= utils.VersionOrdinal(utils.OracleTableColumnCollationDBVersion) {
+		oracleCollation = true
 	}
 
 	// 获取配置文件待同步表列表
@@ -199,7 +207,7 @@ func IncrementSyncOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service
 	// 如果下游数据库增量元数据表 increment_sync_meta 不存在任何记录，说明未进行过数据同步，则进行全量 + 增量数据同步
 	if len(existTableList) == 0 && len(isNotExistTableList) == len(transferTableSlice) {
 		// 全量同步
-		if err = syncOracleFullTableRecordToMySQLUsingAllMode(cfg, engine, transferTableSlice, ALLSyncMode); err != nil {
+		if err = syncOracleFullTableRecordToMySQLUsingAllMode(cfg, engine, transferTableSlice, ALLSyncMode, oracleCollation); err != nil {
 			return err
 		}
 		// 增量数据同步
@@ -213,7 +221,7 @@ func IncrementSyncOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service
 	return fmt.Errorf("increment sync taskflow condition isn't match, can't sync")
 }
 
-func syncOracleFullTableRecordToMySQLUsingAllMode(cfg *service.CfgFile, engine *service.Engine, transferTableSlice []string, syncMode string) error {
+func syncOracleFullTableRecordToMySQLUsingAllMode(cfg *service.CfgFile, engine *service.Engine, transferTableSlice []string, syncMode string, oracleCollation bool) error {
 	startTime := time.Now()
 	service.Logger.Info("all full table data loader start",
 		zap.String("schema", cfg.SourceConfig.SchemaName))
@@ -294,7 +302,7 @@ func syncOracleFullTableRecordToMySQLUsingAllMode(cfg *service.CfgFile, engine *
 	}
 
 	// 启动全量同步任务
-	if err = startOracleTableFullSync(cfg, engine, waitSyncTableInfo, partSyncTableInfo, syncMode); err != nil {
+	if err = startOracleTableFullSync(cfg, engine, waitSyncTableInfo, partSyncTableInfo, syncMode, oracleCollation); err != nil {
 		return err
 	}
 
@@ -573,7 +581,7 @@ func getOracleTableIncrementRecordLogFile(engine *service.Engine, sourceSchemaNa
 /*
 	全量/增量 FUNCTION
 */
-func startOracleTableFullSync(cfg *service.CfgFile, engine *service.Engine, waitSyncTableInfo, partSyncTableInfo []string, syncMode string) error {
+func startOracleTableFullSync(cfg *service.CfgFile, engine *service.Engine, waitSyncTableInfo, partSyncTableInfo []string, syncMode string, oracleCollation bool) error {
 	if len(partSyncTableInfo) > 0 {
 		if err := startOracleTableConsumeByCheckpoint(cfg, engine, partSyncTableInfo, syncMode); err != nil {
 			return err
@@ -581,7 +589,7 @@ func startOracleTableFullSync(cfg *service.CfgFile, engine *service.Engine, wait
 	}
 	if len(waitSyncTableInfo) > 0 {
 		// 初始化表任务
-		if err := initOracleTableConsumeRowID(cfg, engine, waitSyncTableInfo, FullSyncMode); err != nil {
+		if err := initOracleTableConsumeRowID(cfg, engine, waitSyncTableInfo, FullSyncMode, oracleCollation); err != nil {
 			return err
 		}
 		if err := startOracleTableConsumeByCheckpoint(cfg, engine, waitSyncTableInfo, syncMode); err != nil {

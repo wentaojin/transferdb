@@ -33,7 +33,7 @@ import (
 // 捕获全量数据
 func extractorTableFullRecord(engine *service.Engine, sourceSchemaName, sourceTableName, oracleQuery string, insertBatchSize int) ([]string, []string, error) {
 	startTime := time.Now()
-	cols, rowsResult, err := engine.GetOracleTableRows(oracleQuery, insertBatchSize)
+	cols, rowsResult, err := engine.GetOracleTableRowsData(oracleQuery, insertBatchSize)
 	if err != nil {
 		return cols, rowsResult, fmt.Errorf("get oracle schema [%s] table [%s] record by rowid sql falied: %v", sourceSchemaName, sourceTableName, err)
 	}
@@ -170,7 +170,7 @@ func filterOracleRedoGreaterOrEqualRecordByTable(
 // 1、根据当前表的 SCN 初始化元数据据表
 // 2、根据元数据表记录全量导出导入
 func initOracleTableConsumeRowID(cfg *service.CfgFile, engine *service.Engine,
-	waitSyncTableInfo []string, syncMode string) error {
+	waitSyncTableInfo []string, syncMode string, oraCollation bool) error {
 	wp := workpool.New(cfg.FullConfig.TaskThreads)
 
 	for idx, tbl := range waitSyncTableInfo {
@@ -188,8 +188,14 @@ func initOracleTableConsumeRowID(cfg *service.CfgFile, engine *service.Engine,
 				return err
 			}
 
+			// Date/Timestamp 字段类型格式化
+			sourceColumnInfo, err := engine.AdjustTableSelectColumn(cfg.SourceConfig.SchemaName, table, oraCollation)
+			if err != nil {
+				return err
+			}
+
 			if err = engine.InitWaitAndFullSyncMetaRecord(strings.ToUpper(cfg.SourceConfig.SchemaName),
-				table, strings.ToUpper(cfg.TargetConfig.SchemaName), table, workerID, globalSCN,
+				table, sourceColumnInfo, strings.ToUpper(cfg.TargetConfig.SchemaName), table, workerID, globalSCN,
 				cfg.FullConfig.ChunkSize, cfg.AppConfig.InsertBatchSize, "", syncMode); err != nil {
 				return err
 			}

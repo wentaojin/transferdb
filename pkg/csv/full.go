@@ -29,7 +29,7 @@ import (
 	"github.com/xxjwxc/gowp/workpool"
 )
 
-func startOracleTableFullCSV(cfg *service.CfgFile, engine *service.Engine, waitSyncTableInfo, partSyncTableInfo []string, syncMode string) error {
+func startOracleTableFullCSV(cfg *service.CfgFile, engine *service.Engine, waitSyncTableInfo, partSyncTableInfo []string, syncMode string, oracleCollation bool) error {
 	service.Logger.Info("all full table data csv list",
 		zap.Strings("wait sync tables", waitSyncTableInfo),
 		zap.Strings("part sync tables", partSyncTableInfo))
@@ -47,7 +47,7 @@ func startOracleTableFullCSV(cfg *service.CfgFile, engine *service.Engine, waitS
 	}
 	if len(waitSyncTableInfo) > 0 {
 		// 初始化表任务
-		if err = initOracleTableConsumeRowID(cfg, engine, waitSyncTableInfo, taskflow.FullSyncMode); err != nil {
+		if err = initOracleTableConsumeRowID(cfg, engine, waitSyncTableInfo, taskflow.FullSyncMode, oracleCollation); err != nil {
 			return err
 		}
 
@@ -78,7 +78,7 @@ func startOracleTableConsumeByCheckpoint(cfg *service.CfgFile, engine *service.E
 	return nil
 }
 
-func initOracleTableConsumeRowID(cfg *service.CfgFile, engine *service.Engine, waitSyncTableInfo []string, syncMode string) error {
+func initOracleTableConsumeRowID(cfg *service.CfgFile, engine *service.Engine, waitSyncTableInfo []string, syncMode string, oraCollation bool) error {
 	wp := workpool.New(cfg.CSVConfig.TaskThreads)
 
 	for idx, tbl := range waitSyncTableInfo {
@@ -95,8 +95,15 @@ func initOracleTableConsumeRowID(cfg *service.CfgFile, engine *service.Engine, w
 			if err != nil {
 				return err
 			}
+
+			// Date/Timestamp 字段类型格式化
+			sourceColumnInfo, err := engine.AdjustTableSelectColumn(cfg.SourceConfig.SchemaName, table, oraCollation)
+			if err != nil {
+				return err
+			}
+
 			if err = engine.InitWaitAndFullSyncMetaRecord(strings.ToUpper(cfg.SourceConfig.SchemaName),
-				table, strings.ToUpper(cfg.TargetConfig.SchemaName), table, workerID, globalSCN,
+				table, sourceColumnInfo, strings.ToUpper(cfg.TargetConfig.SchemaName), table, workerID, globalSCN,
 				cfg.CSVConfig.Rows, cfg.AppConfig.InsertBatchSize, cfg.CSVConfig.OutputDir, syncMode); err != nil {
 				return err
 			}

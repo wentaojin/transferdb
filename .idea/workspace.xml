@@ -5,12 +5,22 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="a67576d0-c4df-4b83-a792-1e43567e1978" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/check_marvin.sql" afterDir="false" />
       <change afterPath="$PROJECT_DIR$/conf/transferdb.log" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/user_guaid.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/user_guaid.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/check/check.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/check/check.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/check/write.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/check/write.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/service/check.go" beforeDir="false" afterPath="$PROJECT_DIR$/service/check.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/conf/config.toml" beforeDir="false" afterPath="$PROJECT_DIR$/conf/config.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/go.mod" beforeDir="false" afterPath="$PROJECT_DIR$/go.mod" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/go.sum" beforeDir="false" afterPath="$PROJECT_DIR$/go.sum" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/csv/csv.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/csv/csv.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/csv/full.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/csv/full.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/csv/writer.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/csv/writer.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/diff/chunk.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/diff/chunk.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/taskflow/extractor.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/taskflow/extractor.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/taskflow/taskflow.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/taskflow/taskflow.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/oracle.go" beforeDir="false" afterPath="$PROJECT_DIR$/server/oracle.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/service/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/service/config.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/service/engine.go" beforeDir="false" afterPath="$PROJECT_DIR$/service/engine.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/service/sync_full.go" beforeDir="false" afterPath="$PROJECT_DIR$/service/sync_full.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/test/oracle.go" beforeDir="false" afterPath="$PROJECT_DIR$/test/oracle.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -36,6 +46,12 @@
       <filtered-out-file-type name="COMMIT_BY_MESSAGE" />
     </file-type-list>
   </component>
+  <component name="GoLibraries">
+    <option name="indexEntireGoPath" value="false" />
+  </component>
+  <component name="MarkdownSettingsMigration">
+    <option name="stateVersion" value="1" />
+  </component>
   <component name="ProjectId" id="1xzFBe2yDcj6a0gjFJ75LSfYPRw" />
   <component name="ProjectLevelVcsManager">
     <ConfirmationsSetting value="2" id="Add" />
@@ -44,21 +60,20 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">
-    <property name="ASKED_ADD_EXTERNAL_FILES" value="true" />
-    <property name="DefaultGoTemplateProperty" value="Go File" />
-    <property name="RunOnceActivity.OpenProjectViewOnStart" value="true" />
-    <property name="RunOnceActivity.ShowReadmeOnStart" value="true" />
-    <property name="WebServerToolWindowFactoryState" value="false" />
-    <property name="configurable..is.expanded" value="false" />
-    <property name="configurable.GoLibrariesConfigurable.is.expanded" value="true" />
-    <property name="go.formatter.settings.were.checked" value="true" />
-    <property name="go.import.settings.migrated" value="true" />
-    <property name="go.modules.go.list.on.any.changes.was.set" value="true" />
-    <property name="go.sdk.automatically.set" value="true" />
-    <property name="last_opened_file_path" value="$PROJECT_DIR$/pkg/cost/template" />
-    <property name="settings.editor.selected.configurable" value="editor.preferences.jsOptions" />
-  </component>
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;RunOnceActivity.go.format.on.save.advertiser.fired&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.go.formatter.settings.were.checked&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.go.migrated.go.modules.settings&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.go.modules.go.list.on.any.changes.was.set&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.go.watchers.conflict.with.on.save.actions.check.performed&quot;: &quot;true&quot;,
+    &quot;WebServerToolWindowFactoryState&quot;: &quot;false&quot;,
+    &quot;configurable..is.expanded&quot;: &quot;false&quot;,
+    &quot;configurable.GoLibrariesConfigurable.is.expanded&quot;: &quot;true&quot;,
+    &quot;go.import.settings.migrated&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/Users/marvin&quot;
+  }
+}</component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$/pkg/cost/template" />
@@ -161,17 +176,16 @@
         </entry>
       </map>
     </option>
-    <option name="oldMeFiltersMigrated" value="true" />
   </component>
   <component name="VcsManagerConfiguration">
     <option name="ADD_EXTERNAL_FILES_SILENTLY" value="true" />
   </component>
   <component name="VgoProject">
-    <integration-enabled>true</integration-enabled>
     <environment>
       <map>
         <entry key="GOPROXY" value="https://goproxy.cn,direct" />
       </map>
     </environment>
+    <settings-migrated>true</settings-migrated>
   </component>
 </project>
