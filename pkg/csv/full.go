@@ -97,6 +97,7 @@ func initOracleTableConsumeRowID(cfg *service.CfgFile, engine *service.Engine, w
 			}
 
 			// Date/Timestamp 字段类型格式化
+			// Interval Year/Day 数据字符 TO_CHAR 格式化
 			sourceColumnInfo, err := engine.AdjustTableSelectColumn(cfg.SourceConfig.SchemaName, table, oraCollation)
 			if err != nil {
 				return err

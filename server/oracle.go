@@ -34,9 +34,9 @@ func NewOracleDBEngine(oraCfg service.SourceConfig) (*sql.DB, error) {
 	// https://pkg.go.dev/github.com/godror/godror
 	// https://github.com/godror/godror/blob/db9cd12d89cdc1c60758aa3f36ece36cf5a61814/doc/connection.md
 
-	connString := fmt.Sprintf("oracle://%s:%s@%s/%s?%s&timezone=%s",
+	connString := fmt.Sprintf("oracle://%s:%s@%s/%s?%s",
 		oraCfg.Username, oraCfg.Password, utils.StringsBuilder(oraCfg.Host, ":", strconv.Itoa(oraCfg.Port)),
-		oraCfg.ServiceName, oraCfg.ConnectParams, oraCfg.Timezone)
+		oraCfg.ServiceName, oraCfg.ConnectParams)
 
 	oraDSN, err := godror.ParseDSN(connString)
 	if err != nil {

@@ -100,7 +100,6 @@ type SourceConfig struct {
 	ServiceName   string   `toml:"service-name" json:"service-name"`
 	LibDir        string   `toml:"lib-dir" json:"lib-dir"`
 	ConnectParams string   `toml:"connect-params" json:"connect-params"`
-	Timezone      string   `toml:"timezone" json:"timezone"`
 	SessionParams []string `toml:"session-params" json:"session-params"`
 	SchemaName    string   `toml:"schema-name" json:"schema-name"`
 	IncludeTable  []string `toml:"include-table" json:"include-table"`

@@ -128,11 +128,9 @@ service-name = "helowin"
 # oracle instance client dir
 lib-dir = "/Users/marvin/storehouse/oracle/instantclient_19_8"
 # 配置 oracle 连接参数
-connect-params = "poolMinSessions=10&poolMaxSessions=1000&poolWaitTimeout=60s&poolSessionMaxLifetime=1h&poolSessionTimeout=5m&poolIncrement=10"
-# 时区设置
-timezone = "Local"
+connect-params = "poolMinSessions=10&poolMaxSessions=1000&poolWaitTimeout=60s&poolSessionMaxLifetime=1h&poolSessionTimeout=5m&poolIncrement=10&timezone=Local"
 # 配置 oracle 连接会话 session 变量
-# 内置 Date/Timestamp/Interval Year/Day 数据类型格式化
+# All/Full/CSV 模式内置 Date/Timestamp/Interval Year/Day 数据类型格式化
 # Date 'yyyy-mm-dd hh24:mi:ss'
 # Timestamp 'yyyy-mm-dd hh24:mi:ss.ffx', x 根据 timestamp 精度格式化, 如果超过 6, 按精度 6 格式化字符
 # Interval Year/Day 数据字符 TO_CHAR 格式化
