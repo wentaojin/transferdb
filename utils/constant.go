@@ -78,7 +78,15 @@ const (
 
 	// Channel
 	BufferSize = 1024
+
+	// TiDB 数据库
+	TiDBClusteredIndexIntOnlyValue = "INT_ONLY"
+	TiDBClusteredIndexONValue      = "ON"
+	TiDBClusteredIndexOFFValue     = "OFF"
 )
+
+// alter-primary-key = fase 主键整型数据类型列表
+var TiDBIntegerPrimaryKeyList = []string{"TINYINT", "SMALLINT", "INT", "BIGINT"}
 
 // MySQL 8.0
 // utf8mb4_0900_as_cs 区分重音、区分大小写的排序规则

@@ -15,6 +15,7 @@ require (
 	github.com/shopspring/decimal v1.3.1
 	github.com/stretchr/testify v1.7.0 // indirect
 	github.com/thinkeridea/go-extend v1.3.2
+	github.com/valyala/fastjson v1.6.3
 	github.com/xxjwxc/gowp v0.0.0-20200603141413-57c3ba7108be
 	go.uber.org/multierr v1.6.0 // indirect
 	go.uber.org/zap v1.16.0

@@ -789,3 +789,25 @@ func (e *Engine) getMySQLTable(schemaName string) ([]string, error) {
 	}
 	return tables, nil
 }
+
+func (e *Engine) GetTiDBClusteredIndexValue() (string, error) {
+	_, res, err := Query(e.MysqlDB, `select VARIABLE_VALUE from information_schema.session_variables where upper(variable_name) = upper('tidb_enable_clustered_index')`)
+	if err != nil {
+		return "", err
+	}
+	if len(res) == 0 {
+		return "", nil
+	}
+	return res[0]["VARIABLE_VALUE"], nil
+}
+
+func (e *Engine) GetTiDBAlterPKValue() (string, error) {
+	_, res, err := Query(e.MysqlDB, `select VARIABLE_VALUE from information_schema.session_variables where upper(variable_name) = upper('tidb_config')`)
+	if err != nil {
+		return "", err
+	}
+	if len(res) == 0 {
+		return "", nil
+	}
+	return res[0]["VARIABLE_VALUE"], nil
+}

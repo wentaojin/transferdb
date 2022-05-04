@@ -27,6 +27,7 @@ import (
 
 	"github.com/wentaojin/transferdb/service"
 
+	"github.com/valyala/fastjson"
 	"go.uber.org/zap"
 )
 
@@ -37,6 +38,7 @@ type Table struct {
 	SourceTableName       string
 	TargetDBType          string
 	TargetTableName       string
+	TargetTableOption     string
 	OracleCollation       bool
 	SourceSchemaCollation string // 可为空
 	SourceTableCollation  string // 可为空
@@ -47,31 +49,13 @@ type Table struct {
 	Engine                *service.Engine `json:"-"`
 }
 
-func (t Table) GenCreateTableSQL(modifyTableName string) (string, error) {
-	// 表语句 With 主键约束
-	tablesMap, err := t.Engine.GetOracleTableComment(t.SourceSchemaName, t.SourceTableName)
-	if err != nil {
-		return "", err
-	}
-
-	columnMetaSlice, err := t.reverserOracleTableColumnToMySQL(t.OracleCollation)
-	if err != nil {
-		return "", err
-	}
-
-	primaryKeyMetaSlice, err := t.reverserOracleTablePKToMySQL()
-	if err != nil {
-		return "", err
-	}
-
+func (t Table) GenCreateTableSQL(modifyTableName string) (string, []string, error) {
 	var (
 		tableMetas     []string
 		createTableSQL string
 		tableCollation string
+		compIndexINFO  []string
 	)
-	tableMetas = append(tableMetas, columnMetaSlice...)
-	tableMetas = append(tableMetas, primaryKeyMetaSlice...)
-	tableMeta := strings.Join(tableMetas, ",\n")
 
 	// schema、db、table collation
 	if t.OracleCollation {
@@ -80,7 +64,7 @@ func (t Table) GenCreateTableSQL(modifyTableName string) (string, error) {
 			if val, ok := utils.OracleCollationMap[t.SourceTableCollation]; ok {
 				tableCollation = val
 			} else {
-				return "", fmt.Errorf("oracle table collation [%v] isn't support", t.SourceTableCollation)
+				return "", compIndexINFO, fmt.Errorf("oracle table collation [%v] isn't support", t.SourceTableCollation)
 			}
 		}
 		// schema collation
@@ -88,30 +72,179 @@ func (t Table) GenCreateTableSQL(modifyTableName string) (string, error) {
 			if val, ok := utils.OracleCollationMap[t.SourceSchemaCollation]; ok {
 				tableCollation = val
 			} else {
-				return "", fmt.Errorf("oracle schema collation [%v] table collation [%v] isn't support", t.SourceSchemaCollation, t.SourceTableCollation)
+				return "", compIndexINFO, fmt.Errorf("oracle schema collation [%v] table collation [%v] isn't support", t.SourceSchemaCollation, t.SourceTableCollation)
 			}
 		}
 		if t.SourceTableName == "" && t.SourceSchemaCollation == "" {
-			return "", fmt.Errorf("oracle schema collation [%v] table collation [%v] isn't support", t.SourceSchemaCollation, t.SourceTableCollation)
+			return "", compIndexINFO, fmt.Errorf("oracle schema collation [%v] table collation [%v] isn't support", t.SourceSchemaCollation, t.SourceTableCollation)
 		}
 	} else {
 		// db collation
 		if val, ok := utils.OracleCollationMap[t.SourceDBNLSComp]; ok {
 			tableCollation = val
 		} else {
-			return "", fmt.Errorf("oracle db nls_comp [%v] nls_sort [%v] isn't support", t.SourceDBNLSComp, t.SourceDBNLSSort)
+			return "", compIndexINFO, fmt.Errorf("oracle db nls_comp [%v] nls_sort [%v] isn't support", t.SourceDBNLSComp, t.SourceDBNLSSort)
 		}
 	}
 
-	// table 注释
+	// 唯一约束/普通索引/唯一索引
+	ukINFO, err := t.GenCreateUKSQL()
+	if err != nil {
+		return "", compIndexINFO, fmt.Errorf("oracle db reverse table [%s] unique constraint failed: %v", modifyTableName, err)
+	}
+
+	indexINFO, compNonUniqueIndex, err := t.GenCreateNonUniqueIndex(modifyTableName)
+	if err != nil {
+		return "", compIndexINFO, fmt.Errorf("oracle db reverse table [%s] key non-unique index failed: %v", modifyTableName, err)
+	}
+
+	uniqueIndexINFO, compUniqueIndex, err := t.GenCreateUniqueIndex(modifyTableName)
+	if err != nil {
+		return "", compIndexINFO, fmt.Errorf("oracle db reverse table [%s] key unique index failed: %v", modifyTableName, err)
+	}
+
+	if len(compNonUniqueIndex) > 0 {
+		compIndexINFO = append(compIndexINFO, compNonUniqueIndex...)
+	}
+	if len(compUniqueIndex) > 0 {
+		compIndexINFO = append(compIndexINFO, compUniqueIndex...)
+	}
+
+	// tables 表结构
+	pkMeta, pkINFO, err := t.reverserOracleTablePKToMySQL()
+	if err != nil {
+		return "", []string{}, err
+	}
+
+	columnMetaSlice, singlePKColumnTypeIsInteger, err := t.reverserOracleTableColumnToMySQL(t.OracleCollation, pkINFO)
+	if err != nil {
+		return "", []string{}, err
+	}
+
+	tablesMap, err := t.Engine.GetOracleTableComment(t.SourceSchemaName, t.SourceTableName)
+	if err != nil {
+		return "", []string{}, err
+	}
+
+	// table 表注释
 	tableComment := tablesMap[0]["COMMENTS"]
 
-	if tableComment != "" {
-		createTableSQL = fmt.Sprintf("CREATE TABLE `%s`.`%s` (\n%s\n) ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s COMMENT='%s';",
-			t.TargetSchemaName, modifyTableName, tableMeta, strings.ToLower(utils.MySQLCharacterSet), tableCollation, tableComment)
+	tableMetas = append(tableMetas, columnMetaSlice...)
+	if len(pkMeta) > 0 {
+		tableMetas = append(tableMetas, pkMeta...)
+	}
+
+	if len(ukINFO) > 0 {
+		tableMetas = append(tableMetas, ukINFO...)
+	}
+
+	if len(indexINFO) > 0 {
+		tableMetas = append(tableMetas, indexINFO...)
+	}
+
+	if len(uniqueIndexINFO) > 0 {
+		tableMetas = append(tableMetas, uniqueIndexINFO...)
+	}
+
+	tableMeta := strings.Join(tableMetas, ",\n")
+
+	// table-option 表后缀可选项
+	if t.TargetDBType == utils.MySQLTargetDBType || t.TargetTableOption == "" {
+		// table struct
+		if tableComment != "" {
+			createTableSQL = fmt.Sprintf("CREATE TABLE `%s`.`%s` (\n%s\n) ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s COMMENT='%s';",
+				t.TargetSchemaName, modifyTableName, tableMeta, strings.ToLower(utils.MySQLCharacterSet), tableCollation, tableComment)
+		} else {
+			createTableSQL = fmt.Sprintf("CREATE TABLE `%s`.`%s` (\n%s\n) ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s;",
+				t.TargetSchemaName, modifyTableName, tableMeta, strings.ToLower(utils.MySQLCharacterSet), tableCollation)
+		}
 	} else {
-		createTableSQL = fmt.Sprintf("CREATE TABLE `%s`.`%s` (\n%s\n) ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s;",
-			t.TargetSchemaName, modifyTableName, tableMeta, strings.ToLower(utils.MySQLCharacterSet), tableCollation)
+		// TiDB
+		clusteredIdxVal, err := t.Engine.GetTiDBClusteredIndexValue()
+		if err != nil {
+			return createTableSQL, compIndexINFO, err
+		}
+		switch strings.ToUpper(clusteredIdxVal) {
+		case utils.TiDBClusteredIndexOFFValue:
+			if tableComment != "" && t.TargetTableOption != "" {
+				createTableSQL = fmt.Sprintf("CREATE TABLE `%s`.`%s` (\n%s\n) ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s %s COMMENT='%s';",
+					t.TargetSchemaName, modifyTableName, tableMeta, strings.ToLower(utils.MySQLCharacterSet), tableCollation, strings.ToUpper(t.TargetTableOption), tableComment)
+			} else if tableComment == "" && t.TargetTableOption != "" {
+				createTableSQL = fmt.Sprintf("CREATE TABLE `%s`.`%s` (\n%s\n) ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s %s;",
+					t.TargetSchemaName, modifyTableName, tableMeta, strings.ToLower(utils.MySQLCharacterSet), tableCollation, strings.ToUpper(t.TargetTableOption))
+			} else if tableComment == "" && t.TargetTableOption == "" {
+				createTableSQL = fmt.Sprintf("CREATE TABLE `%s`.`%s` (\n%s\n) ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s;",
+					t.TargetSchemaName, modifyTableName, tableMeta, strings.ToLower(utils.MySQLCharacterSet), tableCollation)
+			} else {
+				createTableSQL = fmt.Sprintf("CREATE TABLE `%s`.`%s` (\n%s\n) ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s COMMENT='%s';",
+					t.TargetSchemaName, modifyTableName, tableMeta, strings.ToLower(utils.MySQLCharacterSet), tableCollation, tableComment)
+			}
+		case utils.TiDBClusteredIndexONValue:
+			if tableComment != "" {
+				createTableSQL = fmt.Sprintf("CREATE TABLE `%s`.`%s` (\n%s\n) ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s COMMENT='%s';",
+					t.TargetSchemaName, modifyTableName, tableMeta, strings.ToLower(utils.MySQLCharacterSet), tableCollation, tableComment)
+			} else {
+				createTableSQL = fmt.Sprintf("CREATE TABLE `%s`.`%s` (\n%s\n) ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s;",
+					t.TargetSchemaName, modifyTableName, tableMeta, strings.ToLower(utils.MySQLCharacterSet), tableCollation)
+			}
+		default:
+			// tidb_enable_clustered_index = int_only / tidb_enable_clustered_index 不存在值，等于空
+			pkVal, err := t.Engine.GetTiDBAlterPKValue()
+			if err != nil {
+				return createTableSQL, compIndexINFO, err
+			}
+			if !fastjson.Exists([]byte(pkVal), "alter-primary-key") {
+				service.Logger.Warn("reverse oracle table struct",
+					zap.String("schema", t.SourceSchemaName),
+					zap.String("table", t.SourceTableName),
+					zap.String("comment", tablesMap[0]["COMMENTS"]),
+					zap.Strings("columns", columnMetaSlice),
+					zap.Strings("pk", pkMeta),
+					zap.String("alter-primary-key", "not support, would be disable table-option"))
+				if tableComment != "" {
+					createTableSQL = fmt.Sprintf("CREATE TABLE `%s`.`%s` (\n%s\n) ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s COMMENT='%s';",
+						t.TargetSchemaName, modifyTableName, tableMeta, strings.ToLower(utils.MySQLCharacterSet), tableCollation, tableComment)
+				} else {
+					createTableSQL = fmt.Sprintf("CREATE TABLE `%s`.`%s` (\n%s\n) ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s;",
+						t.TargetSchemaName, modifyTableName, tableMeta, strings.ToLower(utils.MySQLCharacterSet), tableCollation)
+				}
+			}
+
+			var p fastjson.Parser
+			v, err := p.Parse(pkVal)
+			if err != nil {
+				return createTableSQL, compIndexINFO, err
+			}
+
+			// alter-primary-key = false
+			// 单列主键是否整型
+			if len(pkINFO) == 1 && singlePKColumnTypeIsInteger {
+				if tableComment != "" {
+					createTableSQL = fmt.Sprintf("CREATE TABLE `%s`.`%s` (\n%s\n) ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s COMMENT='%s';",
+						t.TargetSchemaName, modifyTableName, tableMeta, strings.ToLower(utils.MySQLCharacterSet), tableCollation, tableComment)
+				} else {
+					createTableSQL = fmt.Sprintf("CREATE TABLE `%s`.`%s` (\n%s\n) ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s;",
+						t.TargetSchemaName, modifyTableName, tableMeta, strings.ToLower(utils.MySQLCharacterSet), tableCollation)
+				}
+			}
+
+			// alter-primary-key = true / 联合主键 len(pkINFO)>1 table-option 生效
+			if v.GetBool("alter-primary-key") || len(pkINFO) > 1 || !singlePKColumnTypeIsInteger {
+				if tableComment != "" && t.TargetTableOption != "" {
+					createTableSQL = fmt.Sprintf("CREATE TABLE `%s`.`%s` (\n%s\n) ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s %s COMMENT='%s';",
+						t.TargetSchemaName, modifyTableName, tableMeta, strings.ToLower(utils.MySQLCharacterSet), tableCollation, strings.ToUpper(t.TargetTableOption), tableComment)
+				} else if tableComment == "" && t.TargetTableOption != "" {
+					createTableSQL = fmt.Sprintf("CREATE TABLE `%s`.`%s` (\n%s\n) ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s %s;",
+						t.TargetSchemaName, modifyTableName, tableMeta, strings.ToLower(utils.MySQLCharacterSet), tableCollation, strings.ToUpper(t.TargetTableOption))
+				} else if tableComment == "" && t.TargetTableOption == "" {
+					createTableSQL = fmt.Sprintf("CREATE TABLE `%s`.`%s` (\n%s\n) ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s;",
+						t.TargetSchemaName, modifyTableName, tableMeta, strings.ToLower(utils.MySQLCharacterSet), tableCollation)
+				} else {
+					createTableSQL = fmt.Sprintf("CREATE TABLE `%s`.`%s` (\n%s\n) ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s COMMENT='%s';",
+						t.TargetSchemaName, modifyTableName, tableMeta, strings.ToLower(utils.MySQLCharacterSet), tableCollation, tableComment)
+				}
+			}
+		}
 	}
 
 	service.Logger.Info("reverse oracle table struct",
@@ -119,30 +252,19 @@ func (t Table) GenCreateTableSQL(modifyTableName string) (string, error) {
 		zap.String("table", t.SourceTableName),
 		zap.String("comment", tablesMap[0]["COMMENTS"]),
 		zap.Strings("columns", columnMetaSlice),
-		zap.Strings("pk", primaryKeyMetaSlice),
+		zap.Strings("pk", pkMeta),
 		zap.String("create sql", createTableSQL))
 
-	return createTableSQL, nil
+	return createTableSQL, compIndexINFO, nil
 }
 
-func (t Table) GenCreateUKSQL(modifyTableName string) ([]string, error) {
+func (t Table) GenCreateUKSQL() ([]string, error) {
 	var ukArr []string
 	ukMetas, err := t.reverserOracleTableUKToMySQL()
 	if err != nil {
 		return ukArr, err
 	}
-	if len(ukMetas) > 0 {
-		for _, ukMeta := range ukMetas {
-			ukSQL := fmt.Sprintf("ALTER TABLE `%s`.`%s` %s;", t.TargetSchemaName, modifyTableName, ukMeta)
-			service.Logger.Info("reverse",
-				zap.String("schema", t.TargetSchemaName),
-				zap.String("table", modifyTableName),
-				zap.String("create uk", ukSQL))
-
-			ukArr = append(ukArr, ukSQL)
-		}
-	}
-	return ukArr, nil
+	return ukMetas, nil
 }
 
 func (t Table) GenCreateFKSQL(modifyTableName string) ([]string, error) {
@@ -198,14 +320,38 @@ func (t Table) GenCreateUniqueIndex(modifyTableName string) ([]string, []string,
 	return t.reverserOracleTableUniqueIndexToMySQL(modifyTableName)
 }
 
+func (t Table) GenTableOptionINFO() (string, error) {
+	if t.TargetDBType != utils.TiDBTargetDBType {
+		return "", nil
+	}
+
+	clusteredIdxVal, err := t.Engine.GetTiDBClusteredIndexValue()
+	if err != nil {
+		return "", err
+	}
+
+	if strings.ToUpper(clusteredIdxVal) == utils.TiDBClusteredIndexIntOnlyValue {
+
+	}
+
+	if strings.ToUpper(clusteredIdxVal) == utils.TiDBClusteredIndexONValue {
+		return utils.TiDBClusteredIndexONValue, err
+	}
+
+	if strings.ToUpper(clusteredIdxVal) == utils.TiDBClusteredIndexOFFValue {
+		return utils.TiDBClusteredIndexOFFValue, err
+	}
+	return "", fmt.Errorf("tidb db variable [tidb_enable_clustered_index] value [%s] isn't support", strings.ToUpper(clusteredIdxVal))
+}
+
 func (t Table) reverserOracleTableNormalIndexToMySQL(modifyTableName string) ([]string, []string, error) {
 	var (
-		createIndexSQL        []string
+		keyINFO               []string
 		compatibilityIndexSQL []string
 	)
 	indexesMap, err := t.Engine.GetOracleTableNormalIndex(t.SourceSchemaName, t.SourceTableName)
 	if err != nil {
-		return createIndexSQL, compatibilityIndexSQL, err
+		return keyINFO, compatibilityIndexSQL, err
 	}
 	if len(indexesMap) > 0 {
 		for _, idxMeta := range indexesMap {
@@ -217,11 +363,9 @@ func (t Table) reverserOracleTableNormalIndexToMySQL(modifyTableName string) ([]
 						normalIndex = append(normalIndex, fmt.Sprintf("`%s`", col))
 					}
 
-					sql := fmt.Sprintf("CREATE INDEX `%s` ON `%s`.`%s` (%s);",
-						strings.ToUpper(idxMeta["INDEX_NAME"]), t.TargetSchemaName, modifyTableName,
-						strings.Join(normalIndex, ","))
+					keyIndex := fmt.Sprintf("KEY `%s` (%s)", strings.ToUpper(idxMeta["INDEX_NAME"]), strings.Join(normalIndex, ","))
 
-					createIndexSQL = append(createIndexSQL, sql)
+					keyINFO = append(keyINFO, keyIndex)
 
 					service.Logger.Info("reverse normal index",
 						zap.String("schema", t.SourceSchemaName),
@@ -229,7 +373,7 @@ func (t Table) reverserOracleTableNormalIndexToMySQL(modifyTableName string) ([]
 						zap.String("index name", idxMeta["INDEX_NAME"]),
 						zap.String("index type", idxMeta["INDEX_TYPE"]),
 						zap.String("index column list", idxMeta["COLUMN_LIST"]),
-						zap.String("create normal index sql", sql))
+						zap.String("key index info", keyIndex))
 
 					continue
 
@@ -319,7 +463,7 @@ func (t Table) reverserOracleTableNormalIndexToMySQL(modifyTableName string) ([]
 						zap.String("domain parameters", idxMeta["PARAMETERS"]),
 						zap.String("error", "mysql not support"))
 
-					return createIndexSQL, compatibilityIndexSQL, fmt.Errorf("[NORMAL] oracle schema [%s] table [%s] reverse normal index panic, error: %v", t.SourceSchemaName, t.SourceTableName, idxMeta)
+					return keyINFO, compatibilityIndexSQL, fmt.Errorf("[NORMAL] oracle schema [%s] table [%s] reverse normal index panic, error: %v", t.SourceSchemaName, t.SourceTableName, idxMeta)
 				}
 			}
 
@@ -332,22 +476,22 @@ func (t Table) reverserOracleTableNormalIndexToMySQL(modifyTableName string) ([]
 				zap.String("domain owner", idxMeta["ITYP_OWNER"]),
 				zap.String("domain index name", idxMeta["ITYP_NAME"]),
 				zap.String("domain parameters", idxMeta["PARAMETERS"]))
-			return createIndexSQL, compatibilityIndexSQL, fmt.Errorf("[NON-NORMAL] oracle schema [%s] table [%s] reverse normal index panic, error: %v", t.SourceSchemaName, t.SourceTableName, idxMeta)
+			return keyINFO, compatibilityIndexSQL, fmt.Errorf("[NON-NORMAL] oracle schema [%s] table [%s] reverse normal index panic, error: %v", t.SourceSchemaName, t.SourceTableName, idxMeta)
 		}
 	}
 
-	return createIndexSQL, compatibilityIndexSQL, err
+	return keyINFO, compatibilityIndexSQL, err
 }
 
 func (t Table) reverserOracleTableUniqueIndexToMySQL(modifyTableName string) ([]string, []string, error) {
 	var (
-		createIndexSQL        []string
+		uniqueINFO            []string
 		compatibilityIndexSQL []string
 	)
 
 	indexesMap, err := t.Engine.GetOracleTableUniqueIndex(t.SourceSchemaName, t.SourceTableName)
 	if err != nil {
-		return createIndexSQL, compatibilityIndexSQL, err
+		return uniqueINFO, compatibilityIndexSQL, err
 	}
 
 	if len(indexesMap) > 0 {
@@ -360,12 +504,9 @@ func (t Table) reverserOracleTableUniqueIndexToMySQL(modifyTableName string) ([]
 						uniqueIndex = append(uniqueIndex, fmt.Sprintf("`%s`", col))
 					}
 
-					sql := fmt.Sprintf("CREATE UNIQUE INDEX `%s` ON `%s`.`%s` (%s);",
-						strings.ToUpper(idxMeta["INDEX_NAME"]),
-						t.TargetSchemaName, modifyTableName,
-						strings.Join(uniqueIndex, ","))
+					uniqueIDX := fmt.Sprintf("UNIQUE INDEX `%s` (%s)", strings.ToUpper(idxMeta["INDEX_NAME"]), strings.Join(uniqueIndex, ","))
 
-					createIndexSQL = append(createIndexSQL, sql)
+					uniqueINFO = append(uniqueINFO, uniqueIDX)
 
 					service.Logger.Info("reverse unique index",
 						zap.String("schema", t.SourceSchemaName),
@@ -373,7 +514,7 @@ func (t Table) reverserOracleTableUniqueIndexToMySQL(modifyTableName string) ([]
 						zap.String("index name", idxMeta["INDEX_NAME"]),
 						zap.String("index type", idxMeta["INDEX_TYPE"]),
 						zap.String("index column list", idxMeta["COLUMN_LIST"]),
-						zap.String("create unique index sql", sql))
+						zap.String("unique index info", uniqueIDX))
 
 					continue
 
@@ -404,7 +545,7 @@ func (t Table) reverserOracleTableUniqueIndexToMySQL(modifyTableName string) ([]
 						zap.String("index column list", idxMeta["COLUMN_LIST"]),
 						zap.String("error", "mysql not support"))
 
-					return createIndexSQL, compatibilityIndexSQL, fmt.Errorf("[UNIQUE] oracle schema [%s] table [%s] reverse normal index panic, error: %v", t.SourceSchemaName, t.SourceTableName, idxMeta)
+					return uniqueINFO, compatibilityIndexSQL, fmt.Errorf("[UNIQUE] oracle schema [%s] table [%s] reverse normal index panic, error: %v", t.SourceSchemaName, t.SourceTableName, idxMeta)
 				}
 			}
 			service.Logger.Error("reverse unique key",
@@ -413,90 +554,157 @@ func (t Table) reverserOracleTableUniqueIndexToMySQL(modifyTableName string) ([]
 				zap.String("index name", idxMeta["INDEX_NAME"]),
 				zap.String("index type", idxMeta["INDEX_TYPE"]),
 				zap.String("index column list", idxMeta["COLUMN_LIST"]))
-			return createIndexSQL, compatibilityIndexSQL,
+			return uniqueINFO, compatibilityIndexSQL,
 				fmt.Errorf("[NON-UNIQUE] oracle schema [%s] table [%s] panic, error: %v", t.SourceSchemaName, t.SourceTableName, idxMeta)
 		}
 	}
 
-	return createIndexSQL, compatibilityIndexSQL, err
+	return uniqueINFO, compatibilityIndexSQL, err
 }
 
-func (t Table) reverserOracleTableColumnToMySQL(oraCollation bool) ([]string, error) {
+func (t Table) reverserOracleTableColumnToMySQL(oraCollation bool, pkColumnName []string) ([]string, bool, error) {
 	var (
 		// 字段元数据组
 		columnMetas []string
+		// 单列主键是否整型类型
+		singlePKColumnTypeIsInteger bool
 	)
+	// 单列主键非整型类型
+	singlePKColumnTypeIsInteger = false
 
 	// 获取表数据字段列信息
 	columnsMap, err := t.Engine.GetOracleTableColumn(t.SourceSchemaName, t.SourceTableName, oraCollation)
 	if err != nil {
-		return columnMetas, err
+		return columnMetas, singlePKColumnTypeIsInteger, err
 	}
 
-	// Oracle 表字段数据类型内置映射 MySQL/TiDB 规则转换
-	for _, rowCol := range columnsMap {
-		var (
-			columnMeta string
-			err        error
-		)
-		if oraCollation {
-			columnMeta, err = ReverseOracleTableColumnMapRule(
-				t.SourceSchemaName,
-				t.SourceTableName,
-				rowCol["COLUMN_NAME"],
-				rowCol["DATA_TYPE"],
-				rowCol["NULLABLE"],
-				rowCol["COMMENTS"],
-				rowCol["DATA_DEFAULT"],
-				rowCol["DATA_SCALE"],
-				rowCol["DATA_PRECISION"],
-				rowCol["DATA_LENGTH"],
-				rowCol["COLLATION"],
-				t.Engine,
+	// 联合主键判断
+	if len(pkColumnName) == 1 {
+		// 单列主键
+		for _, rowCol := range columnsMap {
+			var (
+				columnMeta string
+				err        error
 			)
-		} else {
-			columnMeta, err = ReverseOracleTableColumnMapRule(
-				t.SourceSchemaName,
-				t.SourceTableName,
-				rowCol["COLUMN_NAME"],
-				rowCol["DATA_TYPE"],
-				rowCol["NULLABLE"],
-				rowCol["COMMENTS"],
-				rowCol["DATA_DEFAULT"],
-				rowCol["DATA_SCALE"],
-				rowCol["DATA_PRECISION"],
-				rowCol["DATA_LENGTH"],
-				"",
-				t.Engine,
+			if oraCollation {
+				columnMeta, err = ReverseOracleTableColumnMapRule(
+					t.SourceSchemaName,
+					t.SourceTableName,
+					rowCol["COLUMN_NAME"],
+					rowCol["DATA_TYPE"],
+					rowCol["NULLABLE"],
+					rowCol["COMMENTS"],
+					rowCol["DATA_DEFAULT"],
+					rowCol["DATA_SCALE"],
+					rowCol["DATA_PRECISION"],
+					rowCol["DATA_LENGTH"],
+					rowCol["COLLATION"],
+					t.Engine,
+				)
+			} else {
+				columnMeta, err = ReverseOracleTableColumnMapRule(
+					t.SourceSchemaName,
+					t.SourceTableName,
+					rowCol["COLUMN_NAME"],
+					rowCol["DATA_TYPE"],
+					rowCol["NULLABLE"],
+					rowCol["COMMENTS"],
+					rowCol["DATA_DEFAULT"],
+					rowCol["DATA_SCALE"],
+					rowCol["DATA_PRECISION"],
+					rowCol["DATA_LENGTH"],
+					"",
+					t.Engine,
+				)
+			}
+			if err != nil {
+				return columnMetas, singlePKColumnTypeIsInteger, err
+			}
+
+			columnMetas = append(columnMetas, columnMeta)
+
+			// 单列主键数据类型获取判断
+			if strings.ToUpper(pkColumnName[0]) == strings.ToUpper(rowCol["COLUMN_NAME"]) {
+				// Map 规则转换后的字段对应数据类型
+				// columnMeta 视角 columnName columnType ....
+				columnType := strings.Fields(columnMeta)[1]
+				for _, integerType := range utils.TiDBIntegerPrimaryKeyList {
+					if find := strings.Contains(strings.ToUpper(columnType), strings.ToUpper(integerType)); find {
+						singlePKColumnTypeIsInteger = true
+					}
+				}
+			}
+		}
+	} else {
+		// 联合主键
+		// Oracle 表字段数据类型内置映射 MySQL/TiDB 规则转换
+		for _, rowCol := range columnsMap {
+			var (
+				columnMeta string
+				err        error
 			)
+			if oraCollation {
+				columnMeta, err = ReverseOracleTableColumnMapRule(
+					t.SourceSchemaName,
+					t.SourceTableName,
+					rowCol["COLUMN_NAME"],
+					rowCol["DATA_TYPE"],
+					rowCol["NULLABLE"],
+					rowCol["COMMENTS"],
+					rowCol["DATA_DEFAULT"],
+					rowCol["DATA_SCALE"],
+					rowCol["DATA_PRECISION"],
+					rowCol["DATA_LENGTH"],
+					rowCol["COLLATION"],
+					t.Engine,
+				)
+			} else {
+				columnMeta, err = ReverseOracleTableColumnMapRule(
+					t.SourceSchemaName,
+					t.SourceTableName,
+					rowCol["COLUMN_NAME"],
+					rowCol["DATA_TYPE"],
+					rowCol["NULLABLE"],
+					rowCol["COMMENTS"],
+					rowCol["DATA_DEFAULT"],
+					rowCol["DATA_SCALE"],
+					rowCol["DATA_PRECISION"],
+					rowCol["DATA_LENGTH"],
+					"",
+					t.Engine,
+				)
+			}
+			if err != nil {
+				return columnMetas, singlePKColumnTypeIsInteger, err
+			}
+			columnMetas = append(columnMetas, columnMeta)
 		}
-		if err != nil {
-			return columnMetas, err
-		}
-		columnMetas = append(columnMetas, columnMeta)
 	}
-	return columnMetas, nil
+
+	return columnMetas, singlePKColumnTypeIsInteger, nil
 }
 
-func (t Table) reverserOracleTablePKToMySQL() ([]string, error) {
-	var keysMeta []string
+func (t Table) reverserOracleTablePKToMySQL() ([]string, []string, error) {
+	var (
+		keysMeta []string
+		pkArr    []string
+	)
 	primaryKeyMap, err := t.Engine.GetOracleTablePrimaryKey(t.SourceSchemaName, t.SourceTableName)
 	if err != nil {
-		return keysMeta, err
+		return keysMeta, pkArr, err
 	}
 
 	if len(primaryKeyMap) > 1 {
-		return keysMeta, fmt.Errorf("oracle schema [%s] table [%s] primary key exist multiple values: [%v]", t.SourceSchemaName, t.SourceTableName, primaryKeyMap)
+		return keysMeta, pkArr, fmt.Errorf("oracle schema [%s] table [%s] primary key exist multiple values: [%v]", t.SourceSchemaName, t.SourceTableName, primaryKeyMap)
 	}
 	if len(primaryKeyMap) > 0 {
-		var pkArr []string
 		for _, col := range strings.Split(primaryKeyMap[0]["COLUMN_LIST"], ",") {
 			pkArr = append(pkArr, fmt.Sprintf("`%s`", col))
 		}
 		pk := fmt.Sprintf("PRIMARY KEY (%s)", strings.ToUpper(strings.Join(pkArr, ",")))
 		keysMeta = append(keysMeta, pk)
 	}
-	return keysMeta, nil
+	return keysMeta, pkArr, nil
 }
 
 func (t Table) reverserOracleTableUKToMySQL() ([]string, error) {
@@ -511,7 +719,7 @@ func (t Table) reverserOracleTableUKToMySQL() ([]string, error) {
 			for _, col := range strings.Split(rowUKCol["COLUMN_LIST"], ",") {
 				ukArr = append(ukArr, fmt.Sprintf("`%s`", col))
 			}
-			uk := fmt.Sprintf("ADD UNIQUE `%s` (%s)",
+			uk := fmt.Sprintf("UNIQUE KEY `%s` (%s)",
 				strings.ToUpper(rowUKCol["CONSTRAINT_NAME"]), strings.ToUpper(strings.Join(ukArr, ",")))
 
 			keysMeta = append(keysMeta, uk)
@@ -804,16 +1012,17 @@ func LoadOracleToMySQLTableList(engine *service.Engine, cfg *service.CfgFile, ex
 			for ts := range chS {
 				// 库名、表名规则
 				tbl := Table{
-					SourceSchemaName: strings.ToUpper(sourceSchema),
-					TargetSchemaName: strings.ToUpper(cfg.TargetConfig.SchemaName),
-					SourceTableName:  strings.ToUpper(ts),
-					TargetDBType:     strings.ToUpper(cfg.TargetConfig.DBType),
-					TargetTableName:  strings.ToUpper(ts),
-					SourceTableType:  tablesMap[ts],
-					SourceDBNLSSort:  nlsSort,
-					SourceDBNLSComp:  nlsComp,
-					Overwrite:        cfg.TargetConfig.Overwrite,
-					Engine:           engine,
+					SourceSchemaName:  strings.ToUpper(sourceSchema),
+					TargetSchemaName:  strings.ToUpper(cfg.TargetConfig.SchemaName),
+					SourceTableName:   strings.ToUpper(ts),
+					TargetDBType:      strings.ToUpper(cfg.TargetConfig.DBType),
+					TargetTableName:   strings.ToUpper(ts),
+					TargetTableOption: strings.ToUpper(cfg.TargetConfig.TableOption),
+					SourceTableType:   tablesMap[ts],
+					SourceDBNLSSort:   nlsSort,
+					SourceDBNLSComp:   nlsComp,
+					Overwrite:         cfg.TargetConfig.Overwrite,
+					Engine:            engine,
 				}
 				tbl.OracleCollation = oraCollation
 				if oraCollation {

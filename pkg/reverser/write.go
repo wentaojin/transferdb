@@ -33,18 +33,15 @@ import (
 )
 
 type ReverseWriter struct {
-	DBType            string
-	DBVersion         string
-	CreateTable       string
-	CreateUK          []string
-	CreateFK          []string
-	CreateCK          []string
-	CreateUniqueIndex []string
-	CreateNormalIndex []string
-	CreateOtherIndex  []string
-	ReverseTable      Table
-	RevFileMW         *FileMW
-	CompFileMW        *FileMW
+	DBType          string
+	DBVersion       string
+	CreateTable     string
+	CreateFK        []string
+	CreateCK        []string
+	CreateCompIndex []string
+	ReverseTable    Table
+	RevFileMW       *FileMW
+	CompFileMW      *FileMW
 }
 
 type FileMW struct {
@@ -80,15 +77,12 @@ func NewReverseWriter(t Table, revFileMW, compFileMW *FileMW) (*ReverseWriter, e
 	modifyTableName := changeOracleTableName(t.SourceTableName, t.TargetTableName)
 	t.TargetTableName = modifyTableName
 
-	tableStruct, err := t.GenCreateTableSQL(modifyTableName)
+	tableStruct, compIndexINFO, err := t.GenCreateTableSQL(modifyTableName)
 	if err != nil {
 		return nil, err
 	}
 
-	ukSQL, err := t.GenCreateUKSQL(modifyTableName)
-	if err != nil {
-		return nil, err
-	}
+	// 兼容项
 	fkSQL, err := t.GenCreateFKSQL(modifyTableName)
 	if err != nil {
 		return nil, err
@@ -97,37 +91,17 @@ func NewReverseWriter(t Table, revFileMW, compFileMW *FileMW) (*ReverseWriter, e
 	if err != nil {
 		return nil, err
 	}
-	revNonUniqueIndex, compNonUniqueIndex, err := t.GenCreateNonUniqueIndex(modifyTableName)
-	if err != nil {
-		return nil, err
-	}
-
-	revUniqueIndex, compUniqueIndex, err := t.GenCreateUniqueIndex(modifyTableName)
-	if err != nil {
-		return nil, err
-	}
-
-	var compIndex []string
-	if len(compNonUniqueIndex) > 0 {
-		compIndex = append(compIndex, compNonUniqueIndex...)
-	}
-	if len(compUniqueIndex) > 0 {
-		compIndex = append(compIndex, compUniqueIndex...)
-	}
 
 	return &ReverseWriter{
-		DBType:            t.TargetDBType,
-		DBVersion:         dbVersion,
-		CreateTable:       tableStruct,
-		CreateUK:          ukSQL,
-		CreateFK:          fkSQL,
-		CreateCK:          ckSQL,
-		CreateUniqueIndex: revUniqueIndex,
-		CreateNormalIndex: revNonUniqueIndex,
-		CreateOtherIndex:  compIndex,
-		ReverseTable:      t,
-		RevFileMW:         revFileMW,
-		CompFileMW:        compFileMW,
+		DBType:          t.TargetDBType,
+		DBVersion:       dbVersion,
+		CreateTable:     tableStruct,
+		CreateFK:        fkSQL,
+		CreateCK:        ckSQL,
+		CreateCompIndex: compIndexINFO,
+		ReverseTable:    t,
+		RevFileMW:       revFileMW,
+		CompFileMW:      compFileMW,
 	}, nil
 
 }
@@ -152,29 +126,8 @@ func (d *ReverseWriter) Reverse() error {
 	sqlRev.WriteString("*/\n")
 	sqlRev.WriteString(d.CreateTable + "\n\n")
 
-	// 唯一约束
-	if len(d.CreateUK) > 0 {
-		for _, sql := range d.CreateUK {
-			sqlRev.WriteString(sql + "\n")
-		}
-	}
-
-	// 唯一索引
-	if len(d.CreateUniqueIndex) > 0 {
-		for _, sql := range d.CreateUniqueIndex {
-			sqlRev.WriteString(sql + "\n")
-		}
-	}
-
-	// 普通索引
-	if len(d.CreateNormalIndex) > 0 {
-		for _, sql := range d.CreateNormalIndex {
-			sqlRev.WriteString(sql + "\n")
-		}
-	}
-
-	// 不兼容项
-	if len(d.CreateFK) > 0 || len(d.CreateCK) > 0 || len(d.CreateOtherIndex) > 0 {
+	// 兼容项处理
+	if len(d.CreateFK) > 0 || len(d.CreateCK) > 0 || len(d.CreateCompIndex) > 0 {
 		sqlComp.WriteString("/*\n")
 		sqlComp.WriteString(fmt.Sprintf(" oracle table index or consrtaint maybe mysql has compatibility, skip\n"))
 		tw := table.NewWriter()
@@ -210,8 +163,8 @@ func (d *ReverseWriter) Reverse() error {
 			}
 		}
 		// 增加不兼容性语句
-		if len(d.CreateOtherIndex) > 0 {
-			for _, sql := range d.CreateOtherIndex {
+		if len(d.CreateCompIndex) > 0 {
+			for _, sql := range d.CreateCompIndex {
 				sqlComp.WriteString(sql + "\n")
 			}
 		}
@@ -240,8 +193,8 @@ func (d *ReverseWriter) Reverse() error {
 			sqlComp.WriteString(sql + "\n")
 		}
 	}
-	if len(d.CreateOtherIndex) > 0 {
-		for _, sql := range d.CreateOtherIndex {
+	if len(d.CreateCompIndex) > 0 {
+		for _, sql := range d.CreateCompIndex {
 			sqlComp.WriteString(sql + "\n")
 		}
 	}
