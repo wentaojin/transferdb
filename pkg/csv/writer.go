@@ -201,10 +201,6 @@ func (f *FileWriter) write(w io.Writer) error {
 						}
 						results = append(results, fmt.Sprintf("%v", rf))
 					}
-				// TODO: 二进制数据类型如何处理
-				//case "[]uint8":
-				//	// Raw、Long Raw 二进制数据
-				//	rowsResult = append(rowsResult, fmt.Sprintf("BINARY('%v')", string(raw)))
 				default:
 					var (
 						by []byte

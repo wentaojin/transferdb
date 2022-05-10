@@ -131,6 +131,8 @@ func (d *Diff) String() string {
 }
 
 // 字段查询以 ORACLE 字段为主
+// Date/Timestamp 字段类型格式化
+// Interval Year/Day 数据字符 TO_CHAR 格式化
 func AdjustTableSelectColumn(e *service.Engine, schemaName, tableName string, sourceCharacterSet, nlsComp string,
 	sourceTableCollation string, sourceSchemaCollation string, oracleCollation bool, onlyCheckRows bool) ([]string, string, string, error) {
 	var (
@@ -174,7 +176,7 @@ func AdjustTableSelectColumn(e *service.Engine, schemaName, tableName string, so
 		// 默认其他类型
 		default:
 			if strings.Contains(colsInfo.DataType, "INTERVAL") {
-				sourceColumnInfo = append(sourceColumnInfo, colName)
+				sourceColumnInfo = append(sourceColumnInfo, utils.StringsBuilder("TO_CHAR(", colName, ") AS ", colName))
 				targetColumnInfo = append(targetColumnInfo, colName)
 			} else if strings.Contains(colsInfo.DataType, "TIMESTAMP") {
 				sourceColumnInfo = append(sourceColumnInfo, utils.StringsBuilder("TO_CHAR(", colName, ",'yyyy-MM-dd HH24:mi:ss') AS ", colName))

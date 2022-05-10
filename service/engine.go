@@ -279,9 +279,6 @@ func (e *Engine) GetOracleTableRowsData(querySQL string, insertBatchSize int) ([
 						}
 						rowsResult = append(rowsResult, fmt.Sprintf("%v", rf))
 					}
-				case "[]uint8":
-					// Raw、Long Raw 二进制数据
-					rowsResult = append(rowsResult, fmt.Sprintf("BINARY('%v')", string(raw)))
 				default:
 					rowsResult = append(rowsResult, fmt.Sprintf("'%v'", string(raw)))
 				}
