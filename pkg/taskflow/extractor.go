@@ -255,12 +255,15 @@ func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceT
 	for _, m := range fullSyncMetas {
 		meta := m
 		wp.Do(func() error {
+			querySQL := utils.StringsBuilder(meta.SourceSQL, meta.RowidSQL)
+
 			// 抽取 Oracle 数据
 			var (
 				columnFields []string
 				rowsResult   []string
 			)
-			columnFields, rowsResult, err = extractorTableFullRecord(engine, cfg.SourceConfig.SchemaName, sourceTableName, meta.RowidSQL, cfg.AppConfig.InsertBatchSize)
+
+			columnFields, rowsResult, err = extractorTableFullRecord(engine, cfg.SourceConfig.SchemaName, sourceTableName, querySQL, cfg.AppConfig.InsertBatchSize)
 			if err != nil {
 				return err
 			}
@@ -269,7 +272,7 @@ func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceT
 				service.Logger.Warn("oracle schema table rowid data return null rows, skip",
 					zap.String("schema", cfg.SourceConfig.SchemaName),
 					zap.String("table", sourceTableName),
-					zap.String("sql", meta.RowidSQL))
+					zap.String("sql", querySQL))
 
 				// 清理记录以及更新记录
 				if err = engine.ModifyWaitAndFullSyncTableMetaRecord(
@@ -292,7 +295,7 @@ func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceT
 				engine,
 				cfg.TargetConfig.SchemaName,
 				meta.SourceTableName,
-				meta.RowidSQL,
+				querySQL,
 				cfg.FullConfig.ApplyThreads,
 				columnFields, rowsResult); err != nil {
 				return err

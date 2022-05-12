@@ -30,8 +30,8 @@ type DataDiffMeta struct {
 	ID               uint   `gorm:"primary_key;autoIncrement;comment:'自增编号'" json:"id"`
 	SourceSchemaName string `gorm:"not null;index:idx_schema_table_range;comment:'源端 schema'" json:"source_schema_name"`
 	SourceTableName  string `gorm:"not null;index:idx_schema_table_range;comment:'源端表名'" json:"source_table_name"`
-	SourceColumnInfo string `gorm:"comment:'源端查询字段信息'" json:"source_column_info"`
-	TargetColumnInfo string `gorm:"comment:'目标端查询字段信息'" json:"target_column_info"`
+	SourceColumnInfo string `gorm:"type:text;comment:'源端查询字段信息'" json:"source_column_info"`
+	TargetColumnInfo string `gorm:"type:text;comment:'目标端查询字段信息'" json:"target_column_info"`
 	Range            string `gorm:"not null;index:idx_schema_table_range;comment:'查询 where 条件'" json:"range"`
 	NumberColumn     string `gorm:"comment:'number 类型字段列'" json:"number_column"` // 值为空则是指定 WHERE 对比或者 WHERE 1=1 对比
 	IsPartition      string `gorm:"comment:'是否是分区表'" json:"is_partition"`        // 同步转换统一转换成非分区表，此处只做标志

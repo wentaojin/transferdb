@@ -29,12 +29,12 @@ import (
 
 // 表数据应用 -> 全量任务
 func applierTableFullRecord(engine *service.Engine,
-	targetSchemaName, targetTableName, rowidSQL string, applyThreads int, columns, rowsResult []string) error {
+	targetSchemaName, targetTableName, querySQL string, applyThreads int, columns, rowsResult []string) error {
 	startTime := time.Now()
 	service.Logger.Info("single full table rowid data applier start",
 		zap.String("schema", targetSchemaName),
 		zap.String("table", targetTableName),
-		zap.String("rowid sql", rowidSQL))
+		zap.String("query sql", querySQL))
 
 	// batch 并发写
 	if err := engine.BatchWriteMySQLTableData(
@@ -49,7 +49,7 @@ func applierTableFullRecord(engine *service.Engine,
 	service.Logger.Info("single full table rowid data applier finished",
 		zap.String("schema", targetSchemaName),
 		zap.String("table", targetTableName),
-		zap.String("rowid sql", rowidSQL),
+		zap.String("query sql", querySQL),
 		zap.String("cost", endTime.Sub(startTime).String()))
 	return nil
 }

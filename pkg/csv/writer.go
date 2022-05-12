@@ -39,7 +39,7 @@ type FileWriter struct {
 	SourceCharset string
 	SourceTable   string
 	Columns       []string
-	RowidSQL      string
+	QuerySQL      string
 	Rows          *sql.Rows `json:"-"`
 	OutDir        string
 	FileName      string
@@ -255,7 +255,7 @@ func (f *FileWriter) write(w io.Writer) error {
 		zap.String("schema", f.SourceSchema),
 		zap.String("table", f.SourceTable),
 		zap.Int("rows", rowCount),
-		zap.String("rowid sql", f.RowidSQL),
+		zap.String("query sql", f.QuerySQL),
 		zap.String("detail", f.String()))
 
 	return nil

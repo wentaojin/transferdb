@@ -235,7 +235,7 @@ func (e *Engine) InitWaitAndFullSyncMetaRecord(sourceSchema, sourceTable, source
 
 	// 统计信息数据行数 0，直接全表扫
 	if tableRows == 0 {
-		sql := utils.StringsBuilder(`SELECT `, sourceColumnInfo, ` FROM `, sourceSchema, `.`, sourceTable)
+		sql := utils.StringsBuilder(`SELECT `, sourceColumnInfo, ` FROM `, sourceSchema, `.`, sourceTable, ` WHERE 1 = 1`)
 		Logger.Warn("get oracle table rows",
 			zap.String("schema", sourceSchema),
 			zap.String("table", sourceTable),
@@ -246,7 +246,8 @@ func (e *Engine) InitWaitAndFullSyncMetaRecord(sourceSchema, sourceTable, source
 			if err = e.GormDB.Create(&FullSyncMeta{
 				SourceSchemaName: strings.ToUpper(sourceSchema),
 				SourceTableName:  strings.ToUpper(sourceTable),
-				RowidSQL:         sql,
+				SourceSQL:        utils.StringsBuilder(`SELECT `, sourceColumnInfo, ` FROM `, sourceSchema, `.`, sourceTable),
+				RowidSQL:         ` WHERE 1 = 1`,
 				IsPartition:      isPartition,
 				GlobalSCN:        globalSCN,
 			}).Error; err != nil {
@@ -256,7 +257,8 @@ func (e *Engine) InitWaitAndFullSyncMetaRecord(sourceSchema, sourceTable, source
 			if err = e.GormDB.Create(&FullSyncMeta{
 				SourceSchemaName: strings.ToUpper(sourceSchema),
 				SourceTableName:  strings.ToUpper(sourceTable),
-				RowidSQL:         sql,
+				SourceSQL:        utils.StringsBuilder(`SELECT `, sourceColumnInfo, ` FROM `, sourceSchema, `.`, sourceTable),
+				RowidSQL:         ` WHERE 1 = 1`,
 				IsPartition:      isPartition,
 				GlobalSCN:        globalSCN,
 				CSVFile:          filepath.Join(csvDataDir, targetSchema, targetTable, utils.StringsBuilder(targetSchema, `.`, targetTable, `.1.csv`)),
@@ -516,7 +518,7 @@ END;`)
 func (e *Engine) GetOracleTableChunksByRowID(taskName, sourceSchema, sourceTable, sourceColumnInfo, targetSchema, targetTable string, globalSCN, insertBatchSize int, csvDataDir, isPartition string) (int, error) {
 	var rowCount int
 
-	querySQL := utils.StringsBuilder(`SELECT 'SELECT `, sourceColumnInfo, ` FROM `, sourceSchema, `.`, sourceTable, ` WHERE ROWID BETWEEN ''' || start_rowid || ''' AND ''' || end_rowid || '''' CMD FROM user_parallel_execute_chunks WHERE  task_name = '`, taskName, `' ORDER BY chunk_id`)
+	querySQL := utils.StringsBuilder(`SELECT ' WHERE ROWID BETWEEN ''' || start_rowid || ''' AND ''' || end_rowid || '''' CMD FROM user_parallel_execute_chunks WHERE  task_name = '`, taskName, `' ORDER BY chunk_id`)
 
 	_, res, err := Query(e.OracleDB, querySQL)
 	if err != nil {
@@ -525,7 +527,7 @@ func (e *Engine) GetOracleTableChunksByRowID(taskName, sourceSchema, sourceTable
 
 	// 判断数据是否存在，跳过 full_sync_meta 记录，更新 wait_sync_meta 记录，无需同步
 	if len(res) == 0 {
-		querySQL = utils.StringsBuilder(`SELECT `, sourceColumnInfo, ` FROM `, sourceSchema, `.`, sourceTable)
+		querySQL = utils.StringsBuilder(`SELECT `, sourceColumnInfo, ` FROM `, sourceSchema, `.`, sourceTable, ` WHERE 1 = 1`)
 		Logger.Warn("get oracle table rowids rows",
 			zap.String("schema", sourceSchema),
 			zap.String("table", sourceSchema),
@@ -536,7 +538,8 @@ func (e *Engine) GetOracleTableChunksByRowID(taskName, sourceSchema, sourceTable
 			if err = e.GormDB.Create(&FullSyncMeta{
 				SourceSchemaName: sourceSchema,
 				SourceTableName:  sourceSchema,
-				RowidSQL:         querySQL,
+				SourceSQL:        utils.StringsBuilder(`SELECT `, sourceColumnInfo, ` FROM `, sourceSchema, `.`, sourceTable),
+				RowidSQL:         ` WHERE 1 = 1`,
 				IsPartition:      isPartition,
 				GlobalSCN:        globalSCN,
 				CSVFile:          csvDataDir,
@@ -547,7 +550,8 @@ func (e *Engine) GetOracleTableChunksByRowID(taskName, sourceSchema, sourceTable
 			if err = e.GormDB.Create(&FullSyncMeta{
 				SourceSchemaName: sourceSchema,
 				SourceTableName:  sourceTable,
-				RowidSQL:         querySQL,
+				SourceSQL:        utils.StringsBuilder(`SELECT `, sourceColumnInfo, ` FROM `, sourceSchema, `.`, sourceTable),
+				RowidSQL:         ` WHERE 1 = 1`,
 				IsPartition:      isPartition,
 				GlobalSCN:        globalSCN,
 				CSVFile:          filepath.Join(csvDataDir, targetSchema, targetTable, utils.StringsBuilder(targetSchema, `.`, targetTable, `.1.csv`)),

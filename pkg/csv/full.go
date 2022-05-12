@@ -18,6 +18,7 @@ package csv
 import (
 	"database/sql"
 	"fmt"
+	"github.com/wentaojin/transferdb/utils"
 	"strings"
 	"time"
 
@@ -142,23 +143,25 @@ func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceC
 	for _, m := range fullSyncMetas {
 		meta := m
 		wp.Do(func() error {
+			querySQL := utils.StringsBuilder(meta.SourceSQL, meta.RowidSQL)
+
 			// 抽取 Oracle 数据
 			var (
 				columnFields []string
 				rowsResult   *sql.Rows
 			)
-			columnFields, rowsResult, err = extractorTableFullRecord(engine, cfg.SourceConfig.SchemaName, meta.SourceTableName, meta.RowidSQL)
+			columnFields, rowsResult, err = extractorTableFullRecord(engine, cfg.SourceConfig.SchemaName, meta.SourceTableName, querySQL)
 			if err != nil {
 				return err
 			}
 
 			// 转换/应用 Oracle CSV 数据
 			if err = applierTableFullRecord(
-				cfg.TargetConfig.SchemaName, meta.SourceTableName, meta.RowidSQL,
+				cfg.TargetConfig.SchemaName, meta.SourceTableName, querySQL,
 				translatorTableFullRecord(
 					cfg.TargetConfig.SchemaName, meta.SourceTableName, sourceCharset,
 					columnFields, engine, meta.SourceSchemaName, meta.SourceTableName,
-					meta.RowidSQL, rowsResult, cfg.CSVConfig, meta.CSVFile)); err != nil {
+					querySQL, rowsResult, cfg.CSVConfig, meta.CSVFile)); err != nil {
 				return err
 			}
 

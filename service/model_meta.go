@@ -42,9 +42,10 @@ type FullSyncMeta struct {
 	SourceSchemaName string `gorm:"not null;index:idx_schema_table_rowid;comment:'源端 schema'" json:"source_schema_name"`
 	SourceTableName  string `gorm:"not null;index:idx_schema_table_rowid;comment:'源端表名'" json:"source_table_name"`
 	GlobalSCN        int    `gorm:"comment:'全局 SCN'" json:"global_scn"`
-	RowidSQL         string `gorm:"not null;index:idx_schema_table_rowid;comment:'表 rowid 切分SQL'" json:"rowid_sql"`
+	SourceSQL        string `gorm:"type:text;comment:'源端 sql'" json:"source_sql"`
+	RowidSQL         string `gorm:"type:varchar(300);not null;index:idx_schema_table_rowid;comment:'表 rowid 切分SQL'" json:"rowid_sql"`
 	IsPartition      string `gorm:"comment:'是否是分区表'" json:"is_partition"` // 同步转换统一转换成非分区表，此处只做标志
-	CSVFile          string `gorm:"comment:'csv 文件名'" json:"csv_file"`
+	CSVFile          string `gorm:"type:varchar(300);comment:'csv 文件名'" json:"csv_file"`
 	BaseModel
 }
 

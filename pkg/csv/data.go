@@ -51,13 +51,13 @@ func extractorTableFullRecord(engine *service.Engine, sourceSchemaName, sourceTa
 
 func translatorTableFullRecord(
 	targetSchemaName, targetTableName, sourceDBCharset string, columns []string,
-	engine *service.Engine, sourceSchema, sourceTable, rowidSQL string,
+	engine *service.Engine, sourceSchema, sourceTable, querySQL string,
 	rowsResult *sql.Rows, csvConfig service.CSVConfig, csvFileName string) *FileWriter {
 	return &FileWriter{
 		SourceSchema:  sourceSchema,
 		SourceTable:   sourceTable,
 		SourceCharset: sourceDBCharset,
-		RowidSQL:      rowidSQL,
+		QuerySQL:      querySQL,
 		Engine:        engine,
 		CSVConfig:     csvConfig,
 		Columns:       columns,
@@ -70,12 +70,12 @@ func translatorTableFullRecord(
 	}
 }
 
-func applierTableFullRecord(targetSchemaName, targetTableName string, rowidSQL string, fileWriter *FileWriter) error {
+func applierTableFullRecord(targetSchemaName, targetTableName string, querySQL string, fileWriter *FileWriter) error {
 	startTime := time.Now()
 	service.Logger.Info("single full table rowid data applier start",
 		zap.String("schema", targetSchemaName),
 		zap.String("table", targetTableName),
-		zap.String("rowid sql", rowidSQL))
+		zap.String("query sql", querySQL))
 	if err := fileWriter.WriteFile(); err != nil {
 		return err
 	}
@@ -83,7 +83,7 @@ func applierTableFullRecord(targetSchemaName, targetTableName string, rowidSQL s
 	service.Logger.Info("single full table rowid data applier finished",
 		zap.String("schema", targetSchemaName),
 		zap.String("table", targetTableName),
-		zap.String("rowid sql", rowidSQL),
+		zap.String("query sql", querySQL),
 		zap.String("cost", endTime.Sub(startTime).String()))
 	return nil
 }
