@@ -250,6 +250,7 @@ func (e *Engine) InitWaitAndFullSyncMetaRecord(sourceSchema, sourceTable, source
 				RowidSQL:         ` WHERE 1 = 1`,
 				IsPartition:      isPartition,
 				GlobalSCN:        globalSCN,
+				CSVFile:          csvDataDir,
 			}).Error; err != nil {
 				return fmt.Errorf("gorm create table [%s.%s] full_sync_meta failed [statistics rows = 0]: %v", sourceSchema, sourceTable, err)
 			}
@@ -565,14 +566,21 @@ func (e *Engine) GetOracleTableChunksByRowID(taskName, sourceSchema, sourceTable
 
 	var fullMetas []FullSyncMeta
 	for i, r := range res {
+		var csvFile string
+		if csvDataDir != "" {
+			csvFile = filepath.Join(csvDataDir, targetSchema, targetTable,
+				utils.StringsBuilder(targetSchema, `.`, targetTable, `.`, strconv.Itoa(i), `.csv`))
+		} else {
+			csvFile = csvDataDir
+		}
 		fullMetas = append(fullMetas, FullSyncMeta{
 			SourceSchemaName: strings.ToUpper(sourceSchema),
 			SourceTableName:  strings.ToUpper(sourceTable),
+			SourceSQL:        utils.StringsBuilder(`SELECT `, sourceColumnInfo, ` FROM `, sourceSchema, `.`, sourceTable),
 			RowidSQL:         r["CMD"],
 			IsPartition:      isPartition,
 			GlobalSCN:        globalSCN,
-			CSVFile: filepath.Join(csvDataDir, targetSchema, targetTable,
-				utils.StringsBuilder(targetSchema, `.`, targetTable, `.`, strconv.Itoa(i), `.csv`)),
+			CSVFile:          csvFile,
 		})
 	}
 

@@ -35,14 +35,14 @@ func extractorTableFullRecord(engine *service.Engine, sourceSchemaName, sourceTa
 	startTime := time.Now()
 	cols, rowsResult, err := engine.GetOracleTableRowsData(oracleQuery, insertBatchSize)
 	if err != nil {
-		return cols, rowsResult, fmt.Errorf("get oracle schema [%s] table [%s] record by rowid sql falied: %v", sourceSchemaName, sourceTableName, err)
+		return cols, rowsResult, fmt.Errorf("get oracle schema [%s] table [%s] record by sql [%v] falied: %v", sourceSchemaName, sourceTableName, oracleQuery, err)
 	}
 
 	endTime := time.Now()
 	service.Logger.Info("single full table rowid data extractor finished",
 		zap.String("schema", sourceSchemaName),
 		zap.String("table", sourceTableName),
-		zap.String("rowid sql", oracleQuery),
+		zap.String("sql", oracleQuery),
 		zap.String("cost", endTime.Sub(startTime).String()))
 
 	return cols, rowsResult, nil
