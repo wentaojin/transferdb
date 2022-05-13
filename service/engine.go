@@ -280,7 +280,8 @@ func (e *Engine) GetOracleTableRowsData(querySQL string, insertBatchSize int) ([
 						rowsResult = append(rowsResult, fmt.Sprintf("%v", rf))
 					}
 				default:
-					rowsResult = append(rowsResult, fmt.Sprintf("'%v'", string(raw)))
+					// 特殊字符单引号替换
+					rowsResult = append(rowsResult, fmt.Sprintf("'%v'", strings.Replace(string(raw), "'", "\\"+"'", -1)))
 				}
 			}
 		}
