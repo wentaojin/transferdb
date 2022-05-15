@@ -134,18 +134,6 @@ func (e *Engine) IsExistOracleSchema(schemaName string) error {
 	return nil
 }
 
-func (e *Engine) IsExistOracleTable(schemaName string, includeTables []string) error {
-	tables, err := e.GetOracleTable(schemaName)
-	if err != nil {
-		return err
-	}
-	ok, noExistTables := utils.IsSubsetString(tables, includeTables)
-	if !ok {
-		return fmt.Errorf("oracle include-tables values [%v] isn't exist in the db schema [%v]", noExistTables, schemaName)
-	}
-	return nil
-}
-
 // Preapre 批量 Batch
 func (e *Engine) BatchWriteMySQLTableData(targetSchemaName, targetTableName, sqlPrefix string, valuesBatchArgs []string, applyThreads int) error {
 	if len(valuesBatchArgs) > 0 {

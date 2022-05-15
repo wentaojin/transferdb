@@ -35,13 +35,7 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 	service.Logger.Info("reverse table oracle to mysql start",
 		zap.String("schema", cfg.SourceConfig.SchemaName))
 
-	// 用于检查下游 MySQL/TiDB 环境检查
-	// 只提供表结构转换文本输出，不提供直写下游，故注释下游检查项
-	//if err := reverseOracleToMySQLTableInspect(engine, cfg); err != nil {
-	//	return err
-	//}
-
-	// 获取待转换表
+	// 获取配置文件待同步表列表
 	exporterTableSlice, err := cfg.GenerateTables(engine)
 	if err != nil {
 		return err
@@ -209,63 +203,6 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 			zap.Int("table failed", int(errorTotals)),
 			zap.String("failed tips", "failed detail, please see table [table_error_detail]"),
 			zap.String("cost", endTime.Sub(startTime).String()))
-	}
-	return nil
-}
-
-// 表转换前检查
-func reverseOracleToMySQLTableInspect(engine *service.Engine, cfg *service.CfgFile) error {
-	if err := engine.IsExistOracleSchema(cfg.SourceConfig.SchemaName); err != nil {
-		return err
-	}
-	ok, err := engine.IsExistMySQLSchema(cfg.TargetConfig.SchemaName)
-	if err != nil {
-		return err
-	}
-	if !ok {
-		_, _, err := service.Query(engine.MysqlDB, fmt.Sprintf(`CREATE DATABASE IF NOT EXISTS %s`, cfg.TargetConfig.SchemaName))
-		if err != nil {
-			return err
-		}
-		return nil
-	}
-
-	// 获取 oracle 导出转换表列表
-	var exporterTableSlice []string
-	if len(cfg.SourceConfig.IncludeTable) != 0 {
-		if err := engine.IsExistOracleTable(cfg.SourceConfig.SchemaName, cfg.SourceConfig.IncludeTable); err != nil {
-			return err
-		}
-		exporterTableSlice = append(exporterTableSlice, cfg.SourceConfig.IncludeTable...)
-	}
-
-	if len(cfg.SourceConfig.ExcludeTable) != 0 {
-		exporterTableSlice, err = engine.FilterDifferenceOracleTable(cfg.SourceConfig.SchemaName, cfg.SourceConfig.ExcludeTable)
-		if err != nil {
-			return err
-		}
-	}
-
-	// 检查源端 schema 导出表是否存在目标端 schema 内
-	existMysqlTables, err := engine.FilterIntersectionMySQLTable(cfg.TargetConfig.SchemaName, exporterTableSlice)
-	if err != nil {
-		return err
-	}
-	if len(existMysqlTables) > 0 {
-		for _, tbl := range existMysqlTables {
-			if cfg.TargetConfig.Overwrite {
-				if err := engine.RenameMySQLTableName(cfg.TargetConfig.SchemaName, tbl); err != nil {
-					return err
-				}
-			} else {
-				// 表跳过重命名以及创建
-				service.Logger.Warn("appear warning",
-					zap.String("schema", cfg.TargetConfig.SchemaName),
-					zap.String("table", tbl),
-					zap.String("warn",
-						fmt.Sprintf("config file params overwrite value false, table skip create")))
-			}
-		}
 	}
 	return nil
 }

@@ -47,7 +47,7 @@ func FullCSVOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service.Engin
 	}
 
 	// 获取配置文件待同步表列表
-	transferTableSlice, err := taskflow.GetTransferTableSliceByCfg(cfg, engine)
+	transferTableSlice, err := cfg.GenerateTables(engine)
 	if err != nil {
 		return err
 	}

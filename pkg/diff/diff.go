@@ -28,8 +28,6 @@ import (
 
 	"github.com/wentaojin/transferdb/pkg/reverser"
 
-	"github.com/wentaojin/transferdb/pkg/taskflow"
-
 	"github.com/scylladb/go-set/strset"
 	"github.com/thinkeridea/go-extend/exstrings"
 
@@ -57,8 +55,8 @@ func OracleDiffMySQLTable(engine *service.Engine, cfg *service.CfgFile) error {
 		return fmt.Errorf("oracle db version [%v] is less than 11g, can't be using transferdb tools", oraDBVersion)
 	}
 
-	// 获取 ORACLE 转换表
-	exporterTableSlice, err := taskflow.GetTransferTableSliceByCfg(cfg, engine)
+	// 获取配置文件待同步表列表
+	exporterTableSlice, err := cfg.GenerateTables(engine)
 	if err != nil {
 		return err
 	}

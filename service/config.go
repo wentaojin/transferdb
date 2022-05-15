@@ -18,6 +18,8 @@ package service
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/wentaojin/transferdb/pkg/filter"
+	"github.com/wentaojin/transferdb/utils"
 	"time"
 
 	"go.uber.org/zap"
@@ -149,36 +151,67 @@ func (c *CfgFile) GenerateTables(engine *Engine) ([]string, error) {
 	startTime := time.Now()
 	var (
 		exporterTableSlice []string
+		excludeTables      []string
 		err                error
 	)
+	err = engine.IsExistOracleSchema(c.SourceConfig.SchemaName)
+	if err != nil {
+		return []string{}, err
+	}
+
+	// 获取 oracle 所有数据表
+	allTables, err := engine.GetOracleTable(c.SourceConfig.SchemaName)
+	if err != nil {
+		return exporterTableSlice, err
+	}
+
 	switch {
 	case len(c.SourceConfig.IncludeTable) != 0 && len(c.SourceConfig.ExcludeTable) == 0:
-		if err := engine.IsExistOracleTable(c.SourceConfig.SchemaName, c.SourceConfig.IncludeTable); err != nil {
-			return exporterTableSlice, err
+		// 过滤规则加载
+		f, err := filter.Parse(c.SourceConfig.IncludeTable)
+		if err != nil {
+			panic(err)
 		}
-		exporterTableSlice = append(exporterTableSlice, c.SourceConfig.IncludeTable...)
+
+		for _, t := range allTables {
+			if f.MatchTable(t) {
+				exporterTableSlice = append(exporterTableSlice, t)
+			}
+		}
 	case len(c.SourceConfig.IncludeTable) == 0 && len(c.SourceConfig.ExcludeTable) != 0:
-		exporterTableSlice, err = engine.FilterDifferenceOracleTable(c.SourceConfig.SchemaName, c.SourceConfig.ExcludeTable)
+		// 过滤规则加载
+		f, err := filter.Parse(c.SourceConfig.ExcludeTable)
 		if err != nil {
-			return exporterTableSlice, err
+			panic(err)
 		}
+
+		for _, t := range allTables {
+			if f.MatchTable(t) {
+				excludeTables = append(excludeTables, t)
+			}
+		}
+		exporterTableSlice = utils.FilterDifferenceStringItems(allTables, excludeTables)
+
 	case len(c.SourceConfig.IncludeTable) == 0 && len(c.SourceConfig.ExcludeTable) == 0:
-		exporterTableSlice, err = engine.GetOracleTable(c.SourceConfig.SchemaName)
-		if err != nil {
-			return exporterTableSlice, err
-		}
+		exporterTableSlice = allTables
+
 	default:
 		return exporterTableSlice, fmt.Errorf("source config params include-table/exclude-table cannot exist at the same time")
 	}
 
 	if len(exporterTableSlice) == 0 {
-		return exporterTableSlice, fmt.Errorf("exporter table slice can not null from reverse task")
+		return exporterTableSlice, fmt.Errorf("exporter tables aren't exist, please check config params include-table/exclude-table")
 	}
+
 	endTime := time.Now()
 	Logger.Info("get oracle to mysql all tables",
 		zap.String("schema", c.SourceConfig.SchemaName),
-		zap.Strings("tables", exporterTableSlice),
+		zap.Strings("exporter tables list", exporterTableSlice),
+		zap.Int("include table counts", len(exporterTableSlice)),
+		zap.Int("exclude table counts", len(excludeTables)),
+		zap.Int("all table counts", len(allTables)),
 		zap.String("cost", endTime.Sub(startTime).String()))
+
 	return exporterTableSlice, nil
 }
 

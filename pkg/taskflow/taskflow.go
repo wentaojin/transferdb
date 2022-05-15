@@ -56,7 +56,7 @@ func FullSyncOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service.Engi
 	}
 
 	// 获取配置文件待同步表列表
-	transferTableSlice, err := GetTransferTableSliceByCfg(cfg, engine)
+	transferTableSlice, err := cfg.GenerateTables(engine)
 	if err != nil {
 		return err
 	}
@@ -168,7 +168,7 @@ func IncrementSyncOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service
 	}
 
 	// 获取配置文件待同步表列表
-	transferTableSlice, err := GetTransferTableSliceByCfg(cfg, engine)
+	transferTableSlice, err := cfg.GenerateTables(engine)
 	if err != nil {
 		return err
 	}
@@ -597,39 +597,4 @@ func startOracleTableFullSync(cfg *service.CfgFile, engine *service.Engine, wait
 		}
 	}
 	return nil
-}
-
-// 从配置文件获取需要迁移同步的表列表
-func GetTransferTableSliceByCfg(cfg *service.CfgFile, engine *service.Engine) ([]string, error) {
-	err := engine.IsExistOracleSchema(cfg.SourceConfig.SchemaName)
-	if err != nil {
-		return []string{}, err
-	}
-	var exporterTableSlice []string
-
-	switch {
-	case len(cfg.SourceConfig.IncludeTable) != 0 && len(cfg.SourceConfig.ExcludeTable) == 0:
-		if err := engine.IsExistOracleTable(cfg.SourceConfig.SchemaName, cfg.SourceConfig.IncludeTable); err != nil {
-			return exporterTableSlice, err
-		}
-		exporterTableSlice = append(exporterTableSlice, cfg.SourceConfig.IncludeTable...)
-	case len(cfg.SourceConfig.IncludeTable) == 0 && len(cfg.SourceConfig.ExcludeTable) != 0:
-		exporterTableSlice, err = engine.FilterDifferenceOracleTable(cfg.SourceConfig.SchemaName, cfg.SourceConfig.ExcludeTable)
-		if err != nil {
-			return exporterTableSlice, err
-		}
-	case len(cfg.SourceConfig.IncludeTable) == 0 && len(cfg.SourceConfig.ExcludeTable) == 0:
-		exporterTableSlice, err = engine.GetOracleTable(cfg.SourceConfig.SchemaName)
-		if err != nil {
-			return exporterTableSlice, err
-		}
-	default:
-		return exporterTableSlice, fmt.Errorf("source config params include-table/exclude-table cannot exist at the same time")
-	}
-
-	if len(exporterTableSlice) == 0 {
-		return exporterTableSlice, fmt.Errorf("exporter table slice can not null by extractor task")
-	}
-
-	return exporterTableSlice, nil
 }

@@ -75,14 +75,6 @@ AND upper(index_name) = upper('%s')`, schemaName, tableName, indexName)
 	return true
 }
 
-func (e *Engine) FilterDifferenceOracleTable(schemaName string, excludeTables []string) ([]string, error) {
-	tables, err := e.GetOracleTable(schemaName)
-	if err != nil {
-		return []string{}, err
-	}
-	return utils.FilterDifferenceStringItems(tables, excludeTables), nil
-}
-
 func (e *Engine) GetOracleTableComment(schemaName string, tableName string) ([]map[string]string, error) {
 	var (
 		comments []map[string]string

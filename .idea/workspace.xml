@@ -5,8 +5,19 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="a67576d0-c4df-4b83-a792-1e43567e1978" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/pkg/filter/filter.go" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/pkg/filter/matchers.go" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/pkg/filter/parser.go" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/test/filter.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/conf/config.toml" beforeDir="false" afterPath="$PROJECT_DIR$/conf/config.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/csv/csv.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/csv/csv.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/diff/diff.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/diff/diff.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/reverser/reverser.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/reverser/reverser.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/taskflow/taskflow.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/taskflow/taskflow.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/service/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/service/config.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/service/engine.go" beforeDir="false" afterPath="$PROJECT_DIR$/service/engine.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/service/reverser.go" beforeDir="false" afterPath="$PROJECT_DIR$/service/reverser.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -48,6 +59,7 @@
   </component>
   <component name="PropertiesComponent">{
   &quot;keyToString&quot;: {
+    &quot;DefaultGoTemplateProperty&quot;: &quot;Go File&quot;,
     &quot;RunOnceActivity.OpenProjectViewOnStart&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.go.format.on.save.advertiser.fired&quot;: &quot;true&quot;,
@@ -76,7 +88,7 @@
       <recent name="$PROJECT_DIR$/storage/element" />
     </key>
   </component>
-  <component name="RunManager" selected="Go Build.go build github.com/wentaojin/transferdb/test (5)">
+  <component name="RunManager" selected="Go Build.go build github.com/wentaojin/transferdb/test (2)">
     <configuration default="true" type="GoApplicationRunConfiguration" factoryName="Go Application">
       <module name="transferdb" />
       <working_directory value="$PROJECT_DIR$" />
@@ -86,13 +98,13 @@
       <filePath value="$PROJECT_DIR$" />
       <method v="2" />
     </configuration>
-    <configuration name="go build github.com/wentaojin/transferdb/test (1)" type="GoApplicationRunConfiguration" factoryName="Go Application" temporary="true" nameIsGenerated="true">
+    <configuration name="go build github.com/wentaojin/transferdb/test (2)" type="GoApplicationRunConfiguration" factoryName="Go Application" temporary="true" nameIsGenerated="true">
       <module name="transferdb" />
       <working_directory value="$PROJECT_DIR$" />
       <kind value="FILE" />
       <package value="github.com/wentaojin/transferdb/test" />
       <directory value="$PROJECT_DIR$" />
-      <filePath value="$PROJECT_DIR$/test/csv.go" />
+      <filePath value="$PROJECT_DIR$/test/filter.go" />
       <method v="2" />
     </configuration>
     <configuration name="go build github.com/wentaojin/transferdb/test (3)" type="GoApplicationRunConfiguration" factoryName="Go Application" temporary="true" nameIsGenerated="true">
@@ -143,11 +155,11 @@
     </configuration>
     <recent_temporary>
       <list>
+        <item itemvalue="Go Build.go build github.com/wentaojin/transferdb/test (2)" />
         <item itemvalue="Go Build.go build github.com/wentaojin/transferdb/test (5)" />
         <item itemvalue="Go Build.go build github.com/wentaojin/transferdb/test (4)" />
         <item itemvalue="Go Build.go build github.com/wentaojin/transferdb/test (3)" />
         <item itemvalue="Go Build.go build github.com/wentaojin/transferdb/test" />
-        <item itemvalue="Go Build.go build github.com/wentaojin/transferdb/test (1)" />
       </list>
     </recent_temporary>
   </component>
