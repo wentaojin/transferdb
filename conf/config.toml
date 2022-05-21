@@ -122,9 +122,9 @@ worker-threads = 3
 # 若需要增量数据同步，则需要 logminer 权限
 username = "marvin"
 password = "marvin"
-host = "172.16.4.207"
+host = "172.16.4.94"
 port = 1521
-service-name = "helowin"
+service-name = "oracl"
 # oracle instance client dir
 lib-dir = "/Users/marvin/storehouse/oracle/instantclient_19_8"
 # 配置 oracle 连接参数
@@ -150,8 +150,8 @@ db-type = "tidb"
 # 目标端连接串
 username = "marvin"
 password = "marvin"
-host = "172.16.4.207"
-port = 4000
+host = "172.16.4.89"
+port = 5500
 # mysql 链接参数
 connect-params = "charset=utf8mb4&multiStatements=true&parseTime=True&loc=Local"
 # 目标端元数据库
