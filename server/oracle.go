@@ -18,6 +18,8 @@ package server
 import (
 	"database/sql"
 	"fmt"
+	"os"
+	"runtime"
 	"strconv"
 
 	"github.com/wentaojin/transferdb/utils"
@@ -44,7 +46,18 @@ func NewOracleDBEngine(oraCfg service.SourceConfig) (*sql.DB, error) {
 	}
 
 	oraDSN.OnInitStmts = oraCfg.SessionParams
-	oraDSN.LibDir = oraCfg.LibDir
+
+	// libDir won't have any effect on Linux for linking reasons to do with Oracle's libnnz library that are proving to be intractable.
+	// You must set LD_LIBRARY_PATH or run ldconfig before your process starts.
+	// This is documented in various places for other drivers that use ODPI-C. The parameter works on macOS and Windows.
+	switch runtime.GOOS {
+	case "linux":
+		if err = os.Setenv("LD_LIBRARY_PATH", oraCfg.LibDir); err != nil {
+			return nil, fmt.Errorf("set LD_LIBRARY_PATH env failed: %v", err)
+		}
+	case "windows", "darwin":
+		oraDSN.LibDir = oraCfg.LibDir
+	}
 
 	sqlDB := sql.OpenDB(godror.NewConnector(oraDSN))
 	sqlDB.SetMaxIdleConns(0)

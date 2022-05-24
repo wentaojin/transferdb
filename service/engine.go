@@ -388,6 +388,24 @@ func (e *Engine) GetOracleDataRowStrings(querySQL string) ([]string, *strset.Set
 						return cols, stringSet, crc32Value, err
 					}
 					rowsTMP = append(rowsTMP, fmt.Sprintf("%v", r))
+				case "godror.Number":
+					r, err := decimal.NewFromString(string(raw))
+					if err != nil {
+						return cols, stringSet, crc32Value, err
+					}
+					if r.IsInteger() {
+						si, err := utils.StrconvIntBitSize(string(raw), 64)
+						if err != nil {
+							return cols, stringSet, crc32Value, err
+						}
+						rowsTMP = append(rowsTMP, fmt.Sprintf("%v", si))
+					} else {
+						rf, err := utils.StrconvFloatBitSize(string(raw), 64)
+						if err != nil {
+							return cols, stringSet, crc32Value, err
+						}
+						rowsTMP = append(rowsTMP, fmt.Sprintf("%v", rf))
+					}
 				default:
 					rowsTMP = append(rowsTMP, fmt.Sprintf("'%v'", string(raw)))
 				}

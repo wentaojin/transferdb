@@ -17,6 +17,7 @@ package diff
 
 import (
 	"fmt"
+	"github.com/thinkeridea/go-extend/exstrings"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -29,8 +30,6 @@ import (
 	"github.com/wentaojin/transferdb/pkg/reverser"
 
 	"github.com/scylladb/go-set/strset"
-	"github.com/thinkeridea/go-extend/exstrings"
-
 	"github.com/wentaojin/transferdb/pkg/check"
 
 	"github.com/wentaojin/transferdb/utils"
@@ -709,30 +708,6 @@ func Report(targetSchema string, dm service.DataDiffMeta, engine *service.Engine
 	//上游不存在，下游存在 DELETE 下游
 
 	var fixSQL strings.Builder
-	// 判断上游数据是否多
-	sourceMore := strset.Difference(oraStringSet, mysqlStringSet).List()
-	if len(sourceMore) > 0 {
-		fixSQL.WriteString("/*\n")
-		fixSQL.WriteString(fmt.Sprintf(" mysql table [%s.%s] chunk data rows are less \n", targetSchema, dm.SourceTableName))
-
-		sw := table.NewWriter()
-		sw.SetStyle(table.StyleLight)
-		sw.AppendHeader(table.Row{"DATABASE", "DATA COUNTS SQL", "CRC32"})
-		sw.AppendRows([]table.Row{
-			{"ORACLE",
-				utils.StringsBuilder("SELECT COUNT(1)", " FROM ", dm.SourceSchemaName, ".", dm.SourceTableName, " WHERE ", dm.Range),
-				oraCrc32Val},
-			{"MySQL", utils.StringsBuilder(
-				"SELECT COUNT(1)", " FROM ", targetSchema, ".", dm.SourceTableName, " WHERE ", dm.Range),
-				mysqlCrc32Val},
-		})
-		fixSQL.WriteString(fmt.Sprintf("%v\n", sw.Render()))
-		fixSQL.WriteString("*/\n")
-		insertPrefix := utils.StringsBuilder("INSERT INTO ", targetSchema, ".", dm.SourceTableName, " (", strings.Join(oraColumns, ","), ") VALUES (")
-		for _, s := range sourceMore {
-			fixSQL.WriteString(fmt.Sprintf("%v;\n", utils.StringsBuilder(insertPrefix, s, ")")))
-		}
-	}
 
 	// 判断下游数据是否多
 	targetMore := strset.Difference(mysqlStringSet, oraStringSet).List()
@@ -768,6 +743,31 @@ func Report(targetSchema string, dm service.DataDiffMeta, engine *service.Engine
 			}
 
 			fixSQL.WriteString(fmt.Sprintf("%v;\n", utils.StringsBuilder(deletePrefix, exstrings.Join(whereCond, " AND "))))
+		}
+	}
+
+	// 判断上游数据是否多
+	sourceMore := strset.Difference(oraStringSet, mysqlStringSet).List()
+	if len(sourceMore) > 0 {
+		fixSQL.WriteString("/*\n")
+		fixSQL.WriteString(fmt.Sprintf(" mysql table [%s.%s] chunk data rows are less \n", targetSchema, dm.SourceTableName))
+
+		sw := table.NewWriter()
+		sw.SetStyle(table.StyleLight)
+		sw.AppendHeader(table.Row{"DATABASE", "DATA COUNTS SQL", "CRC32"})
+		sw.AppendRows([]table.Row{
+			{"ORACLE",
+				utils.StringsBuilder("SELECT COUNT(1)", " FROM ", dm.SourceSchemaName, ".", dm.SourceTableName, " WHERE ", dm.Range),
+				oraCrc32Val},
+			{"MySQL", utils.StringsBuilder(
+				"SELECT COUNT(1)", " FROM ", targetSchema, ".", dm.SourceTableName, " WHERE ", dm.Range),
+				mysqlCrc32Val},
+		})
+		fixSQL.WriteString(fmt.Sprintf("%v\n", sw.Render()))
+		fixSQL.WriteString("*/\n")
+		insertPrefix := utils.StringsBuilder("INSERT INTO ", targetSchema, ".", dm.SourceTableName, " (", strings.Join(oraColumns, ","), ") VALUES (")
+		for _, s := range sourceMore {
+			fixSQL.WriteString(fmt.Sprintf("%v;\n", utils.StringsBuilder(insertPrefix, s, ")")))
 		}
 	}
 

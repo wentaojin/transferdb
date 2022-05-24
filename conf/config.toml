@@ -122,7 +122,7 @@ worker-threads = 3
 # 若需要增量数据同步，则需要 logminer 权限
 username = "marvin"
 password = "marvin"
-host = "172.16.4.94"
+host = "172.16.4.93"
 port = 1521
 service-name = "oracl"
 # oracle instance client dir
@@ -140,7 +140,7 @@ schema-name = "marvin"
 # 源端迁移任务表（只用于 prepare/reverse/check/all/full 阶段，gather 阶段不适用，gather 只适用于 schema 级别）
 # include-table 和 exclude-table 不能同时配置，两者只能配置一个,如果两个都没配置则 Schema 内表全迁移
 # include-table 和 exclude-table 支持正则表达式以及通配符（tab_*/tab*）
-include-table = ["marvin*"]
+include-table = ["t"]
 exclude-table = []
 
 # 只用于 prepare/reverse/check/all/full 阶段，gather 阶段不适用
