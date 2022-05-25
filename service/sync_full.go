@@ -116,6 +116,11 @@ func (e *Engine) ModifyWaitSyncTableMetaRecord(metaSchemaName, sourceSchemaName,
 			return err
 		}
 		if errTotal >= 1 {
+			Logger.Warn("update mysql [wait_sync_meta] meta",
+				zap.String("schema", sourceSchemaName),
+				zap.String("table", sourceTableName),
+				zap.String("mode", syncMode),
+				zap.String("updated", "skip"))
 			return nil
 		}
 	}
@@ -155,7 +160,7 @@ func (e *Engine) ModifyWaitAndFullSyncTableMetaRecord(metaSchemaName, sourceSche
 				strings.ToUpper(sourceTableName),
 				syncMode).
 			Update("full_split_times", gorm.Expr("full_split_times - 1")).Error; err != nil {
-			fmt.Errorf(
+			return fmt.Errorf(
 				`update mysql meta schema [%s] table [wait_sync_meta] reocrd with source table [%s] failed: %v`,
 				metaSchemaName, sourceTableName, err.Error())
 

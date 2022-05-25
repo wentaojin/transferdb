@@ -189,7 +189,7 @@ func IncrementSyncOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service
 				return err
 			}
 			if len(panicTables) != 0 {
-				return fmt.Errorf("table list [%s] can't incremently sync, because table full sync isn't finished", panicTables)
+				return fmt.Errorf("table list %s can't incremently sync, because table increment sync meta record is exist and full meta sync isn't finished", panicTables)
 			}
 			// 增量数据同步
 			for range time.Tick(300 * time.Millisecond) {
@@ -308,7 +308,7 @@ func syncOracleFullTableRecordToMySQLUsingAllMode(cfg *service.CfgFile, engine *
 
 	// 全量任务结束，写入增量源数据表起始 SCN 号
 	//根据配置文件生成同步表元数据 [increment_sync_meta]
-	if err = generateTableIncrementTaskCheckpointMeta(cfg.SourceConfig.SchemaName, engine, syncMode); err != nil {
+	if err = generateTableIncrementTaskCheckpointMeta(cfg.SourceConfig.SchemaName, cfg.TargetConfig.MetaSchema, engine, syncMode); err != nil {
 		return err
 	}
 

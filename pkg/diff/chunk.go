@@ -163,8 +163,8 @@ func AdjustTableSelectColumn(e *service.Engine, schemaName, tableName string, so
 			targetColumnInfo = append(targetColumnInfo, colName)
 		// 字符
 		case "BFILE", "CHARACTER", "LONG", "NCHAR VARYING", "ROWID", "UROWID", "VARCHAR", "XMLTYPE", "CHAR", "NCHAR", "NVARCHAR2", "NCLOB", "CLOB":
-			sourceColumnInfo = append(sourceColumnInfo, colName)
-			targetColumnInfo = append(targetColumnInfo, colName)
+			sourceColumnInfo = append(sourceColumnInfo, utils.StringsBuilder("NVL(", colName, ",'') AS ", colName))
+			targetColumnInfo = append(targetColumnInfo, utils.StringsBuilder("IFNULL(", colName, ",'') AS ", colName))
 		// 二进制
 		case "BLOB", "LONG RAW", "RAW":
 			sourceColumnInfo = append(sourceColumnInfo, colName)

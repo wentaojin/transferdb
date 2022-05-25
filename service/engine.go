@@ -492,8 +492,44 @@ func (e *Engine) GetMySQLDataRowStrings(querySQL string) ([]string, *strset.Set,
 				rowsTMP = append(rowsTMP, fmt.Sprintf("%v", `NULL`))
 			} else {
 				switch columnTypes[i] {
-				case "int64":
+				case "int8":
+					r, err := utils.StrconvIntBitSize(string(raw), 8)
+					if err != nil {
+						return cols, stringSet, crc32Value, err
+					}
+					rowsTMP = append(rowsTMP, fmt.Sprintf("%v", r))
+				case "int16":
+					r, err := utils.StrconvIntBitSize(string(raw), 16)
+					if err != nil {
+						return cols, stringSet, crc32Value, err
+					}
+					rowsTMP = append(rowsTMP, fmt.Sprintf("%v", r))
+				case "int32", "sql.NullInt32":
+					r, err := utils.StrconvIntBitSize(string(raw), 32)
+					if err != nil {
+						return cols, stringSet, crc32Value, err
+					}
+					rowsTMP = append(rowsTMP, fmt.Sprintf("%v", r))
+				case "int64", "sql.NullInt64":
 					r, err := utils.StrconvIntBitSize(string(raw), 64)
+					if err != nil {
+						return cols, stringSet, crc32Value, err
+					}
+					rowsTMP = append(rowsTMP, fmt.Sprintf("%v", r))
+				case "uint8":
+					r, err := utils.StrconvUintBitSize(string(raw), 8)
+					if err != nil {
+						return cols, stringSet, crc32Value, err
+					}
+					rowsTMP = append(rowsTMP, fmt.Sprintf("%v", r))
+				case "uint16":
+					r, err := utils.StrconvUintBitSize(string(raw), 16)
+					if err != nil {
+						return cols, stringSet, crc32Value, err
+					}
+					rowsTMP = append(rowsTMP, fmt.Sprintf("%v", r))
+				case "uint32":
+					r, err := utils.StrconvUintBitSize(string(raw), 32)
 					if err != nil {
 						return cols, stringSet, crc32Value, err
 					}
@@ -510,7 +546,7 @@ func (e *Engine) GetMySQLDataRowStrings(querySQL string) ([]string, *strset.Set,
 						return cols, stringSet, crc32Value, err
 					}
 					rowsTMP = append(rowsTMP, fmt.Sprintf("%v", r))
-				case "float64":
+				case "float64", "sql.NullFloat64":
 					r, err := utils.StrconvFloatBitSize(string(raw), 64)
 					if err != nil {
 						return cols, stringSet, crc32Value, err

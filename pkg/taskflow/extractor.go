@@ -274,14 +274,17 @@ func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceT
 					zap.String("table", sourceTableName),
 					zap.String("sql", querySQL))
 
-				// 清理记录以及更新记录
-				if err = engine.ModifyWaitAndFullSyncTableMetaRecord(
-					cfg.TargetConfig.MetaSchema,
-					cfg.SourceConfig.SchemaName,
-					sourceTableName,
-					meta.RowidSQL,
-					syncMode); err != nil {
-					return err
+				// 清理 full_sync_meta 记录以及更新 wait_sync_meta 记录
+				// ALL 同步模式跳过清理，等待 INCREMENT 元数据表记录最小 SCN 后再清理
+				if syncMode != ALLSyncMode {
+					if err = engine.ModifyWaitAndFullSyncTableMetaRecord(
+						cfg.TargetConfig.MetaSchema,
+						cfg.SourceConfig.SchemaName,
+						sourceTableName,
+						meta.RowidSQL,
+						syncMode); err != nil {
+						return err
+					}
 				}
 				return nil
 			}
@@ -301,11 +304,14 @@ func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceT
 				return err
 			}
 
-			// 清理记录
-			if err = engine.ModifyFullSyncTableMetaRecord(
-				cfg.TargetConfig.MetaSchema,
-				cfg.SourceConfig.SchemaName, meta.SourceTableName, meta.RowidSQL); err != nil {
-				return err
+			// 清理 full_sync_meta 记录
+			// ALL 同步模式跳过清理，等待 INCREMENT 元数据表记录最小 SCN 后再清理
+			if syncMode != ALLSyncMode {
+				if err = engine.ModifyFullSyncTableMetaRecord(
+					cfg.TargetConfig.MetaSchema,
+					cfg.SourceConfig.SchemaName, meta.SourceTableName, meta.RowidSQL); err != nil {
+					return err
+				}
 			}
 			return nil
 		})
@@ -324,7 +330,7 @@ func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceT
 			cfg.SourceConfig.SchemaName, sourceTableName)
 	}
 
-	// 更新记录
+	// 更新 wait_sync_meta 记录
 	if err = engine.ModifyWaitSyncTableMetaRecord(
 		cfg.TargetConfig.MetaSchema,
 		cfg.SourceConfig.SchemaName, sourceTableName, syncMode); err != nil {
@@ -340,16 +346,24 @@ func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceT
 }
 
 // 根据配置文件以及起始 SCN 生成同步表元数据 [increment_sync_meta]
-func generateTableIncrementTaskCheckpointMeta(sourceSchemaName string, engine *service.Engine, syncMode string) error {
+func generateTableIncrementTaskCheckpointMeta(sourceSchemaName, metaSchemaName string, engine *service.Engine, syncMode string) error {
+	// 获取所有已完成全量数据的表记录
 	tableMeta, _, err := engine.GetFinishFullSyncMetaRecord(sourceSchemaName, syncMode)
 	if err != nil {
 		return err
 	}
 
+	// 记录表起始 SCN 记录
 	for _, tm := range tableMeta {
 		if err = engine.InitIncrementSyncMetaRecord(tm.SourceSchemaName, tm.SourceTableName, tm.IsPartition, tm.FullGlobalSCN); err != nil {
 			return err
 		}
 	}
+
+	// 清理已完成全量数据表记录
+	if err = engine.TruncateFullSyncTableMetaRecord(metaSchemaName); err != nil {
+		return err
+	}
+
 	return nil
 }
