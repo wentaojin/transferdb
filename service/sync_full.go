@@ -231,8 +231,7 @@ func (e *Engine) TruncateMySQLTableRecord(targetSchemaName string, tableName str
 	return nil
 }
 
-func (e *Engine) InitWaitAndFullSyncMetaRecord(sourceSchema, sourceTable, sourceColumnInfo, targetSchema, targetTable string, workerID, globalSCN int, chunkSize, insertBatchSize int,
-	csvDataDir, syncMode string) error {
+func (e *Engine) InitWaitAndFullSyncMetaRecord(sourceSchema, sourceTable, sourceColumnInfo, targetSchema, targetTable string, workerID, globalSCN int, chunkSize, insertBatchSize int, csvDataDir, syncMode string) error {
 	tableRows, isPartition, err := e.getOracleTableRowsByStatistics(sourceSchema, sourceTable)
 	if err != nil {
 		return err
@@ -267,7 +266,7 @@ func (e *Engine) InitWaitAndFullSyncMetaRecord(sourceSchema, sourceTable, source
 				RowidSQL:         ` WHERE 1 = 1`,
 				IsPartition:      isPartition,
 				GlobalSCN:        globalSCN,
-				CSVFile:          filepath.Join(csvDataDir, targetSchema, targetTable, utils.StringsBuilder(targetSchema, `.`, targetTable, `.1.csv`)),
+				CSVFile:          filepath.Join(csvDataDir, targetSchema, targetTable, utils.StringsBuilder(targetSchema, `.`, targetTable, `.0.csv`)),
 			}).Error; err != nil {
 				return fmt.Errorf("gorm create table [%s.%s] full_sync_meta failed [statistics rows = 0]: %v", sourceSchema, sourceTable, err)
 			}
@@ -560,7 +559,7 @@ func (e *Engine) GetOracleTableChunksByRowID(taskName, sourceSchema, sourceTable
 				RowidSQL:         ` WHERE 1 = 1`,
 				IsPartition:      isPartition,
 				GlobalSCN:        globalSCN,
-				CSVFile:          filepath.Join(csvDataDir, targetSchema, targetTable, utils.StringsBuilder(targetSchema, `.`, targetTable, `.1.csv`)),
+				CSVFile:          filepath.Join(csvDataDir, targetSchema, targetTable, utils.StringsBuilder(targetSchema, `.`, targetTable, `.0.csv`)),
 			}).Error; err != nil {
 				return rowCount, fmt.Errorf("gorm create table [%s.%s] full_sync_meta failed [rowids rows = 0]: %v", sourceSchema, sourceTable, err)
 			}

@@ -171,6 +171,12 @@ func filterOracleRedoGreaterOrEqualRecordByTable(
 // 2、根据元数据表记录全量导出导入
 func initOracleTableConsumeRowID(cfg *service.CfgFile, engine *service.Engine,
 	waitSyncTableInfo []string, syncMode string, oraCollation bool) error {
+	// 全量同步前，获取 SCN 以及初始化元数据表
+	globalSCN, err := engine.GetOracleCurrentSnapshotSCN()
+	if err != nil {
+		return err
+	}
+
 	wp := workpool.New(cfg.FullConfig.TaskThreads)
 
 	for idx, tbl := range waitSyncTableInfo {
@@ -178,16 +184,6 @@ func initOracleTableConsumeRowID(cfg *service.CfgFile, engine *service.Engine,
 		workerID := idx
 		wp.Do(func() error {
 			startTime := time.Now()
-			service.Logger.Info("single full table init scn start",
-				zap.String("schema", cfg.SourceConfig.SchemaName),
-				zap.String("table", table))
-
-			// 全量同步前，获取 SCN 以及初始化元数据表
-			globalSCN, err := engine.GetOracleCurrentSnapshotSCN()
-			if err != nil {
-				return err
-			}
-
 			// Date/Timestamp 字段类型格式化
 			// Interval Year/Day 数据字符 TO_CHAR 格式化
 			sourceColumnInfo, err := engine.AdjustTableSelectColumn(cfg.SourceConfig.SchemaName, table, oraCollation)
@@ -202,10 +198,12 @@ func initOracleTableConsumeRowID(cfg *service.CfgFile, engine *service.Engine,
 			}
 
 			endTime := time.Now()
-			service.Logger.Info("single full table init scn finished",
+			service.Logger.Info("single table init wait_sync_meta and full_sync_meta finished",
 				zap.String("schema", cfg.SourceConfig.SchemaName),
 				zap.String("table", table),
+				zap.Int("global scn", globalSCN),
 				zap.String("cost", endTime.Sub(startTime).String()))
+
 			return nil
 		})
 	}
@@ -216,6 +214,7 @@ func initOracleTableConsumeRowID(cfg *service.CfgFile, engine *service.Engine,
 	if !wp.IsDone() {
 		return fmt.Errorf("init oracle table rowid by scn failed, please rerunning")
 	}
+
 	return nil
 }
 
@@ -275,16 +274,13 @@ func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceT
 					zap.String("sql", querySQL))
 
 				// 清理 full_sync_meta 记录以及更新 wait_sync_meta 记录
-				// ALL 同步模式跳过清理，等待 INCREMENT 元数据表记录最小 SCN 后再清理
-				if syncMode != ALLSyncMode {
-					if err = engine.ModifyWaitAndFullSyncTableMetaRecord(
-						cfg.TargetConfig.MetaSchema,
-						cfg.SourceConfig.SchemaName,
-						sourceTableName,
-						meta.RowidSQL,
-						syncMode); err != nil {
-						return err
-					}
+				if err = engine.ModifyWaitAndFullSyncTableMetaRecord(
+					cfg.TargetConfig.MetaSchema,
+					cfg.SourceConfig.SchemaName,
+					sourceTableName,
+					meta.RowidSQL,
+					syncMode); err != nil {
+					return err
 				}
 				return nil
 			}
@@ -305,13 +301,10 @@ func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceT
 			}
 
 			// 清理 full_sync_meta 记录
-			// ALL 同步模式跳过清理，等待 INCREMENT 元数据表记录最小 SCN 后再清理
-			if syncMode != ALLSyncMode {
-				if err = engine.ModifyFullSyncTableMetaRecord(
-					cfg.TargetConfig.MetaSchema,
-					cfg.SourceConfig.SchemaName, meta.SourceTableName, meta.RowidSQL); err != nil {
-					return err
-				}
+			if err = engine.ModifyFullSyncTableMetaRecord(
+				cfg.TargetConfig.MetaSchema,
+				cfg.SourceConfig.SchemaName, meta.SourceTableName, meta.RowidSQL); err != nil {
+				return err
 			}
 			return nil
 		})

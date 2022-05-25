@@ -6,10 +6,8 @@
   <component name="ChangeListManager">
     <list default="true" id="a67576d0-c4df-4b83-a792-1e43567e1978" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/diff/chunk.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/diff/chunk.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/csv/full.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/csv/full.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pkg/taskflow/extractor.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/taskflow/extractor.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/taskflow/taskflow.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/taskflow/taskflow.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/service/engine.go" beforeDir="false" afterPath="$PROJECT_DIR$/service/engine.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/service/sync_full.go" beforeDir="false" afterPath="$PROJECT_DIR$/service/sync_full.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />

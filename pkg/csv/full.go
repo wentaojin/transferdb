@@ -80,6 +80,12 @@ func startOracleTableConsumeByCheckpoint(cfg *service.CfgFile, engine *service.E
 }
 
 func initOracleTableConsumeRowID(cfg *service.CfgFile, engine *service.Engine, waitSyncTableInfo []string, syncMode string, oraCollation bool) error {
+	// 全量同步前，获取 SCN 以及初始化元数据表
+	globalSCN, err := engine.GetOracleCurrentSnapshotSCN()
+	if err != nil {
+		return err
+	}
+
 	wp := workpool.New(cfg.CSVConfig.TaskThreads)
 
 	for idx, tbl := range waitSyncTableInfo {
@@ -87,16 +93,6 @@ func initOracleTableConsumeRowID(cfg *service.CfgFile, engine *service.Engine, w
 		workerID := idx
 		wp.Do(func() error {
 			startTime := time.Now()
-			service.Logger.Info("single full table init scn start",
-				zap.String("schema", cfg.SourceConfig.SchemaName),
-				zap.String("table", table))
-
-			// 全量同步前，获取 SCN 以及初始化元数据表
-			globalSCN, err := engine.GetOracleCurrentSnapshotSCN()
-			if err != nil {
-				return err
-			}
-
 			// Date/Timestamp 字段类型格式化
 			// Interval Year/Day 数据字符 TO_CHAR 格式化
 			sourceColumnInfo, err := engine.AdjustTableSelectColumn(cfg.SourceConfig.SchemaName, table, oraCollation)
@@ -111,7 +107,7 @@ func initOracleTableConsumeRowID(cfg *service.CfgFile, engine *service.Engine, w
 			}
 
 			endTime := time.Now()
-			service.Logger.Info("single full table init scn finished",
+			service.Logger.Info("single table init wait_sync_meta and full_sync_meta finished",
 				zap.String("schema", cfg.SourceConfig.SchemaName),
 				zap.String("table", table),
 				zap.String("cost", endTime.Sub(startTime).String()))
