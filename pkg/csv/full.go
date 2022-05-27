@@ -162,7 +162,7 @@ func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceC
 			}
 
 			// 清理记录
-			if err = engine.ModifyFullSyncTableMetaRecord(
+			if err = engine.ClearFullSyncTableMetaRecord(
 				cfg.TargetConfig.MetaSchema,
 				cfg.SourceConfig.SchemaName, meta.SourceTableName, meta.RowidSQL); err != nil {
 				return err

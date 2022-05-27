@@ -17,6 +17,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/wentaojin/transferdb/service"
 
@@ -25,21 +26,29 @@ import (
 
 func main() {
 	mysqlCfg := service.TargetConfig{
-		Username:      "marvin",
-		Password:      "marvin",
-		Host:          "192.168.2.30",
-		Port:          5000,
+		Username:      "root",
+		Password:      "tidb",
+		Host:          "120.92.86.179",
+		Port:          4000,
 		ConnectParams: "charset=utf8mb4&parseTime=True&loc=Local&multiStatements=true&tidb_txn_mode='optimistic'",
-		MetaSchema:    "steven",
+		MetaSchema:    "db_meta",
 	}
-	engine, err := server.NewMySQLEngineGeneralDB(mysqlCfg, 300)
+	engine, err := server.NewMySQLEngineGeneralDB(mysqlCfg, 300, 300)
 	if err != nil {
 		fmt.Println(err)
 	}
-	cols, res, err := service.Query(engine.MysqlDB, "select * from t1")
-	if err != nil {
-		fmt.Println(err)
+
+	if err = engine.GormDB.Model(&service.WaitSyncMeta{}).
+		Where("source_schema_name = ? AND source_table_name = ? AND sync_mode = ?",
+			"SYSBENCH",
+			strings.ToUpper("SBTEST2"),
+			"ALL").
+		Updates(map[string]interface{}{
+			"full_global_scn": 129,
+			"FullSplitTimes":  100,
+			"IsPartition":     "NO",
+		}).Error; err != nil {
+		panic(engine)
 	}
-	fmt.Println(cols)
-	fmt.Println(res)
+
 }

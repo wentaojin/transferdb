@@ -90,7 +90,7 @@ func (e *Engine) IsExistIncrementSyncMetaRecord(schemaName string, transferTable
 // 清理并更新同步任务元数据表
 // 1、全量每成功同步一张表记录，再清理记录
 // 2、更新同步数据表元信息
-func (e *Engine) ModifyFullSyncTableMetaRecord(metaSchemaName, sourceSchemaName, sourceTableName, rowidSQL string) error {
+func (e *Engine) ClearFullSyncTableMetaRecord(metaSchemaName, sourceSchemaName, sourceTableName, rowidSQL string) error {
 	if err := e.GormDB.Model(FullSyncMeta{}).
 		Where(`source_schema_name = ? AND source_table_name= ? AND upper(rowid_sql)= ?`,
 			strings.ToUpper(sourceSchemaName),
@@ -337,9 +337,9 @@ func (e *Engine) UpdateWaitSyncMetaTableRecord(schemaName, tableName string, row
 			strings.ToUpper(tableName),
 			syncMode).
 		Updates(map[string]interface{}{
-			"full_global_scn":  globalSCN,
-			"full_split_times": rowCounts,
-			"is_partition":     isPartition,
+			"FullGlobalSCN":  globalSCN,
+			"FullSplitTimes": rowCounts,
+			"IsPartition":    isPartition,
 		}).Error; err != nil {
 		return err
 	}

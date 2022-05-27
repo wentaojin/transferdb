@@ -241,9 +241,6 @@ func startOracleTableConsumeByCheckpoint(cfg *service.CfgFile, engine *service.E
 
 func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceTableName, syncMode string) error {
 	startTime := time.Now()
-	service.Logger.Info("single full table data sync start",
-		zap.String("schema", cfg.SourceConfig.SchemaName),
-		zap.String("table", sourceTableName))
 
 	fullSyncMetas, err := engine.GetFullSyncMetaRowIDRecord(cfg.SourceConfig.SchemaName, sourceTableName)
 	if err != nil {
@@ -301,7 +298,7 @@ func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceT
 			}
 
 			// 清理 full_sync_meta 记录
-			if err = engine.ModifyFullSyncTableMetaRecord(
+			if err = engine.ClearFullSyncTableMetaRecord(
 				cfg.TargetConfig.MetaSchema,
 				cfg.SourceConfig.SchemaName, meta.SourceTableName, meta.RowidSQL); err != nil {
 				return err
@@ -352,11 +349,5 @@ func generateTableIncrementTaskCheckpointMeta(sourceSchemaName, metaSchemaName s
 			return err
 		}
 	}
-
-	// 清理已完成全量数据表记录
-	if err = engine.TruncateFullSyncTableMetaRecord(metaSchemaName); err != nil {
-		return err
-	}
-
 	return nil
 }
