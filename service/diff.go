@@ -43,7 +43,7 @@ func (e *Engine) GetMySQLTableName(schemaName, tableName string) ([]string, erro
 }
 
 func (e *Engine) InitDataDiffMetaRecordByNUMBER(sourceSchema, sourceTable, sourceColumnInfo, targetColumnInfo, numberColName string,
-	globalSCN, workerID, chunkSize, insertBatchSize int, syncMode string) error {
+	globalSCN uint64, workerID, chunkSize, insertBatchSize int, syncMode string) error {
 	tableRows, isPartition, err := e.getOracleTableRowsByStatistics(sourceSchema, sourceTable)
 	if err != nil {
 		return err
@@ -106,7 +106,7 @@ func (e *Engine) InitDataDiffMetaRecordByNUMBER(sourceSchema, sourceTable, sourc
 	return nil
 }
 
-func (e *Engine) InitDataDiffMetaRecordByWhere(sourceSchema, sourceTable, sourceColumnInfo, targetColumnInfo, whereS, syncMode string, globalSCN int) error {
+func (e *Engine) InitDataDiffMetaRecordByWhere(sourceSchema, sourceTable, sourceColumnInfo, targetColumnInfo, whereS, syncMode string, globalSCN uint64) error {
 	_, isPartition, err := e.getOracleTableRowsByStatistics(sourceSchema, sourceTable)
 	if err != nil {
 		return err

@@ -308,7 +308,7 @@ func syncOracleFullTableRecordToMySQLUsingAllMode(cfg *service.CfgFile, engine *
 
 	// 全量任务结束，写入增量源数据表起始 SCN 号
 	//根据配置文件生成同步表元数据 [increment_sync_meta]
-	if err = generateTableIncrementTaskCheckpointMeta(cfg.SourceConfig.SchemaName, cfg.TargetConfig.MetaSchema, engine, syncMode); err != nil {
+	if err = generateTableIncrementTaskCheckpointMeta(cfg.SourceConfig.SchemaName, engine, syncMode); err != nil {
 		return err
 	}
 
@@ -332,22 +332,22 @@ func syncOracleTableIncrementRecordToMySQLUsingAllMode(cfg *service.CfgFile, eng
 	// 遍历所有日志文件
 	for _, log := range logFiles {
 		// 获取日志文件起始 SCN
-		logFileStartSCN, err := strconv.Atoi(log["FIRST_CHANGE"])
+		logFileStartSCN, err := utils.StrconvUintBitSize(log["FIRST_CHANGE"], 64)
 		if err != nil {
-			return fmt.Errorf("get oracle log file start scn %s strconv.Atoi failed: %v", log["FIRST_CHANGE"], err)
+			return fmt.Errorf("get oracle log file start scn %s utils.StrconvUintBitSize failed: %v", log["FIRST_CHANGE"], err)
 		}
 
 		// 获取日志文件结束 SCN
-		logFileEndSCN, err := strconv.Atoi(log["NEXT_CHANGE"])
+		logFileEndSCN, err := utils.StrconvUintBitSize(log["NEXT_CHANGE"], 64)
 		if err != nil {
-			return fmt.Errorf("get oracle log file end scn %s strconv.Atoi failed: %v", log["NEXT_CHANGE"], err)
+			return fmt.Errorf("get oracle log file end scn %s utils.StrconvUintBitSize failed: %v", log["NEXT_CHANGE"], err)
 		}
 
 		zap.L().Info("increment table log file logminer",
 			zap.String("logfile", log["LOG_FILE"]),
-			zap.Int("logfile start scn", logFileStartSCN),
-			zap.Int("logminer start scn", logFileStartSCN),
-			zap.Int("logfile end scn", logFileEndSCN))
+			zap.Uint64("logfile start scn", logFileStartSCN),
+			zap.Uint64("logminer start scn", logFileStartSCN),
+			zap.Uint64("logfile end scn", logFileEndSCN))
 
 		// 获取增量元数据表内所需同步表信息
 		transferTableSlice, transferTableMetaMap, err := engine.GetMySQLTableIncrementMetaRecord(cfg.SourceConfig.SchemaName)
@@ -563,13 +563,13 @@ func getOracleTableIncrementRecordLogFile(engine *service.Engine, sourceSchemaNa
 	)
 	// 获取所需挖掘的日志文件
 	if redoScn == 0 {
-		strArchivedSCN := strconv.Itoa(archivedScn)
+		strArchivedSCN := strconv.FormatUint(archivedScn, 10)
 		logFiles, err = engine.GetOracleArchivedLogFile(strArchivedSCN)
 		if err != nil {
 			return logFiles, err
 		}
 	} else {
-		strRedoCN := strconv.Itoa(redoScn)
+		strRedoCN := strconv.FormatUint(redoScn, 10)
 		logFiles, err = engine.GetOracleRedoLogFile(strRedoCN)
 		if err != nil {
 			return logFiles, err

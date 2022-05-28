@@ -53,18 +53,18 @@ func extractorTableIncrementRecord(engine *service.Engine,
 	sourceSchemaName string,
 	sourceTableNameList []string,
 	logFileName string,
-	logFileStartSCN int, lastCheckpoint, logminerQueryTimeout int) ([]service.LogminerContent, error) {
+	logFileStartSCN, lastCheckpoint uint64, logminerQueryTimeout int) ([]service.LogminerContent, error) {
 	rowsResult, err := engine.GetOracleLogminerContentToMySQL(
 		sourceSchemaName,
 		utils.StringArrayToCapitalChar(sourceTableNameList),
-		strconv.Itoa(lastCheckpoint),
+		strconv.FormatUint(lastCheckpoint, 10),
 		logminerQueryTimeout)
 	if err != nil {
 		return []service.LogminerContent{}, err
 	}
 	zap.L().Info("increment table log extractor", zap.String("logfile", logFileName),
-		zap.Int("logfile start scn", logFileStartSCN),
-		zap.Int("source table last scn", lastCheckpoint),
+		zap.Uint64("logfile start scn", logFileStartSCN),
+		zap.Uint64("source table last scn", lastCheckpoint),
 		zap.Int("row counts", len(rowsResult)))
 
 	return rowsResult, nil
@@ -74,7 +74,7 @@ func extractorTableIncrementRecord(engine *service.Engine,
 func filterOracleRedoGreaterOrEqualRecordByTable(
 	rowsResult []service.LogminerContent,
 	transferTableList []string,
-	transferTableMetaMap map[string]int,
+	transferTableMetaMap map[string]uint64,
 	workerThreads, currentResetFlag int) (map[string][]service.LogminerContent, error) {
 	var (
 		lcMap map[string][]service.LogminerContent
@@ -201,7 +201,7 @@ func initOracleTableConsumeRowID(cfg *service.CfgFile, engine *service.Engine,
 			zap.L().Info("single table init wait_sync_meta and full_sync_meta finished",
 				zap.String("schema", cfg.SourceConfig.SchemaName),
 				zap.String("table", table),
-				zap.Int("global scn", globalSCN),
+				zap.Uint64("global scn", globalSCN),
 				zap.String("cost", endTime.Sub(startTime).String()))
 
 			return nil
@@ -336,7 +336,7 @@ func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceT
 }
 
 // 根据配置文件以及起始 SCN 生成同步表元数据 [increment_sync_meta]
-func generateTableIncrementTaskCheckpointMeta(sourceSchemaName, metaSchemaName string, engine *service.Engine, syncMode string) error {
+func generateTableIncrementTaskCheckpointMeta(sourceSchemaName string, engine *service.Engine, syncMode string) error {
 	// 获取所有已完成全量数据的表记录
 	tableMeta, _, err := engine.GetFinishFullSyncMetaRecord(sourceSchemaName, syncMode)
 	if err != nil {

@@ -25,8 +25,8 @@ import (
 )
 
 type IncrPayload struct {
-	GlobalSCN      int             `json:"global_scn"`
-	SourceTableSCN int             `json:"source_table_scn"`
+	GlobalSCN      uint64          `json:"global_scn"`
+	SourceTableSCN uint64          `json:"source_table_scn"`
 	SourceSchema   string          `json:"source_schema"`
 	SourceTable    string          `json:"source_table"`
 	TargetSchema   string          `json:"target_schema"`

@@ -231,7 +231,7 @@ func (e *Engine) TruncateMySQLTableRecord(targetSchemaName string, tableName str
 	return nil
 }
 
-func (e *Engine) InitWaitAndFullSyncMetaRecord(sourceSchema, sourceTable, sourceColumnInfo, targetSchema, targetTable string, workerID, globalSCN int, chunkSize, insertBatchSize int, csvDataDir, syncMode string) error {
+func (e *Engine) InitWaitAndFullSyncMetaRecord(sourceSchema, sourceTable, sourceColumnInfo, targetSchema, targetTable string, workerID int, globalSCN uint64, chunkSize, insertBatchSize int, csvDataDir, syncMode string) error {
 	tableRows, isPartition, err := e.getOracleTableRowsByStatistics(sourceSchema, sourceTable)
 	if err != nil {
 		return err
@@ -317,7 +317,7 @@ func (e *Engine) InitWaitSyncTableMetaRecord(schemaName string, tableName []stri
 			SourceSchemaName: strings.ToUpper(schemaName),
 			SourceTableName:  strings.ToUpper(table),
 			SyncMode:         syncMode,
-			FullGlobalSCN:    -1,
+			FullGlobalSCN:    0,
 			FullSplitTimes:   -1,
 		}).Error; err != nil {
 			return err
@@ -326,7 +326,7 @@ func (e *Engine) InitWaitSyncTableMetaRecord(schemaName string, tableName []stri
 	return nil
 }
 
-func (e *Engine) UpdateWaitSyncMetaTableRecord(schemaName, tableName string, rowCounts, globalSCN int, isPartition, syncMode string) error {
+func (e *Engine) UpdateWaitSyncMetaTableRecord(schemaName, tableName string, rowCounts int, globalSCN uint64, isPartition, syncMode string) error {
 	// 如果行数（切分次数）等于 0，full_sync_meta 自动生成全表读，额外更新处理 wait_sync_meta
 	if rowCounts == 0 {
 		rowCounts = 1
@@ -347,7 +347,7 @@ func (e *Engine) UpdateWaitSyncMetaTableRecord(schemaName, tableName string, row
 	return nil
 }
 
-func (e *Engine) InitIncrementSyncMetaRecord(schemaName, tableName, isPartition string, globalSCN int) error {
+func (e *Engine) InitIncrementSyncMetaRecord(schemaName, tableName, isPartition string, globalSCN uint64) error {
 	if err := e.GormDB.Create(&IncrementSyncMeta{
 		GlobalSCN:        globalSCN,
 		SourceSchemaName: strings.ToUpper(schemaName),
@@ -365,7 +365,7 @@ func (e *Engine) GetFinishFullSyncMetaRecord(schemaName string, syncMode string)
 		tableMetas []WaitSyncMeta
 		tables     []string
 	)
-	if err := e.GormDB.Where("source_schema_name = ? AND full_global_scn > -1 AND full_split_times = 0 and sync_mode = ?",
+	if err := e.GormDB.Where("source_schema_name = ? AND full_global_scn > 0 AND full_split_times = 0 and sync_mode = ?",
 		strings.ToUpper(schemaName),
 		syncMode).Find(&tableMetas).Error; err != nil {
 		return tableMetas, tables, err
@@ -384,7 +384,7 @@ func (e *Engine) IsFinishFullSyncMetaRecord(schemaName string, transferTableSlic
 		tableMetas  []WaitSyncMeta
 	)
 	for _, tbl := range transferTableSlice {
-		if err := e.GormDB.Where("source_schema_name = ? AND source_table_name = ? AND full_global_scn > -1 AND full_split_times = 0 and sync_mode = ?",
+		if err := e.GormDB.Where("source_schema_name = ? AND source_table_name = ? AND full_global_scn > 0 AND full_split_times = 0 and sync_mode = ?",
 			strings.ToUpper(schemaName),
 			strings.ToUpper(tbl),
 			syncMode).Find(&tableMetas).Error; err != nil {
@@ -406,7 +406,7 @@ func (e *Engine) GetPartSyncTableMetaRecord(sourceSchema, syncMode string) ([]Wa
 		tableInfo  []string
 	)
 
-	if err := e.GormDB.Where("source_schema_name = ? AND full_global_scn > -1 AND full_split_times > 0 and sync_mode = ?",
+	if err := e.GormDB.Where("source_schema_name = ? AND full_global_scn > 0 AND full_split_times > 0 and sync_mode = ?",
 		strings.ToUpper(sourceSchema),
 		syncMode).Find(&tableMetas).Error; err != nil {
 		return tableMetas, tableInfo, err
@@ -426,7 +426,7 @@ func (e *Engine) GetWaitSyncTableMetaRecord(sourceSchema, syncMode string) ([]Wa
 		tableInfo  []string
 	)
 
-	if err := e.GormDB.Where("source_schema_name = ? AND full_global_scn = -1 AND full_split_times = -1 and sync_mode = ?",
+	if err := e.GormDB.Where("source_schema_name = ? AND full_global_scn = 0 AND full_split_times = -1 and sync_mode = ?",
 		strings.ToUpper(sourceSchema), syncMode).Find(&tableMetas).Error; err != nil {
 		return tableMetas, tableInfo, err
 	}
@@ -466,16 +466,16 @@ func (e *Engine) GetFullSyncMetaRowIDRecord(schemaName, tableName string) ([]Ful
 	return tableFullMetas, nil
 }
 
-func (e *Engine) GetOracleCurrentSnapshotSCN() (int, error) {
+func (e *Engine) GetOracleCurrentSnapshotSCN() (uint64, error) {
 	// 获取当前 SCN 号
 	_, res, err := Query(e.OracleDB, "select min(current_scn) CURRENT_SCN from gv$database")
-	var globalSCN int
+	var globalSCN uint64
 	if err != nil {
 		return globalSCN, err
 	}
-	globalSCN, err = strconv.Atoi(res[0]["CURRENT_SCN"])
+	globalSCN, err = utils.StrconvUintBitSize(res[0]["CURRENT_SCN"], 64)
 	if err != nil {
-		return globalSCN, fmt.Errorf("get oracle current snapshot scn %s strconv.Atoi failed: %v", res[0]["CURRENT_SCN"], err)
+		return globalSCN, fmt.Errorf("get oracle current snapshot scn %s utils.StrconvUintBitSize failed: %v", res[0]["CURRENT_SCN"], err)
 	}
 	return globalSCN, nil
 }
@@ -520,7 +520,7 @@ END;`)
 	return nil
 }
 
-func (e *Engine) GetOracleTableChunksByRowID(taskName, sourceSchema, sourceTable, sourceColumnInfo, targetSchema, targetTable string, globalSCN, insertBatchSize int, csvDataDir, isPartition string) (int, error) {
+func (e *Engine) GetOracleTableChunksByRowID(taskName, sourceSchema, sourceTable, sourceColumnInfo, targetSchema, targetTable string, globalSCN uint64, insertBatchSize int, csvDataDir, isPartition string) (int, error) {
 	var rowCount int
 
 	querySQL := utils.StringsBuilder(`SELECT ' WHERE ROWID BETWEEN ''' || start_rowid || ''' AND ''' || end_rowid || '''' CMD FROM user_parallel_execute_chunks WHERE  task_name = '`, taskName, `' ORDER BY chunk_id`)

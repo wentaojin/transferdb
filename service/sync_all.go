@@ -18,7 +18,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -27,7 +26,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func (e *Engine) GetOracleRedoLogSCN(scn string) (int, error) {
+func (e *Engine) GetOracleRedoLogSCN(scn string) (uint64, error) {
 	_, res, err := Query(e.OracleDB, utils.StringsBuilder(`select  FIRST_CHANGE# AS SCN
   from (SELECT  GROUP#,
                first_change#,
@@ -36,21 +35,21 @@ func (e *Engine) GetOracleRedoLogSCN(scn string) (int, error) {
           FROM v$LOG
          WHERE FIRST_CHANGE# <= `, scn, ` order by FIRST_CHANGE# desc)
  where rownum = 1`))
-	var globalSCN int
+	var globalSCN uint64
 	if err != nil {
 		return globalSCN, err
 	}
 	if len(res) > 0 {
-		globalSCN, err = strconv.Atoi(res[0]["SCN"])
+		globalSCN, err = utils.StrconvUintBitSize(res[0]["SCN"], 64)
 		if err != nil {
-			return globalSCN, fmt.Errorf("get oracle redo log scn %s strconv.Atoi failed: %v", res[0]["SCN"], err)
+			return globalSCN, fmt.Errorf("get oracle redo log scn %s utils.StrconvUintBitSize failed: %v", res[0]["SCN"], err)
 		}
 	}
 	return globalSCN, nil
 }
 
-func (e *Engine) GetOracleArchivedLogSCN(scn string) (int, error) {
-	var globalSCN int
+func (e *Engine) GetOracleArchivedLogSCN(scn string) (uint64, error) {
+	var globalSCN uint64
 	_, res, err := Query(e.OracleDB, utils.StringsBuilder(`select FIRST_CHANGE# AS SCN
   from (select FIRST_CHANGE#,FIRST_TIME
           from v$archived_log
@@ -62,9 +61,9 @@ func (e *Engine) GetOracleArchivedLogSCN(scn string) (int, error) {
 		return globalSCN, err
 	}
 	if len(res) > 0 {
-		globalSCN, err = strconv.Atoi(res[0]["SCN"])
+		globalSCN, err = utils.StrconvUintBitSize(res[0]["SCN"], 64)
 		if err != nil {
-			return globalSCN, fmt.Errorf("get oracle archive log scn %s strconv.Atoi failed: %v", res[0]["SCN"], err)
+			return globalSCN, fmt.Errorf("get oracle archive log scn %s utils.StrconvUintBitSize failed: %v", res[0]["SCN"], err)
 		}
 	}
 	return globalSCN, nil
@@ -101,7 +100,7 @@ func (e *Engine) GetOracleArchivedLogFile(scn string) ([]map[string]string, erro
 	return res, nil
 }
 
-func (e *Engine) GetOracleCurrentRedoMaxSCN() (int, int, string, error) {
+func (e *Engine) GetOracleCurrentRedoMaxSCN() (uint64, uint64, string, error) {
 	_, res, err := Query(e.OracleDB, utils.StringsBuilder(`SELECT
        l.FIRST_CHANGE# AS FIRST_CHANGE,
        l.NEXT_CHANGE# AS NEXT_CHANGE,
@@ -115,13 +114,13 @@ func (e *Engine) GetOracleCurrentRedoMaxSCN() (int, int, string, error) {
 	if len(res) == 0 {
 		return 0, 0, "", fmt.Errorf("oracle current redo log can't null")
 	}
-	firstSCN, err := strconv.Atoi(res[0]["FIRST_CHANGE"])
+	firstSCN, err := utils.StrconvUintBitSize(res[0]["FIRST_CHANGE"], 64)
 	if err != nil {
-		return firstSCN, 0, res[0]["LOG_FILE"], fmt.Errorf("get oracle current redo first_change scn %s strconv.Atoi falied: %v", res[0]["FIRST_CHANGE"], err)
+		return firstSCN, 0, res[0]["LOG_FILE"], fmt.Errorf("get oracle current redo first_change scn %s utils.StrconvUintBitSize falied: %v", res[0]["FIRST_CHANGE"], err)
 	}
-	maxSCN, err := strconv.Atoi(res[0]["NEXT_CHANGE"])
+	maxSCN, err := utils.StrconvUintBitSize(res[0]["NEXT_CHANGE"], 64)
 	if err != nil {
-		return firstSCN, maxSCN, res[0]["LOG_FILE"], fmt.Errorf("get oracle current redo next_change scn %s strconv.Atoi falied: %v", res[0]["NEXT_CHANGE"], err)
+		return firstSCN, maxSCN, res[0]["LOG_FILE"], fmt.Errorf("get oracle current redo next_change scn %s utils.StrconvUintBitSize falied: %v", res[0]["NEXT_CHANGE"], err)
 	}
 	if maxSCN == 0 || firstSCN == 0 {
 		return firstSCN, maxSCN, res[0]["LOG_FILE"], fmt.Errorf("GetOracleCurrentRedoMaxSCN value is euqal to 0, does't meet expectations")
@@ -158,8 +157,8 @@ func (e *Engine) GetMySQLTableIncrementMetaMinGlobalSCNTime(sourceSchemaName str
 	return globalSCN, nil
 }
 
-func (e *Engine) GetMySQLTableIncrementMetaMinSourceTableSCNTime(sourceSchemaName string) (int, error) {
-	var sourceTableSCN int
+func (e *Engine) GetMySQLTableIncrementMetaMinSourceTableSCNTime(sourceSchemaName string) (uint64, error) {
+	var sourceTableSCN uint64
 	if err := e.GormDB.Model(&IncrementSyncMeta{}).Where("source_schema_name = ?",
 		strings.ToUpper(sourceSchemaName)).
 		Distinct().
@@ -169,10 +168,10 @@ func (e *Engine) GetMySQLTableIncrementMetaMinSourceTableSCNTime(sourceSchemaNam
 	return sourceTableSCN, nil
 }
 
-func (e *Engine) GetMySQLTableIncrementMetaRecord(sourceSchemaName string) ([]string, map[string]int, error) {
+func (e *Engine) GetMySQLTableIncrementMetaRecord(sourceSchemaName string) ([]string, map[string]uint64, error) {
 	var (
 		incrementMeta      []IncrementSyncMeta
-		tableMetas         map[string]int
+		tableMetas         map[string]uint64
 		transferTableSlice []string
 	)
 	if err := e.GormDB.Where("source_schema_name = ?", strings.ToUpper(sourceSchemaName)).
@@ -184,7 +183,7 @@ func (e *Engine) GetMySQLTableIncrementMetaRecord(sourceSchemaName string) ([]st
 		return transferTableSlice, tableMetas, fmt.Errorf("mysql increment mete table [table_increment_meta] can't null")
 	}
 
-	tableMetas = make(map[string]int)
+	tableMetas = make(map[string]uint64)
 	for _, tbl := range incrementMeta {
 		tableMetas[strings.ToUpper(tbl.SourceTableName)] = tbl.SourceTableSCN
 		transferTableSlice = append(transferTableSlice, strings.ToUpper(tbl.SourceTableName))
@@ -237,7 +236,7 @@ END;`))
 // V$LOGMNR_CONTENTS 字段解释参考链接
 // https://docs.oracle.com/en/database/oracle/oracle-database/21/refrn/V-LOGMNR_CONTENTS.html#GUID-B9196942-07BF-4935-B603-FA875064F5C3
 type LogminerContent struct {
-	SCN       int
+	SCN       uint64
 	SegOwner  string
 	TableName string
 	SQLRedo   string
