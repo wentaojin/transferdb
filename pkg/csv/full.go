@@ -31,7 +31,7 @@ import (
 )
 
 func startOracleTableFullCSV(cfg *service.CfgFile, engine *service.Engine, waitSyncTableInfo, partSyncTableInfo []string, syncMode string, oracleCollation bool) error {
-	service.Logger.Info("all full table data csv list",
+	zap.L().Info("all full table data csv list",
 		zap.Strings("wait sync tables", waitSyncTableInfo),
 		zap.Strings("part sync tables", partSyncTableInfo))
 
@@ -107,7 +107,7 @@ func initOracleTableConsumeRowID(cfg *service.CfgFile, engine *service.Engine, w
 			}
 
 			endTime := time.Now()
-			service.Logger.Info("single table init wait_sync_meta and full_sync_meta finished",
+			zap.L().Info("single table init wait_sync_meta and full_sync_meta finished",
 				zap.String("schema", cfg.SourceConfig.SchemaName),
 				zap.String("table", table),
 				zap.String("cost", endTime.Sub(startTime).String()))
@@ -125,7 +125,7 @@ func initOracleTableConsumeRowID(cfg *service.CfgFile, engine *service.Engine, w
 
 func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceCharset, sourceTableName, syncMode string) error {
 	startTime := time.Now()
-	service.Logger.Info("single full table data sync start",
+	zap.L().Info("single full table data sync start",
 		zap.String("schema", cfg.SourceConfig.SchemaName),
 		zap.String("charset", sourceCharset),
 		zap.String("table", sourceTableName))
@@ -176,7 +176,7 @@ func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceC
 
 	endTime := time.Now()
 	if !wp.IsDone() {
-		service.Logger.Fatal("single full table data loader failed",
+		zap.L().Fatal("single full table data loader failed",
 			zap.String("schema", cfg.SourceConfig.SchemaName),
 			zap.String("table", sourceTableName),
 			zap.String("cost", endTime.Sub(startTime).String()))
@@ -191,7 +191,7 @@ func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceC
 		return err
 	}
 
-	service.Logger.Info("single full table data loader finished",
+	zap.L().Info("single full table data loader finished",
 		zap.String("schema", cfg.SourceConfig.SchemaName),
 		zap.String("table", sourceTableName),
 		zap.String("cost", endTime.Sub(startTime).String()))

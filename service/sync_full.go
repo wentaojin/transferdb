@@ -100,7 +100,7 @@ func (e *Engine) ClearFullSyncTableMetaRecord(metaSchemaName, sourceSchemaName, 
 			`clear mysql meta schema [%s] table [full_sync_meta] reocrd with source table [%s] failed: %v`,
 			metaSchemaName, sourceTableName, err.Error())
 	}
-	Logger.Info("clear mysql [full_sync_meta] meta",
+	zap.L().Info("clear mysql [full_sync_meta] meta",
 		zap.String("schema", sourceSchemaName),
 		zap.String("table", sourceTableName),
 		zap.String("sql", rowidSQL),
@@ -116,7 +116,7 @@ func (e *Engine) ModifyWaitSyncTableMetaRecord(metaSchemaName, sourceSchemaName,
 			return err
 		}
 		if errTotal >= 1 {
-			Logger.Warn("update mysql [wait_sync_meta] meta",
+			zap.L().Warn("update mysql [wait_sync_meta] meta",
 				zap.String("schema", sourceSchemaName),
 				zap.String("table", sourceTableName),
 				zap.String("mode", syncMode),
@@ -135,7 +135,7 @@ func (e *Engine) ModifyWaitSyncTableMetaRecord(metaSchemaName, sourceSchemaName,
 			metaSchemaName, sourceTableName, err.Error())
 
 	}
-	Logger.Info("update mysql [wait_sync_meta] meta",
+	zap.L().Info("update mysql [wait_sync_meta] meta",
 		zap.String("schema", sourceSchemaName),
 		zap.String("table", sourceTableName),
 		zap.String("status", "success"))
@@ -170,7 +170,7 @@ func (e *Engine) ModifyWaitAndFullSyncTableMetaRecord(metaSchemaName, sourceSche
 		return err
 	}
 
-	Logger.Info("clear and update mysql meta",
+	zap.L().Info("clear and update mysql meta",
 		zap.String("schema", sourceSchemaName),
 		zap.String("table", sourceTableName),
 		zap.String("sql", rowidSQL),
@@ -185,7 +185,7 @@ func (e *Engine) TruncateFullSyncTableMetaRecord(metaSchemaName string) error {
 		return fmt.Errorf("truncate mysql meta schema table [full_sync_meta] reocrd failed: %v", err.Error())
 	}
 
-	Logger.Info("truncate table full meta record",
+	zap.L().Info("truncate table full meta record",
 		zap.String("schema", metaSchemaName),
 		zap.String("table", "full_sync_meta"),
 		zap.String("status", "success"))
@@ -197,7 +197,7 @@ func (e *Engine) TruncateDataDiffMetaRecord(metaSchemaName string) error {
 		return fmt.Errorf("truncate mysql meta schema table [data_diff_meta] reocrd failed: %v", err.Error())
 	}
 
-	Logger.Info("truncate table data diff meta record",
+	zap.L().Info("truncate table data diff meta record",
 		zap.String("schema", metaSchemaName),
 		zap.String("table", "data_diff_meta"),
 		zap.String("status", "success"))
@@ -211,7 +211,7 @@ func (e *Engine) DeleteWaitSyncTableMetaRecord(metaSchemaName, sourceSchemaName,
 		syncMode).Delete(&WaitSyncMeta{}).Error; err != nil {
 		return err
 	}
-	Logger.Info("delete table record",
+	zap.L().Info("delete table record",
 		zap.String("schema", metaSchemaName),
 		zap.String("table", "wait_sync_meta"),
 		zap.String("sync mode", syncMode),
@@ -223,7 +223,7 @@ func (e *Engine) TruncateMySQLTableRecord(targetSchemaName string, tableName str
 	if err := e.GormDB.Exec(fmt.Sprintf("TRUNCATE TABLE %s.%s", targetSchemaName, tableName)).Error; err != nil {
 		return fmt.Errorf("truncate mysql meta schema table [%v] reocrd failed: %v", tableName, err.Error())
 	}
-	Logger.Info("truncate table",
+	zap.L().Info("truncate table",
 		zap.String("schema", targetSchemaName),
 		zap.String("table", tableName),
 		zap.String("status", "success"))
@@ -240,7 +240,7 @@ func (e *Engine) InitWaitAndFullSyncMetaRecord(sourceSchema, sourceTable, source
 	// 统计信息数据行数 0，直接全表扫
 	if tableRows == 0 {
 		sql := utils.StringsBuilder(`SELECT `, sourceColumnInfo, ` FROM `, sourceSchema, `.`, sourceTable, ` WHERE 1 = 1`)
-		Logger.Warn("get oracle table rows",
+		zap.L().Warn("get oracle table rows",
 			zap.String("schema", sourceSchema),
 			zap.String("table", sourceTable),
 			zap.String("sql", sql),
@@ -278,7 +278,7 @@ func (e *Engine) InitWaitAndFullSyncMetaRecord(sourceSchema, sourceTable, source
 		return nil
 	}
 
-	Logger.Info("get oracle table statistics rows",
+	zap.L().Info("get oracle table statistics rows",
 		zap.String("schema", sourceSchema),
 		zap.String("table", sourceTable),
 		zap.Int("rows", tableRows))
@@ -533,7 +533,7 @@ func (e *Engine) GetOracleTableChunksByRowID(taskName, sourceSchema, sourceTable
 	// 判断数据是否存在，跳过 full_sync_meta 记录，更新 wait_sync_meta 记录，无需同步
 	if len(res) == 0 {
 		querySQL = utils.StringsBuilder(`SELECT `, sourceColumnInfo, ` FROM `, sourceSchema, `.`, sourceTable, ` WHERE 1 = 1`)
-		Logger.Warn("get oracle table rowids rows",
+		zap.L().Warn("get oracle table rowids rows",
 			zap.String("schema", sourceSchema),
 			zap.String("table", sourceSchema),
 			zap.String("sql", querySQL),

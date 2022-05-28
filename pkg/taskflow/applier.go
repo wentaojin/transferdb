@@ -31,7 +31,7 @@ import (
 func applierTableFullRecord(engine *service.Engine,
 	targetSchemaName, targetTableName, querySQL string, applyThreads int, columns, rowsResult []string) error {
 	startTime := time.Now()
-	service.Logger.Info("single full table rowid data applier start",
+	zap.L().Info("single full table rowid data applier start",
 		zap.String("schema", targetSchemaName),
 		zap.String("table", targetTableName),
 		zap.String("query sql", querySQL))
@@ -46,7 +46,7 @@ func applierTableFullRecord(engine *service.Engine,
 	}
 
 	endTime := time.Now()
-	service.Logger.Info("single full table rowid data applier finished",
+	zap.L().Info("single full table rowid data applier finished",
 		zap.String("schema", targetSchemaName),
 		zap.String("table", targetTableName),
 		zap.String("query sql", querySQL),
@@ -57,7 +57,7 @@ func applierTableFullRecord(engine *service.Engine,
 // 表数据应用 -> 增量任务
 func applierTableIncrementRecord(p *IncrPayload) error {
 	sql := strings.Join(p.MySQLRedo, ";")
-	//zlog.Logger.Info("increment applier sql", zap.String("sql", sql))
+	//zlog.zap.L().Info("increment applier sql", zap.String("sql", sql))
 	_, err := p.Engine.MysqlDB.Exec(sql)
 	if err != nil {
 		return fmt.Errorf("single increment table data insert mysql [%s] falied:%v", sql, err)
@@ -65,7 +65,7 @@ func applierTableIncrementRecord(p *IncrPayload) error {
 	// 数据写入完毕，更新元数据 checkpoint 表
 	// 如果同步中断，数据同步使用会以 global_scn 为准，也就是会进行重复消费
 	if err := p.Engine.UpdateTableIncrementMetaALLSCNRecord(p.SourceSchema, p.SourceTable, p.OperationType, p.GlobalSCN, p.SourceTableSCN); err != nil {
-		service.Logger.Error("update table increment scn record failed",
+		zap.L().Error("update table increment scn record failed",
 			zap.String("payload", p.Marshal()),
 			zap.Error(err))
 		return err
@@ -93,7 +93,7 @@ func applyOracleRedoIncrementRecord(cfg *service.CfgFile, engine *service.Engine
 				go func(engine *service.Engine, tbl, targetSchemaName string, rowsResult []service.LogminerContent, taskQueue chan IncrPayload) {
 					defer func() {
 						if err := recover(); err != nil {
-							service.Logger.Fatal("translatorAndApplyOracleIncrementRecord",
+							zap.L().Fatal("translatorAndApplyOracleIncrementRecord",
 								zap.String("schema", cfg.TargetConfig.SchemaName),
 								zap.String("table", tbl),
 								zap.Error(fmt.Errorf("%v", err)))
@@ -115,7 +115,7 @@ func applyOracleRedoIncrementRecord(cfg *service.CfgFile, engine *service.Engine
 
 				return nil
 			}
-			service.Logger.Warn("increment table log file logminer null data, transferdb will continue to capture",
+			zap.L().Warn("increment table log file logminer null data, transferdb will continue to capture",
 				zap.String("mysql schema", cfg.TargetConfig.SchemaName),
 				zap.String("table", tbl),
 				zap.String("status", "success"))

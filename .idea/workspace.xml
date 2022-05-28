@@ -5,11 +5,40 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="a67576d0-c4df-4b83-a792-1e43567e1978" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/conf/transferdb.log" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmd/main.go" beforeDir="false" afterPath="$PROJECT_DIR$/cmd/main.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/go.mod" beforeDir="false" afterPath="$PROJECT_DIR$/go.mod" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/go.sum" beforeDir="false" afterPath="$PROJECT_DIR$/go.sum" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/check/check.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/check/check.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/check/write.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/check/write.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/cost/cost.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/cost/cost.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/csv/csv.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/csv/csv.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/csv/data.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/csv/data.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pkg/csv/full.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/csv/full.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/csv/writer.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/csv/writer.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/diff/diff.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/diff/diff.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/prepare/prepare.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/prepare/prepare.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/reverser/reverser.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/reverser/reverser.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/reverser/table.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/reverser/table.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/reverser/write.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/reverser/write.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/signal/signal_posix.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/signal/signal_posix.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/signal/signal_windows.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/signal/signal_windows.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/taskflow/applier.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/taskflow/applier.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pkg/taskflow/extractor.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/taskflow/extractor.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/taskflow/payload.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/taskflow/payload.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/taskflow/sqlparser.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/taskflow/sqlparser.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/taskflow/taskflow.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/taskflow/taskflow.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/taskflow/translator.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/taskflow/translator.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/mysql.go" beforeDir="false" afterPath="$PROJECT_DIR$/server/mysql.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/service/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/service/config.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/service/diff.go" beforeDir="false" afterPath="$PROJECT_DIR$/service/diff.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/service/logger_gorm.go" beforeDir="false" afterPath="$PROJECT_DIR$/service/logger_gorm.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/service/logger_zap.go" beforeDir="false" afterPath="$PROJECT_DIR$/service/logger_zap.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/service/model_diff.go" beforeDir="false" afterPath="$PROJECT_DIR$/service/model_diff.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/service/reverser.go" beforeDir="false" afterPath="$PROJECT_DIR$/service/reverser.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/service/sync_all.go" beforeDir="false" afterPath="$PROJECT_DIR$/service/sync_all.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/service/sync_full.go" beforeDir="false" afterPath="$PROJECT_DIR$/service/sync_full.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/test/mysql.go" beforeDir="false" afterPath="$PROJECT_DIR$/test/mysql.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

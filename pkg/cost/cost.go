@@ -28,7 +28,7 @@ import (
 
 func OracleMigrateMySQLCostEvaluate(engine *service.Engine, cfg *service.CfgFile) error {
 	startTime := time.Now()
-	service.Logger.Info("evaluate oracle migrate mysql cost start",
+	zap.L().Info("evaluate oracle migrate mysql cost start",
 		zap.String("oracleSchema", cfg.SourceConfig.SchemaName),
 		zap.String("mysqlSchema", cfg.TargetConfig.SchemaName))
 
@@ -102,7 +102,7 @@ func OracleMigrateMySQLCostEvaluate(engine *service.Engine, cfg *service.CfgFile
 		usernameArray = append(usernameArray, fmt.Sprintf("'%s'", usernameMap["USERNAME"]))
 	}
 
-	service.Logger.Info("gather database schema array", zap.Strings("schema", usernameArray))
+	zap.L().Info("gather database schema array", zap.Strings("schema", usernameArray))
 
 	pwdDir, err := os.Getwd()
 	if err != nil {
@@ -122,7 +122,7 @@ func OracleMigrateMySQLCostEvaluate(engine *service.Engine, cfg *service.CfgFile
 		return err
 	}
 	finishedTime := time.Now()
-	service.Logger.Info("gather database overview",
+	zap.L().Info("gather database overview",
 		zap.Strings("schema", usernameArray),
 		zap.String("cost", finishedTime.Sub(beginTime).String()))
 
@@ -132,7 +132,7 @@ func OracleMigrateMySQLCostEvaluate(engine *service.Engine, cfg *service.CfgFile
 		return err
 	}
 	finishedTime = time.Now()
-	service.Logger.Info("gather database type",
+	zap.L().Info("gather database type",
 		zap.Strings("schema", usernameArray),
 		zap.String("cost", finishedTime.Sub(beginTime).String()))
 
@@ -142,7 +142,7 @@ func OracleMigrateMySQLCostEvaluate(engine *service.Engine, cfg *service.CfgFile
 		return err
 	}
 	finishedTime = time.Now()
-	service.Logger.Info("gather database check",
+	zap.L().Info("gather database check",
 		zap.Strings("schema", usernameArray),
 		zap.String("cost", finishedTime.Sub(beginTime).String()))
 
@@ -151,7 +151,7 @@ func OracleMigrateMySQLCostEvaluate(engine *service.Engine, cfg *service.CfgFile
 	}
 
 	endTime := time.Now()
-	service.Logger.Info("evaluate oracle migrate mysql cost finished",
+	zap.L().Info("evaluate oracle migrate mysql cost finished",
 		zap.String("cost", endTime.Sub(startTime).String()),
 		zap.String("output", filepath.Join(pwdDir, fileName)))
 	return nil

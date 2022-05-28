@@ -194,7 +194,7 @@ func (t Table) GenCreateTableSQL(modifyTableName string) (string, []string, erro
 				return createTableSQL, compIndexINFO, err
 			}
 			if !fastjson.Exists([]byte(pkVal), "alter-primary-key") {
-				service.Logger.Warn("reverse oracle table struct",
+				zap.L().Warn("reverse oracle table struct",
 					zap.String("schema", t.SourceSchemaName),
 					zap.String("table", t.SourceTableName),
 					zap.String("comment", tablesMap[0]["COMMENTS"]),
@@ -247,7 +247,7 @@ func (t Table) GenCreateTableSQL(modifyTableName string) (string, []string, erro
 		}
 	}
 
-	service.Logger.Info("reverse oracle table struct",
+	zap.L().Info("reverse oracle table struct",
 		zap.String("schema", t.SourceSchemaName),
 		zap.String("table", t.SourceTableName),
 		zap.String("comment", tablesMap[0]["COMMENTS"]),
@@ -277,7 +277,7 @@ func (t Table) GenCreateFKSQL(modifyTableName string) ([]string, error) {
 	if len(fkMetas) > 0 {
 		for _, fk := range fkMetas {
 			addFkSQL := fmt.Sprintf("ALTER TABLE `%s`.`%s` ADD %s;", t.TargetSchemaName, modifyTableName, fk)
-			service.Logger.Info("reverse",
+			zap.L().Info("reverse",
 				zap.String("schema", t.TargetSchemaName),
 				zap.String("table", modifyTableName),
 				zap.String("fk sql", addFkSQL))
@@ -298,7 +298,7 @@ func (t Table) GenCreateCKSQL(modifyTableName string) ([]string, error) {
 	if len(ckMetas) > 0 {
 		for _, ck := range ckMetas {
 			ckSQL := fmt.Sprintf("ALTER TABLE `%s`.`%s` ADD %s;", t.TargetSchemaName, modifyTableName, ck)
-			service.Logger.Info("reverse",
+			zap.L().Info("reverse",
 				zap.String("schema", t.TargetSchemaName),
 				zap.String("table", modifyTableName),
 				zap.String("ck sql", ckSQL))
@@ -367,7 +367,7 @@ func (t Table) reverserOracleTableNormalIndexToMySQL(modifyTableName string) ([]
 
 					keyINFO = append(keyINFO, keyIndex)
 
-					service.Logger.Info("reverse normal index",
+					zap.L().Info("reverse normal index",
 						zap.String("schema", t.SourceSchemaName),
 						zap.String("table", idxMeta["TABLE_NAME"]),
 						zap.String("index name", idxMeta["INDEX_NAME"]),
@@ -384,7 +384,7 @@ func (t Table) reverserOracleTableNormalIndexToMySQL(modifyTableName string) ([]
 
 					compatibilityIndexSQL = append(compatibilityIndexSQL, sql)
 
-					service.Logger.Warn("reverse normal index",
+					zap.L().Warn("reverse normal index",
 						zap.String("schema", t.SourceSchemaName),
 						zap.String("table", idxMeta["TABLE_NAME"]),
 						zap.String("index name", idxMeta["INDEX_NAME"]),
@@ -401,7 +401,7 @@ func (t Table) reverserOracleTableNormalIndexToMySQL(modifyTableName string) ([]
 
 					compatibilityIndexSQL = append(compatibilityIndexSQL, sql)
 
-					service.Logger.Warn("reverse normal index",
+					zap.L().Warn("reverse normal index",
 						zap.String("schema", t.SourceSchemaName),
 						zap.String("table", idxMeta["TABLE_NAME"]),
 						zap.String("index name", idxMeta["INDEX_NAME"]),
@@ -418,7 +418,7 @@ func (t Table) reverserOracleTableNormalIndexToMySQL(modifyTableName string) ([]
 
 					compatibilityIndexSQL = append(compatibilityIndexSQL, sql)
 
-					service.Logger.Warn("reverse normal index",
+					zap.L().Warn("reverse normal index",
 						zap.String("schema", t.SourceSchemaName),
 						zap.String("table", idxMeta["TABLE_NAME"]),
 						zap.String("index name", idxMeta["INDEX_NAME"]),
@@ -438,7 +438,7 @@ func (t Table) reverserOracleTableNormalIndexToMySQL(modifyTableName string) ([]
 
 					compatibilityIndexSQL = append(compatibilityIndexSQL, sql)
 
-					service.Logger.Warn("reverse normal index",
+					zap.L().Warn("reverse normal index",
 						zap.String("schema", t.SourceSchemaName),
 						zap.String("table", idxMeta["TABLE_NAME"]),
 						zap.String("index name", idxMeta["INDEX_NAME"]),
@@ -452,7 +452,7 @@ func (t Table) reverserOracleTableNormalIndexToMySQL(modifyTableName string) ([]
 					continue
 
 				default:
-					service.Logger.Error("reverse normal index",
+					zap.L().Error("reverse normal index",
 						zap.String("schema", t.SourceSchemaName),
 						zap.String("table", idxMeta["TABLE_NAME"]),
 						zap.String("index name", idxMeta["INDEX_NAME"]),
@@ -467,7 +467,7 @@ func (t Table) reverserOracleTableNormalIndexToMySQL(modifyTableName string) ([]
 				}
 			}
 
-			service.Logger.Error("reverse normal index",
+			zap.L().Error("reverse normal index",
 				zap.String("schema", t.SourceSchemaName),
 				zap.String("table", idxMeta["TABLE_NAME"]),
 				zap.String("index name", idxMeta["INDEX_NAME"]),
@@ -508,7 +508,7 @@ func (t Table) reverserOracleTableUniqueIndexToMySQL(modifyTableName string) ([]
 
 					uniqueINFO = append(uniqueINFO, uniqueIDX)
 
-					service.Logger.Info("reverse unique index",
+					zap.L().Info("reverse unique index",
 						zap.String("schema", t.SourceSchemaName),
 						zap.String("table", idxMeta["TABLE_NAME"]),
 						zap.String("index name", idxMeta["INDEX_NAME"]),
@@ -525,7 +525,7 @@ func (t Table) reverserOracleTableUniqueIndexToMySQL(modifyTableName string) ([]
 
 					compatibilityIndexSQL = append(compatibilityIndexSQL, sql)
 
-					service.Logger.Warn("reverse unique key",
+					zap.L().Warn("reverse unique key",
 						zap.String("schema", t.SourceSchemaName),
 						zap.String("table", idxMeta["TABLE_NAME"]),
 						zap.String("index name", idxMeta["INDEX_NAME"]),
@@ -537,7 +537,7 @@ func (t Table) reverserOracleTableUniqueIndexToMySQL(modifyTableName string) ([]
 					continue
 
 				default:
-					service.Logger.Error("reverse unique index",
+					zap.L().Error("reverse unique index",
 						zap.String("schema", t.SourceSchemaName),
 						zap.String("table", idxMeta["TABLE_NAME"]),
 						zap.String("index name", idxMeta["INDEX_NAME"]),
@@ -548,7 +548,7 @@ func (t Table) reverserOracleTableUniqueIndexToMySQL(modifyTableName string) ([]
 					return uniqueINFO, compatibilityIndexSQL, fmt.Errorf("[UNIQUE] oracle schema [%s] table [%s] reverse normal index panic, error: %v", t.SourceSchemaName, t.SourceTableName, idxMeta)
 				}
 			}
-			service.Logger.Error("reverse unique key",
+			zap.L().Error("reverse unique key",
 				zap.String("schema", t.SourceSchemaName),
 				zap.String("table", idxMeta["TABLE_NAME"]),
 				zap.String("index name", idxMeta["INDEX_NAME"]),
@@ -869,7 +869,7 @@ func LoadOracleToMySQLTableList(engine *service.Engine, cfg *service.CfgFile, ex
 	beginTime := time.Now()
 	defer func() {
 		endTime := time.Now()
-		service.Logger.Info("load oracle table list finished",
+		zap.L().Info("load oracle table list finished",
 			zap.String("schema", sourceSchema),
 			zap.Int("table totals", len(exporterTableSlice)),
 			zap.Int("table gens", len(tables)),
@@ -891,19 +891,19 @@ func LoadOracleToMySQLTableList(engine *service.Engine, cfg *service.CfgFile, ex
 	}
 
 	if len(partitionTables) != 0 {
-		service.Logger.Warn("partition tables",
+		zap.L().Warn("partition tables",
 			zap.String("schema", sourceSchema),
 			zap.String("partition table list", fmt.Sprintf("%v", partitionTables)),
 			zap.String("suggest", "if necessary, please manually convert and process the tables in the above list"))
 	}
 	if len(temporaryTables) != 0 {
-		service.Logger.Warn("temporary tables",
+		zap.L().Warn("temporary tables",
 			zap.String("schema", sourceSchema),
 			zap.String("temporary table list", fmt.Sprintf("%v", temporaryTables)),
 			zap.String("suggest", "if necessary, please manually process the tables in the above list"))
 	}
 	if len(clusteredTables) != 0 {
-		service.Logger.Warn("clustered tables",
+		zap.L().Warn("clustered tables",
 			zap.String("schema", sourceSchema),
 			zap.String("clustered table list", fmt.Sprintf("%v", clusteredTables)),
 			zap.String("suggest", "if necessary, please manually process the tables in the above list"))
@@ -932,7 +932,7 @@ func LoadOracleToMySQLTableList(engine *service.Engine, cfg *service.CfgFile, ex
 	}
 
 	endTime := time.Now()
-	service.Logger.Info("get oracle db character and version finished",
+	zap.L().Info("get oracle db character and version finished",
 		zap.String("schema", sourceSchema),
 		zap.String("db version", oraDBVersion),
 		zap.String("db character", characterSet),
@@ -956,7 +956,7 @@ func LoadOracleToMySQLTableList(engine *service.Engine, cfg *service.CfgFile, ex
 			return []Table{}, partitionTables, temporaryTables, clusteredTables, err
 		}
 		endTime = time.Now()
-		service.Logger.Info("get oracle schema and table collation finished",
+		zap.L().Info("get oracle schema and table collation finished",
 			zap.String("schema", sourceSchema),
 			zap.String("db version", oraDBVersion),
 			zap.String("db character", characterSet),
@@ -971,7 +971,7 @@ func LoadOracleToMySQLTableList(engine *service.Engine, cfg *service.CfgFile, ex
 		return []Table{}, partitionTables, temporaryTables, clusteredTables, err
 	}
 	endTime = time.Now()
-	service.Logger.Info("get oracle table type finished",
+	zap.L().Info("get oracle table type finished",
 		zap.String("schema", sourceSchema),
 		zap.String("db version", oraDBVersion),
 		zap.String("db character", characterSet),
@@ -1039,7 +1039,7 @@ func LoadOracleToMySQLTableList(engine *service.Engine, cfg *service.CfgFile, ex
 	<-c
 
 	endTime = time.Now()
-	service.Logger.Info("gen oracle slice table finished",
+	zap.L().Info("gen oracle slice table finished",
 		zap.String("schema", sourceSchema),
 		zap.Int("table totals", len(exporterTableSlice)),
 		zap.Int("table gens", len(tables)),

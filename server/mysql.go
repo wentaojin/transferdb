@@ -17,13 +17,12 @@ package server
 
 import (
 	"fmt"
+	"go.uber.org/zap"
 	"time"
 
 	"gorm.io/gorm/schema"
 
 	"github.com/wentaojin/transferdb/service"
-
-	gormLogger "gorm.io/gorm/logger"
 
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -41,11 +40,10 @@ func NewMySQLEnginePrepareDB(mysqlCfg service.TargetConfig, slowQueryThreshold, 
 		mysqlCfg.Username, mysqlCfg.Password, mysqlCfg.Host, mysqlCfg.Port)
 
 	// 初始化 gorm 日志记录器
-	gLogger := service.NewGormLogger(service.Logger, time.Duration(slowQueryThreshold)*time.Millisecond)
-	gLogger.LogMode(gormLogger.Warn)
-	gLogger.SetAsDefault()
+	logger := service.NewGormLogger(zap.L(), slowQueryThreshold)
+	logger.SetAsDefault()
 	gormDB, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
-		Logger: gLogger,
+		Logger: logger,
 		NamingStrategy: schema.NamingStrategy{
 			SingularTable: true, // 使用单数表名
 		},
@@ -78,14 +76,14 @@ func NewMySQLEngineGeneralDB(mysqlCfg service.TargetConfig, slowQueryThreshold, 
 		gormDB *gorm.DB
 		err    error
 	)
-	gLogger := service.NewGormLogger(service.Logger, time.Duration(slowQueryThreshold)*time.Millisecond)
-	gLogger.LogMode(gormLogger.Warn)
-	gLogger.SetAsDefault()
+
+	logger := service.NewGormLogger(zap.L(), slowQueryThreshold)
+	logger.SetAsDefault()
 	gormDB, err = gorm.Open(mysql.Open(dsn), &gorm.Config{
 		// 禁用外键（指定外键时不会在 mysql 创建真实的外键约束）
 		DisableForeignKeyConstraintWhenMigrating: true,
 		PrepareStmt:                              true,
-		Logger:                                   gLogger,
+		Logger:                                   logger,
 		NamingStrategy: schema.NamingStrategy{
 			SingularTable: true, // 使用单数表名
 		},

@@ -82,7 +82,7 @@ func (d *DiffWriter) String() string {
 // 3、分区只对比分区类型、分区键、分区表达式等，不对比具体每个分区下的情况
 func (d *DiffWriter) DiffTable() error {
 	startTime := time.Now()
-	service.Logger.Info("check table start",
+	zap.L().Info("check table start",
 		zap.String("oracle table", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)),
 		zap.String("mysql table", fmt.Sprintf("%s.%s", d.TargetSchemaName, d.TableName)))
 
@@ -105,7 +105,7 @@ func (d *DiffWriter) DiffTable() error {
 	}
 
 	// 表类型检查 - only 分区表
-	service.Logger.Info("check table",
+	zap.L().Info("check table",
 		zap.String("table partition type check", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)))
 	if oracleTable.IsPartition != mysqlTable.IsPartition {
 		if err = d.partitionRuleCheck(d.ChkFileMW, oracleTable, mysqlTable); err != nil {
@@ -115,14 +115,14 @@ func (d *DiffWriter) DiffTable() error {
 	}
 
 	// 表注释检查
-	service.Logger.Info("check table",
+	zap.L().Info("check table",
 		zap.String("table comment check", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)))
 	if oracleTable.TableComment != mysqlTable.TableComment {
 		builder.WriteString(d.commentRuleCheck(oracleTable, mysqlTable))
 	}
 
 	// 表级别字符集以及排序规则检查
-	service.Logger.Info("check table",
+	zap.L().Info("check table",
 		zap.String("table character set and collation check", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)))
 	// GBK 处理，统一 UTF8MB4 处理
 	var oracleCharacterSet string
@@ -137,12 +137,12 @@ func (d *DiffWriter) DiffTable() error {
 
 	// 1、表字段级别字符集以及排序规则校验 -> 基于原表字段类型以及字符集、排序规则
 	// 2、下游表字段数检查，多了
-	service.Logger.Info("check table",
+	zap.L().Info("check table",
 		zap.String("table column character set and collation check", fmt.Sprintf("%s.%s", d.TargetSchemaName, d.TableName)))
 	builder.WriteString(d.columnCharacterSetAndCollationRuleCheck(oracleTable, mysqlTable))
 
 	// 上游表字段数检查
-	service.Logger.Info("check table",
+	zap.L().Info("check table",
 		zap.String("oracle table column counts check", fmt.Sprintf("%s.%s", d.TargetSchemaName, d.TableName)))
 	oracleColumns, err := d.oracleColumnCountsCheck(oracleTable, mysqlTable)
 	if err != nil {
@@ -151,7 +151,7 @@ func (d *DiffWriter) DiffTable() error {
 	builder.WriteString(oracleColumns)
 
 	// 表主键/唯一约束检查
-	service.Logger.Info("check table",
+	zap.L().Info("check table",
 		zap.String("table pk and uk constraint check", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)),
 		zap.String("oracle struct", oracleTable.String(utils.PUConstraintJSON)),
 		zap.String("mysql struct", mysqlTable.String(utils.PUConstraintJSON)))
@@ -164,7 +164,7 @@ func (d *DiffWriter) DiffTable() error {
 
 	// TiDB 版本排除外键以及检查约束检查
 	if !isTiDB {
-		service.Logger.Info("check table",
+		zap.L().Info("check table",
 			zap.String("table fk constraint check", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)),
 			zap.String("oracle struct", oracleTable.String(utils.FKConstraintJSON)),
 			zap.String("mysql struct", mysqlTable.String(utils.FKConstraintJSON)))
@@ -183,7 +183,7 @@ func (d *DiffWriter) DiffTable() error {
 			dbVersion = mysqlVersion
 		}
 		if utils.VersionOrdinal(dbVersion) > utils.VersionOrdinal(utils.MySQLCheckConsVersion) {
-			service.Logger.Info("check table",
+			zap.L().Info("check table",
 				zap.String("table ck constraint check", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)),
 				zap.String("oracle struct", oracleTable.String(utils.CKConstraintJSON)),
 				zap.String("mysql struct", mysqlTable.String(utils.CKConstraintJSON)))
@@ -197,7 +197,7 @@ func (d *DiffWriter) DiffTable() error {
 	}
 
 	// 索引检查
-	service.Logger.Info("check table",
+	zap.L().Info("check table",
 		zap.String("table indexes check", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)),
 		zap.String("oracle struct", oracleTable.String(utils.IndexJSON)),
 		zap.String("mysql struct", mysqlTable.String(utils.IndexJSON)))
@@ -209,7 +209,7 @@ func (d *DiffWriter) DiffTable() error {
 
 	// 分区表检查
 	if mysqlTable.IsPartition && oracleTable.IsPartition {
-		service.Logger.Info("check table",
+		zap.L().Info("check table",
 			zap.String("table partition check", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)),
 			zap.String("oracle struct", oracleTable.String(utils.PartitionJSON)),
 			zap.String("mysql struct", mysqlTable.String(utils.PartitionJSON)))
@@ -247,7 +247,7 @@ func (d *DiffWriter) DiffTable() error {
 
 	// 表字段检查
 	// 注释格式化
-	service.Logger.Info("check table",
+	zap.L().Info("check table",
 		zap.String("table column info check", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)))
 	columnString, err := d.columnRuleCheck(oracleTable, mysqlTable)
 	if err != nil {
@@ -263,7 +263,7 @@ func (d *DiffWriter) DiffTable() error {
 	}
 
 	endTime := time.Now()
-	service.Logger.Info("check table finished",
+	zap.L().Info("check table finished",
 		zap.String("oracle table", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)),
 		zap.String("mysql table", fmt.Sprintf("%s.%s", d.TargetSchemaName, d.TableName)),
 		zap.String("cost", endTime.Sub(startTime).String()))
@@ -288,7 +288,7 @@ func (d *DiffWriter) partitionRuleCheck(file *reverser.FileMW, oracleTable, mysq
 		return err
 	}
 
-	service.Logger.Warn("table type different",
+	zap.L().Warn("table type different",
 		zap.String("oracle table", fmt.Sprintf("%s.%s partition [%t]", d.SourceSchemaName, d.TableName, oracleTable.IsPartition)),
 		zap.String("mysql table", fmt.Sprintf("%s.%s partition [%t]", d.TargetSchemaName, d.TableName,
 			mysqlTable.IsPartition)))
@@ -337,7 +337,7 @@ func (d *DiffWriter) tableCharacterSetAndCollationRuleCheck(oracleTable, mysqlTa
 	var mysqlCharacterSet string
 	if strings.ToUpper(utils.OracleDBCharacterSetMap[oracleTable.TableCharacterSet]) == "GBK" {
 		mysqlCharacterSet = "UTF8MB4"
-		service.Logger.Warn("check oracle table",
+		zap.L().Warn("check oracle table",
 			zap.String("schema", oracleTable.SchemaName),
 			zap.String("table", oracleTable.TableName),
 			zap.String("characterSet", oracleTable.TableCharacterSet),
@@ -397,7 +397,7 @@ func (d *DiffWriter) columnCharacterSetAndCollationRuleCheck(oracleTable, mysqlT
 			var mysqlCharacterSet string
 			if strings.ToUpper(utils.OracleDBCharacterSetMap[oracleTable.Columns[strings.ToUpper(mysqlColName)].CharacterSet]) == "GBK" {
 				mysqlCharacterSet = "UTF8MB4"
-				service.Logger.Warn("check oracle table",
+				zap.L().Warn("check oracle table",
 					zap.String("schema", oracleTable.SchemaName),
 					zap.String("table", oracleTable.TableName),
 					zap.String("column", mysqlColName),
@@ -774,7 +774,7 @@ func (d *DiffWriter) columnRuleCheck(oracleTable, mysqlTable *Table) (string, er
 	}
 
 	if len(tableRowArray) != 0 && len(diffColumnMsgs) != 0 {
-		service.Logger.Info("check table",
+		zap.L().Info("check table",
 			zap.String("table column info check, generate fixed sql", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)),
 			zap.String("oracle struct", oracleTable.String(utils.ColumnsJSON)),
 			zap.String("mysql struct", mysqlTable.String(utils.ColumnsJSON)))
@@ -796,7 +796,7 @@ func (d *DiffWriter) columnRuleCheck(oracleTable, mysqlTable *Table) (string, er
 	}
 
 	if len(createColumnMetas) != 0 {
-		service.Logger.Info("check table",
+		zap.L().Info("check table",
 			zap.String("table column info check, generate created sql", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)),
 			zap.String("oracle struct", oracleTable.String(utils.ColumnsJSON)),
 			zap.String("mysql struct", mysqlTable.String(utils.ColumnsJSON)))

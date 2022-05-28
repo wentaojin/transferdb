@@ -38,7 +38,7 @@ const (
 // 全量数据导出导入
 func FullSyncOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service.Engine) error {
 	startTime := time.Now()
-	service.Logger.Info("all full table data sync start",
+	zap.L().Info("all full table data sync start",
 		zap.String("schema", cfg.SourceConfig.SchemaName))
 
 	// 判断上游 Oracle 数据库版本
@@ -114,7 +114,7 @@ func FullSyncOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service.Engi
 	}
 	if len(waitSyncTableMetas) == 0 && len(partSyncTableMetas) == 0 {
 		endTime := time.Now()
-		service.Logger.Info("all full table data sync finished",
+		zap.L().Info("all full table data sync finished",
 			zap.String("schema", cfg.SourceConfig.SchemaName),
 			zap.String("cost", endTime.Sub(startTime).String()))
 		return nil
@@ -127,7 +127,7 @@ func FullSyncOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service.Engi
 	}
 	if len(panicCheckpointTables) != 0 {
 		endTime := time.Now()
-		service.Logger.Error("all full table data loader error",
+		zap.L().Error("all full table data loader error",
 			zap.String("schema", cfg.SourceConfig.SchemaName),
 			zap.String("cost", endTime.Sub(startTime).String()),
 			zap.Strings("panic tables", panicCheckpointTables))
@@ -141,7 +141,7 @@ func FullSyncOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service.Engi
 	}
 
 	endTime := time.Now()
-	service.Logger.Info("all full table data sync finished",
+	zap.L().Info("all full table data sync finished",
 		zap.String("schema", cfg.SourceConfig.SchemaName),
 		zap.String("cost", endTime.Sub(startTime).String()))
 	return nil
@@ -151,7 +151,7 @@ func FullSyncOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service.Engi
 	增量同步任务
 */
 func IncrementSyncOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service.Engine) error {
-	service.Logger.Info("oracle to mysql increment sync table data start", zap.String("schema", cfg.SourceConfig.SchemaName))
+	zap.L().Info("oracle to mysql increment sync table data start", zap.String("schema", cfg.SourceConfig.SchemaName))
 
 	// 判断上游 Oracle 数据库版本
 	// 需要 oracle 11g 及以上
@@ -223,7 +223,7 @@ func IncrementSyncOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service
 
 func syncOracleFullTableRecordToMySQLUsingAllMode(cfg *service.CfgFile, engine *service.Engine, transferTableSlice []string, syncMode string, oracleCollation bool) error {
 	startTime := time.Now()
-	service.Logger.Info("all full table data loader start",
+	zap.L().Info("all full table data loader start",
 		zap.String("schema", cfg.SourceConfig.SchemaName))
 
 	// 判断并记录待同步表列表
@@ -280,7 +280,7 @@ func syncOracleFullTableRecordToMySQLUsingAllMode(cfg *service.CfgFile, engine *
 	}
 	if len(waitSyncTableMetas) == 0 && len(partSyncTableMetas) == 0 {
 		endTime := time.Now()
-		service.Logger.Info("all full table data loader finished",
+		zap.L().Info("all full table data loader finished",
 			zap.String("schema", cfg.SourceConfig.SchemaName),
 			zap.String("cost", endTime.Sub(startTime).String()))
 		return nil
@@ -293,7 +293,7 @@ func syncOracleFullTableRecordToMySQLUsingAllMode(cfg *service.CfgFile, engine *
 	}
 	if len(panicCheckpointTables) != 0 {
 		endTime := time.Now()
-		service.Logger.Error("all full table data loader error",
+		zap.L().Error("all full table data loader error",
 			zap.String("schema", cfg.SourceConfig.SchemaName),
 			zap.String("cost", endTime.Sub(startTime).String()),
 			zap.Strings("panic tables", panicCheckpointTables))
@@ -313,7 +313,7 @@ func syncOracleFullTableRecordToMySQLUsingAllMode(cfg *service.CfgFile, engine *
 	}
 
 	endTime := time.Now()
-	service.Logger.Info("all full table data loader finished",
+	zap.L().Info("all full table data loader finished",
 		zap.String("schema", cfg.SourceConfig.SchemaName),
 		zap.String("cost", endTime.Sub(startTime).String()))
 	return nil
@@ -326,7 +326,7 @@ func syncOracleTableIncrementRecordToMySQLUsingAllMode(cfg *service.CfgFile, eng
 		return err
 	}
 
-	service.Logger.Info("increment table log file get",
+	zap.L().Info("increment table log file get",
 		zap.String("logfile", fmt.Sprintf("%v", logFiles)))
 
 	// 遍历所有日志文件
@@ -343,7 +343,7 @@ func syncOracleTableIncrementRecordToMySQLUsingAllMode(cfg *service.CfgFile, eng
 			return err
 		}
 
-		service.Logger.Info("increment table log file logminer",
+		zap.L().Info("increment table log file logminer",
 			zap.String("logfile", log["LOG_FILE"]),
 			zap.Int("logfile start scn", logFileStartSCN),
 			zap.Int("logminer start scn", logFileStartSCN),
@@ -421,7 +421,7 @@ func syncOracleTableIncrementRecordToMySQLUsingAllMode(cfg *service.CfgFile, eng
 					if err != nil {
 						return err
 					}
-					service.Logger.Warn("oracle current redo log reset flag", zap.Int("CurrentResetFlag", utils.CurrentResetFlag))
+					zap.L().Warn("oracle current redo log reset flag", zap.Int("CurrentResetFlag", utils.CurrentResetFlag))
 					utils.CurrentResetFlag = 1
 				} else {
 					logminerContentMap, err = filterOracleRedoGreaterOrEqualRecordByTable(
@@ -467,7 +467,7 @@ func syncOracleTableIncrementRecordToMySQLUsingAllMode(cfg *service.CfgFile, eng
 
 					continue
 				}
-				service.Logger.Warn("increment table log file logminer data that needn't to be consumed by current redo, transferdb will continue to capture")
+				zap.L().Warn("increment table log file logminer data that needn't to be consumed by current redo, transferdb will continue to capture")
 				continue
 			}
 			logminerContentMap, err = filterOracleRedoGreaterOrEqualRecordByTable(
@@ -495,7 +495,7 @@ func syncOracleTableIncrementRecordToMySQLUsingAllMode(cfg *service.CfgFile, eng
 				}
 				continue
 			}
-			service.Logger.Warn("increment table log file logminer data that needn't to be consumed by logfile, transferdb will continue to capture")
+			zap.L().Warn("increment table log file logminer data that needn't to be consumed by logfile, transferdb will continue to capture")
 			continue
 		}
 
@@ -533,7 +533,7 @@ func syncOracleTableIncrementRecordToMySQLUsingAllMode(cfg *service.CfgFile, eng
 				return err
 			}
 		}
-		service.Logger.Warn("increment table log file logminer null data, transferdb will continue to capture")
+		zap.L().Warn("increment table log file logminer null data, transferdb will continue to capture")
 		continue
 	}
 	return nil

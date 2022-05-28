@@ -265,7 +265,7 @@ func (e *Engine) GetOracleLogminerContentToMySQL(schemaName string, sourceTableN
    AND SCN >= `, lastCheckpoint, ` ORDER BY SCN`)
 
 	startTime := time.Now()
-	Logger.Info("logminer sql",
+	zap.L().Info("logminer sql",
 		zap.String("sql", querySQL),
 		zap.Time("start time", startTime))
 
@@ -283,7 +283,7 @@ func (e *Engine) GetOracleLogminerContentToMySQL(schemaName string, sourceTableN
 		lcs = append(lcs, lc)
 	}
 	endTime := time.Now()
-	Logger.Info("logminer sql",
+	zap.L().Info("logminer sql",
 		zap.String("sql", querySQL),
 		zap.Time("end time", endTime),
 		zap.String("cost time", time.Since(startTime).String()))

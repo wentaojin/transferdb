@@ -21,8 +21,6 @@ import (
 
 	"github.com/wentaojin/transferdb/utils"
 
-	"github.com/wentaojin/transferdb/service"
-
 	"go.uber.org/zap"
 
 	"github.com/pingcap/parser/format"
@@ -77,7 +75,7 @@ func (v *Stmt) Enter(in ast.Node) (ast.Node, bool) {
 			flags := format.DefaultRestoreFlags
 			err := val.Expr.Restore(format.NewRestoreCtx(flags, &sb))
 			if err != nil {
-				service.Logger.Error("sql parser failed",
+				zap.L().Error("sql parser failed",
 					zap.String("stmt", v.Marshal()))
 			}
 		}
@@ -91,7 +89,7 @@ func (v *Stmt) Enter(in ast.Node) (ast.Node, bool) {
 					flags := format.DefaultRestoreFlags
 					err := exprNode.Restore(format.NewRestoreCtx(flags, &sb))
 					if err != nil {
-						service.Logger.Error("sql parser failed",
+						zap.L().Error("sql parser failed",
 							zap.String("stmt", v.Marshal()))
 					}
 					v.WhereExpr = sb.String()
@@ -112,7 +110,7 @@ func (v *Stmt) Enter(in ast.Node) (ast.Node, bool) {
 				flags := format.DefaultRestoreFlags
 				err := lists[i].Restore(format.NewRestoreCtx(flags, &sb))
 				if err != nil {
-					service.Logger.Error("sql parser failed",
+					zap.L().Error("sql parser failed",
 						zap.String("stmt", v.Marshal()))
 				}
 				v.Data[utils.StringsBuilder("`", strings.ToUpper(col.String()), "`")] = sb.String()
@@ -132,7 +130,7 @@ func (v *Stmt) Enter(in ast.Node) (ast.Node, bool) {
 					flags := format.DefaultRestoreFlags
 					err := exprNode.Restore(format.NewRestoreCtx(flags, &sb))
 					if err != nil {
-						service.Logger.Error("sql parser failed",
+						zap.L().Error("sql parser failed",
 							zap.String("stmt", v.Marshal()))
 					}
 					v.WhereExpr = sb.String()
@@ -158,7 +156,7 @@ func (v *Stmt) Leave(in ast.Node) (ast.Node, bool) {
 func (v *Stmt) Marshal() string {
 	b, err := json.Marshal(&v)
 	if err != nil {
-		service.Logger.Error("marshal stmt to string",
+		zap.L().Error("marshal stmt to string",
 			zap.String("string", string(b)),
 			zap.Error(err))
 	}
@@ -177,12 +175,12 @@ func beforeData(where ast.ExprNode, before map[string]interface{}) {
 			flags := format.DefaultRestoreFlags
 			err := binaryNode.R.Restore(format.NewRestoreCtx(flags, &value))
 			if err != nil {
-				service.Logger.Error("sql parser failed",
+				zap.L().Error("sql parser failed",
 					zap.String("error", err.Error()))
 			}
 			err = binaryNode.L.Restore(format.NewRestoreCtx(flags, &column))
 			if err != nil {
-				service.Logger.Error("sql parser failed",
+				zap.L().Error("sql parser failed",
 					zap.String("error", err.Error()))
 			}
 			before[strings.ToUpper(column.String())] = value.String()

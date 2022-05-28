@@ -51,7 +51,7 @@ func (e *Engine) InitDataDiffMetaRecordByNUMBER(sourceSchema, sourceTable, sourc
 
 	// 统计信息数据行数 0，直接全表扫
 	if tableRows == 0 {
-		Logger.Warn("get oracle table rows",
+		zap.L().Warn("get oracle table rows",
 			zap.String("schema", sourceSchema),
 			zap.String("table", sourceTable),
 			zap.String("where", "1 = 1"),
@@ -75,7 +75,7 @@ func (e *Engine) InitDataDiffMetaRecordByNUMBER(sourceSchema, sourceTable, sourc
 		return nil
 	}
 
-	Logger.Info("get oracle table statistics rows",
+	zap.L().Info("get oracle table statistics rows",
 		zap.String("schema", sourceSchema),
 		zap.String("table", sourceTable),
 		zap.Int("rows", tableRows))
@@ -189,7 +189,7 @@ FROM user_parallel_execute_chunks WHERE  task_name = '`, taskName, `' ORDER BY c
 
 	// 判断数据是否存在，更新 data_diff_meta 记录，无需同步
 	if len(res) == 0 {
-		Logger.Warn("get oracle table rowids rows",
+		zap.L().Warn("get oracle table rowids rows",
 			zap.String("schema", sourceSchema),
 			zap.String("table", sourceSchema),
 			zap.String("where", "1 = 1"),

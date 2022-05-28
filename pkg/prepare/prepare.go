@@ -27,7 +27,7 @@ import (
 // 同步环境准备
 func TransferDBEnvPrepare(engine *service.Engine) error {
 	startTime := time.Now()
-	service.Logger.Info("prepare tansferdb env start")
+	zap.L().Info("prepare tansferdb env start")
 	if err := engine.InitMysqlEngineDB(); err != nil {
 		return err
 	}
@@ -35,7 +35,7 @@ func TransferDBEnvPrepare(engine *service.Engine) error {
 		return err
 	}
 	endTime := time.Now()
-	service.Logger.Info("prepare tansferdb env finished",
+	zap.L().Info("prepare tansferdb env finished",
 		zap.String("cost", endTime.Sub(startTime).String()))
 	return nil
 }

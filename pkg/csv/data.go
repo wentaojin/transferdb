@@ -40,7 +40,7 @@ func extractorTableFullRecord(engine *service.Engine, sourceSchemaName, sourceTa
 	}
 
 	endTime := time.Now()
-	service.Logger.Info("single full table rowid data extractor finished",
+	zap.L().Info("single full table rowid data extractor finished",
 		zap.String("schema", sourceSchemaName),
 		zap.String("table", sourceTableName),
 		zap.String("rowid sql", oracleQuery),
@@ -72,7 +72,7 @@ func translatorTableFullRecord(
 
 func applierTableFullRecord(targetSchemaName, targetTableName string, querySQL string, fileWriter *FileWriter) error {
 	startTime := time.Now()
-	service.Logger.Info("single full table rowid data applier start",
+	zap.L().Info("single full table rowid data applier start",
 		zap.String("schema", targetSchemaName),
 		zap.String("table", targetTableName),
 		zap.String("query sql", querySQL))
@@ -80,7 +80,7 @@ func applierTableFullRecord(targetSchemaName, targetTableName string, querySQL s
 		return err
 	}
 	endTime := time.Now()
-	service.Logger.Info("single full table rowid data applier finished",
+	zap.L().Info("single full table rowid data applier finished",
 		zap.String("schema", targetSchemaName),
 		zap.String("table", targetTableName),
 		zap.String("query sql", querySQL),

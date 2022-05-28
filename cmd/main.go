@@ -51,16 +51,14 @@ func main() {
 
 	go func() {
 		if err = http.ListenAndServe(cfg.AppConfig.PprofPort, nil); err != nil {
-			service.Logger.Fatal("listen and serve pprof failed", zap.Error(errors.Cause(err)))
+			zap.L().Fatal("listen and serve pprof failed", zap.Error(errors.Cause(err)))
 		}
 		os.Exit(0)
 	}()
 
 	// 初始化日志 logger
-	if err = service.NewZapLogger(cfg); err != nil {
-		log.Fatalf("create global zap logger failed: %v", err)
-	}
-	service.RecordAppVersion("transferdb", service.Logger, cfg)
+	service.NewZapLogger(cfg)
+	service.RecordAppVersion("transferdb", zap.L(), cfg)
 
 	// 信号量监听处理
 	signal.SetupSignalHandler(func() {
@@ -69,6 +67,6 @@ func main() {
 
 	// 程序运行
 	if err = server.Run(cfg, *mode); err != nil {
-		service.Logger.Fatal("server run failed", zap.Error(errors.Cause(err)))
+		zap.L().Fatal("server run failed", zap.Error(errors.Cause(err)))
 	}
 }

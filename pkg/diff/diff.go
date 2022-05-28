@@ -41,7 +41,7 @@ import (
 
 func OracleDiffMySQLTable(engine *service.Engine, cfg *service.CfgFile) error {
 	startTime := time.Now()
-	service.Logger.Info("diff table oracle to mysql start",
+	zap.L().Info("diff table oracle to mysql start",
 		zap.String("schema", cfg.SourceConfig.SchemaName))
 
 	// 判断上游 Oracle 数据库版本
@@ -61,7 +61,7 @@ func OracleDiffMySQLTable(engine *service.Engine, cfg *service.CfgFile) error {
 	}
 
 	if len(exporterTableSlice) == 0 {
-		service.Logger.Warn("there are no table objects in the oracle schema",
+		zap.L().Warn("there are no table objects in the oracle schema",
 			zap.String("schema", cfg.SourceConfig.SchemaName))
 		return nil
 	}
@@ -122,7 +122,7 @@ func OracleDiffMySQLTable(engine *service.Engine, cfg *service.CfgFile) error {
 	}
 	if len(waitSyncTableMetas) == 0 && len(partSyncTableMetas) == 0 {
 		endTime := time.Now()
-		service.Logger.Info("all oracle table data diff finished",
+		zap.L().Info("all oracle table data diff finished",
 			zap.String("schema", cfg.SourceConfig.SchemaName),
 			zap.String("cost", endTime.Sub(startTime).String()))
 		return nil
@@ -135,7 +135,7 @@ func OracleDiffMySQLTable(engine *service.Engine, cfg *service.CfgFile) error {
 	}
 	if len(panicCheckpointTables) != 0 {
 		endTime := time.Now()
-		service.Logger.Error("all oracle table data diff error",
+		zap.L().Error("all oracle table data diff error",
 			zap.String("schema", cfg.SourceConfig.SchemaName),
 			zap.String("cost", endTime.Sub(startTime).String()),
 			zap.Strings("panic tables", panicCheckpointTables))
@@ -178,7 +178,7 @@ func OracleDiffMySQLTable(engine *service.Engine, cfg *service.CfgFile) error {
 		oraCollation = true
 	}
 	finishTime := time.Now()
-	service.Logger.Info("get oracle db character and version finished",
+	zap.L().Info("get oracle db character and version finished",
 		zap.String("schema", cfg.SourceConfig.SchemaName),
 		zap.String("db version", oraDBVersion),
 		zap.String("db character", characterSet),
@@ -202,7 +202,7 @@ func OracleDiffMySQLTable(engine *service.Engine, cfg *service.CfgFile) error {
 			return err
 		}
 		finishTime = time.Now()
-		service.Logger.Info("get oracle schema and table collation finished",
+		zap.L().Info("get oracle schema and table collation finished",
 			zap.String("schema", cfg.SourceConfig.SchemaName),
 			zap.String("db version", oraDBVersion),
 			zap.String("db character", characterSet),
@@ -242,15 +242,15 @@ func OracleDiffMySQLTable(engine *service.Engine, cfg *service.CfgFile) error {
 	}
 
 	endTime := time.Now()
-	service.Logger.Info("diff", zap.String("fix sql file output", filepath.Join(pwdDir, cfg.DiffConfig.FixSqlFile)))
+	zap.L().Info("diff", zap.String("fix sql file output", filepath.Join(pwdDir, cfg.DiffConfig.FixSqlFile)))
 	if errorTotals == 0 {
-		service.Logger.Info("diff table oracle to mysql finished",
+		zap.L().Info("diff table oracle to mysql finished",
 			zap.Int("table totals", len(exporterTableSlice)),
 			zap.Int("table success", len(exporterTableSlice)),
 			zap.Int("table failed", int(errorTotals)),
 			zap.String("cost", endTime.Sub(startTime).String()))
 	} else {
-		service.Logger.Warn("diff table oracle to mysql finished",
+		zap.L().Warn("diff table oracle to mysql finished",
 			zap.Int("table totals", len(exporterTableSlice)),
 			zap.Int("table success", len(exporterTableSlice)-int(errorTotals)),
 			zap.Int("table failed", int(errorTotals)),
@@ -329,7 +329,7 @@ func startTableDiffByCheckpoint(cfg *service.CfgFile, engine *service.Engine, pa
 							Detail:           meta.String(),
 							Error:            err.Error(),
 						}).Error; err != nil {
-							service.Logger.Error("diff table oracle to mysql failed",
+							zap.L().Error("diff table oracle to mysql failed",
 								zap.String("schema", meta.SourceSchemaName),
 								zap.String("table", meta.SourceTableName),
 								zap.Error(
@@ -352,7 +352,7 @@ func startTableDiffByCheckpoint(cfg *service.CfgFile, engine *service.Engine, pa
 								Detail:           meta.String(),
 								Error:            fmt.Sprintf("fix sql file write failed: %v", err.Error()),
 							}).Error; err != nil {
-								service.Logger.Error("diff table oracle to mysql failed",
+								zap.L().Error("diff table oracle to mysql failed",
 									zap.String("schema", meta.SourceSchemaName),
 									zap.String("table", meta.SourceTableName),
 									zap.Error(
@@ -375,7 +375,7 @@ func startTableDiffByCheckpoint(cfg *service.CfgFile, engine *service.Engine, pa
 							Detail:           meta.String(),
 							Error:            fmt.Sprintf("delete [data_diff_meta] record write failed: %v", err.Error()),
 						}).Error; err != nil {
-							service.Logger.Error("diff table oracle to mysql failed",
+							zap.L().Error("diff table oracle to mysql failed",
 								zap.String("schema", meta.SourceSchemaName),
 								zap.String("table", meta.SourceTableName),
 								zap.Error(
@@ -400,7 +400,7 @@ func startTableDiffByCheckpoint(cfg *service.CfgFile, engine *service.Engine, pa
 		}
 
 		diffEndTime := time.Now()
-		service.Logger.Info("diff single table oracle to mysql finished",
+		zap.L().Info("diff single table oracle to mysql finished",
 			zap.String("schema", d.SourceSchema),
 			zap.String("table", d.SourceTable),
 			zap.String("cost", diffEndTime.Sub(diffStartTime).String()))
@@ -461,7 +461,7 @@ func startTableDiffByNormal(cfg *service.CfgFile, engine *service.Engine, waitSy
 							Detail:           meta.String(),
 							Error:            err.Error(),
 						}).Error; err != nil {
-							service.Logger.Error("diff table oracle to mysql failed",
+							zap.L().Error("diff table oracle to mysql failed",
 								zap.String("schema", meta.SourceSchemaName),
 								zap.String("table", meta.SourceTableName),
 								zap.Error(
@@ -484,7 +484,7 @@ func startTableDiffByNormal(cfg *service.CfgFile, engine *service.Engine, waitSy
 								Detail:           meta.String(),
 								Error:            fmt.Sprintf("fix sql file write failed: %v", err.Error()),
 							}).Error; err != nil {
-								service.Logger.Error("diff table oracle to mysql failed",
+								zap.L().Error("diff table oracle to mysql failed",
 									zap.String("schema", meta.SourceSchemaName),
 									zap.String("table", meta.SourceTableName),
 									zap.Error(
@@ -507,7 +507,7 @@ func startTableDiffByNormal(cfg *service.CfgFile, engine *service.Engine, waitSy
 							Detail:           meta.String(),
 							Error:            fmt.Sprintf("delete [data_diff_meta] record write failed: %v", err.Error()),
 						}).Error; err != nil {
-							service.Logger.Error("diff table oracle to mysql failed",
+							zap.L().Error("diff table oracle to mysql failed",
 								zap.String("schema", meta.SourceSchemaName),
 								zap.String("table", meta.SourceTableName),
 								zap.Error(
@@ -533,7 +533,7 @@ func startTableDiffByNormal(cfg *service.CfgFile, engine *service.Engine, waitSy
 		}
 
 		diffEndTime := time.Now()
-		service.Logger.Info("diff single table oracle to mysql finished",
+		zap.L().Info("diff single table oracle to mysql finished",
 			zap.String("schema", d.SourceSchema),
 			zap.String("table", d.SourceTable),
 			zap.String("cost", diffEndTime.Sub(diffStartTime).String()))
@@ -599,7 +599,7 @@ func PreDiffCheck(exporterTableSlice []string, cfg *service.CfgFile, engine *ser
 	}
 
 	endTime := time.Now()
-	service.Logger.Info("pre check schema oracle to mysql finished",
+	zap.L().Info("pre check schema oracle to mysql finished",
 		zap.String("schema", strings.ToUpper(cfg.SourceConfig.SchemaName)),
 		zap.String("cost", endTime.Sub(startTime).String()))
 
@@ -635,7 +635,7 @@ func PreSplitChunk(cfg *service.CfgFile, engine *service.Engine, exportTableSlic
 			defer wg.Done()
 			for d := range ch {
 				if err = d.SplitChunk(workerID); err != nil {
-					service.Logger.Panic("pre split table chunk failed", zap.String("table", d.String()), zap.Error(err))
+					zap.L().Panic("pre split table chunk failed", zap.String("table", d.String()), zap.Error(err))
 					panic(fmt.Errorf("pre split table [%v] chunk failed, failed table detail please see logfile, error: [%v]", d.String(), err))
 				}
 			}
@@ -645,7 +645,7 @@ func PreSplitChunk(cfg *service.CfgFile, engine *service.Engine, exportTableSlic
 	wg.Wait()
 
 	endTime := time.Now()
-	service.Logger.Info("pre split oracle and mysql table chunk finished",
+	zap.L().Info("pre split oracle and mysql table chunk finished",
 		zap.String("schema", cfg.SourceConfig.SchemaName),
 		zap.String("cost", endTime.Sub(startTime).String()))
 
@@ -682,7 +682,7 @@ func Report(targetSchema string, dm service.DataDiffMeta, engine *service.Engine
 
 	// 数据相同
 	if oraCrc32Val == mysqlCrc32Val {
-		service.Logger.Info("oracle table chunk diff equal",
+		zap.L().Info("oracle table chunk diff equal",
 			zap.String("oracle schema", dm.SourceSchemaName),
 			zap.String("mysql schema", targetSchema),
 			zap.String("table", dm.SourceTableName),
@@ -693,7 +693,7 @@ func Report(targetSchema string, dm service.DataDiffMeta, engine *service.Engine
 		return "", nil
 	}
 
-	service.Logger.Info("oracle table chunk diff isn't equal",
+	zap.L().Info("oracle table chunk diff isn't equal",
 		zap.String("oracle schema", dm.SourceSchemaName),
 		zap.String("mysql schema", targetSchema),
 		zap.String("table", dm.SourceTableName),

@@ -39,7 +39,7 @@ func extractorTableFullRecord(engine *service.Engine, sourceSchemaName, sourceTa
 	}
 
 	endTime := time.Now()
-	service.Logger.Info("single full table rowid data extractor finished",
+	zap.L().Info("single full table rowid data extractor finished",
 		zap.String("schema", sourceSchemaName),
 		zap.String("table", sourceTableName),
 		zap.String("sql", oracleQuery),
@@ -62,7 +62,7 @@ func extractorTableIncrementRecord(engine *service.Engine,
 	if err != nil {
 		return []service.LogminerContent{}, err
 	}
-	service.Logger.Info("increment table log extractor", zap.String("logfile", logFileName),
+	zap.L().Info("increment table log extractor", zap.String("logfile", logFileName),
 		zap.Int("logfile start scn", logFileStartSCN),
 		zap.Int("source table last scn", lastCheckpoint),
 		zap.Int("row counts", len(rowsResult)))
@@ -87,7 +87,7 @@ func filterOracleRedoGreaterOrEqualRecordByTable(
 	}
 
 	startTime := time.Now()
-	service.Logger.Info("oracle table redo filter start",
+	zap.L().Info("oracle table redo filter start",
 		zap.Time("start time", startTime))
 
 	c := make(chan struct{})
@@ -158,7 +158,7 @@ func filterOracleRedoGreaterOrEqualRecordByTable(
 	<-c
 
 	endTime := time.Now()
-	service.Logger.Info("oracle table filter finished",
+	zap.L().Info("oracle table filter finished",
 		zap.String("status", "success"),
 		zap.Time("start time", startTime),
 		zap.Time("end time", endTime),
@@ -198,7 +198,7 @@ func initOracleTableConsumeRowID(cfg *service.CfgFile, engine *service.Engine,
 			}
 
 			endTime := time.Now()
-			service.Logger.Info("single table init wait_sync_meta and full_sync_meta finished",
+			zap.L().Info("single table init wait_sync_meta and full_sync_meta finished",
 				zap.String("schema", cfg.SourceConfig.SchemaName),
 				zap.String("table", table),
 				zap.Int("global scn", globalSCN),
@@ -265,7 +265,7 @@ func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceT
 			}
 
 			if len(rowsResult) == 0 {
-				service.Logger.Warn("oracle schema table rowid data return null rows, skip",
+				zap.L().Warn("oracle schema table rowid data return null rows, skip",
 					zap.String("schema", cfg.SourceConfig.SchemaName),
 					zap.String("table", sourceTableName),
 					zap.String("sql", querySQL))
@@ -312,7 +312,7 @@ func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceT
 
 	endTime := time.Now()
 	if !wp.IsDone() {
-		service.Logger.Fatal("single full table data loader failed",
+		zap.L().Fatal("single full table data loader failed",
 			zap.String("schema", cfg.SourceConfig.SchemaName),
 			zap.String("table", sourceTableName),
 			zap.String("cost", endTime.Sub(startTime).String()))
@@ -327,7 +327,7 @@ func syncOracleRowsByRowID(cfg *service.CfgFile, engine *service.Engine, sourceT
 		return err
 	}
 
-	service.Logger.Info("single full table data loader finished",
+	zap.L().Info("single full table data loader finished",
 		zap.String("schema", cfg.SourceConfig.SchemaName),
 		zap.String("table", sourceTableName),
 		zap.String("cost", endTime.Sub(startTime).String()))

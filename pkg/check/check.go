@@ -34,7 +34,7 @@ import (
 
 func OracleTableToMySQLMappingCheck(engine *service.Engine, cfg *service.CfgFile) error {
 	startTime := time.Now()
-	service.Logger.Info("check oracle and mysql table start",
+	zap.L().Info("check oracle and mysql table start",
 		zap.String("oracleSchema", cfg.SourceConfig.SchemaName),
 		zap.String("mysqlSchema", cfg.TargetConfig.SchemaName))
 
@@ -117,7 +117,7 @@ func OracleTableToMySQLMappingCheck(engine *service.Engine, cfg *service.CfgFile
 		oraCollation = true
 	}
 	finishTime := time.Now()
-	service.Logger.Info("get oracle db character and version finished",
+	zap.L().Info("get oracle db character and version finished",
 		zap.String("schema", cfg.SourceConfig.SchemaName),
 		zap.String("db version", oraDBVersion),
 		zap.String("db character", characterSet),
@@ -141,7 +141,7 @@ func OracleTableToMySQLMappingCheck(engine *service.Engine, cfg *service.CfgFile
 			return err
 		}
 		finishTime = time.Now()
-		service.Logger.Info("get oracle schema and table collation finished",
+		zap.L().Info("get oracle schema and table collation finished",
 			zap.String("schema", cfg.SourceConfig.SchemaName),
 			zap.String("db version", oraDBVersion),
 			zap.String("db character", characterSet),
@@ -184,7 +184,7 @@ func OracleTableToMySQLMappingCheck(engine *service.Engine, cfg *service.CfgFile
 						Detail:           wr.String(),
 						Error:            err.Error(),
 					}).Error; err != nil {
-						service.Logger.Error("check table oracle to mysql failed",
+						zap.L().Error("check table oracle to mysql failed",
 							zap.String("schema", strings.ToUpper(sourceSchemaName)),
 							zap.String("table", t),
 							zap.Error(
@@ -208,15 +208,15 @@ func OracleTableToMySQLMappingCheck(engine *service.Engine, cfg *service.CfgFile
 	}
 
 	endTime := time.Now()
-	service.Logger.Info("check", zap.String("output", filepath.Join(pwdDir, fmt.Sprintf("check_%s.sql", cfg.SourceConfig.SchemaName))))
+	zap.L().Info("check", zap.String("output", filepath.Join(pwdDir, fmt.Sprintf("check_%s.sql", cfg.SourceConfig.SchemaName))))
 	if checkError == 0 {
-		service.Logger.Info("check table oracle to mysql finished",
+		zap.L().Info("check table oracle to mysql finished",
 			zap.Int("table totals", len(exporterTableSlice)),
 			zap.Int("table success", len(exporterTableSlice)),
 			zap.Int("table failed", 0),
 			zap.String("cost", endTime.Sub(startTime).String()))
 	} else {
-		service.Logger.Warn("check table oracle to mysql finished",
+		zap.L().Warn("check table oracle to mysql finished",
 			zap.Int("table totals", len(exporterTableSlice)),
 			zap.Int("table success", len(exporterTableSlice)-int(checkError)),
 			zap.Int("check failed", int(checkError)),

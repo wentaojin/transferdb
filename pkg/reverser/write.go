@@ -267,7 +267,7 @@ func GenCreateSchema(file *FileMW, engine *service.Engine, sourceSchema, targetS
 		return err
 	}
 	endTime := time.Now()
-	service.Logger.Info("output oracle to mysql schema create sql",
+	zap.L().Info("output oracle to mysql schema create sql",
 		zap.String("schema", sourceSchema),
 		zap.String("cost", endTime.Sub(startTime).String()))
 
@@ -314,7 +314,7 @@ func CompatibilityDBTips(file *FileMW, sourceSchema string, partition, temporary
 		}
 	}
 	endTime := time.Now()
-	service.Logger.Info("output oracle to mysql compatibility tips",
+	zap.L().Info("output oracle to mysql compatibility tips",
 		zap.String("schema", sourceSchema),
 		zap.String("cost", endTime.Sub(startTime).String()))
 

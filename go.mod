@@ -13,18 +13,16 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/scylladb/go-set v1.0.2
 	github.com/shopspring/decimal v1.3.1
-	github.com/stretchr/testify v1.7.0 // indirect
 	github.com/thinkeridea/go-extend v1.3.2
 	github.com/valyala/fastjson v1.6.3
 	github.com/xxjwxc/gowp v0.0.0-20200603141413-57c3ba7108be
-	go.uber.org/multierr v1.6.0 // indirect
-	go.uber.org/zap v1.16.0
-	golang.org/x/mod v0.4.1 // indirect
-	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
-	golang.org/x/sys v0.0.0-20210220050731-9a76102bfb43 // indirect
+	go.uber.org/multierr v1.7.0 // indirect
+	go.uber.org/zap v1.21.0
+	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/text v0.3.3
+	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	gorm.io/driver/mysql v1.0.4
-	gorm.io/gorm v1.20.12
+	gorm.io/driver/mysql v1.3.3
+	gorm.io/gorm v1.23.5
 	honnef.co/go/tools v0.1.1 // indirect
 )

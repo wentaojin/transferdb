@@ -90,7 +90,7 @@ func (e *Engine) DeleteDataDiffMeta(schemaName, tableName, whereS string) error 
 		}
 	}
 
-	Logger.Info("delete mysql [data_diff_meta] meta",
+	zap.L().Info("delete mysql [data_diff_meta] meta",
 		zap.String("schema", schemaName),
 		zap.String("table", tableName),
 		zap.String("where", whereS),

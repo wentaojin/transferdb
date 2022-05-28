@@ -98,7 +98,7 @@ func translatorTableFullRecord(
 			GenerateMySQLPrepareBindVarStatement(columnCounts, rowBatchCounts))
 	}
 	endTime := time.Now()
-	service.Logger.Info("single full table rowid data translator",
+	zap.L().Info("single full table rowid data translator",
 		zap.String("schema", targetSchemaName),
 		zap.String("table", targetTableName),
 		zap.String("rowid sql", rowidSQL),
@@ -162,7 +162,7 @@ func translatorAndApplyOracleIncrementRecord(
 	rowsResult []service.LogminerContent, taskQueue chan IncrPayload) error {
 
 	startTime := time.Now()
-	service.Logger.Info("oracle table increment log apply start",
+	zap.L().Info("oracle table increment log apply start",
 		zap.String("mysql schema", targetSchema),
 		zap.String("table", sourceTableName),
 		zap.Time("start time", startTime))
@@ -174,7 +174,7 @@ func translatorAndApplyOracleIncrementRecord(
 		}
 
 		if rows.Operation == utils.DDLOperation {
-			service.Logger.Info("translator oracle payload", zap.String("ORACLE DDL", rows.SQLRedo))
+			zap.L().Info("translator oracle payload", zap.String("ORACLE DDL", rows.SQLRedo))
 		}
 
 		// 移除引号
@@ -215,12 +215,12 @@ func translatorAndApplyOracleIncrementRecord(
 			OperationType:  operationType}
 
 		// 避免太多日志输出
-		// zlog.Logger.Info("translator oracle payload", zap.String("payload", lp.Marshal()))
+		// zlog.zap.L().Info("translator oracle payload", zap.String("payload", lp.Marshal()))
 		taskQueue <- lp
 	}
 
 	endTime := time.Now()
-	service.Logger.Info("oracle table increment log apply finished",
+	zap.L().Info("oracle table increment log apply finished",
 		zap.String("mysql schema", targetSchema),
 		zap.String("table", sourceTableName),
 		zap.String("status", "success"),

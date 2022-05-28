@@ -29,7 +29,7 @@ import (
 
 func FullCSVOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service.Engine) error {
 	startTime := time.Now()
-	service.Logger.Info("all full table data csv start",
+	zap.L().Info("all full table data csv start",
 		zap.String("schema", cfg.SourceConfig.SchemaName))
 
 	// 判断上游 Oracle 数据库版本
@@ -101,7 +101,7 @@ func FullCSVOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service.Engin
 	}
 	if len(waitSyncTableMetas) == 0 && len(partSyncTableMetas) == 0 {
 		endTime := time.Now()
-		service.Logger.Info("all full table data csv finished",
+		zap.L().Info("all full table data csv finished",
 			zap.String("schema", cfg.SourceConfig.SchemaName),
 			zap.String("cost", endTime.Sub(startTime).String()))
 		return nil
@@ -114,7 +114,7 @@ func FullCSVOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service.Engin
 	}
 	if len(panicCheckpointTables) != 0 {
 		endTime := time.Now()
-		service.Logger.Error("all full table data loader error",
+		zap.L().Error("all full table data loader error",
 			zap.String("schema", cfg.SourceConfig.SchemaName),
 			zap.String("cost", endTime.Sub(startTime).String()),
 			zap.Strings("panic tables", panicCheckpointTables))
@@ -128,7 +128,7 @@ func FullCSVOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service.Engin
 	}
 
 	endTime := time.Now()
-	service.Logger.Info("all full table data csv finished",
+	zap.L().Info("all full table data csv finished",
 		zap.String("schema", cfg.SourceConfig.SchemaName),
 		zap.String("cost", endTime.Sub(startTime).String()))
 	return nil

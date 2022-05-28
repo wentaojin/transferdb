@@ -251,7 +251,7 @@ func (f *FileWriter) write(w io.Writer) error {
 		return err
 	}
 
-	service.Logger.Info("oracle schema table rowid data rows",
+	zap.L().Info("oracle schema table rowid data rows",
 		zap.String("schema", f.SourceSchema),
 		zap.String("table", f.SourceTable),
 		zap.Int("rows", rowCount),

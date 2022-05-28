@@ -32,7 +32,7 @@ import (
 
 func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) error {
 	startTime := time.Now()
-	service.Logger.Info("reverse table oracle to mysql start",
+	zap.L().Info("reverse table oracle to mysql start",
 		zap.String("schema", cfg.SourceConfig.SchemaName))
 
 	// 获取配置文件待同步表列表
@@ -42,7 +42,7 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 	}
 
 	if len(exporterTableSlice) == 0 {
-		service.Logger.Warn("there are no table objects in the oracle schema",
+		zap.L().Warn("there are no table objects in the oracle schema",
 			zap.String("schema", cfg.SourceConfig.SchemaName))
 		return nil
 	}
@@ -144,7 +144,7 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 						Detail:           t.String(),
 						Error:            err.Error(),
 					}).Error; err != nil {
-						service.Logger.Error("reverse table oracle to mysql failed",
+						zap.L().Error("reverse table oracle to mysql failed",
 							zap.String("schema", t.SourceSchemaName),
 							zap.String("table", t.SourceTableName),
 							zap.Error(
@@ -164,7 +164,7 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 						Detail:           t.String(),
 						Error:            err.Error(),
 					}).Error; err != nil {
-						service.Logger.Error("reverse table oracle to mysql failed",
+						zap.L().Error("reverse table oracle to mysql failed",
 							zap.String("scheme", t.SourceSchemaName),
 							zap.String("table", t.SourceTableName),
 							zap.Error(
@@ -186,18 +186,18 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 	}
 
 	endTime := time.Now()
-	service.Logger.Info("reverse", zap.String("create table and index output", filepath.Join(pwdDir,
+	zap.L().Info("reverse", zap.String("create table and index output", filepath.Join(pwdDir,
 		fmt.Sprintf("reverse_%s.sql", cfg.SourceConfig.SchemaName))))
-	service.Logger.Info("compatibility", zap.String("maybe exist compatibility output", filepath.Join(pwdDir,
+	zap.L().Info("compatibility", zap.String("maybe exist compatibility output", filepath.Join(pwdDir,
 		fmt.Sprintf("compatibility_%s.sql", cfg.SourceConfig.SchemaName))))
 	if errorTotals == 0 {
-		service.Logger.Info("reverse table oracle to mysql finished",
+		zap.L().Info("reverse table oracle to mysql finished",
 			zap.Int("table totals", len(tables)),
 			zap.Int("table success", len(tables)),
 			zap.Int("table failed", int(errorTotals)),
 			zap.String("cost", endTime.Sub(startTime).String()))
 	} else {
-		service.Logger.Warn("reverse table oracle to mysql finished",
+		zap.L().Warn("reverse table oracle to mysql finished",
 			zap.Int("table totals", len(tables)),
 			zap.Int("table success", len(tables)-int(errorTotals)),
 			zap.Int("table failed", int(errorTotals)),

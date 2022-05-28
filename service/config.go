@@ -204,7 +204,7 @@ func (c *CfgFile) GenerateTables(engine *Engine) ([]string, error) {
 	}
 
 	endTime := time.Now()
-	Logger.Info("get oracle to mysql all tables",
+	zap.L().Info("get oracle to mysql all tables",
 		zap.String("schema", c.SourceConfig.SchemaName),
 		zap.Strings("exporter tables list", exporterTableSlice),
 		zap.Int("include table counts", len(exporterTableSlice)),

@@ -51,7 +51,7 @@ func (e *Engine) FilterIntersectionMySQLTable(schemaName string, includeTables [
 func (e *Engine) RenameMySQLTableName(schemaName string, tableName string) error {
 	backupTable := fmt.Sprintf("%s_bak", tableName)
 	querySQL := fmt.Sprintf("RENAME TABLE `%s`.`%s` TO `%s`.`%s`", schemaName, tableName, schemaName, backupTable)
-	Logger.Info("Exec SQL",
+	zap.L().Info("Exec SQL",
 		zap.String("schema", schemaName),
 		zap.String("table", tableName),
 		zap.String("sql", fmt.Sprintf("%v", querySQL)))

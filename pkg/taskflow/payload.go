@@ -47,7 +47,7 @@ type IncrResult struct {
 func (p *IncrPayload) Run() error {
 	// 数据写入并更新元数据表
 	if err := applierTableIncrementRecord(p); err != nil {
-		service.Logger.Error("apply table increment record failed",
+		zap.L().Error("apply table increment record failed",
 			zap.String("payload", p.Marshal()),
 			zap.Error(err))
 		return err
@@ -59,7 +59,7 @@ func (p *IncrPayload) Run() error {
 func (p *IncrPayload) Marshal() string {
 	b, err := json.Marshal(&p)
 	if err != nil {
-		service.Logger.Error("marshal task to string",
+		zap.L().Error("marshal task to string",
 			zap.String("string", string(b)),
 			zap.Error(err))
 	}
@@ -79,7 +79,7 @@ func CreateWorkerPool(numOfWorkers int, jobQueue chan IncrPayload, resultQueue c
 func GetIncrResult(done chan bool, resultQueue chan IncrResult) {
 	for result := range resultQueue {
 		if !result.Status {
-			service.Logger.Fatal("task increment table record",
+			zap.L().Fatal("task increment table record",
 				zap.String("payload", result.Payload.Marshal()))
 		}
 	}
