@@ -193,19 +193,20 @@ func (e *Engine) GetMySQLTableIncrementMetaRecord(sourceSchemaName string) ([]st
 
 func (e *Engine) AddOracleLogminerlogFile(logFile string) error {
 	ctx, _ := context.WithCancel(context.Background())
-	_, err := e.OracleDB.ExecContext(ctx, utils.StringsBuilder(`BEGIN
+	sql := utils.StringsBuilder(`BEGIN
   dbms_logmnr.add_logfile(logfilename => '`, logFile, `',
                           options     => dbms_logmnr.NEW);
-END;`))
+END;`)
+	_, err := e.OracleDB.ExecContext(ctx, sql)
 	if err != nil {
-		return fmt.Errorf("oracle logminer add log file failed: %v", err)
+		return fmt.Errorf("oracle logminer sql [%v] add log file [%s] failed: %v", sql, logFile, err)
 	}
 	return nil
 }
 
 func (e *Engine) StartOracleLogminerStoredProcedure(scn string) error {
 	ctx, _ := context.WithCancel(context.Background())
-	_, err := e.OracleDB.ExecContext(ctx, utils.StringsBuilder(`BEGIN
+	sql := utils.StringsBuilder(`BEGIN
   dbms_logmnr.start_logmnr(startSCN => `, scn, `,
                            options  => SYS.DBMS_LOGMNR.SKIP_CORRUPTION +       -- 日志遇到坏块，不报错退出，直接跳过
                                        SYS.DBMS_LOGMNR.NO_SQL_DELIMITER +
@@ -213,9 +214,10 @@ func (e *Engine) StartOracleLogminerStoredProcedure(scn string) error {
                                        SYS.DBMS_LOGMNR.COMMITTED_DATA_ONLY +
                                        SYS.DBMS_LOGMNR.DICT_FROM_ONLINE_CATALOG +
                                        SYS.DBMS_LOGMNR.STRING_LITERALS_IN_STMT);
-END;`))
+END;`)
+	_, err := e.OracleDB.ExecContext(ctx, sql)
 	if err != nil {
-		return fmt.Errorf("oracle logminer stored procedure start failed: %v", err)
+		return fmt.Errorf("oracle logminer stored procedure sql [%v] startscn [%v] failed: %v", sql, scn, err)
 	}
 	return nil
 }
