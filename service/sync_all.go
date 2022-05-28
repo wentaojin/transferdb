@@ -43,7 +43,7 @@ func (e *Engine) GetOracleRedoLogSCN(scn string) (int, error) {
 	if len(res) > 0 {
 		globalSCN, err = strconv.Atoi(res[0]["SCN"])
 		if err != nil {
-			return globalSCN, err
+			return globalSCN, fmt.Errorf("get oracle redo log scn %s strconv.Atoi failed: %v", res[0]["SCN"], err)
 		}
 	}
 	return globalSCN, nil
@@ -64,7 +64,7 @@ func (e *Engine) GetOracleArchivedLogSCN(scn string) (int, error) {
 	if len(res) > 0 {
 		globalSCN, err = strconv.Atoi(res[0]["SCN"])
 		if err != nil {
-			return globalSCN, err
+			return globalSCN, fmt.Errorf("get oracle archive log scn %s strconv.Atoi failed: %v", res[0]["SCN"], err)
 		}
 	}
 	return globalSCN, nil
@@ -117,11 +117,11 @@ func (e *Engine) GetOracleCurrentRedoMaxSCN() (int, int, string, error) {
 	}
 	firstSCN, err := strconv.Atoi(res[0]["FIRST_CHANGE"])
 	if err != nil {
-		return firstSCN, 0, res[0]["LOG_FILE"], fmt.Errorf("GetOracleCurrentRedoMaxSCN strconv.Atoi falied: %v", err)
+		return firstSCN, 0, res[0]["LOG_FILE"], fmt.Errorf("get oracle current redo first_change scn %s strconv.Atoi falied: %v", res[0]["FIRST_CHANGE"], err)
 	}
 	maxSCN, err := strconv.Atoi(res[0]["NEXT_CHANGE"])
 	if err != nil {
-		return firstSCN, maxSCN, res[0]["LOG_FILE"], fmt.Errorf("GetOracleCurrentRedoMaxSCN strconv.Atoi falied: %v", err)
+		return firstSCN, maxSCN, res[0]["LOG_FILE"], fmt.Errorf("get oracle current redo next_change scn %s strconv.Atoi falied: %v", res[0]["NEXT_CHANGE"], err)
 	}
 	if maxSCN == 0 || firstSCN == 0 {
 		return firstSCN, maxSCN, res[0]["LOG_FILE"], fmt.Errorf("GetOracleCurrentRedoMaxSCN value is euqal to 0, does't meet expectations")

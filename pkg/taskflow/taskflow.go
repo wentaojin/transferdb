@@ -334,13 +334,13 @@ func syncOracleTableIncrementRecordToMySQLUsingAllMode(cfg *service.CfgFile, eng
 		// 获取日志文件起始 SCN
 		logFileStartSCN, err := strconv.Atoi(log["FIRST_CHANGE"])
 		if err != nil {
-			return err
+			return fmt.Errorf("get oracle log file start scn %s strconv.Atoi failed: %v", log["FIRST_CHANGE"], err)
 		}
 
 		// 获取日志文件结束 SCN
 		logFileEndSCN, err := strconv.Atoi(log["NEXT_CHANGE"])
 		if err != nil {
-			return err
+			return fmt.Errorf("get oracle log file end scn %s strconv.Atoi failed: %v", log["NEXT_CHANGE"], err)
 		}
 
 		zap.L().Info("increment table log file logminer",
@@ -589,7 +589,7 @@ func startOracleTableFullSync(cfg *service.CfgFile, engine *service.Engine, wait
 	}
 	if len(waitSyncTableInfo) > 0 {
 		// 初始化表任务
-		if err := initOracleTableConsumeRowID(cfg, engine, waitSyncTableInfo, FullSyncMode, oracleCollation); err != nil {
+		if err := initOracleTableConsumeRowID(cfg, engine, waitSyncTableInfo, syncMode, oracleCollation); err != nil {
 			return err
 		}
 		if err := startOracleTableConsumeByCheckpoint(cfg, engine, waitSyncTableInfo, syncMode); err != nil {

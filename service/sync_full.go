@@ -475,7 +475,7 @@ func (e *Engine) GetOracleCurrentSnapshotSCN() (int, error) {
 	}
 	globalSCN, err = strconv.Atoi(res[0]["CURRENT_SCN"])
 	if err != nil {
-		return globalSCN, err
+		return globalSCN, fmt.Errorf("get oracle current snapshot scn %s strconv.Atoi failed: %v", res[0]["CURRENT_SCN"], err)
 	}
 	return globalSCN, nil
 }
@@ -626,8 +626,8 @@ func (e *Engine) getOracleTableRowsByStatistics(schemaName, tableName string) (i
 	}
 	numRows, err := strconv.Atoi(res[0]["NUM_ROWS"])
 	if err != nil {
-		return 0, res[0]["PARTITIONED"], fmt.Errorf("get oracle schema table [%v] rows by statistics falied: %v",
-			fmt.Sprintf("%s.%s", schemaName, tableName), err)
+		return 0, res[0]["PARTITIONED"], fmt.Errorf("get oracle schema table [%v] rows [%s] by statistics strconv.Atoi falied: %v",
+			fmt.Sprintf("%s.%s", schemaName, tableName), res[0]["NUM_ROWS"], err)
 	}
 	return numRows, res[0]["PARTITIONED"], nil
 }
@@ -663,7 +663,7 @@ func (e *Engine) AdjustTableSelectColumn(schemaName, tableName string, oraCollat
 			} else if strings.Contains(rowCol["DATA_TYPE"], "TIMESTAMP") {
 				dataScale, err := strconv.Atoi(rowCol["DATA_SCALE"])
 				if err != nil {
-					return "", err
+					return "", fmt.Errorf("aujust oracle timestamp datatype scale [%s] strconv.Atoi failed: %v", rowCol["DATA_SCALE"], err)
 				}
 				if dataScale == 0 {
 					columnNames = append(columnNames, utils.StringsBuilder("TO_CHAR(", rowCol["COLUMN_NAME"], ",'yyyy-mm-dd hh24:mi:ss') AS ", rowCol["COLUMN_NAME"]))
