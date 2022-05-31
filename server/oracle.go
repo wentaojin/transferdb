@@ -35,9 +35,10 @@ import (
 func NewOracleDBEngine(oraCfg service.SourceConfig) (*sql.DB, error) {
 	// https://pkg.go.dev/github.com/godror/godror
 	// https://github.com/godror/godror/blob/db9cd12d89cdc1c60758aa3f36ece36cf5a61814/doc/connection.md
-
-	connString := fmt.Sprintf("oracle://%s:%s@%s/%s?%s",
-		oraCfg.Username, oraCfg.Password, utils.StringsBuilder(oraCfg.Host, ":", strconv.Itoa(oraCfg.Port)),
+	// https://godror.github.io/godror/doc/connection.html
+	// 异构池 heterogeneousPool = 1，即程序连接用户与访问 oracle schema 用户名不一致
+	connString := fmt.Sprintf("oracle://@%s/%s?%s&heterogeneousPool=1",
+		utils.StringsBuilder(oraCfg.Host, ":", strconv.Itoa(oraCfg.Port)),
 		oraCfg.ServiceName, oraCfg.ConnectParams)
 
 	oraDSN, err := godror.ParseDSN(connString)
@@ -45,6 +46,7 @@ func NewOracleDBEngine(oraCfg service.SourceConfig) (*sql.DB, error) {
 		return nil, err
 	}
 
+	oraDSN.Username, oraDSN.Password = oraCfg.Username, godror.NewPassword(oraCfg.Password)
 	oraDSN.OnInitStmts = oraCfg.SessionParams
 
 	// libDir won't have any effect on Linux for linking reasons to do with Oracle's libnnz library that are proving to be intractable.

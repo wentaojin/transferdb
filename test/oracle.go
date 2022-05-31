@@ -25,12 +25,12 @@ import (
 
 func main() {
 	oraCfg := service.SourceConfig{
-		Username:      "marvin",
-		Password:      "marvin",
-		Host:          "172.16.4.207",
+		Username:      "c##logminer",
+		Password:      "logminer",
+		Host:          "172.16.4.93",
 		Port:          1521,
-		ServiceName:   "helowin",
-		ConnectParams: "poolMinSessions=10&poolMaxSessions=1000&poolWaitTimeout=60s&poolSessionMaxLifetime=1h&poolSessionTimeout=5m&poolIncrement=1&timezone=Local",
+		ServiceName:   "orclpdb",
+		ConnectParams: "&poolMinSessions=10&poolMaxSessions=1000&poolWaitTimeout=60s&poolSessionMaxLifetime=1h&poolSessionTimeout=5s&poolIncrement=1&timezone=Local",
 		SessionParams: []string{},
 		SchemaName:    "marvin",
 		IncludeTable:  nil,
@@ -77,12 +77,12 @@ func main() {
 	//}
 
 	// Date/Timestamp/Interval Year/Day 字段类型格式化
-	sourceColumnInfo, err := engine.AdjustTableSelectColumn("marvin", "marvin11", false)
+	sourceColumnInfo, err := engine.AdjustTableSelectColumn("marvin", "marvin0", false)
 	if err != nil {
 		fmt.Println(err)
 	}
 
-	_, r2, err := engine.GetOracleTableRowsData(utils.StringsBuilder(`select `, sourceColumnInfo, ` from marvin.marvin11`), 1)
+	_, r2, err := engine.GetOracleTableRowsData(utils.StringsBuilder(`select `, sourceColumnInfo, ` from marvin.marvin0 where rownum = 1`), 1)
 	if err != nil {
 		fmt.Println(err)
 	}

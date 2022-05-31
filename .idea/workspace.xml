@@ -6,7 +6,10 @@
   <component name="ChangeListManager">
     <list default="true" id="a67576d0-c4df-4b83-a792-1e43567e1978" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/service/sync_all.go" beforeDir="false" afterPath="$PROJECT_DIR$/service/sync_all.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/user_guaid.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/user_guaid.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/oracle.go" beforeDir="false" afterPath="$PROJECT_DIR$/server/oracle.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/service/model_meta.go" beforeDir="false" afterPath="$PROJECT_DIR$/service/model_meta.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/test/oracle.go" beforeDir="false" afterPath="$PROJECT_DIR$/test/oracle.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -46,24 +49,25 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;DefaultGoTemplateProperty&quot;: &quot;Go File&quot;,
-    &quot;RunOnceActivity.OpenProjectViewOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.go.format.on.save.advertiser.fired&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.go.formatter.settings.were.checked&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.go.migrated.go.modules.settings&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.go.modules.go.list.on.any.changes.was.set&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.go.watchers.conflict.with.on.save.actions.check.performed&quot;: &quot;true&quot;,
-    &quot;WebServerToolWindowFactoryState&quot;: &quot;false&quot;,
-    &quot;configurable..is.expanded&quot;: &quot;false&quot;,
-    &quot;configurable.GoLibrariesConfigurable.is.expanded&quot;: &quot;true&quot;,
-    &quot;go.import.settings.migrated&quot;: &quot;true&quot;,
-    &quot;last_opened_file_path&quot;: &quot;/Users/marvin&quot;,
-    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "DefaultGoTemplateProperty": "Go File",
+    "RunOnceActivity.OpenProjectViewOnStart": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.go.format.on.save.advertiser.fired": "true",
+    "RunOnceActivity.go.formatter.settings.were.checked": "true",
+    "RunOnceActivity.go.migrated.go.modules.settings": "true",
+    "RunOnceActivity.go.modules.go.list.on.any.changes.was.set": "true",
+    "RunOnceActivity.go.watchers.conflict.with.on.save.actions.check.performed": "true",
+    "WebServerToolWindowFactoryState": "false",
+    "configurable..is.expanded": "false",
+    "configurable.GoLibrariesConfigurable.is.expanded": "true",
+    "go.import.settings.migrated": "true",
+    "last_opened_file_path": "/Users/marvin",
+    "nodejs_package_manager_path": "npm",
+    "settings.editor.selected.configurable": "preferences.lookFeel"
   }
-}</component>
+}]]></component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$/pkg/cost/template" />
@@ -77,7 +81,7 @@
       <recent name="$PROJECT_DIR$/storage/element" />
     </key>
   </component>
-  <component name="RunManager" selected="Go Build.go build github.com/wentaojin/transferdb/test">
+  <component name="RunManager" selected="Go Build.go build github.com/wentaojin/transferdb/test (3)">
     <configuration default="true" type="GoApplicationRunConfiguration" factoryName="Go Application">
       <module name="transferdb" />
       <working_directory value="$PROJECT_DIR$" />
@@ -105,13 +109,13 @@
       <filePath value="$PROJECT_DIR$/test/filter.go" />
       <method v="2" />
     </configuration>
-    <configuration name="go build github.com/wentaojin/transferdb/test (4)" type="GoApplicationRunConfiguration" factoryName="Go Application" temporary="true" nameIsGenerated="true">
+    <configuration name="go build github.com/wentaojin/transferdb/test (3)" type="GoApplicationRunConfiguration" factoryName="Go Application" temporary="true" nameIsGenerated="true">
       <module name="transferdb" />
       <working_directory value="$PROJECT_DIR$" />
       <kind value="FILE" />
       <package value="github.com/wentaojin/transferdb/test" />
       <directory value="$PROJECT_DIR$" />
-      <filePath value="$PROJECT_DIR$/test/concurrency.go" />
+      <filePath value="$PROJECT_DIR$/test/oracle.go" />
       <method v="2" />
     </configuration>
     <configuration name="go build github.com/wentaojin/transferdb/test (5)" type="GoApplicationRunConfiguration" factoryName="Go Application" temporary="true" nameIsGenerated="true">
@@ -144,11 +148,11 @@
     </configuration>
     <recent_temporary>
       <list>
+        <item itemvalue="Go Build.go build github.com/wentaojin/transferdb/test (3)" />
         <item itemvalue="Go Build.go build github.com/wentaojin/transferdb/test" />
         <item itemvalue="Go Build.go build github.com/wentaojin/transferdb/test (1)" />
         <item itemvalue="Go Build.go build github.com/wentaojin/transferdb/test (2)" />
         <item itemvalue="Go Build.go build github.com/wentaojin/transferdb/test (5)" />
-        <item itemvalue="Go Build.go build github.com/wentaojin/transferdb/test (4)" />
       </list>
     </recent_temporary>
   </component>

@@ -116,27 +116,73 @@ $ ./transferdb --config config.toml --mode prepare
 $ ./transferdb --config config.toml --mode diff
 ```
 #### ALL 模式同步
+##### 附加日志
 ```sql
-/*同步用户*/
+/* NONCDB/CDB 数据库开启归档以及补充日志 */
+-- 开启归档【必须选项】
+alter database archivelog;
+    
+-- 设置归档目录
+alter system set log_archive_dest_1='location=/deploy/oracle/oradata/ARCHIVE' scope=spfile sid='*';
+    
+-- 最小附加日志【必须选项】
+ALTER DATABASE ADD supplemental LOG DATA;
+
+-- 表级别或者库级别选其一
+-- 一般只针对同步表开启即可【必须选项】，未开启会导致同步存在问题
+-- 增加库级别附加日志
+ALTER DATABASE ADD supplemental LOG DATA (ALL) COLUMNS;
+-- 清理库级别附加日志
+ALTER DATABASE DROP supplemental LOG DATA (all) COLUMNS;
+    
+--增加表级别附加日志
+ALTER TABLE marvin.marvin4 ADD supplemental LOG DATA (all) COLUMNS;
+ALTER TABLE marvin.marvin7 ADD supplemental LOG DATA (all) COLUMNS;
+ALTER TABLE marvin.marvin8 ADD supplemental LOG DATA (all) COLUMNS;
+
+--清理表级别附加日志
+ALTER TABLE marvin.marvin4 DROP supplemental LOG DATA (all) COLUMNS;
+ALTER TABLE marvin.marvin7 DROP supplemental LOG DATA (all) COLUMNS;
+ALTER TABLE marvin.marvin8 DROP supplemental LOG DATA (all) COLUMNS;
+
+/* 查看附加日志 */
+-- 数据库级别附加日志查看
+SELECT supplemental_log_data_min min,
+supplemental_log_data_pk pk,
+supplemental_log_data_ui ui,
+supplemental_log_data_fk fk,
+supplemental_log_data_all allc
+FROM v$database;
+
+-- 表级别附加日志查看
+select * from dba_log_groups where upper(owner) = upper('marvin');
+
+-- 查看不同用户的连接数
+select username,count(username) from v$session where username is not null group by username;
+```
+##### NonCDB ORACLE
+```sql
+/* NONCDB 用户创建*/
 /*创建表空间*/
 create tablespace LOGMINER_TBS
-datafile '/data1/oracle/app/oracle/oradata/orcl/logminer.dbf' 
-size 50M autoextend on next 5M maxsize unlimited; 
+datafile '/data1/oracle/app/oracle/oradata/orcl/logminer.dbf'
+size 50M autoextend on next 5M maxsize unlimited;
 
 /*创建临时表空间*/
-create temporary tablespace LOGMINER_TMP_TBL  
-tempfile '/data1/oracle/app/oracle/oradata/orcl/logminer_tmp.dbf' 
-size 50m autoextend on next 50m maxsize 20480m;  
+create temporary tablespace LOGMINER_TMP_TBL
+tempfile '/data1/oracle/app/oracle/oradata/orcl/logminer_tmp.dbf'
+size 50m autoextend on next 50m maxsize 20480m;
 
 /*创建用户*/
-CREATE USER logminer IDENTIFIED BY logminer 
+CREATE USER logminer IDENTIFIED BY logminer
 DEFAULT tablespace LOGMINER_TBS
 temporary tablespace LOGMINER_TMP_TBL;
 
-/*用户角色*/
+/* 配置文件 [source] schema-name 同步用户授权 */
+-- 创建用户 NonCDB 角色
 create role logminer_privs;
 
-/*角色授权*/
+-- 角色授权
 grant create session,
 EXECUTE_CATALOG_ROLE,
 select any transaction,
@@ -155,49 +201,51 @@ grant select on v_$logmnr_contents to logminer_privs;
 -- 仅当Oracle为12c版本时，才需要添加，否则删除此行内容
 grant LOGMINING to logminer_privs;
 
-/*用户授权*/
+-- 用户角色授权
 grant logminer_privs to logminer;
-alter user logminer quota unlimited on users;
-
-
-
-/* 数据库开启归档以及补充日志 */
--- 开启归档【必须选项】
-alter database archivelog;
--- 最小附加日志【必须选项】
-ALTER DATABASE ADD supplemental LOG DATA ;
-
--- 表级别或者库级别选其一，一般只针对同步表开启即可【必须选项】，未开启会导致同步存在问题
---增加表级别附加日志
-ALTER TABLE marvin.marvin4 ADD supplemental LOG DATA (all) COLUMNS;
-ALTER TABLE marvin.marvin7 ADD supplemental LOG DATA (all) COLUMNS;
-ALTER TABLE marvin.marvin8 ADD supplemental LOG DATA (all) COLUMNS;
-
---清理表级别附加日志
-ALTER TABLE marvin.marvin4 DROP supplemental LOG DATA (all) COLUMNS;
-ALTER TABLE marvin.marvin7 DROP supplemental LOG DATA (all) COLUMNS;
-ALTER TABLE marvin.marvin8 DROP supplemental LOG DATA (all) COLUMNS;
-
---增加或删除库级别附加日志【库级别、表级别二选一】
-ALTER DATABASE ADD supplemental LOG DATA (all) COLUMNS;
-ALTER DATABASE DROP supplemental LOG DATA (all) COLUMNS;
-
-/* 查看附加日志 */
--- 数据库级别附加日志查看
-SELECT supplemental_log_data_min min,
-supplemental_log_data_pk pk,
-supplemental_log_data_ui ui,
-supplemental_log_data_fk fk,
-supplemental_log_data_all allc
-FROM v$database;
-
--- 表级别附加日志查看
-select * from dba_log_groups where upper(owner) = upper('marvin');
-
--- 查看不同用户的连接数
-select username,count(username) from v$session where username is not null group by username;
 ```
+##### CDB ORACLE
+```sql
+/* CDB 用户创建 */
+-- CDB/PDB 切换
+alter session set container=CDB$ROOT;
+alter session set container=ORCLPDB;
 
+-- CDB 内创建表空间(需要所有 PDBS 创建同样表空间名)
+-- datafile '/deploy/oracle/oradata/ORCLCDB/logminer01.dbf'  数据文件名不一样
+create tablespace LOGMINER_TBS
+datafile '/deploy/oracle/oradata/ORCLCDB/logminer00.dbf'
+size 50M autoextend on next 5M maxsize unlimited;
+
+-- CDB 内创建临时表空间(需要所有 PDBS 创建同样表空间名)
+-- tempfile '/deploy/oracle/oradata/ORCLCDB/logminer_tmp01.dbf' 数据文件名不一样
+create temporary tablespace LOGMINER_TMP_TBL
+tempfile '/deploy/oracle/oradata/ORCLCDB/logminer_tmp00.dbf'
+size 50m autoextend on next 50m maxsize unlimited;
+
+-- 创建 CDB 用户(如果设置 CDB 用户默认表空间或者临时表空间，则需要所有 PDBS 内创建同样的表空间名，数据文件名不一样)
+CREATE USER c##logminer IDENTIFIED BY logminer
+DEFAULT tablespace LOGMINER_TBS
+temporary tablespace LOGMINER_TMP_TBL;
+
+ALTER USER c##logminer quota unlimited on users;
+
+-- 允许 CDB 用户访问所有 PDBS
+ALTER USER c##logminer SET CONTAINER_DATA=ALL CONTAINER=CURRENT;
+
+-- CDB 用户授权
+GRANT DBA to c##logminer CONTAINER=ALL;
+GRANT CREATE SESSION TO c##logminer CONTAINER=ALL;
+GRANT CREATE TABLE TO c##logminer CONTAINER=ALL;
+GRANT EXECUTE_CATALOG_ROLE TO c##logminer CONTAINER=ALL;
+GRANT EXECUTE ON DBMS_LOGMNR TO c##logminer CONTAINER=ALL;
+GRANT SELECT ON V_$DATABASE TO c##logminer CONTAINER=ALL;
+GRANT SELECT ON V_$LOGMNR_CONTENTS TO c##logminer CONTAINER=ALL;
+GRANT SELECT ON V_$ARCHIVED_LOG TO c##logminer CONTAINER=ALL;
+GRANT SELECT ON V_$LOG TO c##logminer CONTAINER=ALL;
+GRANT SELECT ON V_$LOGFILE TO c##logminer CONTAINER=ALL;
+GRANT RESOURCE, CONNECT TO c##logminer CONTAINER=ALL;
+```
 若直接在命令行中用 `nohup` 启动程序，可能会因为 SIGHUP 信号而退出，建议把 `nohup` 放到脚本里面且不建议用 kill -9，如：
 
 ```shell
