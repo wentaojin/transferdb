@@ -18,9 +18,9 @@ package server
 import (
 	"database/sql"
 	"fmt"
-	"strings"
-
 	"github.com/wentaojin/transferdb/pkg/diff"
+	"strings"
+	"time"
 
 	"github.com/wentaojin/transferdb/pkg/csv"
 
@@ -37,6 +37,12 @@ import (
 	"github.com/wentaojin/transferdb/pkg/reverser"
 )
 
+const (
+	mysqlMaxOpenConn     = 1024
+	mysqlMaxIdleConn     = 256
+	mysqlConnMaxLifeTime = 15 * time.Minute
+)
+
 // 程序运行
 func Run(cfg *service.CfgFile, mode string) error {
 	switch strings.ToLower(strings.TrimSpace(mode)) {
@@ -51,7 +57,7 @@ func Run(cfg *service.CfgFile, mode string) error {
 		}
 	case "prepare":
 		// 表结构转换 - only prepare 阶段
-		engine, err := NewMySQLEnginePrepareDB(cfg.TargetConfig, cfg.AppConfig.SlowlogThreshold, 1024)
+		engine, err := NewMySQLEnginePrepareDB(cfg.TargetConfig, cfg.AppConfig.SlowlogThreshold, mysqlMaxOpenConn)
 		if err != nil {
 			return err
 		}
@@ -60,7 +66,7 @@ func Run(cfg *service.CfgFile, mode string) error {
 		}
 	case "reverse":
 		// 表结构转换 - reverse 阶段
-		engine, err := NewEngineDB(cfg.SourceConfig, cfg.TargetConfig, cfg.AppConfig.SlowlogThreshold, 1024)
+		engine, err := NewEngineDB(cfg.SourceConfig, cfg.TargetConfig, cfg.AppConfig.SlowlogThreshold, mysqlMaxOpenConn)
 		if err != nil {
 			return err
 		}
@@ -69,7 +75,7 @@ func Run(cfg *service.CfgFile, mode string) error {
 		}
 	case "check":
 		// 表结构校验 - 上下游
-		engine, err := NewEngineDB(cfg.SourceConfig, cfg.TargetConfig, cfg.AppConfig.SlowlogThreshold, 1024)
+		engine, err := NewEngineDB(cfg.SourceConfig, cfg.TargetConfig, cfg.AppConfig.SlowlogThreshold, mysqlMaxOpenConn)
 		if err != nil {
 			return err
 		}
@@ -78,7 +84,7 @@ func Run(cfg *service.CfgFile, mode string) error {
 		}
 	case "diff":
 		// 数据校验 - 以上游为准
-		engine, err := NewEngineDB(cfg.SourceConfig, cfg.TargetConfig, cfg.AppConfig.SlowlogThreshold, 1024)
+		engine, err := NewEngineDB(cfg.SourceConfig, cfg.TargetConfig, cfg.AppConfig.SlowlogThreshold, mysqlMaxOpenConn)
 		if err != nil {
 			return err
 		}
@@ -98,7 +104,7 @@ func Run(cfg *service.CfgFile, mode string) error {
 		}
 	case "csv":
 		// csv 全量数据导出
-		engine, err := NewEngineDB(cfg.SourceConfig, cfg.TargetConfig, cfg.AppConfig.SlowlogThreshold, 1024)
+		engine, err := NewEngineDB(cfg.SourceConfig, cfg.TargetConfig, cfg.AppConfig.SlowlogThreshold, mysqlMaxOpenConn)
 		if err != nil {
 			return err
 		}

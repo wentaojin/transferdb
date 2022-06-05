@@ -6,10 +6,13 @@
   <component name="ChangeListManager">
     <list default="true" id="a67576d0-c4df-4b83-a792-1e43567e1978" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/user_guaid.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/user_guaid.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/conf/config.toml" beforeDir="false" afterPath="$PROJECT_DIR$/conf/config.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/report_marvin.html" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/go.mod" beforeDir="false" afterPath="$PROJECT_DIR$/go.mod" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/go.sum" beforeDir="false" afterPath="$PROJECT_DIR$/go.sum" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/mysql.go" beforeDir="false" afterPath="$PROJECT_DIR$/server/mysql.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/server/oracle.go" beforeDir="false" afterPath="$PROJECT_DIR$/server/oracle.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/service/model_meta.go" beforeDir="false" afterPath="$PROJECT_DIR$/service/model_meta.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/test/oracle.go" beforeDir="false" afterPath="$PROJECT_DIR$/test/oracle.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/server.go" beforeDir="false" afterPath="$PROJECT_DIR$/server/server.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -81,7 +84,7 @@
       <recent name="$PROJECT_DIR$/storage/element" />
     </key>
   </component>
-  <component name="RunManager" selected="Go Build.go build github.com/wentaojin/transferdb/test (3)">
+  <component name="RunManager" selected="Go Build.go build github.com/wentaojin/transferdb/test (4)">
     <configuration default="true" type="GoApplicationRunConfiguration" factoryName="Go Application">
       <module name="transferdb" />
       <working_directory value="$PROJECT_DIR$" />
@@ -118,13 +121,13 @@
       <filePath value="$PROJECT_DIR$/test/oracle.go" />
       <method v="2" />
     </configuration>
-    <configuration name="go build github.com/wentaojin/transferdb/test (5)" type="GoApplicationRunConfiguration" factoryName="Go Application" temporary="true" nameIsGenerated="true">
+    <configuration name="go build github.com/wentaojin/transferdb/test (4)" type="GoApplicationRunConfiguration" factoryName="Go Application" temporary="true" nameIsGenerated="true">
       <module name="transferdb" />
       <working_directory value="$PROJECT_DIR$" />
       <kind value="FILE" />
       <package value="github.com/wentaojin/transferdb/test" />
       <directory value="$PROJECT_DIR$" />
-      <filePath value="$PROJECT_DIR$/test/template.go" />
+      <filePath value="$PROJECT_DIR$/test/grpool.go" />
       <method v="2" />
     </configuration>
     <configuration name="go build github.com/wentaojin/transferdb/test" type="GoApplicationRunConfiguration" factoryName="Go Application" temporary="true" nameIsGenerated="true">
@@ -148,11 +151,11 @@
     </configuration>
     <recent_temporary>
       <list>
+        <item itemvalue="Go Build.go build github.com/wentaojin/transferdb/test (4)" />
         <item itemvalue="Go Build.go build github.com/wentaojin/transferdb/test (3)" />
         <item itemvalue="Go Build.go build github.com/wentaojin/transferdb/test" />
         <item itemvalue="Go Build.go build github.com/wentaojin/transferdb/test (1)" />
         <item itemvalue="Go Build.go build github.com/wentaojin/transferdb/test (2)" />
-        <item itemvalue="Go Build.go build github.com/wentaojin/transferdb/test (5)" />
       </list>
     </recent_temporary>
   </component>

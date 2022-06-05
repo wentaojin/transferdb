@@ -94,11 +94,11 @@ chunk-size = 100000
 # 用于初始化表任务并发数【写下游 meta 数据库】
 task-threads = 128
 # 表导出导入并发数，同时处理多少张上游表，可动态变更
-table-threads = 8
+table-threads = 4
 # 单表 SQL 执行并发数，表示同时多少并发 SQL 读取上游表数据，可动态变更
-sql-threads = 64
+sql-threads = 32
 # 每 sql-threads 线程写下游并发数，可动态变更
-apply-threads = 128
+apply-threads = 64
 # 关于全量断点恢复
 #   - 若想断点恢复，设置 enable-checkpoint = true,首次一旦运行则 chunk-size 数不能调整，
 #   - 若不想断点恢复或者重新调整 chunk-size 数，设置 enable-checkpoint = false,重新运行全量任务
@@ -106,30 +106,29 @@ apply-threads = 128
 enable-checkpoint = true
 
 [all]
-# logminer 挖掘最长耗时，单位: 秒
+# logminer 单次挖掘最长耗时，单位: 秒
 logminer-query-timeout   = 300
 # 并发筛选 oracle 日志数
 filter-threads = 16
 # 并发表应用数，同时处理多少张表
-apply-threads = 3
+apply-threads = 4
 # apply-threads 每个表并发处理最大工作对列
-worker-queue = 3
+worker-queue = 128
 # apply-threads 每个表并发处理最大任务分发数
-worker-threads = 3
+worker-threads = 64
 
 [source]
 # 源端 oracle 连接串
 # 若需要增量数据同步，则需要 logminer 权限
-username = "marvin"
-password = "marvin"
+username = "c##logminer"
+password = "logminer"
 host = "172.16.4.93"
 port = 1521
-service-name = "oracl"
+service-name = "orclpdb"
 # oracle instance client dir
 lib-dir = "/Users/marvin/storehouse/oracle/instantclient_19_8"
 # 配置 oracle 连接参数
-connect-params = "poolMinSessions=10&poolMaxSessions=1000&poolWaitTimeout=60s&poolSessionMaxLifetime=1h&poolSessionTimeout=5m&poolIncrement=10&timezone=Local"
-# 配置 oracle 连接会话 session 变量
+connect-params = "poolMinSessions=50&poolMaxSessions=1000&poolWaitTimeout=360s&poolSessionMaxLifetime=2h&poolSessionTimeout=2h&poolIncrement=30&timezone=Local"# 配置 oracle 连接会话 session 变量
 # All/Full/CSV 模式内置 Date/Timestamp/Interval Year/Day 数据类型格式化
 # Date 'yyyy-mm-dd hh24:mi:ss'
 # Timestamp 'yyyy-mm-dd hh24:mi:ss.ffx', x 根据 timestamp 精度格式化, 如果超过 6, 按精度 6 格式化字符
@@ -140,7 +139,7 @@ schema-name = "marvin"
 # 源端迁移任务表（只用于 prepare/reverse/check/all/full 阶段，gather 阶段不适用，gather 只适用于 schema 级别）
 # include-table 和 exclude-table 不能同时配置，两者只能配置一个,如果两个都没配置则 Schema 内表全迁移
 # include-table 和 exclude-table 支持正则表达式以及通配符（tab_*/tab*）
-include-table = ["t"]
+include-table = ["marvin*"]
 exclude-table = []
 
 # 只用于 prepare/reverse/check/all/full 阶段，gather 阶段不适用

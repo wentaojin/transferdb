@@ -18,19 +18,12 @@ package server
 import (
 	"fmt"
 	"go.uber.org/zap"
-	"time"
-
 	"gorm.io/gorm/schema"
 
 	"github.com/wentaojin/transferdb/service"
 
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
-)
-
-const (
-	// 数据库允许最大连接数
-	MysqlMaxConnection = 4096
 )
 
 // 创建 mysql 数据库引擎
@@ -99,13 +92,9 @@ func NewMySQLEngineGeneralDB(mysqlCfg service.TargetConfig, slowQueryThreshold, 
 		return &service.Engine{}, fmt.Errorf("error on ping mysql database connection [meta-schema]: %v", err)
 	}
 
-	sqlDB.SetMaxIdleConns(100)
-	if mysqlMaxOpenConn >= MysqlMaxConnection {
-		sqlDB.SetMaxOpenConns(MysqlMaxConnection)
-	} else {
-		sqlDB.SetMaxOpenConns(mysqlMaxOpenConn)
-	}
-	sqlDB.SetConnMaxLifetime(time.Minute * 15)
+	sqlDB.SetMaxIdleConns(mysqlMaxIdleConn)
+	sqlDB.SetMaxOpenConns(mysqlMaxOpenConn)
+	sqlDB.SetConnMaxLifetime(mysqlConnMaxLifeTime)
 
 	return &service.Engine{
 		MysqlDB: sqlDB,

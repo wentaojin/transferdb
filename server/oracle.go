@@ -37,7 +37,7 @@ func NewOracleDBEngine(oraCfg service.SourceConfig) (*sql.DB, error) {
 	// https://github.com/godror/godror/blob/db9cd12d89cdc1c60758aa3f36ece36cf5a61814/doc/connection.md
 	// https://godror.github.io/godror/doc/connection.html
 	// 异构池 heterogeneousPool = 1，即程序连接用户与访问 oracle schema 用户名不一致
-	connString := fmt.Sprintf("oracle://@%s/%s?%s&heterogeneousPool=1",
+	connString := fmt.Sprintf("oracle://@%s/%s?%s&connectionClass=POOL_CONNECTION_CLASS&heterogeneousPool=1",
 		utils.StringsBuilder(oraCfg.Host, ":", strconv.Itoa(oraCfg.Port)),
 		oraCfg.ServiceName, oraCfg.ConnectParams)
 
@@ -60,6 +60,9 @@ func NewOracleDBEngine(oraCfg service.SourceConfig) (*sql.DB, error) {
 	case "windows", "darwin":
 		oraDSN.LibDir = oraCfg.LibDir
 	}
+
+	// godror logger 日志输出
+	// godror.SetLogger(zapr.NewLogger(zap.L()))
 
 	sqlDB := sql.OpenDB(godror.NewConnector(oraDSN))
 	sqlDB.SetMaxIdleConns(0)
