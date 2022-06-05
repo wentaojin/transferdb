@@ -4,8 +4,11 @@ go 1.16
 
 require (
 	github.com/BurntSushi/toml v0.4.1
+	github.com/cespare/xxhash/v2 v2.1.2 // indirect
+	github.com/fatih/color v1.13.0 // indirect
+	github.com/go-sql-driver/mysql v1.6.0
 	github.com/godror/godror v0.33.0
-	github.com/gogf/gf/v2 v2.0.6
+	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/jedib0t/go-pretty/v6 v6.2.4
 	github.com/pingcap/errors v0.11.5-0.20201126102027-b0a155152ca3 // indirect
 	github.com/pingcap/log v0.0.0-20201112100606-8f1e84a3abc8
@@ -19,10 +22,12 @@ require (
 	github.com/xxjwxc/gowp v0.0.0-20200603141413-57c3ba7108be
 	go.uber.org/multierr v1.7.0 // indirect
 	go.uber.org/zap v1.21.0
+	golang.org/x/net v0.0.0-20211112202133-69e39bad7dc2 // indirect
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/text v0.3.8-0.20211105212822-18b340fc7af2
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
-	gorm.io/driver/mysql v1.3.3
+	gopkg.in/yaml.v2 v2.4.0 // indirect
+	gorm.io/driver/mysql v1.3.4
 	gorm.io/gorm v1.23.5
 	honnef.co/go/tools v0.1.1 // indirect
 )

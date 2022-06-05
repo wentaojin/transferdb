@@ -18,11 +18,12 @@ package server
 import (
 	"fmt"
 	"go.uber.org/zap"
+	"gorm.io/driver/mysql"
 	"gorm.io/gorm/schema"
 
 	"github.com/wentaojin/transferdb/service"
 
-	"gorm.io/driver/mysql"
+	_ "github.com/go-sql-driver/mysql"
 	"gorm.io/gorm"
 )
 
@@ -35,7 +36,10 @@ func NewMySQLEnginePrepareDB(mysqlCfg service.TargetConfig, slowQueryThreshold, 
 	// 初始化 gorm 日志记录器
 	logger := service.NewGormLogger(zap.L(), slowQueryThreshold)
 	logger.SetAsDefault()
-	gormDB, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
+	gormDB, err := gorm.Open(mysql.New(mysql.Config{
+		DriverName: "mysql",
+		DSN:        dsn,
+	}), &gorm.Config{
 		Logger: logger,
 		NamingStrategy: schema.NamingStrategy{
 			SingularTable: true, // 使用单数表名
@@ -72,7 +76,10 @@ func NewMySQLEngineGeneralDB(mysqlCfg service.TargetConfig, slowQueryThreshold, 
 
 	logger := service.NewGormLogger(zap.L(), slowQueryThreshold)
 	logger.SetAsDefault()
-	gormDB, err = gorm.Open(mysql.Open(dsn), &gorm.Config{
+	gormDB, err = gorm.Open(mysql.New(mysql.Config{
+		DriverName: "mysql",
+		DSN:        dsn,
+	}), &gorm.Config{
 		// 禁用外键（指定外键时不会在 mysql 创建真实的外键约束）
 		DisableForeignKeyConstraintWhenMigrating: true,
 		PrepareStmt:                              true,
