@@ -18,11 +18,11 @@ package server
 import (
 	"database/sql"
 	"fmt"
+	"github.com/wentaojin/transferdb/utils"
 	"os"
 	"runtime"
 	"strconv"
-
-	"github.com/wentaojin/transferdb/utils"
+	"strings"
 
 	"github.com/wentaojin/transferdb/service"
 
@@ -36,8 +36,8 @@ func NewOracleDBEngine(oraCfg service.SourceConfig) (*sql.DB, error) {
 	// https://pkg.go.dev/github.com/godror/godror
 	// https://github.com/godror/godror/blob/db9cd12d89cdc1c60758aa3f36ece36cf5a61814/doc/connection.md
 	// https://godror.github.io/godror/doc/connection.html
-	// 异构池 heterogeneousPool = 1，即程序连接用户与访问 oracle schema 用户名不一致
-	connString := fmt.Sprintf("oracle://@%s/%s?%s&connectionClass=POOL_CONNECTION_CLASS&heterogeneousPool=1",
+	// 启用异构池 heterogeneousPool 即程序连接用户与访问 oracle schema 用户名不一致
+	connString := fmt.Sprintf("oracle://@%s/%s?connectionClass=POOL_CONNECTION_CLASS&heterogeneousPool=1&%s",
 		utils.StringsBuilder(oraCfg.Host, ":", strconv.Itoa(oraCfg.Port)),
 		oraCfg.ServiceName, oraCfg.ConnectParams)
 
@@ -47,7 +47,10 @@ func NewOracleDBEngine(oraCfg service.SourceConfig) (*sql.DB, error) {
 	}
 
 	oraDSN.Username, oraDSN.Password = oraCfg.Username, godror.NewPassword(oraCfg.Password)
-	oraDSN.OnInitStmts = oraCfg.SessionParams
+
+	oraDSN.OnInitStmts = append(oraDSN.OnInitStmts,
+		append(oraCfg.SessionParams,
+			utils.StringsBuilder("ALTER SESSION SET CURRENT_SCHEMA = ", strings.ToUpper(oraCfg.SchemaName)))...)
 
 	// libDir won't have any effect on Linux for linking reasons to do with Oracle's libnnz library that are proving to be intractable.
 	// You must set LD_LIBRARY_PATH or run ldconfig before your process starts.

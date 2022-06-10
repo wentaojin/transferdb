@@ -113,17 +113,17 @@ func (t Table) GenCreateTableSQL(modifyTableName string) (string, []string, erro
 	// tables 表结构
 	pkMeta, pkINFO, err := t.reverserOracleTablePKToMySQL()
 	if err != nil {
-		return "", []string{}, err
+		return createTableSQL, compIndexINFO, err
 	}
 
 	columnMetaSlice, singlePKColumnTypeIsInteger, err := t.reverserOracleTableColumnToMySQL(t.OracleCollation, pkINFO)
 	if err != nil {
-		return "", []string{}, err
+		return createTableSQL, compIndexINFO, err
 	}
 
 	tablesMap, err := t.Engine.GetOracleTableComment(t.SourceSchemaName, t.SourceTableName)
 	if err != nil {
-		return "", []string{}, err
+		return createTableSQL, compIndexINFO, err
 	}
 
 	// table 表注释
@@ -150,6 +150,13 @@ func (t Table) GenCreateTableSQL(modifyTableName string) (string, []string, erro
 
 	// table-option 表后缀可选项
 	if t.TargetDBType == utils.MySQLTargetDBType || t.TargetTableOption == "" {
+		zap.L().Warn("reverse oracle table struct",
+			zap.String("schema", t.SourceSchemaName),
+			zap.String("table", t.SourceTableName),
+			zap.String("comment", tablesMap[0]["COMMENTS"]),
+			zap.Strings("columns", columnMetaSlice),
+			zap.Strings("pk", pkMeta),
+			zap.String("table-option", "table-option is null, would be disabled"))
 		// table struct
 		if tableComment != "" {
 			createTableSQL = fmt.Sprintf("CREATE TABLE `%s`.`%s` (\n%s\n) ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s COMMENT='%s';",
@@ -166,6 +173,15 @@ func (t Table) GenCreateTableSQL(modifyTableName string) (string, []string, erro
 		}
 		switch strings.ToUpper(clusteredIdxVal) {
 		case utils.TiDBClusteredIndexOFFValue:
+			zap.L().Warn("reverse oracle table struct",
+				zap.String("schema", t.SourceSchemaName),
+				zap.String("table", t.SourceTableName),
+				zap.String("comment", tablesMap[0]["COMMENTS"]),
+				zap.Strings("columns", columnMetaSlice),
+				zap.Strings("pk", pkMeta),
+				zap.String("tidb_enable_clustered_index", utils.TiDBClusteredIndexOFFValue),
+				zap.String("table-option", "tidb_enable_clustered_index is off, would be enabled"))
+
 			if tableComment != "" && t.TargetTableOption != "" {
 				createTableSQL = fmt.Sprintf("CREATE TABLE `%s`.`%s` (\n%s\n) ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s %s COMMENT='%s';",
 					t.TargetSchemaName, modifyTableName, tableMeta, strings.ToLower(utils.MySQLCharacterSet), tableCollation, strings.ToUpper(t.TargetTableOption), tableComment)
@@ -180,6 +196,15 @@ func (t Table) GenCreateTableSQL(modifyTableName string) (string, []string, erro
 					t.TargetSchemaName, modifyTableName, tableMeta, strings.ToLower(utils.MySQLCharacterSet), tableCollation, tableComment)
 			}
 		case utils.TiDBClusteredIndexONValue:
+			zap.L().Warn("reverse oracle table struct",
+				zap.String("schema", t.SourceSchemaName),
+				zap.String("table", t.SourceTableName),
+				zap.String("comment", tablesMap[0]["COMMENTS"]),
+				zap.Strings("columns", columnMetaSlice),
+				zap.Strings("pk", pkMeta),
+				zap.String("tidb_enable_clustered_index", utils.TiDBClusteredIndexONValue),
+				zap.String("table-option", "tidb_enable_clustered_index is on, would be disabled"))
+
 			if tableComment != "" {
 				createTableSQL = fmt.Sprintf("CREATE TABLE `%s`.`%s` (\n%s\n) ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s COMMENT='%s';",
 					t.TargetSchemaName, modifyTableName, tableMeta, strings.ToLower(utils.MySQLCharacterSet), tableCollation, tableComment)
@@ -200,7 +225,9 @@ func (t Table) GenCreateTableSQL(modifyTableName string) (string, []string, erro
 					zap.String("comment", tablesMap[0]["COMMENTS"]),
 					zap.Strings("columns", columnMetaSlice),
 					zap.Strings("pk", pkMeta),
-					zap.String("alter-primary-key", "not support, would be disable table-option"))
+					zap.String("tidb_enable_clustered_index", strings.ToUpper(clusteredIdxVal)),
+					zap.String("alter-primary-key", "not exist"),
+					zap.String("table-option", "alter-primary-key isn't exits, would be disable"))
 				if tableComment != "" {
 					createTableSQL = fmt.Sprintf("CREATE TABLE `%s`.`%s` (\n%s\n) ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s COMMENT='%s';",
 						t.TargetSchemaName, modifyTableName, tableMeta, strings.ToLower(utils.MySQLCharacterSet), tableCollation, tableComment)
@@ -208,40 +235,77 @@ func (t Table) GenCreateTableSQL(modifyTableName string) (string, []string, erro
 					createTableSQL = fmt.Sprintf("CREATE TABLE `%s`.`%s` (\n%s\n) ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s;",
 						t.TargetSchemaName, modifyTableName, tableMeta, strings.ToLower(utils.MySQLCharacterSet), tableCollation)
 				}
-			}
-
-			var p fastjson.Parser
-			v, err := p.Parse(pkVal)
-			if err != nil {
-				return createTableSQL, compIndexINFO, err
-			}
-
-			// alter-primary-key = false
-			// 单列主键是否整型
-			if len(pkINFO) == 1 && singlePKColumnTypeIsInteger {
-				if tableComment != "" {
-					createTableSQL = fmt.Sprintf("CREATE TABLE `%s`.`%s` (\n%s\n) ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s COMMENT='%s';",
-						t.TargetSchemaName, modifyTableName, tableMeta, strings.ToLower(utils.MySQLCharacterSet), tableCollation, tableComment)
-				} else {
-					createTableSQL = fmt.Sprintf("CREATE TABLE `%s`.`%s` (\n%s\n) ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s;",
-						t.TargetSchemaName, modifyTableName, tableMeta, strings.ToLower(utils.MySQLCharacterSet), tableCollation)
+			} else {
+				var p fastjson.Parser
+				v, err := p.Parse(pkVal)
+				if err != nil {
+					return createTableSQL, compIndexINFO, err
 				}
-			}
 
-			// alter-primary-key = true / 联合主键 len(pkINFO)>1 table-option 生效
-			if v.GetBool("alter-primary-key") || len(pkINFO) > 1 || !singlePKColumnTypeIsInteger {
-				if tableComment != "" && t.TargetTableOption != "" {
-					createTableSQL = fmt.Sprintf("CREATE TABLE `%s`.`%s` (\n%s\n) ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s %s COMMENT='%s';",
-						t.TargetSchemaName, modifyTableName, tableMeta, strings.ToLower(utils.MySQLCharacterSet), tableCollation, strings.ToUpper(t.TargetTableOption), tableComment)
-				} else if tableComment == "" && t.TargetTableOption != "" {
-					createTableSQL = fmt.Sprintf("CREATE TABLE `%s`.`%s` (\n%s\n) ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s %s;",
-						t.TargetSchemaName, modifyTableName, tableMeta, strings.ToLower(utils.MySQLCharacterSet), tableCollation, strings.ToUpper(t.TargetTableOption))
-				} else if tableComment == "" && t.TargetTableOption == "" {
-					createTableSQL = fmt.Sprintf("CREATE TABLE `%s`.`%s` (\n%s\n) ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s;",
-						t.TargetSchemaName, modifyTableName, tableMeta, strings.ToLower(utils.MySQLCharacterSet), tableCollation)
+				isAlterPK := v.GetBool("alter-primary-key")
+
+				// alter-primary-key = false
+				// 整型主键 table-option 不生效
+				// 单列主键是整型
+				if !isAlterPK && len(pkINFO) == 1 && singlePKColumnTypeIsInteger {
+					zap.L().Warn("reverse oracle table struct",
+						zap.String("schema", t.SourceSchemaName),
+						zap.String("table", t.SourceTableName),
+						zap.String("comment", tablesMap[0]["COMMENTS"]),
+						zap.Strings("columns", columnMetaSlice),
+						zap.Strings("pk", pkMeta),
+						zap.String("tidb_enable_clustered_index", strings.ToUpper(clusteredIdxVal)),
+						zap.Bool("alter-primary-key", isAlterPK),
+						zap.String("table-option", "integer primary key, would be disable"))
+
+					if tableComment != "" {
+						createTableSQL = fmt.Sprintf("CREATE TABLE `%s`.`%s` (\n%s\n) ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s COMMENT='%s';",
+							t.TargetSchemaName, modifyTableName, tableMeta, strings.ToLower(utils.MySQLCharacterSet), tableCollation, tableComment)
+					} else {
+						createTableSQL = fmt.Sprintf("CREATE TABLE `%s`.`%s` (\n%s\n) ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s;",
+							t.TargetSchemaName, modifyTableName, tableMeta, strings.ToLower(utils.MySQLCharacterSet), tableCollation)
+					}
 				} else {
-					createTableSQL = fmt.Sprintf("CREATE TABLE `%s`.`%s` (\n%s\n) ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s COMMENT='%s';",
-						t.TargetSchemaName, modifyTableName, tableMeta, strings.ToLower(utils.MySQLCharacterSet), tableCollation, tableComment)
+					// table-option 生效
+					// alter-primary-key = true
+					// alter-primary-key = false && 联合主键 len(pkINFO)>1
+					// alter-primary-key = false && 非整型主键
+					if isAlterPK || (!isAlterPK && len(pkINFO) > 1) || (!isAlterPK && !singlePKColumnTypeIsInteger) {
+						zap.L().Warn("reverse oracle table struct",
+							zap.String("schema", t.SourceSchemaName),
+							zap.String("table", t.SourceTableName),
+							zap.String("comment", tablesMap[0]["COMMENTS"]),
+							zap.Strings("columns", columnMetaSlice),
+							zap.Strings("pk", pkMeta),
+							zap.String("tidb_enable_clustered_index", strings.ToUpper(clusteredIdxVal)),
+							zap.Bool("alter-primary-key", isAlterPK),
+							zap.String("table-option", "enabled"))
+						if tableComment != "" && t.TargetTableOption != "" {
+							createTableSQL = fmt.Sprintf("CREATE TABLE `%s`.`%s` (\n%s\n) ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s %s COMMENT='%s';",
+								t.TargetSchemaName, modifyTableName, tableMeta, strings.ToLower(utils.MySQLCharacterSet), tableCollation, strings.ToUpper(t.TargetTableOption), tableComment)
+						} else if tableComment == "" && t.TargetTableOption != "" {
+							createTableSQL = fmt.Sprintf("CREATE TABLE `%s`.`%s` (\n%s\n) ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s %s;",
+								t.TargetSchemaName, modifyTableName, tableMeta, strings.ToLower(utils.MySQLCharacterSet), tableCollation, strings.ToUpper(t.TargetTableOption))
+						} else if tableComment == "" && t.TargetTableOption == "" {
+							createTableSQL = fmt.Sprintf("CREATE TABLE `%s`.`%s` (\n%s\n) ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s;",
+								t.TargetSchemaName, modifyTableName, tableMeta, strings.ToLower(utils.MySQLCharacterSet), tableCollation)
+						} else {
+							createTableSQL = fmt.Sprintf("CREATE TABLE `%s`.`%s` (\n%s\n) ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s COMMENT='%s';",
+								t.TargetSchemaName, modifyTableName, tableMeta, strings.ToLower(utils.MySQLCharacterSet), tableCollation, tableComment)
+						}
+					} else {
+						zap.L().Error("reverse oracle table struct",
+							zap.String("schema", t.SourceSchemaName),
+							zap.String("table", t.SourceTableName),
+							zap.String("comment", tablesMap[0]["COMMENTS"]),
+							zap.Strings("columns", columnMetaSlice),
+							zap.Strings("pk", pkMeta),
+							zap.String("tidb_enable_clustered_index", strings.ToUpper(clusteredIdxVal)),
+							zap.Bool("alter-primary-key", isAlterPK),
+							zap.String("table-option", "disabled"),
+							zap.Error(fmt.Errorf("not support")))
+						return createTableSQL, compIndexINFO, fmt.Errorf("reverse oracle table struct error: table-option not support")
+					}
 				}
 			}
 		}
@@ -624,7 +688,7 @@ func (t Table) reverserOracleTableColumnToMySQL(oraCollation bool, pkColumnName 
 			columnMetas = append(columnMetas, columnMeta)
 
 			// 单列主键数据类型获取判断
-			if strings.ToUpper(pkColumnName[0]) == strings.ToUpper(rowCol["COLUMN_NAME"]) {
+			if strings.ToUpper(pkColumnName[0]) == utils.StringsBuilder("`", strings.ToUpper(rowCol["COLUMN_NAME"]), "`") {
 				// Map 规则转换后的字段对应数据类型
 				// columnMeta 视角 columnName columnType ....
 				columnType := strings.Fields(columnMeta)[1]
