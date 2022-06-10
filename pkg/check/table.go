@@ -129,7 +129,7 @@ func NewOracleTableINFO(schemaName, tableName string, engine *service.Engine, so
 		TableName:  tableName,
 	}
 	// table collation
-	tableCollation, err := generateTableCollation(nlsComp, oracleCollation, sourceSchemaCollation, sourceTableCollation)
+	tableCollation, err := genTableCollation(nlsComp, oracleCollation, sourceSchemaCollation, sourceTableCollation)
 	if err != nil {
 		return oraTable, err
 	}
@@ -235,7 +235,7 @@ func GetOracleTableColumn(schemaName, tableName string, engine *service.Engine, 
 			MySQLOriginDataDefault:  "", // only mysql
 		}
 
-		columnCollation, err := generateTableColumnCollation(nlsComp, oraCollation, sourceSchemaCollation, sourceTableCollation, strings.ToUpper(rowCol["COLLATION"]))
+		columnCollation, err := genTableColumnCollation(nlsComp, oraCollation, sourceSchemaCollation, sourceTableCollation, strings.ToUpper(rowCol["COLLATION"]))
 		if err != nil {
 			return columns, "", err
 		}

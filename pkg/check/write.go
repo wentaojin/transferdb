@@ -136,7 +136,7 @@ func (d *DiffWriter) DiffTable() error {
 	}
 
 	// 1、表字段级别字符集以及排序规则校验 -> 基于原表字段类型以及字符集、排序规则
-	// 2、下游表字段数检查，多了
+	// 2、下游表字段数检查多了
 	zap.L().Info("check table",
 		zap.String("table column character set and collation check", fmt.Sprintf("%s.%s", d.TargetSchemaName, d.TableName)))
 	builder.WriteString(d.columnCharacterSetAndCollationRuleCheck(oracleTable, mysqlTable))
@@ -427,10 +427,20 @@ func (d *DiffWriter) columnCharacterSetAndCollationRuleCheck(oracleTable, mysqlT
 
 		var sqlStrings []string
 		for mysqlColName, mysqlColInfo := range delColumnsMap {
-			t.AppendRows([]table.Row{
-				{d.TableName, mysqlColName,
-					fmt.Sprintf("%s(%s)", mysqlColInfo.DataType, mysqlColInfo.DataLength), "Drop MySQL Table Column"},
-			})
+			// TIMESTAMP/DATETIME 时间字段特殊处理
+			// 数据类型内自带精度
+			if (strings.Contains(strings.ToUpper(mysqlColInfo.DataType), "TIMESTAMP")) || strings.Contains(strings.ToUpper(mysqlColInfo.DataType), "DATETIME") {
+				t.AppendRows([]table.Row{
+					{d.TableName, mysqlColName,
+						fmt.Sprintf("%s(%s)", mysqlColInfo.DataType, mysqlColInfo.DatetimePrecision), "Drop MySQL Table Column"},
+				})
+			} else {
+				t.AppendRows([]table.Row{
+					{d.TableName, mysqlColName,
+						fmt.Sprintf("%s(%s)", mysqlColInfo.DataType, mysqlColInfo.DataLength), "Drop MySQL Table Column"},
+				})
+			}
+
 			sqlStrings = append(sqlStrings, fmt.Sprintf("ALTER TABLE %s.%s DROP COLUMN %s;", d.TargetSchemaName, d.TableName, mysqlColName))
 		}
 
@@ -457,7 +467,7 @@ func (d *DiffWriter) oracleColumnCountsCheck(oracleTable, mysqlTable *Table) (st
 
 		t := table.NewWriter()
 		t.SetStyle(table.StyleLight)
-		t.AppendHeader(table.Row{"TABLE", "COLUMN", "MYSQL", "SUGGEST"})
+		t.AppendHeader(table.Row{"TABLE", "COLUMN", "ORACLE", "SUGGEST"})
 
 		var sqlStrings []string
 		for oracleColName, oracleColInfo := range addColumnsMap {
@@ -465,43 +475,35 @@ func (d *DiffWriter) oracleColumnCountsCheck(oracleTable, mysqlTable *Table) (st
 				columnMeta string
 				err        error
 			)
-			if d.SourceDBCollation {
-				columnMeta, err = reverser.ReverseOracleTableColumnMapRule(
-					d.SourceSchemaName,
-					d.TableName,
-					oracleColName,
-					oracleColInfo.DataType,
-					oracleColInfo.NULLABLE,
-					oracleColInfo.Comment,
-					oracleColInfo.DataDefault,
-					oracleColInfo.DataScale,
-					oracleColInfo.DataPrecision,
-					oracleColInfo.DataLength,
-					oracleColInfo.Collation,
-					d.Engine)
-			} else {
-				columnMeta, err = reverser.ReverseOracleTableColumnMapRule(
-					d.SourceSchemaName,
-					d.TableName,
-					oracleColName,
-					oracleColInfo.DataType,
-					oracleColInfo.NULLABLE,
-					oracleColInfo.Comment,
-					oracleColInfo.DataDefault,
-					oracleColInfo.DataScale,
-					oracleColInfo.DataPrecision,
-					oracleColInfo.DataLength,
-					"",
-					d.Engine)
-			}
+			columnMeta, err = OracleTableColumnMapRuleReverse(d.SourceSchemaName,
+				d.TableName,
+				oracleColName,
+				oracleColInfo.DataType,
+				oracleColInfo.NULLABLE,
+				oracleColInfo.Comment,
+				oracleColInfo.DataDefault,
+				oracleColInfo.DataScale,
+				oracleColInfo.DataPrecision,
+				oracleColInfo.DataLength,
+				oracleColInfo.CharacterSet,
+				oracleColInfo.Collation,
+				d.Engine)
 			if err != nil {
 				return "", err
 			}
-
-			t.AppendRows([]table.Row{
-				{d.TableName, oracleColName,
-					fmt.Sprintf("%s(%s)", oracleColInfo.DataType, oracleColInfo.DataLength), "Add MySQL Table Column"},
-			})
+			// TIMESTAMP 时间字段特殊处理
+			// 数据类型内自带精度
+			if strings.Contains(strings.ToUpper(oracleColInfo.DataType), "TIMESTAMP") {
+				t.AppendRows([]table.Row{
+					{d.TableName, oracleColName,
+						fmt.Sprintf("%s", oracleColInfo.DataType), "Add MySQL Table Column"},
+				})
+			} else {
+				t.AppendRows([]table.Row{
+					{d.TableName, oracleColName,
+						fmt.Sprintf("%s(%s)", oracleColInfo.DataType, oracleColInfo.DataLength), "Add MySQL Table Column"},
+				})
+			}
 			sqlStrings = append(sqlStrings, fmt.Sprintf("ALTER TABLE %s.%s ADD COLUMN %s;", d.TargetSchemaName, d.TableName, columnMeta))
 		}
 
@@ -706,10 +708,10 @@ func (d *DiffWriter) indexRuleCheck(oracleTable, mysqlTable *Table) (string, err
 
 func (d *DiffWriter) columnRuleCheck(oracleTable, mysqlTable *Table) (string, error) {
 	var (
-		diffColumnMsgs    []string
-		createColumnMetas []string
-		tableRowArray     []table.Row
-		builder           strings.Builder
+		diffColumnMsgs []string
+		//createColumnMetas []string
+		tableRowArray []table.Row
+		builder       strings.Builder
 	)
 
 	for oracleColName, oracleColInfo := range oracleTable.Columns {
@@ -731,46 +733,7 @@ func (d *DiffWriter) columnRuleCheck(oracleTable, mysqlTable *Table) (string, er
 			}
 			continue
 		}
-
-		var (
-			columnMeta string
-			err        error
-		)
-		if d.SourceDBCollation {
-			columnMeta, err = reverser.ReverseOracleTableColumnMapRule(
-				d.SourceSchemaName,
-				d.TableName,
-				oracleColName,
-				oracleColInfo.DataType,
-				oracleColInfo.NULLABLE,
-				oracleColInfo.Comment,
-				oracleColInfo.DataDefault,
-				oracleColInfo.DataScale,
-				oracleColInfo.DataPrecision,
-				oracleColInfo.DataLength,
-				oracleColInfo.Collation,
-				d.Engine)
-		} else {
-			columnMeta, err = reverser.ReverseOracleTableColumnMapRule(
-				d.SourceSchemaName,
-				d.TableName,
-				oracleColName,
-				oracleColInfo.DataType,
-				oracleColInfo.NULLABLE,
-				oracleColInfo.Comment,
-				oracleColInfo.DataDefault,
-				oracleColInfo.DataScale,
-				oracleColInfo.DataPrecision,
-				oracleColInfo.DataLength,
-				"",
-				d.Engine)
-		}
-		if err != nil {
-			return builder.String(), err
-		}
-		if columnMeta != "" {
-			createColumnMetas = append(createColumnMetas, columnMeta)
-		}
+		// 如果源端字段不存在目标段字段忽略，功能与 oracleColumnCountsCheck 函数相同，对于源端存在目标端不存在的新增
 	}
 
 	if len(tableRowArray) != 0 && len(diffColumnMsgs) != 0 {
@@ -795,17 +758,5 @@ func (d *DiffWriter) columnRuleCheck(oracleTable, mysqlTable *Table) (string, er
 		builder.WriteString("\n")
 	}
 
-	if len(createColumnMetas) != 0 {
-		zap.L().Info("check table",
-			zap.String("table column info check, generate created sql", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.TableName)),
-			zap.String("oracle struct", oracleTable.String(utils.ColumnsJSON)),
-			zap.String("mysql struct", mysqlTable.String(utils.ColumnsJSON)))
-
-		builder.WriteString(fmt.Sprintf("-- oracle table columns info isn't exist in mysql, generate created sql\n"))
-		for _, columnMeta := range createColumnMetas {
-			builder.WriteString(fmt.Sprintf("ALTER TABLE %s.%s ADD COLUMN %s;\n",
-				d.TargetSchemaName, d.TableName, columnMeta))
-		}
-	}
 	return builder.String(), nil
 }

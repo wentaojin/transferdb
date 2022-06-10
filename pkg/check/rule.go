@@ -17,6 +17,9 @@ package check
 
 import (
 	"fmt"
+	"github.com/wentaojin/transferdb/pkg/reverser"
+	"github.com/wentaojin/transferdb/service"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -25,6 +28,403 @@ import (
 	"github.com/jedib0t/go-pretty/v6/table"
 )
 
+/*
+	Oracle 表字段映射转换
+*/
+func OracleTableColumnMapRuleReverse(
+	sourceSchema, sourceTableName, columnName string,
+	dataType, dataNullable, comments, dataDefault string,
+	dataScaleValue, dataPrecisionValue, dataLengthValue, columnCharacter, columnCollation string, engine *service.Engine) (string, error) {
+	var (
+		// 字段元数据
+		columnMeta string
+		// oracle 表原始字段类型
+		originColumnType string
+		// 内置字段类型转换规则
+		buildInColumnType string
+		// 转换字段类型
+		modifyColumnType string
+	)
+	dataLength, err := strconv.Atoi(dataLengthValue)
+	if err != nil {
+		return columnMeta, fmt.Errorf("oracle schema [%s] table [%s] reverser column data_length string to int failed: %v", sourceSchema, sourceTableName, err)
+	}
+	dataPrecision, err := strconv.Atoi(dataPrecisionValue)
+	if err != nil {
+		return columnMeta, fmt.Errorf("oracle schema [%s] table [%s] reverser column data_precision string to int failed: %v", sourceSchema, sourceTableName, err)
+	}
+	dataScale, err := strconv.Atoi(dataScaleValue)
+	if err != nil {
+		return columnMeta, fmt.Errorf("oracle schema [%s] table [%s] reverser column data_scale string to int failed: %v", sourceSchema, sourceTableName, err)
+	}
+
+	// 获取自定义映射规则
+	columnDataTypeMapSlice, err := engine.GetColumnRuleMap(sourceSchema, sourceTableName)
+	if err != nil {
+		return columnMeta, err
+	}
+	tableDataTypeMapSlice, err := engine.GetTableRuleMap(sourceSchema, sourceTableName)
+	if err != nil {
+		return columnMeta, err
+	}
+	schemaDataTypeMapSlice, err := engine.GetSchemaRuleMap(sourceSchema)
+	if err != nil {
+		return columnMeta, err
+	}
+	defaultValueMapSlice, err := engine.GetDefaultValueMap()
+	if err != nil {
+		return columnMeta, err
+	}
+
+	switch strings.ToUpper(dataType) {
+	case "NUMBER":
+		switch {
+		case dataScale > 0:
+			originColumnType = fmt.Sprintf("NUMBER(%d,%d)", dataPrecision, dataScale)
+			buildInColumnType = fmt.Sprintf("DECIMAL(%d,%d)", dataPrecision, dataScale)
+		case dataScale == 0:
+			switch {
+			case dataPrecision == 0 && dataScale == 0:
+				originColumnType = "NUMBER"
+				buildInColumnType = "DECIMAL(65,30)"
+			case dataPrecision >= 1 && dataPrecision < 3:
+				originColumnType = fmt.Sprintf("NUMBER(%d)", dataPrecision)
+				buildInColumnType = "TINYINT"
+			case dataPrecision >= 3 && dataPrecision < 5:
+				originColumnType = fmt.Sprintf("NUMBER(%d)", dataPrecision)
+				buildInColumnType = "SMALLINT"
+			case dataPrecision >= 5 && dataPrecision < 9:
+				originColumnType = fmt.Sprintf("NUMBER(%d)", dataPrecision)
+				buildInColumnType = "INT"
+			case dataPrecision >= 9 && dataPrecision < 19:
+				originColumnType = fmt.Sprintf("NUMBER(%d)", dataPrecision)
+				buildInColumnType = "BIGINT"
+			case dataPrecision >= 19 && dataPrecision <= 38:
+				originColumnType = fmt.Sprintf("NUMBER(%d)", dataPrecision)
+				buildInColumnType = fmt.Sprintf("DECIMAL(%d)", dataPrecision)
+			default:
+				originColumnType = fmt.Sprintf("NUMBER(%d)", dataPrecision)
+				buildInColumnType = fmt.Sprintf("DECIMAL(%d,4)", dataPrecision)
+			}
+		}
+		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, "", "", defaultValueMapSlice)
+	case "BFILE":
+		originColumnType = "BFILE"
+		buildInColumnType = "VARCHAR(255)"
+		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, columnCharacter, columnCollation, defaultValueMapSlice)
+	case "CHAR":
+		originColumnType = fmt.Sprintf("CHAR(%d)", dataLength)
+		if dataLength < 256 {
+			buildInColumnType = fmt.Sprintf("CHAR(%d)", dataLength)
+		} else {
+			buildInColumnType = fmt.Sprintf("VARCHAR(%d)", dataLength)
+		}
+		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, columnCharacter, columnCollation, defaultValueMapSlice)
+	case "CHARACTER":
+		originColumnType = fmt.Sprintf("CHARACTER(%d)", dataLength)
+		if dataLength < 256 {
+			buildInColumnType = fmt.Sprintf("CHARACTER(%d)", dataLength)
+		} else {
+			buildInColumnType = fmt.Sprintf("VARCHAR(%d)", dataLength)
+		}
+		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, columnCharacter, columnCollation, defaultValueMapSlice)
+	case "CLOB":
+		originColumnType = "CLOB"
+		buildInColumnType = "LONGTEXT"
+		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, columnCharacter, columnCollation, defaultValueMapSlice)
+	case "BLOB":
+		originColumnType = "BLOB"
+		buildInColumnType = "BLOB"
+		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, columnCharacter, columnCollation, defaultValueMapSlice)
+	case "DATE":
+		originColumnType = "DATE"
+		buildInColumnType = "DATETIME"
+		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, "", "", defaultValueMapSlice)
+	case "DECIMAL":
+		switch {
+		case dataScale == 0 && dataPrecision == 0:
+			originColumnType = "DECIMAL"
+			buildInColumnType = "DECIMAL"
+		default:
+			originColumnType = fmt.Sprintf("DECIMAL(%d,%d)", dataPrecision, dataScale)
+			buildInColumnType = fmt.Sprintf("DECIMAL(%d,%d)", dataPrecision, dataScale)
+		}
+		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, "", "", defaultValueMapSlice)
+	case "DEC":
+		switch {
+		case dataScale == 0 && dataPrecision == 0:
+			originColumnType = "DECIMAL"
+			buildInColumnType = "DECIMAL"
+		default:
+			originColumnType = fmt.Sprintf("DECIMAL(%d,%d)", dataPrecision, dataScale)
+			buildInColumnType = fmt.Sprintf("DECIMAL(%d,%d)", dataPrecision, dataScale)
+		}
+		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, "", "", defaultValueMapSlice)
+	case "DOUBLE PRECISION":
+		originColumnType = "DOUBLE PRECISION"
+		buildInColumnType = "DOUBLE PRECISION"
+		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, "", "", defaultValueMapSlice)
+	case "FLOAT":
+		originColumnType = "FLOAT"
+		if dataPrecision == 0 {
+			buildInColumnType = "FLOAT"
+		} else {
+			buildInColumnType = "DOUBLE"
+		}
+		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, "", "", defaultValueMapSlice)
+	case "INTEGER":
+		originColumnType = "INTEGER"
+		buildInColumnType = "INT"
+		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, "", "", defaultValueMapSlice)
+	case "INT":
+		originColumnType = "INTEGER"
+		buildInColumnType = "INT"
+		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, "", "", defaultValueMapSlice)
+	case "LONG":
+		originColumnType = "LONG"
+		buildInColumnType = "LONGTEXT"
+		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, columnCharacter, columnCollation, defaultValueMapSlice)
+	case "LONG RAW":
+		originColumnType = "LONG RAW"
+		buildInColumnType = "LONGBLOB"
+		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, columnCharacter, columnCollation, defaultValueMapSlice)
+	case "BINARY_FLOAT":
+		originColumnType = "BINARY_FLOAT"
+		buildInColumnType = "DOUBLE"
+		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, "", "", defaultValueMapSlice)
+	case "BINARY_DOUBLE":
+		originColumnType = "BINARY_DOUBLE"
+		buildInColumnType = "DOUBLE"
+		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, "", "", defaultValueMapSlice)
+	case "NCHAR":
+		originColumnType = fmt.Sprintf("NCHAR(%d)", dataLength)
+		if dataLength < 256 {
+			buildInColumnType = fmt.Sprintf("NCHAR(%d)", dataLength)
+		} else {
+			buildInColumnType = fmt.Sprintf("NVARCHAR(%d)", dataLength)
+		}
+		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, columnCharacter, columnCollation, defaultValueMapSlice)
+	case "NCHAR VARYING":
+		originColumnType = "NCHAR VARYING"
+		buildInColumnType = fmt.Sprintf("NCHAR VARYING(%d)", dataLength)
+		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, columnCharacter, columnCollation, defaultValueMapSlice)
+	case "NCLOB":
+		originColumnType = "NCLOB"
+		buildInColumnType = "TEXT"
+		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, columnCharacter, columnCollation, defaultValueMapSlice)
+	case "NUMERIC":
+		originColumnType = fmt.Sprintf("NUMERIC(%d,%d)", dataPrecision, dataScale)
+		buildInColumnType = fmt.Sprintf("NUMERIC(%d,%d)", dataPrecision, dataScale)
+		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, "", "", defaultValueMapSlice)
+	case "NVARCHAR2":
+		originColumnType = fmt.Sprintf("NVARCHAR2(%d)", dataLength)
+		buildInColumnType = fmt.Sprintf("NVARCHAR(%d)", dataLength)
+		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, columnCharacter, columnCollation, defaultValueMapSlice)
+	case "RAW":
+		originColumnType = fmt.Sprintf("RAW(%d)", dataLength)
+		if dataLength < 256 {
+			buildInColumnType = fmt.Sprintf("BINARY(%d)", dataLength)
+		} else {
+			buildInColumnType = fmt.Sprintf("VARBINARY(%d)", dataLength)
+		}
+		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, columnCharacter, columnCollation, defaultValueMapSlice)
+	case "REAL":
+		originColumnType = "real"
+		buildInColumnType = "DOUBLE"
+		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, "", "", defaultValueMapSlice)
+	case "ROWID":
+		originColumnType = "ROWID"
+		buildInColumnType = "CHAR(10)"
+		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, columnCharacter, columnCollation, defaultValueMapSlice)
+	case "SMALLINT":
+		originColumnType = "SMALLINT"
+		buildInColumnType = "DECIMAL(38)"
+		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, "", "", defaultValueMapSlice)
+	case "UROWID":
+		originColumnType = "UROWID"
+		buildInColumnType = fmt.Sprintf("VARCHAR(%d)", dataLength)
+		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, columnCharacter, columnCollation, defaultValueMapSlice)
+	case "VARCHAR2":
+		originColumnType = fmt.Sprintf("VARCHAR2(%d)", dataLength)
+		buildInColumnType = fmt.Sprintf("VARCHAR(%d)", dataLength)
+		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, columnCharacter, columnCollation, defaultValueMapSlice)
+	case "VARCHAR":
+		originColumnType = fmt.Sprintf("VARCHAR(%d)", dataLength)
+		buildInColumnType = fmt.Sprintf("VARCHAR(%d)", dataLength)
+		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, columnCharacter, columnCollation, defaultValueMapSlice)
+	case "XMLTYPE":
+		originColumnType = "XMLTYPE"
+		buildInColumnType = "LONGTEXT"
+		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, columnCharacter, columnCollation, defaultValueMapSlice)
+	default:
+		if strings.Contains(dataType, "INTERVAL") {
+			originColumnType = dataType
+			buildInColumnType = "VARCHAR(30)"
+			modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+			columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, columnCharacter, columnCollation, defaultValueMapSlice)
+		} else if strings.Contains(dataType, "TIMESTAMP") {
+			originColumnType = dataType
+			if strings.Contains(dataType, "WITH TIME ZONE") || strings.Contains(dataType, "WITH LOCAL TIME ZONE") {
+				if dataScale <= 6 {
+					buildInColumnType = fmt.Sprintf("DATETIME(%d)", dataScale)
+				} else {
+					buildInColumnType = fmt.Sprintf("DATETIME(%d)", 6)
+				}
+			} else {
+				if dataScale <= 6 {
+					buildInColumnType = fmt.Sprintf("TIMESTAMP(%d)", dataScale)
+				} else {
+					buildInColumnType = fmt.Sprintf("TIMESTAMP(%d)", 6)
+				}
+			}
+			modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+			columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, "", "", defaultValueMapSlice)
+		} else {
+			originColumnType = dataType
+			buildInColumnType = "TEXT"
+			modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+			columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, columnCharacter, columnCollation, defaultValueMapSlice)
+		}
+	}
+	return columnMeta, nil
+}
+
+func genOracleTableColumnMeta(columnName, columnType, dataNullable, comments, defaultValue,
+	columnCharacter, columnCollation string,
+	defaultValueMapSlice []service.DefaultValueMap) string {
+	var (
+		nullable    string
+		colMeta     string
+		dataDefault string
+		comment     string
+	)
+
+	if dataNullable == "Y" {
+		nullable = "NULL"
+	} else {
+		nullable = "NOT NULL"
+	}
+
+	if comments != "" {
+		if strings.Contains(comments, "\"") {
+			comments = strings.Replace(comments, "\"", "'", -1)
+		}
+		match, _ := regexp.MatchString("'(.*)'", comments)
+		if match {
+			comment = fmt.Sprintf("\"%s\"", comments)
+		} else {
+			comment = fmt.Sprintf("'%s'", comments)
+		}
+	}
+
+	// 字段字符集以及排序规则
+	// 两者同时间存在否则异常
+	if (columnCharacter == "" && columnCollation != "") || (columnCharacter != "" && columnCollation == "") {
+		panic(fmt.Errorf(`oracle table column meta generate failed, 
+column [%v] column type [%v] column character set [%v] and collation [%v] must be the same exits`,
+			columnName, columnType, columnCharacter, columnCollation))
+	}
+
+	if defaultValue != "" {
+		dataDefault = reverser.LoadDataDefaultValueRule(defaultValue, defaultValueMapSlice)
+	} else {
+		dataDefault = defaultValue
+	}
+
+	switch {
+	case nullable == "NULL" && columnCharacter == "" && columnCollation == "":
+		switch {
+		case comment != "" && dataDefault != "":
+			colMeta = fmt.Sprintf("`%s` %s DEFAULT %s COMMENT %s", columnName, columnType, dataDefault, comment)
+		case comment == "" && dataDefault != "":
+			colMeta = fmt.Sprintf("`%s` %s DEFAULT %s", columnName, columnType, dataDefault)
+		case comment != "" && dataDefault == "":
+			colMeta = fmt.Sprintf("`%s` %s COMMENT %s", columnName, columnType, comment)
+		case comment == "" && dataDefault == "":
+			colMeta = fmt.Sprintf("`%s` %s", columnName, columnType)
+		default:
+			panic(fmt.Errorf(`oracle table column meta generate failed, column [%v] column meta [%v] by first`, columnName, colMeta))
+		}
+	case nullable == "NULL" && columnCharacter != "" && columnCollation != "":
+		switch {
+		case comment != "" && dataDefault != "":
+			colMeta = fmt.Sprintf("`%s` %s CHARACTER SET %s COLLATE %s DEFAULT %s COMMENT %s", columnName, columnType, columnCharacter, columnCollation, dataDefault, comment)
+		case comment == "" && dataDefault != "":
+			colMeta = fmt.Sprintf("`%s` %s CHARACTER SET %s COLLATE %s DEFAULT %s", columnName, columnType, columnCharacter, columnCollation, dataDefault)
+		case comment != "" && dataDefault == "":
+			colMeta = fmt.Sprintf("`%s` %s CHARACTER SET %s COLLATE %s COMMENT %s", columnName, columnType,
+				columnCharacter, columnCollation, comment)
+		case comment == "" && dataDefault == "":
+			colMeta = fmt.Sprintf("`%s` %s CHARACTER SET %s COLLATE %s", columnName, columnType, columnCharacter, columnCollation)
+		default:
+			panic(fmt.Errorf(`oracle table column meta generate failed, column [%v] column meta [%v] by second`, columnName, colMeta))
+		}
+	case nullable != "NULL" && columnCharacter == "" && columnCollation == "":
+		switch {
+		case comment != "" && dataDefault != "":
+			colMeta = fmt.Sprintf("`%s` %s %s DEFAULT %s COMMENT %s", columnName, columnType, nullable, dataDefault, comment)
+		case comment != "" && dataDefault == "":
+			colMeta = fmt.Sprintf("`%s` %s %s COMMENT %s", columnName, columnType, nullable, comment)
+		case comment == "" && dataDefault != "":
+			colMeta = fmt.Sprintf("`%s` %s %s DEFAULT %s", columnName, columnType, nullable, dataDefault)
+		case comment == "" && dataDefault == "":
+			colMeta = fmt.Sprintf("`%s` %s %s", columnName, columnType, nullable)
+		default:
+			panic(fmt.Errorf(`oracle table column meta generate failed, column [%v] column meta [%v] by third`, columnName, colMeta))
+		}
+	case nullable != "NULL" && columnCharacter != "" && columnCollation != "":
+		switch {
+		case comment != "" && dataDefault != "":
+			colMeta = fmt.Sprintf("`%s` %s CHARACTER SET %s COLLATE %s %s DEFAULT %s COMMENT %s", columnName, columnType, columnCharacter, columnCollation, nullable, dataDefault, comment)
+		case comment != "" && dataDefault == "":
+			colMeta = fmt.Sprintf("`%s` %s CHARACTER SET %s COLLATE %s %s COMMENT %s", columnName, columnType, columnCharacter, columnCollation, nullable, comment)
+		case comment == "" && dataDefault != "":
+			colMeta = fmt.Sprintf("`%s` %s CHARACTER SET %s COLLATE %s %s DEFAULT %s", columnName, columnType, columnCharacter, columnCollation, nullable, dataDefault)
+		case comment == "" && dataDefault == "":
+			colMeta = fmt.Sprintf("`%s` %s CHARACTER SET %s COLLATE %s %s", columnName, columnType, columnCharacter, columnCollation, nullable)
+		default:
+			panic(fmt.Errorf(`oracle table column meta generate failed, column [%v] column meta [%v] by four`, columnName, colMeta))
+		}
+	default:
+		panic(fmt.Errorf(`oracle table column meta generate failed, column [%v] nullable [%s] character set [%s] collation [%v] by five`, columnName, nullable, columnCharacter, columnCollation))
+	}
+
+	return colMeta
+}
+
+/*
+	Oracle 表规则映射检查
+*/
 func OracleTableMapRuleCheck(
 	sourceSchema, targetSchema, tableName, columnName string,
 	oracleColInfo, mysqlColInfo Column) (string, table.Row, error) {
@@ -89,11 +489,11 @@ func OracleTableMapRuleCheck(
 	}
 	mysqlCollation = strings.ToLower(utils.OracleCollationMap[oracleColInfo.Collation])
 
-	oracleDiffColMeta := generateColumnNullCommentDefaultMeta(oracleColInfo.NULLABLE, oracleColInfo.Comment, oracleColInfo.DataDefault)
-	mysqlDiffColMeta := generateColumnNullCommentDefaultMeta(mysqlColInfo.NULLABLE, mysqlColInfo.Comment, mysqlColInfo.DataDefault)
+	oracleDiffColMeta := genColumnNullCommentDefaultMeta(oracleColInfo.NULLABLE, oracleColInfo.Comment, oracleColInfo.DataDefault)
+	mysqlDiffColMeta := genColumnNullCommentDefaultMeta(mysqlColInfo.NULLABLE, mysqlColInfo.Comment, mysqlColInfo.DataDefault)
 
-	oracleColMeta := generateColumnNullCommentDefaultMeta(oracleColInfo.NULLABLE, oracleColInfo.Comment, oracleColInfo.OracleOriginDataDefault)
-	mysqlColMeta := generateColumnNullCommentDefaultMeta(mysqlColInfo.NULLABLE, mysqlColInfo.Comment, mysqlColInfo.MySQLOriginDataDefault)
+	oracleColMeta := genColumnNullCommentDefaultMeta(oracleColInfo.NULLABLE, oracleColInfo.Comment, oracleColInfo.OracleOriginDataDefault)
+	mysqlColMeta := genColumnNullCommentDefaultMeta(mysqlColInfo.NULLABLE, mysqlColInfo.Comment, mysqlColInfo.MySQLOriginDataDefault)
 
 	// 字段类型判断
 	// CHARACTER SET %s COLLATE %s（Only 作用于字符类型）
@@ -1057,7 +1457,7 @@ func OracleTableMapRuleCheck(
 	}
 }
 
-func generateColumnNullCommentDefaultMeta(dataNullable, comments, dataDefault string) string {
+func genColumnNullCommentDefaultMeta(dataNullable, comments, dataDefault string) string {
 	var (
 		colMeta string
 	)
@@ -1088,7 +1488,7 @@ func generateColumnNullCommentDefaultMeta(dataNullable, comments, dataDefault st
 	return colMeta
 }
 
-func generateTableColumnCollation(nlsComp string, oraCollation bool, schemaCollation, tableCollation, columnCollation string) (string, error) {
+func genTableColumnCollation(nlsComp string, oraCollation bool, schemaCollation, tableCollation, columnCollation string) (string, error) {
 	var collation string
 	if oraCollation {
 		if columnCollation != "" {
@@ -1111,7 +1511,7 @@ func generateTableColumnCollation(nlsComp string, oraCollation bool, schemaColla
 	}
 }
 
-func generateTableCollation(nlsComp string, oraCollation bool, schemaCollation, tableCollation string) (string, error) {
+func genTableCollation(nlsComp string, oraCollation bool, schemaCollation, tableCollation string) (string, error) {
 	var collation string
 	if oraCollation {
 		if tableCollation != "" {
