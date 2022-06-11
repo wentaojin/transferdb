@@ -245,6 +245,15 @@ GRANT SELECT ON V_$ARCHIVED_LOG TO c##logminer CONTAINER=ALL;
 GRANT SELECT ON V_$LOG TO c##logminer CONTAINER=ALL;
 GRANT SELECT ON V_$LOGFILE TO c##logminer CONTAINER=ALL;
 GRANT RESOURCE, CONNECT TO c##logminer CONTAINER=ALL;
+
+-- 切换 PDB 用户
+alter session set container=ORCLPDB;
+-- 授权数据库架构通过程序用户访问
+-- ${schema-name} 指配置文件 [source] 参数 schema-name
+alter user ${schema-name} grant connect through c##logminer;
+
+-- 权限回收用法(如不需要时可使用)
+alter user ${schema-name} revoke connect through c##logminer;
 ```
 若直接在命令行中用 `nohup` 启动程序，可能会因为 SIGHUP 信号而退出，建议把 `nohup` 放到脚本里面且不建议用 kill -9，如：
 

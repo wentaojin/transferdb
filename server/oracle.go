@@ -18,13 +18,11 @@ package server
 import (
 	"database/sql"
 	"fmt"
+	"github.com/wentaojin/transferdb/service"
 	"github.com/wentaojin/transferdb/utils"
 	"os"
 	"runtime"
 	"strconv"
-	"strings"
-
-	"github.com/wentaojin/transferdb/service"
 
 	"github.com/godror/godror"
 
@@ -46,11 +44,11 @@ func NewOracleDBEngine(oraCfg service.SourceConfig) (*sql.DB, error) {
 		return nil, err
 	}
 
-	oraDSN.Username, oraDSN.Password = oraCfg.Username, godror.NewPassword(oraCfg.Password)
-
-	oraDSN.OnInitStmts = append(oraDSN.OnInitStmts,
-		append(oraCfg.SessionParams,
-			utils.StringsBuilder("ALTER SESSION SET CURRENT_SCHEMA = ", strings.ToUpper(oraCfg.SchemaName)))...)
+	// https://blogs.oracle.com/opal/post/external-and-proxy-connection-syntax-examples-for-node-oracledb
+	// Using 12.2 or later client libraries
+	// 异构连接池
+	oraDSN.Username, oraDSN.Password = utils.StringsBuilder(oraCfg.Username, "[", oraCfg.SchemaName, "]"), godror.NewPassword(oraCfg.Password)
+	oraDSN.OnInitStmts = oraCfg.SessionParams
 
 	// libDir won't have any effect on Linux for linking reasons to do with Oracle's libnnz library that are proving to be intractable.
 	// You must set LD_LIBRARY_PATH or run ldconfig before your process starts.
