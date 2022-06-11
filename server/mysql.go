@@ -16,12 +16,12 @@ limitations under the License.
 package server
 
 import (
+	"database/sql"
 	"fmt"
+	"github.com/wentaojin/transferdb/service"
 	"go.uber.org/zap"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm/schema"
-
-	"github.com/wentaojin/transferdb/service"
 
 	_ "github.com/go-sql-driver/mysql"
 	"gorm.io/gorm"
@@ -68,12 +68,15 @@ func NewMySQLEnginePrepareDB(mysqlCfg service.TargetConfig, slowQueryThreshold, 
 func NewMySQLEngineGeneralDB(mysqlCfg service.TargetConfig, slowQueryThreshold, mysqlMaxOpenConn int) (*service.Engine, error) {
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?%s",
 		mysqlCfg.Username, mysqlCfg.Password, mysqlCfg.Host, mysqlCfg.Port, mysqlCfg.MetaSchema, mysqlCfg.ConnectParams)
-	// 初始化 gorm 日志记录器
+
 	var (
-		gormDB *gorm.DB
-		err    error
+		gormDB  *gorm.DB
+		mysqlDB *sql.DB
+		err     error
 	)
 
+	// 初始化 gormDB
+	// 初始化 gorm 日志记录器
 	logger := service.NewGormLogger(zap.L(), slowQueryThreshold)
 	logger.SetAsDefault()
 	gormDB, err = gorm.Open(mysql.New(mysql.Config{
@@ -88,14 +91,16 @@ func NewMySQLEngineGeneralDB(mysqlCfg service.TargetConfig, slowQueryThreshold, 
 			SingularTable: true, // 使用单数表名
 		},
 	})
-
 	if err != nil {
 		return &service.Engine{}, fmt.Errorf("error on initializing mysql database connection [meta-schema]: %v", err)
 	}
 
-	// 初始化数据库连接池
 	sqlDB, err := gormDB.DB()
 	if err != nil {
+		return &service.Engine{}, fmt.Errorf("error on gormDB.DB() convert sqlDB failed [meta-schema]: %v", err)
+	}
+
+	if err = sqlDB.Ping(); err != nil {
 		return &service.Engine{}, fmt.Errorf("error on ping mysql database connection [meta-schema]: %v", err)
 	}
 
@@ -103,8 +108,21 @@ func NewMySQLEngineGeneralDB(mysqlCfg service.TargetConfig, slowQueryThreshold, 
 	sqlDB.SetMaxOpenConns(mysqlMaxOpenConn)
 	sqlDB.SetConnMaxLifetime(mysqlConnMaxLifeTime)
 
+	// 初始化 mysqlDB
+	mysqlDB, err = sql.Open("mysql", dsn)
+	if err != nil {
+		return &service.Engine{}, fmt.Errorf("error on open mysql database connection [target-schema]: %v", err)
+	}
+	if err = mysqlDB.Ping(); err != nil {
+		return &service.Engine{}, fmt.Errorf("error on ping mysql database connection [target-schema]: %v", err)
+	}
+
+	mysqlDB.SetMaxIdleConns(mysqlMaxIdleConn)
+	mysqlDB.SetMaxOpenConns(mysqlMaxOpenConn)
+	mysqlDB.SetConnMaxLifetime(mysqlConnMaxLifeTime)
+
 	return &service.Engine{
-		MysqlDB: sqlDB,
+		MysqlDB: mysqlDB,
 		GormDB:  gormDB,
 	}, nil
 }

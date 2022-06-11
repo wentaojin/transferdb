@@ -149,7 +149,7 @@ db-type = "tidb"
 # 目标端连接串
 username = "marvin"
 password = "marvin"
-host = "172.16.4.89"
+host = "172.16.4.93"
 port = 5500
 # mysql 链接参数
 connect-params = "charset=utf8mb4&multiStatements=true&parseTime=True&loc=Local"

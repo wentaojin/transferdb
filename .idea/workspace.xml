@@ -6,7 +6,8 @@
   <component name="ChangeListManager">
     <list default="true" id="a67576d0-c4df-4b83-a792-1e43567e1978" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/user_guaid.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/user_guaid.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/conf/config.toml" beforeDir="false" afterPath="$PROJECT_DIR$/conf/config.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/mysql.go" beforeDir="false" afterPath="$PROJECT_DIR$/server/mysql.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
