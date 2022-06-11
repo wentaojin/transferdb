@@ -247,6 +247,7 @@ GRANT SELECT ON V_$LOGFILE TO c##logminer CONTAINER=ALL;
 GRANT RESOURCE, CONNECT TO c##logminer CONTAINER=ALL;
 
 -- 切换 PDB 用户
+-- sqlplus marvin/marvin@192.168.10.100:1521/orclpdb
 alter session set container=ORCLPDB;
 -- 授权数据库架构通过程序用户访问
 -- ${schema-name} 指配置文件 [source] 参数 schema-name
