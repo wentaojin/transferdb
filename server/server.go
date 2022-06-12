@@ -38,9 +38,8 @@ import (
 )
 
 const (
-	mysqlMaxOpenConn     = 1024
-	mysqlMaxIdleConn     = 256
-	mysqlConnMaxLifeTime = 15 * time.Minute
+	mysqlMaxConn         = 1024
+	mysqlConnMaxLifeTime = 5 * time.Minute
 )
 
 // 程序运行
@@ -57,7 +56,7 @@ func Run(cfg *service.CfgFile, mode string) error {
 		}
 	case "prepare":
 		// 表结构转换 - only prepare 阶段
-		engine, err := NewMySQLEnginePrepareDB(cfg.TargetConfig, cfg.AppConfig.SlowlogThreshold, mysqlMaxOpenConn)
+		engine, err := NewMySQLEnginePrepareDB(cfg.TargetConfig, cfg.AppConfig.SlowlogThreshold, mysqlMaxConn)
 		if err != nil {
 			return err
 		}
@@ -66,7 +65,7 @@ func Run(cfg *service.CfgFile, mode string) error {
 		}
 	case "reverse":
 		// 表结构转换 - reverse 阶段
-		engine, err := NewEngineDB(cfg.SourceConfig, cfg.TargetConfig, cfg.AppConfig.SlowlogThreshold, mysqlMaxOpenConn)
+		engine, err := NewEngineDB(cfg.SourceConfig, cfg.TargetConfig, cfg.AppConfig.SlowlogThreshold, mysqlMaxConn)
 		if err != nil {
 			return err
 		}
@@ -75,7 +74,7 @@ func Run(cfg *service.CfgFile, mode string) error {
 		}
 	case "check":
 		// 表结构校验 - 上下游
-		engine, err := NewEngineDB(cfg.SourceConfig, cfg.TargetConfig, cfg.AppConfig.SlowlogThreshold, mysqlMaxOpenConn)
+		engine, err := NewEngineDB(cfg.SourceConfig, cfg.TargetConfig, cfg.AppConfig.SlowlogThreshold, mysqlMaxConn)
 		if err != nil {
 			return err
 		}
@@ -84,7 +83,7 @@ func Run(cfg *service.CfgFile, mode string) error {
 		}
 	case "diff":
 		// 数据校验 - 以上游为准
-		engine, err := NewEngineDB(cfg.SourceConfig, cfg.TargetConfig, cfg.AppConfig.SlowlogThreshold, mysqlMaxOpenConn)
+		engine, err := NewEngineDB(cfg.SourceConfig, cfg.TargetConfig, cfg.AppConfig.SlowlogThreshold, mysqlMaxConn)
 		if err != nil {
 			return err
 		}
@@ -104,7 +103,7 @@ func Run(cfg *service.CfgFile, mode string) error {
 		}
 	case "csv":
 		// csv 全量数据导出
-		engine, err := NewEngineDB(cfg.SourceConfig, cfg.TargetConfig, cfg.AppConfig.SlowlogThreshold, mysqlMaxOpenConn)
+		engine, err := NewEngineDB(cfg.SourceConfig, cfg.TargetConfig, cfg.AppConfig.SlowlogThreshold, mysqlMaxConn)
 		if err != nil {
 			return err
 		}
