@@ -96,15 +96,16 @@ func (d *Diff) SplitChunk(workerID int, globalSCN uint64) error {
 
 	// 参数优先级
 	if d.OnlyCheckRows {
-		// SELECT COUNT(*) FROM TAB WHERE 1=1
+		// SELECT COUNT(1) FROM TAB WHERE 1=1
 		if err = d.Engine.InitDataDiffMetaRecordByWhere(d.SourceSchema, d.SourceTable,
-			sourceColumnInfo, targetColumnInfo, "1 = 1", d.SyncMode, globalSCN); err != nil {
+			"COUNT(1)", "COUNT(1)", "1 = 1", d.SyncMode, globalSCN); err != nil {
 			return err
 		}
 		return nil
 	}
 
 	if !d.OnlyCheckRows && d.Range != "" {
+		// TODO: Range 数据拆分
 		if err = d.Engine.InitDataDiffMetaRecordByWhere(d.SourceSchema, d.SourceTable,
 			sourceColumnInfo, targetColumnInfo, d.Range, d.SyncMode, globalSCN); err != nil {
 			return err

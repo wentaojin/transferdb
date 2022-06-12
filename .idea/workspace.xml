@@ -7,8 +7,7 @@
     <list default="true" id="a67576d0-c4df-4b83-a792-1e43567e1978" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pkg/diff/chunk.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/diff/chunk.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/diff/diff.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/diff/diff.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/test/oracle.go" beforeDir="false" afterPath="$PROJECT_DIR$/test/oracle.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/service/diff.go" beforeDir="false" afterPath="$PROJECT_DIR$/service/diff.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

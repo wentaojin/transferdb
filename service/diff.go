@@ -187,7 +187,7 @@ FROM user_parallel_execute_chunks WHERE  task_name = '`, taskName, `' ORDER BY c
 		return rowCount, err
 	}
 
-	// 判断数据是否存在，更新 data_diff_meta 记录，无需同步
+	// 判断数据是否存在，更新 data_diff_meta 记录
 	if len(res) == 0 {
 		zap.L().Warn("get oracle table rowids rows",
 			zap.String("schema", sourceSchema),
@@ -258,5 +258,5 @@ FROM user_parallel_execute_chunks WHERE  task_name = '`, taskName, `' ORDER BY c
 		return len(res), fmt.Errorf("gorm create table [%s.%s] data_diff_meta [batch size]failed: %v", sourceSchema, sourceTable, err)
 	}
 
-	return len(res), nil
+	return len(fullMetas), nil
 }
