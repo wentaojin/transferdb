@@ -17,10 +17,8 @@ package main
 
 import (
 	"fmt"
-	"github.com/wentaojin/transferdb/service"
-	"github.com/wentaojin/transferdb/utils"
-
 	"github.com/wentaojin/transferdb/server"
+	"github.com/wentaojin/transferdb/service"
 )
 
 func main() {
@@ -76,13 +74,7 @@ func main() {
 	//	}
 	//}
 
-	// Date/Timestamp/Interval Year/Day 字段类型格式化
-	sourceColumnInfo, err := engine.AdjustTableSelectColumn("marvin", "marvin0", false)
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	_, r2, err := engine.GetOracleTableRowsData(utils.StringsBuilder(`select `, sourceColumnInfo, ` from marvin.marvin0 where rownum = 1`), 1)
+	_, r2, err := engine.GetOracleTableRowsData(`SELECT TO_CHAR(TP1,'yyyy-MM-dd HH24:mi:ss') AS TP1,N1,N2,N3,NVL(CLOBN,'') AS CLOBN,TO_CHAR(NDATE,'yyyy-MM-dd HH24:mi:ss') AS NDATE,RW1,TO_CHAR(TP4,'yyyy-MM-dd HH24:mi:ss') AS TP4,BLOBC,FP1,NVL(FLK,'') AS FLK,RW2,TO_CHAR(TP2,'yyyy-MM-dd HH24:mi:ss') AS TP2,VCHAR1,VCHAR2,VCHAR3,NVL(CHAR1,'') AS CHAR1,FP2 FROM MARVIN.MARVIN2 WHERE N1 = 1449999 ORDER BY N1 DESC`, 1)
 	if err != nil {
 		fmt.Println(err)
 	}

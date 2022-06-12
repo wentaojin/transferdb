@@ -617,6 +617,12 @@ func PreSplitChunk(cfg *service.CfgFile, engine *service.Engine, exportTableSlic
 		return diffs, err
 	}
 
+	// 获取 SCN 以及初始化元数据表
+	globalSCN, err := engine.GetOracleCurrentSnapshotSCN()
+	if err != nil {
+		return diffs, err
+	}
+
 	// 设置工作池
 	// 设置 goroutine 数
 	wg := sync.WaitGroup{}
@@ -631,15 +637,15 @@ func PreSplitChunk(cfg *service.CfgFile, engine *service.Engine, exportTableSlic
 
 	for c := 0; c < cfg.DiffConfig.DiffThreads; c++ {
 		wg.Add(1)
-		go func(workerID int) {
+		go func(workerID int, globalSCN uint64) {
 			defer wg.Done()
 			for d := range ch {
-				if err = d.SplitChunk(workerID); err != nil {
+				if err = d.SplitChunk(workerID, globalSCN); err != nil {
 					zap.L().Panic("pre split table chunk failed", zap.String("table", d.String()), zap.Error(err))
 					panic(fmt.Errorf("pre split table [%v] chunk failed, failed table detail please see logfile, error: [%v]", d.String(), err))
 				}
 			}
-		}(c)
+		}(c, globalSCN)
 	}
 
 	wg.Wait()

@@ -72,7 +72,7 @@ func NewDiff(cfg *service.CfgFile, engine *service.Engine, exportTableSlice []st
 			SourceSchemaCollation: sourceSchemaCollation,
 			OracleCollation:       oracleCollation,
 			InsertBatchSize:       cfg.AppConfig.InsertBatchSize,
-			SyncMode:              utils.CheckMode,
+			SyncMode:              utils.DiffMode,
 		}
 		if _, ok := tableCFG[strings.ToUpper(t)]; ok {
 			d.IndexFields = tableCFG[strings.ToUpper(t)].IndexFields
@@ -83,19 +83,13 @@ func NewDiff(cfg *service.CfgFile, engine *service.Engine, exportTableSlice []st
 	return diffTables, nil
 }
 
-func (d *Diff) SplitChunk(workerID int) error {
+func (d *Diff) SplitChunk(workerID int, globalSCN uint64) error {
 	numberCols, sourceColumnInfo, targetColumnInfo, err := AdjustTableSelectColumn(d.Engine, d.SourceSchema, d.SourceTable, d.SourceCharacterSet, d.NlsComp, d.SourceTableCollation, d.SourceSchemaCollation, d.OracleCollation, d.OnlyCheckRows)
 	if err != nil {
 		return err
 	}
 
 	numberColumn, err := FilterOracleNUMBERColumn(d.Engine, d.SourceSchema, d.SourceTable, d.IndexFields, numberCols, d.OnlyCheckRows)
-	if err != nil {
-		return err
-	}
-
-	// 获取 SCN 以及初始化元数据表
-	globalSCN, err := d.Engine.GetOracleCurrentSnapshotSCN()
 	if err != nil {
 		return err
 	}
@@ -116,12 +110,14 @@ func (d *Diff) SplitChunk(workerID int) error {
 			return err
 		}
 		return nil
-	} else {
+	} else if !d.OnlyCheckRows && d.Range == "" {
 		if err = d.Engine.InitDataDiffMetaRecordByNUMBER(d.SourceSchema, d.SourceTable,
 			sourceColumnInfo, targetColumnInfo, numberColumn, globalSCN, workerID, d.ChunkSize, d.InsertBatchSize, d.SyncMode); err != nil {
 			return err
 		}
 		return nil
+	} else {
+		return fmt.Errorf("config file parse failed, diff string [%v]", d.String())
 	}
 }
 
