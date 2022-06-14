@@ -102,6 +102,7 @@ func NewMySQLEngineGeneralDB(mysqlCfg service.TargetConfig, slowQueryThreshold, 
 
 	sqlDB.SetMaxIdleConns(mysqlIdleConn)
 	sqlDB.SetMaxOpenConns(mysqlMaxOpenConn)
+	sqlDB.SetConnMaxLifetime(mysqlConnMaxLifeTime)
 	sqlDB.SetConnMaxIdleTime(mysqlConnMaxIdleTime)
 
 	if err = sqlDB.Ping(); err != nil {
@@ -116,6 +117,7 @@ func NewMySQLEngineGeneralDB(mysqlCfg service.TargetConfig, slowQueryThreshold, 
 
 	mysqlDB.SetMaxIdleConns(mysqlIdleConn)
 	mysqlDB.SetMaxOpenConns(mysqlMaxOpenConn)
+	mysqlDB.SetConnMaxLifetime(mysqlConnMaxLifeTime)
 	mysqlDB.SetConnMaxIdleTime(mysqlConnMaxIdleTime)
 
 	if err = mysqlDB.Ping(); err != nil {

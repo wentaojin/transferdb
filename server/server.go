@@ -40,6 +40,7 @@ import (
 const (
 	mysqlIdleConn        = 512
 	mysqlMaxConn         = 1024
+	mysqlConnMaxLifeTime = 1 * time.Minute
 	mysqlConnMaxIdleTime = 30 * time.Second
 )
 
@@ -94,8 +95,7 @@ func Run(cfg *service.CfgFile, mode string) error {
 	case "full":
 		// 全量数据 ETL 非一致性（基于某个时间点，而是直接基于现有 SCN）抽取，离线环境提供与原库一致性
 		engine, err := NewEngineDB(
-			cfg.SourceConfig, cfg.TargetConfig, cfg.AppConfig.SlowlogThreshold,
-			cfg.FullConfig.TableThreads*cfg.FullConfig.SQLThreads*cfg.FullConfig.ApplyThreads)
+			cfg.SourceConfig, cfg.TargetConfig, cfg.AppConfig.SlowlogThreshold, mysqlMaxConn)
 		if err != nil {
 			return err
 		}
@@ -114,8 +114,7 @@ func Run(cfg *service.CfgFile, mode string) error {
 	case "all":
 		// 全量 + 增量数据同步阶段 - logminer
 		engine, err := NewEngineDB(
-			cfg.SourceConfig, cfg.TargetConfig, cfg.AppConfig.SlowlogThreshold,
-			cfg.FullConfig.TableThreads*cfg.FullConfig.SQLThreads*cfg.FullConfig.ApplyThreads)
+			cfg.SourceConfig, cfg.TargetConfig, cfg.AppConfig.SlowlogThreshold, mysqlMaxConn)
 		if err != nil {
 			return err
 		}
