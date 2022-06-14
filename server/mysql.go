@@ -100,7 +100,7 @@ func NewMySQLEngineGeneralDB(mysqlCfg service.TargetConfig, slowQueryThreshold, 
 		return &service.Engine{}, fmt.Errorf("error on gormDB.DB() convert sqlDB failed [meta-schema]: %v", err)
 	}
 
-	sqlDB.SetMaxIdleConns(mysqlMaxOpenConn)
+	sqlDB.SetMaxIdleConns(mysqlIdleConn)
 	sqlDB.SetMaxOpenConns(mysqlMaxOpenConn)
 	sqlDB.SetConnMaxIdleTime(mysqlConnMaxIdleTime)
 
@@ -114,7 +114,7 @@ func NewMySQLEngineGeneralDB(mysqlCfg service.TargetConfig, slowQueryThreshold, 
 		return &service.Engine{}, fmt.Errorf("error on open mysql database connection [target-schema]: %v", err)
 	}
 
-	mysqlDB.SetMaxIdleConns(mysqlMaxOpenConn)
+	mysqlDB.SetMaxIdleConns(mysqlIdleConn)
 	mysqlDB.SetMaxOpenConns(mysqlMaxOpenConn)
 	mysqlDB.SetConnMaxIdleTime(mysqlConnMaxIdleTime)
 

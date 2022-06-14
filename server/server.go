@@ -38,6 +38,7 @@ import (
 )
 
 const (
+	mysqlIdleConn        = 512
 	mysqlMaxConn         = 1024
 	mysqlConnMaxIdleTime = 30 * time.Second
 )

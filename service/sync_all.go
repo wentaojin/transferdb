@@ -17,6 +17,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -266,9 +267,6 @@ func (e *Engine) GetOracleLogminerContentToMySQL(schemaName string, sourceTableN
    AND SCN >= `, lastCheckpoint, ` ORDER BY SCN`)
 
 	startTime := time.Now()
-	zap.L().Info("logminer sql",
-		zap.String("sql", querySQL),
-		zap.Time("start time", startTime))
 
 	rows, err := e.OracleDB.QueryContext(ctx, querySQL)
 	if err != nil {
@@ -284,9 +282,16 @@ func (e *Engine) GetOracleLogminerContentToMySQL(schemaName string, sourceTableN
 		lcs = append(lcs, lc)
 	}
 	endTime := time.Now()
+
+	jsonLCS, err := json.Marshal(lcs)
+	if err != nil {
+		return lcs, fmt.Errorf("json Marshal LogminerContent failed: %v", err)
+	}
 	zap.L().Info("logminer sql",
 		zap.String("sql", querySQL),
-		zap.Time("end time", endTime),
-		zap.String("cost time", time.Since(startTime).String()))
+		zap.String("json logminer content", string(jsonLCS)),
+		zap.String("start time", startTime.String()),
+		zap.String("end time", endTime.String()),
+		zap.String("cost time", endTime.Sub(startTime).String()))
 	return lcs, nil
 }
