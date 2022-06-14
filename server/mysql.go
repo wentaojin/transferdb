@@ -100,28 +100,27 @@ func NewMySQLEngineGeneralDB(mysqlCfg service.TargetConfig, slowQueryThreshold, 
 		return &service.Engine{}, fmt.Errorf("error on gormDB.DB() convert sqlDB failed [meta-schema]: %v", err)
 	}
 
+	sqlDB.SetMaxIdleConns(mysqlMaxOpenConn)
+	sqlDB.SetMaxOpenConns(mysqlMaxOpenConn)
+	sqlDB.SetConnMaxIdleTime(mysqlConnMaxIdleTime)
+
 	if err = sqlDB.Ping(); err != nil {
 		return &service.Engine{}, fmt.Errorf("error on ping mysql database connection [meta-schema]: %v", err)
 	}
-
-	sqlDB.SetMaxIdleConns(mysqlMaxOpenConn)
-	sqlDB.SetMaxOpenConns(mysqlMaxOpenConn)
-	sqlDB.SetConnMaxLifetime(mysqlConnMaxLifeTime)
-	sqlDB.SetConnMaxIdleTime(mysqlConnMaxIdleTime)
 
 	// 初始化 mysqlDB
 	mysqlDB, err = sql.Open("mysql", dsn)
 	if err != nil {
 		return &service.Engine{}, fmt.Errorf("error on open mysql database connection [target-schema]: %v", err)
 	}
-	if err = mysqlDB.Ping(); err != nil {
-		return &service.Engine{}, fmt.Errorf("error on ping mysql database connection [target-schema]: %v", err)
-	}
 
 	mysqlDB.SetMaxIdleConns(mysqlMaxOpenConn)
 	mysqlDB.SetMaxOpenConns(mysqlMaxOpenConn)
-	mysqlDB.SetConnMaxLifetime(mysqlConnMaxLifeTime)
 	mysqlDB.SetConnMaxIdleTime(mysqlConnMaxIdleTime)
+
+	if err = mysqlDB.Ping(); err != nil {
+		return &service.Engine{}, fmt.Errorf("error on ping mysql database connection [target-schema]: %v", err)
+	}
 
 	return &service.Engine{
 		MysqlDB: mysqlDB,
