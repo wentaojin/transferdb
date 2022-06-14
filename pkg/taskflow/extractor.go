@@ -171,11 +171,16 @@ func filterOracleRedoGreaterOrEqualRecordByTable(
 // 2、根据元数据表记录全量导出导入
 func initOracleTableConsumeRowID(cfg *service.CfgFile, engine *service.Engine,
 	waitSyncTableInfo []string, syncMode string, oraCollation bool) error {
+	startTime := time.Now()
 	// 全量同步前，获取 SCN 以及初始化元数据表
 	globalSCN, err := engine.GetOracleCurrentSnapshotSCN()
 	if err != nil {
 		return err
 	}
+	zap.L().Info("all table init wait_sync_meta and full_sync_meta start",
+		zap.String("schema", cfg.SourceConfig.SchemaName),
+		zap.Uint64("global scn", globalSCN),
+		zap.String("start time", startTime.String()))
 
 	wp := workpool.New(cfg.FullConfig.TaskThreads)
 
@@ -183,7 +188,7 @@ func initOracleTableConsumeRowID(cfg *service.CfgFile, engine *service.Engine,
 		table := tbl
 		workerID := idx
 		wp.Do(func() error {
-			startTime := time.Now()
+			startTabTime := time.Now()
 			// Date/Timestamp 字段类型格式化
 			// Interval Year/Day 数据字符 TO_CHAR 格式化
 			sourceColumnInfo, err := engine.AdjustTableSelectColumn(cfg.SourceConfig.SchemaName, table, oraCollation)
@@ -197,23 +202,30 @@ func initOracleTableConsumeRowID(cfg *service.CfgFile, engine *service.Engine,
 				return err
 			}
 
-			endTime := time.Now()
+			endTabTime := time.Now()
 			zap.L().Info("single table init wait_sync_meta and full_sync_meta finished",
 				zap.String("schema", cfg.SourceConfig.SchemaName),
 				zap.String("table", table),
 				zap.Uint64("global scn", globalSCN),
-				zap.String("cost", endTime.Sub(startTime).String()))
+				zap.String("cost", endTabTime.Sub(startTabTime).String()))
 
 			return nil
 		})
 	}
 
-	if err := wp.Wait(); err != nil {
+	if err = wp.Wait(); err != nil {
 		return err
 	}
 	if !wp.IsDone() {
 		return fmt.Errorf("init oracle table rowid by scn failed, please rerunning")
 	}
+
+	endTime := time.Now()
+	zap.L().Info("all table init wait_sync_meta and full_sync_meta finished",
+		zap.String("schema", cfg.SourceConfig.SchemaName),
+		zap.Uint64("global scn", globalSCN),
+		zap.String("end time", endTime.String()),
+		zap.String("cost", endTime.Sub(startTime).String()))
 
 	return nil
 }

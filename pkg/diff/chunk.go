@@ -153,11 +153,11 @@ func AdjustTableSelectColumn(e *service.Engine, schemaName, tableName string, so
 		// 数字
 		case "NUMBER":
 			sourceColumnInfo = append(sourceColumnInfo, utils.StringsBuilder("DECODE(SUBSTR(", colName, ",1,1),'.','0' || ", colName, ",", colName, ") AS ", colName))
-			targetColumnInfo = append(targetColumnInfo, utils.StringsBuilder("0 + CAST(", colName, " AS CHAR) AS ", colName))
+			targetColumnInfo = append(targetColumnInfo, utils.StringsBuilder("CAST(0 + CAST(", colName, " AS CHAR) AS CHAR) AS ", colName))
 			numberCols = append(numberCols, colName)
 		case "DECIMAL", "DEC", "DOUBLE PRECISION", "FLOAT", "INTEGER", "INT", "REAL", "NUMERIC", "BINARY_FLOAT", "BINARY_DOUBLE", "SMALLINT":
 			sourceColumnInfo = append(sourceColumnInfo, utils.StringsBuilder("DECODE(SUBSTR(", colName, ",1,1),'.','0' || ", colName, ",", colName, ") AS ", colName))
-			targetColumnInfo = append(targetColumnInfo, utils.StringsBuilder("0 + CAST(", colName, " AS CHAR) AS ", colName))
+			targetColumnInfo = append(targetColumnInfo, utils.StringsBuilder("CAST(0 + CAST(", colName, " AS CHAR) AS CHAR) AS ", colName))
 		// 字符
 		case "BFILE", "CHARACTER", "LONG", "NCHAR VARYING", "ROWID", "UROWID", "VARCHAR", "XMLTYPE", "CHAR", "NCHAR", "NVARCHAR2", "NCLOB", "CLOB":
 			sourceColumnInfo = append(sourceColumnInfo, utils.StringsBuilder("NVL(", colName, ",'') AS ", colName))
