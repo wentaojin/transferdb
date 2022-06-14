@@ -17,7 +17,7 @@ package taskflow
 
 import (
 	"fmt"
-	"strings"
+	"github.com/wentaojin/transferdb/utils"
 	"time"
 
 	"github.com/wentaojin/transferdb/service"
@@ -56,11 +56,28 @@ func applierTableFullRecord(engine *service.Engine,
 
 // 表数据应用 -> 增量任务
 func applierTableIncrementRecord(p *IncrPayload) error {
-	sql := strings.Join(p.MySQLRedo, ";")
-	//zlog.zap.L().Info("increment applier sql", zap.String("sql", sql))
-	_, err := p.Engine.MysqlDB.Exec(sql)
-	if err != nil {
-		return fmt.Errorf("single increment table data insert mysql [%s] falied:%v", sql, err)
+	//zap.L().Info("increment applier sql", zap.String("sql", sql))
+	if p.OperationType == utils.UpdateOperation {
+		// update 语句拆分 delete/replace 放一个事务内
+		txn, err := p.Engine.MysqlDB.Begin()
+		if err != nil {
+			return fmt.Errorf("single increment table [%s] data oracle redo [%v] insert mysql redo [%v] transaction start falied: %v", p.SourceTable, p.OracleRedo, p.MySQLRedo, err)
+		}
+		for _, sql := range p.MySQLRedo {
+			if _, err = txn.Exec(sql); err != nil {
+				return fmt.Errorf("single increment table [%s] data oracle redo [%v] insert mysql [%v] transaction doing falied: %v", p.SourceTable, p.OracleRedo, p.MySQLRedo, err)
+			}
+		}
+		if err = txn.Commit(); err != nil {
+			return fmt.Errorf("single increment table [%s] data oracle redo [%v] insert mysql [%v] transaction commit falied: %v", p.SourceTable, p.OracleRedo, p.MySQLRedo, err)
+		}
+	} else {
+		for _, sql := range p.MySQLRedo {
+			_, err := p.Engine.MysqlDB.Exec(sql)
+			if err != nil {
+				return fmt.Errorf("single increment table [%s] data oracle redo [%v] insert mysql [%v] exec falied: %v", p.SourceTable, p.OracleRedo, p.MySQLRedo, err)
+			}
+		}
 	}
 	// 数据写入完毕，更新元数据 checkpoint 表
 	// 如果同步中断，数据同步使用会以 global_scn 为准，也就是会进行重复消费

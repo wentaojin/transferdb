@@ -39,7 +39,8 @@ import (
 
 const (
 	mysqlMaxConn         = 1024
-	mysqlConnMaxLifeTime = 5 * time.Minute
+	mysqlConnMaxLifeTime = 30 * time.Second
+	mysqlConnMaxIdleTime = 1 * time.Minute
 )
 
 // 程序运行

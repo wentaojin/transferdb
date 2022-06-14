@@ -34,6 +34,8 @@ func NewOracleDBEngine(oraCfg service.SourceConfig) (*sql.DB, error) {
 	// https://pkg.go.dev/github.com/godror/godror
 	// https://github.com/godror/godror/blob/db9cd12d89cdc1c60758aa3f36ece36cf5a61814/doc/connection.md
 	// https://godror.github.io/godror/doc/connection.html
+	// You can specify connection timeout seconds with "?connect_timeout=15" - Ping uses this timeout, NOT the Deadline in Context!
+	// For more connection options, see [Godor Connection Handling](https://godror.github.io/godror/doc/connection.html).
 	// 启用异构池 heterogeneousPool 即程序连接用户与访问 oracle schema 用户名不一致
 	connString := fmt.Sprintf("oracle://@%s/%s?connectionClass=POOL_CONNECTION_CLASS&heterogeneousPool=1&%s",
 		utils.StringsBuilder(oraCfg.Host, ":", strconv.Itoa(oraCfg.Port)),
