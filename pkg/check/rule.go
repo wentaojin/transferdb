@@ -244,11 +244,13 @@ func OracleTableColumnMapRuleReverse(
 		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, columnCharacter, columnCollation, defaultValueMapSlice)
 	case "RAW":
 		originColumnType = fmt.Sprintf("RAW(%d)", dataLength)
-		if dataLength < 256 {
-			buildInColumnType = fmt.Sprintf("BINARY(%d)", dataLength)
-		} else {
-			buildInColumnType = fmt.Sprintf("VARBINARY(%d)", dataLength)
-		}
+		// Fixed: MySQL Binary 数据类型定长，长度不足补 0x00, 容易导致数据对比不一致，统一使用 Varbinary 数据类型
+		//if dataLength < 256 {
+		//	buildInColumnType = fmt.Sprintf("BINARY(%d)", dataLength)
+		//} else {
+		//	buildInColumnType = fmt.Sprintf("VARBINARY(%d)", dataLength)
+		//}
+		buildInColumnType = fmt.Sprintf("VARBINARY(%d)", dataLength)
 		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
 		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, columnCharacter, columnCollation, defaultValueMapSlice)
 	case "REAL":
@@ -1019,26 +1021,27 @@ func OracleTableMapRuleCheck(
 		)
 		return fixedMsg, tableRows, nil
 	case "RAW":
-		if oracleDataLength < 256 {
-			if mysqlDataType == "BINARY" && mysqlDataLength == oracleDataLength && oracleDiffColMeta == mysqlDiffColMeta {
-				return "", nil, nil
-			}
-			tableRows = table.Row{tableName, columnName,
-				fmt.Sprintf("RAW(%d) %s", oracleDataLength, oracleColMeta),
-				fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
-				fmt.Sprintf("BINARY(%d) %s", oracleDataLength, oracleColMeta)}
-
-			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s CHARACTER SET %s COLLATE %s %s;\n",
-				targetSchema,
-				tableName,
-				columnName,
-				fmt.Sprintf("BINARY(%d)", oracleDataLength),
-				mysqlCharacterSet,
-				mysqlCollation,
-				oracleColMeta,
-			)
-			return fixedMsg, tableRows, nil
-		}
+		// Fixed: MySQL Binary 数据类型定长，长度不足补 0x00, 容易导致数据对比不一致，统一使用 Varbinary 数据类型
+		//if oracleDataLength < 256 {
+		//	if mysqlDataType == "BINARY" && mysqlDataLength == oracleDataLength && oracleDiffColMeta == mysqlDiffColMeta {
+		//		return "", nil, nil
+		//	}
+		//	tableRows = table.Row{tableName, columnName,
+		//		fmt.Sprintf("RAW(%d) %s", oracleDataLength, oracleColMeta),
+		//		fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
+		//		fmt.Sprintf("BINARY(%d) %s", oracleDataLength, oracleColMeta)}
+		//
+		//	fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s CHARACTER SET %s COLLATE %s %s;\n",
+		//		targetSchema,
+		//		tableName,
+		//		columnName,
+		//		fmt.Sprintf("BINARY(%d)", oracleDataLength),
+		//		mysqlCharacterSet,
+		//		mysqlCollation,
+		//		oracleColMeta,
+		//	)
+		//	return fixedMsg, tableRows, nil
+		//}
 
 		if mysqlDataType == "VARBINARY" && mysqlDataLength == oracleDataLength && oracleDiffColMeta == mysqlDiffColMeta {
 			return "", nil, nil

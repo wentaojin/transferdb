@@ -240,11 +240,13 @@ func ReverseOracleTableColumnMapRule(
 		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, columnCollation, defaultValueMapSlice)
 	case "RAW":
 		originColumnType = fmt.Sprintf("RAW(%d)", dataLength)
-		if dataLength < 256 {
-			buildInColumnType = fmt.Sprintf("BINARY(%d)", dataLength)
-		} else {
-			buildInColumnType = fmt.Sprintf("VARBINARY(%d)", dataLength)
-		}
+		// Fixed: MySQL Binary 数据类型定长，长度不足补 0x00, 容易导致数据对比不一致，统一使用 Varbinary 数据类型
+		//if dataLength < 256 {
+		//	buildInColumnType = fmt.Sprintf("BINARY(%d)", dataLength)
+		//} else {
+		//	buildInColumnType = fmt.Sprintf("VARBINARY(%d)", dataLength)
+		//}
+		buildInColumnType = fmt.Sprintf("VARBINARY(%d)", dataLength)
 		modifyColumnType = ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
 		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, columnCollation, defaultValueMapSlice)
 	case "REAL":

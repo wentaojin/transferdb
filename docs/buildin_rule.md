@@ -1,7 +1,7 @@
 <b>Oracle Data Type Mapping MySQL/TiDB Rule</b>
 
 | ORACLE                             | MySQL/TiDB                   |
-| ---------------------------------- | ---------------------------- |
+|------------------------------------| ---------------------------- |
 | number                             | decimal(65,30)               |
 | number(p,s)<br />p>0,s>0           | decimal(p,s)                 |
 | number(p,0)<br />1<=p<3            | tinyint                      |
@@ -37,8 +37,7 @@
 | nclob                              | text                         |
 | numeric(p,s)                       | numeric(p,s)                 |
 | nvarchar2(p)                       | nvarchar(p)                  |
-| raw(length)<br />length<256        | binary(length)               |
-| raw(length)<br />length>256        | varbinary(length)            |
+| raw(length)                        | varbinary(length)            |
 | real                               | double                       |
 | rowid                              | char(10)                     |
 | smallint                           | decimal(38)                  |

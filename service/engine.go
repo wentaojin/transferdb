@@ -407,7 +407,8 @@ func (e *Engine) GetOracleDataRowStrings(querySQL string) ([]string, *strset.Set
 						rowsTMP = append(rowsTMP, fmt.Sprintf("%v", rf))
 					}
 				default:
-					rowsTMP = append(rowsTMP, fmt.Sprintf("'%v'", string(raw)))
+					// 特殊字符单引号替换
+					rowsTMP = append(rowsTMP, fmt.Sprintf("'%v'", strings.Replace(string(raw), "'", "\\"+"'", -1)))
 				}
 			}
 		}
@@ -559,7 +560,8 @@ func (e *Engine) GetMySQLDataRowStrings(querySQL string) ([]string, *strset.Set,
 					}
 					rowsTMP = append(rowsTMP, fmt.Sprintf("%v", r))
 				default:
-					rowsTMP = append(rowsTMP, fmt.Sprintf("'%v'", string(raw)))
+					// 特殊字符单引号替换
+					rowsTMP = append(rowsTMP, fmt.Sprintf("'%v'", strings.Replace(string(raw), "'", "\\"+"'", -1)))
 				}
 			}
 		}

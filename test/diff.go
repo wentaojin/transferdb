@@ -58,10 +58,10 @@ func main() {
 	dataDiff := service.DataDiffMeta{
 		ID:               0,
 		SourceSchemaName: "MARVIN",
-		SourceTableName:  "MARVIN2",
-		SourceColumnInfo: "DECODE(SUBSTR(FP2,1,1),'.','0' || FP2,FP2) AS FP2",
-		TargetColumnInfo: "CAST(0 + CAST(FP2 AS CHAR) AS CHAR) AS FP2",
-		Range:            " N1 BETWEEN 1650000 AND 1650001 ",
+		SourceTableName:  "MARVIN0",
+		SourceColumnInfo: "rw1",
+		TargetColumnInfo: "rw1",
+		Range:            " N1 BETWEEN 4350000 AND 4350001",
 		NumberColumn:     "N1",
 	}
 
