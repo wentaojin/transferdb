@@ -18,6 +18,7 @@ package diff
 import (
 	"fmt"
 	"github.com/thinkeridea/go-extend/exstrings"
+	"golang.org/x/sync/errgroup"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -292,13 +293,17 @@ func startTableDiffByCheckpoint(cfg *service.CfgFile, engine *service.Engine, pa
 
 	// 数据对比
 	for _, d := range diffs {
+		diffStartTime := time.Now()
+		zap.L().Info("diff single table oracle to mysql start",
+			zap.String("schema", d.SourceSchema),
+			zap.String("table", d.SourceTable),
+			zap.String("start time", diffStartTime.String()))
+
 		// 获取对比记录
 		diffMetas, err := engine.GetDataDiffMeta(d.SourceSchema, d.SourceTable)
 		if err != nil {
 			return err
 		}
-
-		diffStartTime := time.Now()
 
 		// 设置工作池
 		// 设置 goroutine 数
@@ -424,13 +429,17 @@ func startTableDiffByNormal(cfg *service.CfgFile, engine *service.Engine, waitSy
 
 	// 数据对比
 	for _, d := range diffs {
+		diffStartTime := time.Now()
+		zap.L().Info("diff single table oracle to mysql start",
+			zap.String("schema", d.SourceSchema),
+			zap.String("table", d.SourceTable),
+			zap.String("start time", diffStartTime.String()))
+
 		// 获取对比记录
 		diffMetas, err := engine.GetDataDiffMeta(d.SourceSchema, d.SourceTable)
 		if err != nil {
 			return err
 		}
-
-		diffStartTime := time.Now()
 
 		// 设置工作池
 		// 设置 goroutine 数
@@ -658,6 +667,13 @@ func PreSplitChunk(cfg *service.CfgFile, engine *service.Engine, exportTableSlic
 	return diffs, nil
 }
 
+// 数据对比报告
+type ReportSummary struct {
+	Columns   []string
+	StringSet *strset.Set
+	Crc32Val  uint32
+}
+
 func Report(targetSchema string, dm service.DataDiffMeta, engine *service.Engine) (string, error) {
 	var oraQuery, mysqlQuery string
 	if dm.NumberColumn == "" {
@@ -676,24 +692,52 @@ func Report(targetSchema string, dm service.DataDiffMeta, engine *service.Engine
 			" ORDER BY ", dm.NumberColumn, " DESC")
 	}
 
-	oraColumns, oraStringSet, oraCrc32Val, err := engine.GetOracleDataRowStrings(oraQuery)
-	if err != nil {
-		return "", fmt.Errorf("get oracle data row strings failed: %v", err)
+	// 多线程
+	errGO := new(errgroup.Group)
+	oraChan := make(chan ReportSummary, 1)
+	mysqlChan := make(chan ReportSummary, 1)
+
+	errGO.Go(func() error {
+		oraColumns, oraStringSet, oraCrc32Val, err := engine.GetOracleDataRowStrings(oraQuery)
+		if err != nil {
+			return fmt.Errorf("get oracle data row strings failed: %v", err)
+		}
+		oraChan <- ReportSummary{
+			Columns:   oraColumns,
+			StringSet: oraStringSet,
+			Crc32Val:  oraCrc32Val,
+		}
+		return nil
+	})
+
+	errGO.Go(func() error {
+		mysqlColumns, mysqlStringSet, mysqlCrc32Val, err := engine.GetMySQLDataRowStrings(mysqlQuery)
+		if err != nil {
+			return fmt.Errorf("get mysql data row strings failed: %v", err)
+		}
+		mysqlChan <- ReportSummary{
+			Columns:   mysqlColumns,
+			StringSet: mysqlStringSet,
+			Crc32Val:  mysqlCrc32Val,
+		}
+		return nil
+	})
+
+	if err := errGO.Wait(); err != nil {
+		return "", err
 	}
 
-	mysqlColumns, mysqlStringSet, mysqlCrc32Val, err := engine.GetMySQLDataRowStrings(mysqlQuery)
-	if err != nil {
-		return "", fmt.Errorf("get mysql data row strings failed: %v", err)
-	}
+	oraReport := <-oraChan
+	mysqlReport := <-mysqlChan
 
 	// 数据相同
-	if oraCrc32Val == mysqlCrc32Val {
+	if oraReport.Crc32Val == mysqlReport.Crc32Val {
 		zap.L().Info("oracle table chunk diff equal",
 			zap.String("oracle schema", dm.SourceSchemaName),
 			zap.String("mysql schema", targetSchema),
 			zap.String("table", dm.SourceTableName),
-			zap.Uint32("oracle crc32 values", oraCrc32Val),
-			zap.Uint32("mysql crc32 values", mysqlCrc32Val),
+			zap.Uint32("oracle crc32 values", oraReport.Crc32Val),
+			zap.Uint32("mysql crc32 values", mysqlReport.Crc32Val),
 			zap.String("oracle sql", oraQuery),
 			zap.String("mysql sql", mysqlQuery))
 		return "", nil
@@ -703,8 +747,8 @@ func Report(targetSchema string, dm service.DataDiffMeta, engine *service.Engine
 		zap.String("oracle schema", dm.SourceSchemaName),
 		zap.String("mysql schema", targetSchema),
 		zap.String("table", dm.SourceTableName),
-		zap.Uint32("oracle crc32 values", oraCrc32Val),
-		zap.Uint32("mysql crc32 values", mysqlCrc32Val),
+		zap.Uint32("oracle crc32 values", oraReport.Crc32Val),
+		zap.Uint32("mysql crc32 values", mysqlReport.Crc32Val),
 		zap.String("oracle sql", oraQuery),
 		zap.String("mysql sql", mysqlQuery))
 
@@ -716,7 +760,7 @@ func Report(targetSchema string, dm service.DataDiffMeta, engine *service.Engine
 	var fixSQL strings.Builder
 
 	// 判断下游数据是否多
-	targetMore := strset.Difference(mysqlStringSet, oraStringSet).List()
+	targetMore := strset.Difference(mysqlReport.StringSet, oraReport.StringSet).List()
 	if len(targetMore) > 0 {
 		fixSQL.WriteString("/*\n")
 		fixSQL.WriteString(fmt.Sprintf(" mysql table [%s.%s] chunk data rows are more \n", targetSchema, dm.SourceTableName))
@@ -727,10 +771,10 @@ func Report(targetSchema string, dm service.DataDiffMeta, engine *service.Engine
 		sw.AppendRows([]table.Row{
 			{"ORACLE",
 				utils.StringsBuilder("SELECT COUNT(1)", " FROM ", dm.SourceSchemaName, ".", dm.SourceTableName, " WHERE ", dm.Range),
-				oraCrc32Val},
+				oraReport.Crc32Val},
 			{"MySQL", utils.StringsBuilder(
 				"SELECT COUNT(1)", " FROM ", targetSchema, ".", dm.SourceTableName, " WHERE ", dm.Range),
-				mysqlCrc32Val},
+				mysqlReport.Crc32Val},
 		})
 		fixSQL.WriteString(fmt.Sprintf("%v\n", sw.Render()))
 		fixSQL.WriteString("*/\n")
@@ -740,12 +784,12 @@ func Report(targetSchema string, dm service.DataDiffMeta, engine *service.Engine
 
 			// 计算字段列个数
 			colValues := strings.Split(t, ",")
-			if len(mysqlColumns) != len(colValues) {
+			if len(mysqlReport.Columns) != len(colValues) {
 				return "", fmt.Errorf("mysql schema [%s] table [%s] column counts [%d] isn't match values counts [%d]",
-					targetSchema, dm.SourceTableName, len(mysqlColumns), len(colValues))
+					targetSchema, dm.SourceTableName, len(mysqlReport.Columns), len(colValues))
 			}
-			for i := 0; i < len(mysqlColumns); i++ {
-				whereCond = append(whereCond, utils.StringsBuilder(mysqlColumns[i], "=", colValues[i]))
+			for i := 0; i < len(mysqlReport.Columns); i++ {
+				whereCond = append(whereCond, utils.StringsBuilder(mysqlReport.Columns[i], "=", colValues[i]))
 			}
 
 			fixSQL.WriteString(fmt.Sprintf("%v;\n", utils.StringsBuilder(deletePrefix, exstrings.Join(whereCond, " AND "))))
@@ -753,7 +797,7 @@ func Report(targetSchema string, dm service.DataDiffMeta, engine *service.Engine
 	}
 
 	// 判断上游数据是否多
-	sourceMore := strset.Difference(oraStringSet, mysqlStringSet).List()
+	sourceMore := strset.Difference(oraReport.StringSet, mysqlReport.StringSet).List()
 	if len(sourceMore) > 0 {
 		fixSQL.WriteString("/*\n")
 		fixSQL.WriteString(fmt.Sprintf(" mysql table [%s.%s] chunk data rows are less \n", targetSchema, dm.SourceTableName))
@@ -764,14 +808,14 @@ func Report(targetSchema string, dm service.DataDiffMeta, engine *service.Engine
 		sw.AppendRows([]table.Row{
 			{"ORACLE",
 				utils.StringsBuilder("SELECT COUNT(1)", " FROM ", dm.SourceSchemaName, ".", dm.SourceTableName, " WHERE ", dm.Range),
-				oraCrc32Val},
+				oraReport.Crc32Val},
 			{"MySQL", utils.StringsBuilder(
 				"SELECT COUNT(1)", " FROM ", targetSchema, ".", dm.SourceTableName, " WHERE ", dm.Range),
-				mysqlCrc32Val},
+				mysqlReport.Crc32Val},
 		})
 		fixSQL.WriteString(fmt.Sprintf("%v\n", sw.Render()))
 		fixSQL.WriteString("*/\n")
-		insertPrefix := utils.StringsBuilder("INSERT INTO ", targetSchema, ".", dm.SourceTableName, " (", strings.Join(oraColumns, ","), ") VALUES (")
+		insertPrefix := utils.StringsBuilder("INSERT INTO ", targetSchema, ".", dm.SourceTableName, " (", strings.Join(oraReport.Columns, ","), ") VALUES (")
 		for _, s := range sourceMore {
 			fixSQL.WriteString(fmt.Sprintf("%v;\n", utils.StringsBuilder(insertPrefix, s, ")")))
 		}
