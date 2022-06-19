@@ -18,11 +18,13 @@ package server
 import (
 	"database/sql"
 	"fmt"
+	"github.com/godror/godror/dsn"
 	"github.com/wentaojin/transferdb/service"
 	"github.com/wentaojin/transferdb/utils"
 	"os"
 	"runtime"
 	"strconv"
+	"strings"
 
 	"github.com/godror/godror"
 
@@ -36,21 +38,37 @@ func NewOracleDBEngine(oraCfg service.SourceConfig) (*sql.DB, error) {
 	// https://godror.github.io/godror/doc/connection.html
 	// You can specify connection timeout seconds with "?connect_timeout=15" - Ping uses this timeout, NOT the Deadline in Context!
 	// For more connection options, see [Godor Connection Handling](https://godror.github.io/godror/doc/connection.html).
-	// 启用异构池 heterogeneousPool 即程序连接用户与访问 oracle schema 用户名不一致
-	connString := fmt.Sprintf("oracle://@%s/%s?connectionClass=POOL_CONNECTION_CLASS&heterogeneousPool=1&%s",
-		utils.StringsBuilder(oraCfg.Host, ":", strconv.Itoa(oraCfg.Port)),
-		oraCfg.ServiceName, oraCfg.ConnectParams)
+	var (
+		connString string
+		oraDSN     dsn.ConnectionParams
+		err        error
+	)
+	if strings.ToUpper(oraCfg.SchemaName) == strings.ToUpper(oraCfg.Username) {
+		connString = fmt.Sprintf("oracle://%s:%s@%s/%s?connectionClass=POOL_CONNECTION_CLASS&heterogeneousPool=1&%s",
+			oraCfg.Username, oraCfg.Password, utils.StringsBuilder(oraCfg.Host, ":", strconv.Itoa(oraCfg.Port)),
+			oraCfg.ServiceName, oraCfg.ConnectParams)
+		oraDSN, err = godror.ParseDSN(connString)
+		if err != nil {
+			return nil, err
+		}
 
-	oraDSN, err := godror.ParseDSN(connString)
-	if err != nil {
-		return nil, err
+		oraDSN.OnInitStmts = oraCfg.SessionParams
+	} else {
+		// 启用异构池 heterogeneousPool 即程序连接用户与访问 oracle schema 用户名不一致
+		connString = fmt.Sprintf("oracle://@%s/%s?connectionClass=POOL_CONNECTION_CLASS&heterogeneousPool=1&%s",
+			utils.StringsBuilder(oraCfg.Host, ":", strconv.Itoa(oraCfg.Port)),
+			oraCfg.ServiceName, oraCfg.ConnectParams)
+		oraDSN, err = godror.ParseDSN(connString)
+		if err != nil {
+			return nil, err
+		}
+
+		// https://blogs.oracle.com/opal/post/external-and-proxy-connection-syntax-examples-for-node-oracledb
+		// Using 12.2 or later client libraries
+		// 异构连接池
+		oraDSN.Username, oraDSN.Password = utils.StringsBuilder(oraCfg.Username, "[", oraCfg.SchemaName, "]"), godror.NewPassword(oraCfg.Password)
+		oraDSN.OnInitStmts = oraCfg.SessionParams
 	}
-
-	// https://blogs.oracle.com/opal/post/external-and-proxy-connection-syntax-examples-for-node-oracledb
-	// Using 12.2 or later client libraries
-	// 异构连接池
-	oraDSN.Username, oraDSN.Password = utils.StringsBuilder(oraCfg.Username, "[", oraCfg.SchemaName, "]"), godror.NewPassword(oraCfg.Password)
-	oraDSN.OnInitStmts = oraCfg.SessionParams
 
 	// libDir won't have any effect on Linux for linking reasons to do with Oracle's libnnz library that are proving to be intractable.
 	// You must set LD_LIBRARY_PATH or run ldconfig before your process starts.

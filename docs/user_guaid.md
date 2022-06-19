@@ -212,13 +212,13 @@ alter session set container=CDB$ROOT;
 alter session set container=ORCLPDB;
 
 -- CDB 内创建表空间(需要所有 PDBS 创建同样表空间名)
--- datafile '/deploy/oracle/oradata/ORCLCDB/logminer01.dbf'  数据文件名不一样
+-- datafile '/deploy/oracle/oradata/ORCLPDB/logminer01.dbf'  数据文件名不一样
 create tablespace LOGMINER_TBS
 datafile '/deploy/oracle/oradata/ORCLCDB/logminer00.dbf'
 size 50M autoextend on next 5M maxsize unlimited;
 
 -- CDB 内创建临时表空间(需要所有 PDBS 创建同样表空间名)
--- tempfile '/deploy/oracle/oradata/ORCLCDB/logminer_tmp01.dbf' 数据文件名不一样
+-- tempfile '/deploy/oracle/oradata/ORCLPDB/logminer_tmp01.dbf' 数据文件名不一样
 create temporary tablespace LOGMINER_TMP_TBL
 tempfile '/deploy/oracle/oradata/ORCLCDB/logminer_tmp00.dbf'
 size 50m autoextend on next 50m maxsize unlimited;

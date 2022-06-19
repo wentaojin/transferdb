@@ -266,165 +266,45 @@ func StartTableDiff(partSyncTableInfo, waitSyncTableInfo []string, cfg *service.
 	characterSet string, nlsComp string, tblCollation map[string]string, schemaCollation string, oraCollation bool, fixFileMW *reverser.FileMW) error {
 	// 优先存在断点的表同步
 	if len(partSyncTableInfo) > 0 {
-		if err := startTableDiffByCheckpoint(cfg, engine, partSyncTableInfo, characterSet, nlsComp, tblCollation, schemaCollation, oraCollation, fixFileMW); err != nil {
+		if err := startTableDiffCheck(cfg, engine, partSyncTableInfo, waitSyncTableInfo, characterSet, nlsComp, tblCollation, schemaCollation, oraCollation, fixFileMW, true); err != nil {
 			return err
 		}
 	}
 	if len(waitSyncTableInfo) > 0 {
-		if err := startTableDiffByNormal(cfg, engine, waitSyncTableInfo, characterSet, nlsComp, tblCollation, schemaCollation, oraCollation, fixFileMW); err != nil {
+		if err := startTableDiffCheck(cfg, engine, partSyncTableInfo, waitSyncTableInfo, characterSet, nlsComp, tblCollation, schemaCollation, oraCollation, fixFileMW, false); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// 断点校验
-func startTableDiffByCheckpoint(cfg *service.CfgFile, engine *service.Engine, partSyncTableInfo []string,
-	characterSet string, nlsComp string, tblCollation map[string]string, schemaCollation string, oraCollation bool, fixFileMW *reverser.FileMW) error {
-	// 预检查
-	if err := PreDiffCheck(partSyncTableInfo, cfg, engine); err != nil {
-		return err
-	}
+// 数据校验
+func startTableDiffCheck(cfg *service.CfgFile, engine *service.Engine, partSyncTableInfo, waitSyncTableInfo []string,
+	characterSet string, nlsComp string, tblCollation map[string]string, schemaCollation string, oraCollation bool, fixFileMW *reverser.FileMW, isCheckpoint bool) error {
+	var (
+		diffs []Diff
+		err   error
+	)
 
-	diffs, err := NewDiff(cfg, engine, partSyncTableInfo, characterSet, nlsComp, tblCollation, schemaCollation, oraCollation)
-	if err != nil {
-		return err
-	}
-
-	// 数据对比
-	for _, d := range diffs {
-		diffStartTime := time.Now()
-		zap.L().Info("diff single table oracle to mysql start",
-			zap.String("schema", d.SourceSchema),
-			zap.String("table", d.SourceTable),
-			zap.String("start time", diffStartTime.String()))
-
-		// 获取对比记录
-		diffMetas, err := engine.GetDataDiffMeta(d.SourceSchema, d.SourceTable)
+	if isCheckpoint {
+		// 预检查
+		if err = PreDiffCheck(partSyncTableInfo, cfg, engine); err != nil {
+			return err
+		}
+		diffs, err = NewDiff(cfg, engine, partSyncTableInfo, characterSet, nlsComp, tblCollation, schemaCollation, oraCollation)
 		if err != nil {
 			return err
 		}
-
-		// 设置工作池
-		// 设置 goroutine 数
-		wg := sync.WaitGroup{}
-		ch := make(chan service.DataDiffMeta, utils.BufferSize)
-
-		go func() {
-			for _, meta := range diffMetas {
-				ch <- meta
-			}
-			close(ch)
-		}()
-
-		for c := 0; c < cfg.DiffConfig.DiffThreads; c++ {
-			wg.Add(1)
-			go func(targetSchema string, e *service.Engine, fixFileMW *reverser.FileMW) {
-				defer wg.Done()
-				for meta := range ch {
-					// 数据对比报告
-					r, err := Report(strings.ToUpper(targetSchema), meta, e)
-					if err != nil {
-						if err = e.GormDB.Create(&service.TableErrorDetail{
-							SourceSchemaName: meta.SourceSchemaName,
-							SourceTableName:  meta.SourceTableName,
-							RunMode:          utils.DiffMode,
-							InfoSources:      utils.DiffMode,
-							RunStatus:        "Failed",
-							Detail:           meta.String(),
-							Error:            err.Error(),
-						}).Error; err != nil {
-							zap.L().Error("diff table oracle to mysql failed",
-								zap.String("schema", meta.SourceSchemaName),
-								zap.String("table", meta.SourceTableName),
-								zap.Error(
-									fmt.Errorf("func [Report] diff table task failed, detail see [table_error_detail], please rerunning")))
-							panic(
-								fmt.Errorf("func [Report] diff table task failed, detail see [table_error_detail], please rerunning, error: %v", err))
-						}
-						continue
-					}
-
-					// fixSQL 文件写入
-					if r != "" {
-						if _, err = fmt.Fprintln(fixFileMW, r); err != nil {
-							if err = e.GormDB.Create(&service.TableErrorDetail{
-								SourceSchemaName: meta.SourceSchemaName,
-								SourceTableName:  meta.SourceTableName,
-								RunMode:          utils.DiffMode,
-								InfoSources:      utils.DiffMode,
-								RunStatus:        "Failed",
-								Detail:           meta.String(),
-								Error:            fmt.Sprintf("fix sql file write failed: %v", err.Error()),
-							}).Error; err != nil {
-								zap.L().Error("diff table oracle to mysql failed",
-									zap.String("schema", meta.SourceSchemaName),
-									zap.String("table", meta.SourceTableName),
-									zap.Error(
-										fmt.Errorf("func [Report] diff table task failed, detail see [table_error_detail], please rerunning")))
-								panic(
-									fmt.Errorf("func [Report] diff table task failed, detail see [table_error_detail], please rerunning, error: %v", err))
-							}
-							continue
-						}
-					}
-
-					// 清理记录
-					if err = engine.DeleteDataDiffMeta(meta.SourceSchemaName, meta.SourceTableName, meta.Range); err != nil {
-						if err = e.GormDB.Create(&service.TableErrorDetail{
-							SourceSchemaName: meta.SourceSchemaName,
-							SourceTableName:  meta.SourceTableName,
-							RunMode:          utils.DiffMode,
-							InfoSources:      utils.DiffMode,
-							RunStatus:        "Failed",
-							Detail:           meta.String(),
-							Error:            fmt.Sprintf("delete [data_diff_meta] record write failed: %v", err.Error()),
-						}).Error; err != nil {
-							zap.L().Error("diff table oracle to mysql failed",
-								zap.String("schema", meta.SourceSchemaName),
-								zap.String("table", meta.SourceTableName),
-								zap.Error(
-									fmt.Errorf("func [Report] diff table task failed, detail see [table_error_detail], please rerunning")))
-							panic(
-								fmt.Errorf("func [Report] diff table task failed, detail see [table_error_detail], please rerunning, error: %v", err))
-						}
-						continue
-					}
-
-				}
-			}(cfg.TargetConfig.SchemaName, engine, fixFileMW)
-		}
-
-		wg.Wait()
-
-		// 更新记录
-		if err = engine.ModifyWaitSyncTableMetaRecord(
-			cfg.TargetConfig.MetaSchema,
-			cfg.SourceConfig.SchemaName, d.SourceTable, utils.DiffMode); err != nil {
+	} else {
+		// 预检查
+		if err = PreDiffCheck(waitSyncTableInfo, cfg, engine); err != nil {
 			return err
 		}
-
-		diffEndTime := time.Now()
-		zap.L().Info("diff single table oracle to mysql finished",
-			zap.String("schema", d.SourceSchema),
-			zap.String("table", d.SourceTable),
-			zap.String("cost", diffEndTime.Sub(diffStartTime).String()))
-	}
-	return nil
-}
-
-// 正常校验
-func startTableDiffByNormal(cfg *service.CfgFile, engine *service.Engine, waitSyncTableInfo []string,
-	characterSet string, nlsComp string, tblCollation map[string]string, schemaCollation string, oraCollation bool, fixFileMW *reverser.FileMW) error {
-	// 预检查
-	if err := PreDiffCheck(waitSyncTableInfo, cfg, engine); err != nil {
-		return err
-	}
-
-	// 预切分
-	diffs, err := PreSplitChunk(cfg, engine, waitSyncTableInfo, characterSet, nlsComp, tblCollation, schemaCollation, oraCollation)
-	if err != nil {
-		return err
+		// 预切分
+		diffs, err = PreSplitChunk(cfg, engine, waitSyncTableInfo, characterSet, nlsComp, tblCollation, schemaCollation, oraCollation)
+		if err != nil {
+			return err
+		}
 	}
 
 	// 数据对比
