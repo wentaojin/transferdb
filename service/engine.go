@@ -164,6 +164,7 @@ func (e *Engine) GetOracleTableRowsData(querySQL string, insertBatchSize int) ([
 		rowsResult   []string
 		rowsTMP      []string
 		batchResults []string
+		cols         []string
 	)
 	rows, err := e.OracleDB.Query(querySQL)
 	if err != nil {
@@ -171,9 +172,14 @@ func (e *Engine) GetOracleTableRowsData(querySQL string, insertBatchSize int) ([
 	}
 	defer rows.Close()
 
-	cols, err := rows.Columns()
+	tmpCols, err := rows.Columns()
 	if err != nil {
 		return cols, batchResults, err
+	}
+
+	// 字段名关键字反引号处理
+	for _, col := range tmpCols {
+		cols = append(cols, utils.StringsBuilder("`", col, "`"))
 	}
 
 	// 用于判断字段值是数字还是字符
