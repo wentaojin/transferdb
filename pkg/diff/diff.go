@@ -573,11 +573,12 @@ func Report(targetSchema string, dm service.DataDiffMeta, engine *service.Engine
 	}
 
 	// 多线程
-	errGO := new(errgroup.Group)
+	errORA := &errgroup.Group{}
+	errMySQL := &errgroup.Group{}
 	oraChan := make(chan ReportSummary, 1)
 	mysqlChan := make(chan ReportSummary, 1)
 
-	errGO.Go(func() error {
+	errORA.Go(func() error {
 		oraColumns, oraStringSet, oraCrc32Val, err := engine.GetOracleDataRowStrings(oraQuery)
 		if err != nil {
 			return fmt.Errorf("get oracle data row strings failed: %v", err)
@@ -590,7 +591,7 @@ func Report(targetSchema string, dm service.DataDiffMeta, engine *service.Engine
 		return nil
 	})
 
-	errGO.Go(func() error {
+	errMySQL.Go(func() error {
 		mysqlColumns, mysqlStringSet, mysqlCrc32Val, err := engine.GetMySQLDataRowStrings(mysqlQuery)
 		if err != nil {
 			return fmt.Errorf("get mysql data row strings failed: %v", err)
@@ -603,7 +604,10 @@ func Report(targetSchema string, dm service.DataDiffMeta, engine *service.Engine
 		return nil
 	})
 
-	if err := errGO.Wait(); err != nil {
+	if err := errORA.Wait(); err != nil {
+		return "", err
+	}
+	if err := errMySQL.Wait(); err != nil {
 		return "", err
 	}
 

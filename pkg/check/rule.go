@@ -245,6 +245,7 @@ func OracleTableColumnMapRuleReverse(
 	case "RAW":
 		originColumnType = fmt.Sprintf("RAW(%d)", dataLength)
 		// Fixed: MySQL Binary 数据类型定长，长度不足补 0x00, 容易导致数据对比不一致，统一使用 Varbinary 数据类型
+		// https://ixyzero.com/blog/archives/2118.html
 		//if dataLength < 256 {
 		//	buildInColumnType = fmt.Sprintf("BINARY(%d)", dataLength)
 		//} else {

@@ -5,12 +5,11 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="a67576d0-c4df-4b83-a792-1e43567e1978" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/docs/user_create.sql" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/user_guaid.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/user_guaid.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/cost/template/report_schema.html" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/check/rule.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/check/rule.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pkg/diff/diff.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/diff/diff.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/server/oracle.go" beforeDir="false" afterPath="$PROJECT_DIR$/server/oracle.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/server/server.go" beforeDir="false" afterPath="$PROJECT_DIR$/server/server.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/test/diff.go" beforeDir="false" afterPath="$PROJECT_DIR$/test/diff.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
