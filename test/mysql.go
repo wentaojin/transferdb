@@ -17,38 +17,28 @@ package main
 
 import (
 	"fmt"
-	"strings"
-
-	"github.com/wentaojin/transferdb/service"
-
 	"github.com/wentaojin/transferdb/server"
+	"github.com/wentaojin/transferdb/service"
 )
 
 func main() {
 	mysqlCfg := service.TargetConfig{
 		Username:      "root",
-		Password:      "tidb",
-		Host:          "120.92.86.179",
+		Password:      "",
+		Host:          "17.14.4.90",
 		Port:          4000,
-		ConnectParams: "charset=utf8mb4&parseTime=True&loc=Local&multiStatements=true&tidb_txn_mode='optimistic'",
-		MetaSchema:    "db_meta",
+		ConnectParams: "charset=utf8mb4&parseTime=True&loc=Local&multiStatements=true",
+		SchemaName:    "marvin",
 	}
 	engine, err := server.NewMySQLEngineGeneralDB(mysqlCfg, 300, 300)
 	if err != nil {
 		fmt.Println(err)
 	}
 
-	if err = engine.GormDB.Model(&service.WaitSyncMeta{}).
-		Where("source_schema_name = ? AND source_table_name = ? AND sync_mode = ?",
-			"SYSBENCH",
-			strings.ToUpper("SBTEST2"),
-			"ALL").
-		Updates(map[string]interface{}{
-			"full_global_scn": 129,
-			"FullSplitTimes":  100,
-			"IsPartition":     "NO",
-		}).Error; err != nil {
-		panic(engine)
+	c, r, err := service.Query(engine.MysqlDB, `select * from marvin.cust_info`)
+	if err != nil {
+		fmt.Printf("error exec sql,error: %v", err)
 	}
-
+	fmt.Println(c)
+	fmt.Println(r)
 }

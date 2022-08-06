@@ -41,6 +41,7 @@ func applierTableFullRecord(engine *service.Engine,
 		targetSchemaName,
 		targetTableName,
 		GenerateMySQLInsertSQLStatementPrefix(targetSchemaName, targetTableName, columns, safeMode),
+		querySQL,
 		rowsResult, applyThreads); err != nil {
 		return err
 	}

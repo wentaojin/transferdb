@@ -227,7 +227,12 @@ func SpecialLetters(bs []byte) string {
 	)
 	for _, r := range bytes.Runes(bs) {
 		if unicode.IsPunct(r) || unicode.IsSymbol(r) || unicode.IsSpace(r) {
-			chars = append(chars, '\\', r)
+			// mysql/tidb % 字符, /% 代表 /%，% 代表 % ,无需转义
+			if r == '%' {
+				chars = append(chars, r)
+			} else {
+				chars = append(chars, '\\', r)
+			}
 		} else {
 			chars = append(chars, r)
 		}

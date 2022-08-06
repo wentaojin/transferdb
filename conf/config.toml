@@ -122,7 +122,7 @@ worker-threads = 64
 # 若需要增量数据同步，则需要 logminer 权限
 username = "c##logminer"
 password = "logminer"
-host = "172.16.4.93"
+host = "10.16.4.93"
 port = 1521
 service-name = "orclpdb"
 # oracle instance client dir
@@ -150,7 +150,7 @@ db-type = "tidb"
 # 目标端连接串
 username = "marvin"
 password = "marvin"
-host = "172.16.4.93"
+host = "17.16.4.93"
 port = 5500
 # mysql 链接参数
 connect-params = "charset=utf8mb4&multiStatements=true&parseTime=True&loc=Local"

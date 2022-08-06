@@ -135,7 +135,7 @@ func (e *Engine) IsExistOracleSchema(schemaName string) error {
 }
 
 // Preapre 批量 Batch
-func (e *Engine) BatchWriteMySQLTableData(targetSchemaName, targetTableName, sqlPrefix string, valuesBatchArgs []string, applyThreads int) error {
+func (e *Engine) BatchWriteMySQLTableData(targetSchemaName, targetTableName, sqlPrefix, querySQL string, valuesBatchArgs []string, applyThreads int) error {
 	if len(valuesBatchArgs) > 0 {
 		wp := workpool.New(applyThreads)
 		for _, args := range valuesBatchArgs {
@@ -144,14 +144,14 @@ func (e *Engine) BatchWriteMySQLTableData(targetSchemaName, targetTableName, sql
 				insertSql := utils.StringsBuilder(sqlPrefix, valArgs)
 				_, err := e.MysqlDB.Exec(insertSql)
 				if err != nil {
-					return fmt.Errorf("single full table [%s.%s] sql [%s] data bulk insert mysql falied: %v",
-						targetSchemaName, targetTableName, insertSql, err)
+					return fmt.Errorf("single full table [%s.%s] query sql [%s] replace data sql [%v] data bulk insert mysql failed: %v",
+						targetSchemaName, targetTableName, querySQL, insertSql, err)
 				}
 				return nil
 			})
 		}
 		if err := wp.Wait(); err != nil {
-			return fmt.Errorf("single full table [%s.%s] data concurrency bulk insert mysql falied: %v", targetSchemaName, targetTableName, err)
+			return err
 		}
 	}
 	return nil
@@ -274,8 +274,8 @@ func (e *Engine) GetOracleTableRowsData(querySQL string, insertBatchSize int) ([
 						rowsResult = append(rowsResult, fmt.Sprintf("%v", rf))
 					}
 				default:
-					// 特殊字符单引号替换
-					rowsResult = append(rowsResult, fmt.Sprintf("'%v'", strings.Replace(string(raw), "'", "\\"+"'", -1)))
+					// 特殊字符
+					rowsResult = append(rowsResult, fmt.Sprintf("'%v'", utils.SpecialLetters(raw)))
 				}
 			}
 		}
@@ -413,8 +413,8 @@ func (e *Engine) GetOracleDataRowStrings(querySQL string) ([]string, *strset.Set
 						rowsTMP = append(rowsTMP, fmt.Sprintf("%v", rf))
 					}
 				default:
-					// 特殊字符单引号替换
-					rowsTMP = append(rowsTMP, fmt.Sprintf("'%v'", strings.Replace(string(raw), "'", "\\"+"'", -1)))
+					// 特殊字符
+					rowsTMP = append(rowsTMP, fmt.Sprintf("'%v'", utils.SpecialLetters(raw)))
 				}
 			}
 		}
@@ -566,8 +566,8 @@ func (e *Engine) GetMySQLDataRowStrings(querySQL string) ([]string, *strset.Set,
 					}
 					rowsTMP = append(rowsTMP, fmt.Sprintf("%v", r))
 				default:
-					// 特殊字符单引号替换
-					rowsTMP = append(rowsTMP, fmt.Sprintf("'%v'", strings.Replace(string(raw), "'", "\\"+"'", -1)))
+					// 特殊字符
+					rowsTMP = append(rowsTMP, fmt.Sprintf("'%v'", utils.SpecialLetters(raw)))
 				}
 			}
 		}
