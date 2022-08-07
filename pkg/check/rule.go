@@ -29,7 +29,7 @@ import (
 )
 
 /*
-	Oracle 表字段映射转换
+	Oracle 表字段映射转换 -> Check 阶段
 */
 func OracleTableColumnMapRuleReverse(
 	sourceSchema, sourceTableName, columnName string,
@@ -80,13 +80,28 @@ func OracleTableColumnMapRuleReverse(
 	case "NUMBER":
 		switch {
 		case dataScale > 0:
-			originColumnType = fmt.Sprintf("NUMBER(%d,%d)", dataPrecision, dataScale)
-			buildInColumnType = fmt.Sprintf("DECIMAL(%d,%d)", dataPrecision, dataScale)
+			switch {
+			// oracle 真实数据类型 number(*) -> number(38,127)
+			// number  -> number(38,127)
+			// number(*,x) ->  number(38,x)
+			// decimal(x,y) -> y max 30
+			case dataPrecision == 38 && dataScale > 30:
+				originColumnType = fmt.Sprintf("NUMBER(%d,%d)", dataPrecision, dataScale)
+				buildInColumnType = fmt.Sprintf("DECIMAL(%d,%d)", 65, 30)
+			case dataPrecision == 38 && dataScale <= 30:
+				originColumnType = fmt.Sprintf("NUMBER(%d,%d)", dataPrecision, dataScale)
+				buildInColumnType = fmt.Sprintf("DECIMAL(%d,%d)", 65, dataScale)
+			default:
+				if dataScale <= 30 {
+					originColumnType = fmt.Sprintf("NUMBER(%d,%d)", dataPrecision, dataScale)
+					buildInColumnType = fmt.Sprintf("DECIMAL(%d,%d)", dataPrecision, dataScale)
+				} else {
+					originColumnType = fmt.Sprintf("NUMBER(%d,%d)", dataPrecision, dataScale)
+					buildInColumnType = fmt.Sprintf("DECIMAL(%d,%d)", dataPrecision, 30)
+				}
+			}
 		case dataScale == 0:
 			switch {
-			case dataPrecision == 0 && dataScale == 0:
-				originColumnType = "NUMBER"
-				buildInColumnType = "DECIMAL(65,30)"
 			case dataPrecision >= 1 && dataPrecision < 3:
 				originColumnType = fmt.Sprintf("NUMBER(%d)", dataPrecision)
 				buildInColumnType = "TINYINT"
@@ -104,7 +119,7 @@ func OracleTableColumnMapRuleReverse(
 				buildInColumnType = fmt.Sprintf("DECIMAL(%d)", dataPrecision)
 			default:
 				originColumnType = fmt.Sprintf("NUMBER(%d)", dataPrecision)
-				buildInColumnType = fmt.Sprintf("DECIMAL(%d,4)", dataPrecision)
+				buildInColumnType = fmt.Sprintf("DECIMAL(%d)", 65)
 			}
 		}
 		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
@@ -505,41 +520,83 @@ func OracleTableMapRuleCheck(
 	case "NUMBER":
 		switch {
 		case oracleDataScale > 0:
-			if mysqlDataType == "DECIMAL" && oracleDataPrecision == mysqlDataPrecision && oracleDataScale == mysqlDataScale && oracleDiffColMeta == mysqlDiffColMeta {
+		// oracle 真实数据类型 number(*) -> number(38,127)
+		// number  -> number(38,127)
+		// number(*,x) ->  number(38,x)
+		// decimal(x,y) -> y max 30
+		case oracleDataPrecision == 38 && oracleDataScale > 30:
+			if mysqlDataType == "DECIMAL" && mysqlDataPrecision == 65 && mysqlDataScale == 30 && oracleDiffColMeta == mysqlDiffColMeta {
 				return "", nil, nil
 			}
 
 			tableRows = table.Row{tableName, columnName,
 				fmt.Sprintf("NUMBER(%d,%d) %s", oracleDataPrecision, oracleDataScale, oracleColMeta),
 				fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
-				fmt.Sprintf("DECIMAL(%d,%d) %s", oracleDataPrecision, oracleDataScale, oracleColMeta)}
+				fmt.Sprintf("DECIMAL(65,30) %s", oracleColMeta)}
 
 			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 				targetSchema,
 				tableName,
 				columnName,
-				fmt.Sprintf("DECIMAL(%d,%d)", oracleDataPrecision, oracleDataScale),
+				"DECIMAL(65,30)",
 				oracleColMeta,
 			)
-		case oracleDataScale == 0:
-			switch {
-			case oracleDataPrecision == 0 && oracleDataScale == 0:
-				if mysqlDataType == "DECIMAL" && mysqlDataPrecision == 65 && mysqlDataScale == 30 && oracleDiffColMeta == mysqlDiffColMeta {
+
+		case oracleDataPrecision == 38 && oracleDataScale <= 30:
+			if mysqlDataType == "DECIMAL" && mysqlDataPrecision == 65 && mysqlDataScale == oracleDataScale && oracleDiffColMeta == mysqlDiffColMeta {
+				return "", nil, nil
+			}
+
+			tableRows = table.Row{tableName, columnName,
+				fmt.Sprintf("NUMBER(%d,%d) %s", oracleDataPrecision, oracleDataScale, oracleColMeta),
+				fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
+				fmt.Sprintf("DECIMAL(65,%d) %s", oracleDataScale, oracleColMeta)}
+
+			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
+				targetSchema,
+				tableName,
+				columnName,
+				fmt.Sprintf("DECIMAL(65,%d)", oracleDataScale),
+				oracleColMeta,
+			)
+		default:
+			if oracleDataScale <= 30 {
+				if mysqlDataType == "DECIMAL" && oracleDataPrecision == mysqlDataPrecision && oracleDataScale == mysqlDataScale && oracleDiffColMeta == mysqlDiffColMeta {
 					return "", nil, nil
 				}
 
 				tableRows = table.Row{tableName, columnName,
-					fmt.Sprintf("NUMBER %s", oracleColMeta),
+					fmt.Sprintf("NUMBER(%d,%d) %s", oracleDataPrecision, oracleDataScale, oracleColMeta),
 					fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
-					fmt.Sprintf("DECIMAL(65,30) %s", oracleColMeta)}
+					fmt.Sprintf("DECIMAL(%d,%d) %s", oracleDataPrecision, oracleDataScale, oracleColMeta)}
 
 				fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 					targetSchema,
 					tableName,
 					columnName,
-					"DECIMAL(65,30)",
+					fmt.Sprintf("DECIMAL(%d,%d)", oracleDataPrecision, oracleDataScale),
 					oracleColMeta,
 				)
+			} else {
+				if mysqlDataType == "DECIMAL" && oracleDataPrecision == mysqlDataPrecision && mysqlDataScale == 30 && oracleDiffColMeta == mysqlDiffColMeta {
+					return "", nil, nil
+				}
+
+				tableRows = table.Row{tableName, columnName,
+					fmt.Sprintf("NUMBER(%d,%d) %s", oracleDataPrecision, oracleDataScale, oracleColMeta),
+					fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
+					fmt.Sprintf("DECIMAL(%d,%d) %s", oracleDataPrecision, 30, oracleColMeta)}
+
+				fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
+					targetSchema,
+					tableName,
+					columnName,
+					fmt.Sprintf("DECIMAL(%d,%d)", oracleDataPrecision, 30),
+					oracleColMeta,
+				)
+			}
+		case oracleDataScale == 0:
+			switch {
 			case oracleDataPrecision >= 1 && oracleDataPrecision < 3:
 				if mysqlDataType == "TINYINT" && mysqlDataPrecision >= 3 && mysqlDataScale == oracleDataScale && oracleDiffColMeta == mysqlDiffColMeta {
 					return "", nil, nil
@@ -622,19 +679,19 @@ func OracleTableMapRuleCheck(
 					oracleColMeta,
 				)
 			default:
-				if mysqlDataType == "DECIMAL" && mysqlDataPrecision == oracleDataPrecision && mysqlDataScale == 4 && oracleDiffColMeta == mysqlDiffColMeta {
+				if mysqlDataType == "DECIMAL" && mysqlDataPrecision == 65 && mysqlDataScale == 0 && oracleDiffColMeta == mysqlDiffColMeta {
 					return "", nil, nil
 				}
 				tableRows = table.Row{tableName, columnName,
 					fmt.Sprintf("NUMBER(%d) %s", oracleDataPrecision, oracleColMeta),
 					fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
-					fmt.Sprintf("DECIMAL(%d,4) %s", oracleDataPrecision, oracleColMeta)}
+					fmt.Sprintf("DECIMAL(%d) %s", 65, oracleColMeta)}
 
 				fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
 					targetSchema,
 					tableName,
 					columnName,
-					fmt.Sprintf("DECIMAL(%d,4)", oracleDataPrecision),
+					"DECIMAL(65)",
 					oracleColMeta,
 				)
 			}

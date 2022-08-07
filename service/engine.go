@@ -83,16 +83,15 @@ func Query(db *sql.DB, querySQL string) ([]string, []map[string]string, error) {
 
 		row := make(map[string]string)
 		for k, v := range values {
-			key := cols[k]
 			// 数据库类型 MySQL NULL 是 NULL，空字符串是空字符串
 			// 数据库类型 Oracle NULL、空字符串归于一类 NULL
 			// Oracle/Mysql 对于 'NULL' 统一字符 NULL 处理，查询出来转成 NULL,所以需要判断处理
 			if v == nil { // 处理 NULL 情况，当数据库类型 MySQL 等于 nil
-				row[key] = IsNull
+				row[cols[k]] = IsNull
 			} else {
 				// 处理空字符串以及其他值情况
 				// 数据统一 string 格式显示
-				row[key] = string(v)
+				row[cols[k]] = string(v)
 			}
 		}
 		res = append(res, row)
@@ -100,7 +99,6 @@ func Query(db *sql.DB, querySQL string) ([]string, []map[string]string, error) {
 
 	if err = rows.Err(); err != nil {
 		return cols, res, fmt.Errorf("general sql [%v] query rows.Next failed: [%v]", querySQL, err.Error())
-
 	}
 	return cols, res, nil
 }

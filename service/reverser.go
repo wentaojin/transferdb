@@ -103,14 +103,30 @@ and upper(table_name)=upper('%s')`, strings.ToUpper(schemaName), strings.ToUpper
 func (e *Engine) GetOracleTableColumn(schemaName string, tableName string, oraCollation bool) ([]map[string]string, error) {
 	var querySQL string
 
+	/*
+			1、dataPrecision 精度范围 ORA-01727: numeric precision specifier is out of range (1 to 38)
+			2、dataScale 精度范围 ORA-01728: numeric scale specifier is out of range (-84 to 127)
+			3、oracle number 类型，desc tableName 表结构查看
+			- number(*,10) -> number(38,10)
+			- number(*,0) -> number(38,0)
+			- number(*) -> number
+			- number -> number
+		    - number(x,y) -> number(x,y)
+			4、SQL 查询处理
+			- number(*,10) -> number(38,10)
+			- number(*,0) -> number(38,0)
+			- number(*) -> number(38,127)
+			- number -> number(38,127)
+			- number(x,y) -> number(x,y)
+	*/
 	if oraCollation {
 		querySQL = fmt.Sprintf(`select t.COLUMN_NAME,
 	    t.DATA_TYPE,
 		 t.CHAR_LENGTH,
 		 NVL(t.CHAR_USED,'UNKNOWN') CHAR_USED,
 	    NVL(t.DATA_LENGTH,0) AS DATA_LENGTH,
-	    NVL(t.DATA_PRECISION,0) AS DATA_PRECISION,
-	    NVL(t.DATA_SCALE,0) AS DATA_SCALE,
+	    DECODE(NVL(TO_CHAR(t.DATA_PRECISION),'*'),'*','38',TO_CHAR(t.DATA_PRECISION)) AS DATA_PRECISION,
+	    DECODE(NVL(TO_CHAR(t.DATA_SCALE),'*'),'*','127',TO_CHAR(t.DATA_SCALE)) AS DATA_SCALE,
 		t.NULLABLE,
 	    t.DATA_DEFAULT,
 		DECODE(t.COLLATION,'USING_NLS_COMP',(SELECT VALUE from NLS_DATABASE_PARAMETERS WHERE PARAMETER = 'NLS_COMP'),t.COLLATION) COLLATION,
@@ -130,8 +146,8 @@ func (e *Engine) GetOracleTableColumn(schemaName string, tableName string, oraCo
 		 t.CHAR_LENGTH,
 		 NVL(t.CHAR_USED,'UNKNOWN') CHAR_USED,
 	    NVL(t.DATA_LENGTH,0) AS DATA_LENGTH,
-	    NVL(t.DATA_PRECISION,0) AS DATA_PRECISION,
-	    NVL(t.DATA_SCALE,0) AS DATA_SCALE,
+	    DECODE(NVL(TO_CHAR(t.DATA_PRECISION),'*'),'*','38',TO_CHAR(t.DATA_PRECISION)) AS DATA_PRECISION,
+	    DECODE(NVL(TO_CHAR(t.DATA_SCALE),'*'),'*','127',TO_CHAR(t.DATA_SCALE)) AS DATA_SCALE,
 		t.NULLABLE,
 	    t.DATA_DEFAULT,
 	    c.COMMENTS

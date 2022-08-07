@@ -26,7 +26,9 @@ import (
 	"github.com/wentaojin/transferdb/service"
 )
 
-// 表数据类型转换
+/*
+	Oracle 表字段映射转换 -> Reverse 阶段
+*/
 func ReverseOracleTableColumnMapRule(
 	sourceSchema, sourceTableName, columnName string,
 	dataType, dataNullable, comments, dataDefault string,
@@ -76,13 +78,28 @@ func ReverseOracleTableColumnMapRule(
 	case "NUMBER":
 		switch {
 		case dataScale > 0:
-			originColumnType = fmt.Sprintf("NUMBER(%d,%d)", dataPrecision, dataScale)
-			buildInColumnType = fmt.Sprintf("DECIMAL(%d,%d)", dataPrecision, dataScale)
+			switch {
+			// oracle 真实数据类型 number(*) -> number(38,127)
+			// number  -> number(38,127)
+			// number(*,x) ->  number(38,x)
+			// decimal(x,y) -> y max 30
+			case dataPrecision == 38 && dataScale > 30:
+				originColumnType = fmt.Sprintf("NUMBER(%d,%d)", dataPrecision, dataScale)
+				buildInColumnType = fmt.Sprintf("DECIMAL(%d,%d)", 65, 30)
+			case dataPrecision == 38 && dataScale <= 30:
+				originColumnType = fmt.Sprintf("NUMBER(%d,%d)", dataPrecision, dataScale)
+				buildInColumnType = fmt.Sprintf("DECIMAL(%d,%d)", 65, dataScale)
+			default:
+				if dataScale <= 30 {
+					originColumnType = fmt.Sprintf("NUMBER(%d,%d)", dataPrecision, dataScale)
+					buildInColumnType = fmt.Sprintf("DECIMAL(%d,%d)", dataPrecision, dataScale)
+				} else {
+					originColumnType = fmt.Sprintf("NUMBER(%d,%d)", dataPrecision, dataScale)
+					buildInColumnType = fmt.Sprintf("DECIMAL(%d,%d)", dataPrecision, 30)
+				}
+			}
 		case dataScale == 0:
 			switch {
-			case dataPrecision == 0 && dataScale == 0:
-				originColumnType = "NUMBER"
-				buildInColumnType = "DECIMAL(65,30)"
 			case dataPrecision >= 1 && dataPrecision < 3:
 				originColumnType = fmt.Sprintf("NUMBER(%d)", dataPrecision)
 				buildInColumnType = "TINYINT"
@@ -100,7 +117,7 @@ func ReverseOracleTableColumnMapRule(
 				buildInColumnType = fmt.Sprintf("DECIMAL(%d)", dataPrecision)
 			default:
 				originColumnType = fmt.Sprintf("NUMBER(%d)", dataPrecision)
-				buildInColumnType = fmt.Sprintf("DECIMAL(%d,4)", dataPrecision)
+				buildInColumnType = fmt.Sprintf("DECIMAL(%d)", 65)
 			}
 		}
 		modifyColumnType = ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
@@ -479,31 +496,6 @@ func loadDataTypeRuleUsingTableOrSchema(originColumnType string, buildInColumnTy
 	}
 }
 
-func loadDataTypeRuleOnlyUsingTable(originColumnType string, buildInColumnType string, tableDataTypeMapSlice []service.TableRuleMap) string {
-	if len(tableDataTypeMapSlice) == 0 {
-		return buildInColumnType
-	}
-	for _, tbl := range tableDataTypeMapSlice {
-		if strings.ToUpper(tbl.SourceColumnType) == strings.ToUpper(originColumnType) && tbl.TargetColumnType != "" {
-			return strings.ToUpper(tbl.TargetColumnType)
-		}
-	}
-	return strings.ToUpper(buildInColumnType)
-}
-
-func loadDataTypeRuleOnlyUsingSchema(originColumnType, buildInColumnType string, schemaDataTypeMapSlice []service.SchemaRuleMap) string {
-	if len(schemaDataTypeMapSlice) == 0 {
-		return buildInColumnType
-	}
-
-	for _, tbl := range schemaDataTypeMapSlice {
-		if strings.ToUpper(tbl.SourceColumnType) == strings.ToUpper(originColumnType) && tbl.TargetColumnType != "" {
-			return strings.ToUpper(tbl.TargetColumnType)
-		}
-	}
-	return strings.ToUpper(buildInColumnType)
-}
-
 func loadDataTypeRuleUsingTableAndSchema(originColumnType string, buildInColumnType string, tableDataTypeMapSlice []service.TableRuleMap, schemaDataTypeMapSlice []service.SchemaRuleMap) string {
 	// 规则判断
 	customTableDataType := loadDataTypeRuleOnlyUsingTable(originColumnType, buildInColumnType, tableDataTypeMapSlice)
@@ -522,15 +514,142 @@ func loadDataTypeRuleUsingTableAndSchema(originColumnType string, buildInColumnT
 	}
 }
 
+// 表级别自定义映射规则
+func loadDataTypeRuleOnlyUsingTable(originColumnType string, buildInColumnType string, tableDataTypeMapSlice []service.TableRuleMap) string {
+	if len(tableDataTypeMapSlice) == 0 {
+		return buildInColumnType
+	}
+	for _, tbl := range tableDataTypeMapSlice {
+		/*
+			number 类型处理：函数匹配 ->  GetOracleTableColumn
+			- number(*,10) -> number(38,10)
+			- number(*,0) -> number(38,0)
+			- number(*) -> number(38,127)
+			- number -> number(38,127)
+			- number(5) -> number(5)
+			- number(8,9) -> number(8,9)
+		*/
+		if strings.Contains(strings.ToUpper(tbl.SourceColumnType), "NUMBER") {
+			switch {
+			case strings.Contains(strings.ToUpper(tbl.SourceColumnType), "*") && strings.Contains(strings.ToUpper(tbl.SourceColumnType), ","):
+				if strings.ToUpper(strings.Replace(tbl.SourceColumnType, "*", "38", -1)) == strings.ToUpper(originColumnType) &&
+					tbl.TargetColumnType != "" {
+					return strings.ToUpper(tbl.TargetColumnType)
+				}
+			case strings.Contains(strings.ToUpper(tbl.SourceColumnType), "*") && !strings.Contains(strings.ToUpper(tbl.SourceColumnType), ","):
+				if "NUMBER(38,127)" == strings.ToUpper(originColumnType) &&
+					tbl.TargetColumnType != "" {
+					return strings.ToUpper(tbl.TargetColumnType)
+				}
+			case !strings.Contains(strings.ToUpper(tbl.SourceColumnType), "(") && !strings.Contains(strings.ToUpper(tbl.SourceColumnType), ")"):
+				if "NUMBER(38,127)" == strings.ToUpper(originColumnType) &&
+					tbl.TargetColumnType != "" {
+					return strings.ToUpper(tbl.TargetColumnType)
+				}
+			default:
+				if strings.ToUpper(tbl.SourceColumnType) == strings.ToUpper(originColumnType) && tbl.TargetColumnType != "" {
+					return strings.ToUpper(tbl.TargetColumnType)
+				}
+			}
+		} else {
+			if strings.ToUpper(tbl.SourceColumnType) == strings.ToUpper(originColumnType) && tbl.TargetColumnType != "" {
+				return strings.ToUpper(tbl.TargetColumnType)
+			}
+		}
+	}
+	return strings.ToUpper(buildInColumnType)
+}
+
+// 库级别自定义映射规则
+func loadDataTypeRuleOnlyUsingSchema(originColumnType, buildInColumnType string, schemaDataTypeMapSlice []service.SchemaRuleMap) string {
+	if len(schemaDataTypeMapSlice) == 0 {
+		return buildInColumnType
+	}
+
+	for _, tbl := range schemaDataTypeMapSlice {
+		/*
+			number 类型处理：函数匹配 ->  GetOracleTableColumn
+			- number(*,10) -> number(38,10)
+			- number(*,0) -> number(38,0)
+			- number(*) -> number(38,127)
+			- number -> number(38,127)
+			- number(5) -> number(5)
+			- number(8,9) -> number(8,9)
+		*/
+		if strings.Contains(strings.ToUpper(tbl.SourceColumnType), "NUMBER") {
+			switch {
+			case strings.Contains(strings.ToUpper(tbl.SourceColumnType), "*") && strings.Contains(strings.ToUpper(tbl.SourceColumnType), ","):
+				if strings.ToUpper(strings.Replace(tbl.SourceColumnType, "*", "38", -1)) == strings.ToUpper(originColumnType) &&
+					tbl.TargetColumnType != "" {
+					return strings.ToUpper(tbl.TargetColumnType)
+				}
+			case strings.Contains(strings.ToUpper(tbl.SourceColumnType), "*") && !strings.Contains(strings.ToUpper(tbl.SourceColumnType), ","):
+				if "NUMBER(38,127)" == strings.ToUpper(originColumnType) &&
+					tbl.TargetColumnType != "" {
+					return strings.ToUpper(tbl.TargetColumnType)
+				}
+			case !strings.Contains(strings.ToUpper(tbl.SourceColumnType), "(") && !strings.Contains(strings.ToUpper(tbl.SourceColumnType), ")"):
+				if "NUMBER(38,127)" == strings.ToUpper(originColumnType) &&
+					tbl.TargetColumnType != "" {
+					return strings.ToUpper(tbl.TargetColumnType)
+				}
+			default:
+				if strings.ToUpper(tbl.SourceColumnType) == strings.ToUpper(originColumnType) && tbl.TargetColumnType != "" {
+					return strings.ToUpper(tbl.TargetColumnType)
+				}
+			}
+		} else {
+			if strings.ToUpper(tbl.SourceColumnType) == strings.ToUpper(originColumnType) && tbl.TargetColumnType != "" {
+				return strings.ToUpper(tbl.TargetColumnType)
+			}
+		}
+	}
+	return strings.ToUpper(buildInColumnType)
+}
+
+// 字段级别自定义映射规则
 func loadDataTypeRuleOnlyUsingColumn(columnName string, originColumnType string, buildInColumnType string, columnDataTypeMapSlice []service.ColumnRuleMap) string {
 	if len(columnDataTypeMapSlice) == 0 {
 		return buildInColumnType
 	}
-	for _, col := range columnDataTypeMapSlice {
-		if strings.ToUpper(col.SourceColumnName) == strings.ToUpper(columnName) &&
-			strings.ToUpper(col.SourceColumnType) == strings.ToUpper(originColumnType) &&
-			col.TargetColumnType != "" {
-			return strings.ToUpper(col.TargetColumnType)
+	for _, tbl := range columnDataTypeMapSlice {
+		if strings.ToUpper(tbl.SourceColumnName) == strings.ToUpper(columnName) {
+			/*
+				number 类型处理：函数匹配 ->  GetOracleTableColumn
+				- number(*,10) -> number(38,10)
+				- number(*,0) -> number(38,0)
+				- number(*) -> number(38,127)
+				- number -> number(38,127)
+				- number(5) -> number(5)
+				- number(8,9) -> number(8,9)
+			*/
+			if strings.Contains(strings.ToUpper(tbl.SourceColumnType), "NUMBER") {
+				switch {
+				case strings.Contains(strings.ToUpper(tbl.SourceColumnType), "*") && strings.Contains(strings.ToUpper(tbl.SourceColumnType), ","):
+					if strings.ToUpper(strings.Replace(tbl.SourceColumnType, "*", "38", -1)) == strings.ToUpper(originColumnType) &&
+						tbl.TargetColumnType != "" {
+						return strings.ToUpper(tbl.TargetColumnType)
+					}
+				case strings.Contains(strings.ToUpper(tbl.SourceColumnType), "*") && !strings.Contains(strings.ToUpper(tbl.SourceColumnType), ","):
+					if "NUMBER(38,127)" == strings.ToUpper(originColumnType) &&
+						tbl.TargetColumnType != "" {
+						return strings.ToUpper(tbl.TargetColumnType)
+					}
+				case !strings.Contains(strings.ToUpper(tbl.SourceColumnType), "(") && !strings.Contains(strings.ToUpper(tbl.SourceColumnType), ")"):
+					if "NUMBER(38,127)" == strings.ToUpper(originColumnType) &&
+						tbl.TargetColumnType != "" {
+						return strings.ToUpper(tbl.TargetColumnType)
+					}
+				default:
+					if strings.ToUpper(tbl.SourceColumnType) == strings.ToUpper(originColumnType) && tbl.TargetColumnType != "" {
+						return strings.ToUpper(tbl.TargetColumnType)
+					}
+				}
+			} else {
+				if strings.ToUpper(tbl.SourceColumnType) == strings.ToUpper(originColumnType) && tbl.TargetColumnType != "" {
+					return strings.ToUpper(tbl.TargetColumnType)
+				}
+			}
 		}
 	}
 	return strings.ToUpper(buildInColumnType)
