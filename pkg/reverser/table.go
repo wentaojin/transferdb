@@ -384,30 +384,6 @@ func (t Table) GenCreateUniqueIndex(modifyTableName string) ([]string, []string,
 	return t.reverserOracleTableUniqueIndexToMySQL(modifyTableName)
 }
 
-func (t Table) GenTableOptionINFO() (string, error) {
-	if t.TargetDBType != utils.TiDBTargetDBType {
-		return "", nil
-	}
-
-	clusteredIdxVal, err := t.Engine.GetTiDBClusteredIndexValue()
-	if err != nil {
-		return "", err
-	}
-
-	if strings.ToUpper(clusteredIdxVal) == utils.TiDBClusteredIndexIntOnlyValue {
-
-	}
-
-	if strings.ToUpper(clusteredIdxVal) == utils.TiDBClusteredIndexONValue {
-		return utils.TiDBClusteredIndexONValue, err
-	}
-
-	if strings.ToUpper(clusteredIdxVal) == utils.TiDBClusteredIndexOFFValue {
-		return utils.TiDBClusteredIndexOFFValue, err
-	}
-	return "", fmt.Errorf("tidb db variable [tidb_enable_clustered_index] value [%s] isn't support", strings.ToUpper(clusteredIdxVal))
-}
-
 func (t Table) reverserOracleTableNormalIndexToMySQL(modifyTableName string) ([]string, []string, error) {
 	var (
 		keyINFO               []string
@@ -841,23 +817,29 @@ func (t Table) reverserOracleTableCKToMySQL() ([]string, error) {
 		return keysMeta, err
 	}
 	if len(checkKeyMap) > 0 {
-		for _, rowCKCol := range checkKeyMap {
-			// 多个检查约束匹配
-			// 比如："LOC" IS noT nUll and loc in ('a','b','c')
-			r, err := regexp.Compile(`\s+(?i:AND)\s+|\s+(?i:OR)\s+`)
-			if err != nil {
-				return keysMeta, fmt.Errorf("check constraint regexp and/or failed: %v", err)
-			}
+		// 多个检查约束匹配
+		// 比如："LOC" IS noT nUll and loc in ('a','b','c')
+		r, err := regexp.Compile(`\s+(?i:AND)\s+|\s+(?i:OR)\s+`)
+		if err != nil {
+			return keysMeta, fmt.Errorf("check constraint regexp [AND/OR] failed: %v", err)
+		}
 
+		matchRex, err := regexp.Compile(`(^.*)(?i:IS NOT NULL)`)
+		if err != nil {
+			return keysMeta, fmt.Errorf("check constraint regexp match [IS NOT NULL] failed: %v", err)
+		}
+
+		checkRex, err := regexp.Compile(`(.*)(?i:IS NOT NULL)`)
+		if err != nil {
+			fmt.Printf("check constraint regexp check [IS NOT NULL] failed: %v", err)
+		}
+
+		for _, rowCKCol := range checkKeyMap {
 			// 排除非空约束检查
 			s := strings.TrimSpace(rowCKCol["SEARCH_CONDITION"])
 
 			if !r.MatchString(s) {
-				matchNull, err := regexp.MatchString(`(^.*)(?i:IS NOT NULL)`, s)
-				if err != nil {
-					return keysMeta, fmt.Errorf("check constraint remove not null failed: %v", err)
-				}
-				if !matchNull {
+				if !matchRex.MatchString(s) {
 					keysMeta = append(keysMeta, fmt.Sprintf("CONSTRAINT `%s` CHECK (%s)",
 						strings.ToUpper(rowCKCol["CONSTRAINT_NAME"]),
 						rowCKCol["SEARCH_CONDITION"]))
@@ -889,12 +871,7 @@ func (t Table) reverserOracleTableCKToMySQL() ([]string, error) {
 
 				for _, val := range checkArray {
 					v := strings.TrimSpace(val)
-					matchNull, err := regexp.MatchString(`(.*)(?i:IS NOT NULL)`, v)
-					if err != nil {
-						fmt.Printf("check constraint remove not null failed: %v", err)
-					}
-
-					if !matchNull {
+					if !checkRex.MatchString(v) {
 						constraintArray = append(constraintArray, v)
 					}
 				}

@@ -17,6 +17,7 @@ package main
 
 import (
 	"fmt"
+
 	"github.com/wentaojin/transferdb/pkg/diff"
 	"github.com/wentaojin/transferdb/server"
 	"github.com/wentaojin/transferdb/service"

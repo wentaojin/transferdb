@@ -386,9 +386,8 @@ func genOracleTableColumnMeta(columnName, columnType, dataNullable, comments, de
 	}
 
 	if comments != "" {
-		if strings.Contains(comments, "\"") {
-			comments = strings.Replace(comments, "\"", "'", -1)
-		}
+		comments = strings.Replace(comments, "\"", "'", -1)
+
 		match, _ := regexp.MatchString("'(.*)'", comments)
 		if match {
 			comment = fmt.Sprintf("\"%s\"", comments)
@@ -470,7 +469,7 @@ func LoadDataDefaultValueRule(defaultValue string, defaultValueMapSlice []servic
 	}
 
 	for _, dv := range defaultValueMapSlice {
-		if strings.ToUpper(dv.SourceDefaultValue) == strings.ToUpper(defaultValue) && dv.TargetDefaultValue != "" {
+		if strings.EqualFold(dv.SourceDefaultValue, defaultValue) && dv.TargetDefaultValue != "" {
 			return dv.TargetDefaultValue
 		}
 	}
@@ -532,27 +531,27 @@ func loadDataTypeRuleOnlyUsingTable(originColumnType string, buildInColumnType s
 		if strings.Contains(strings.ToUpper(tbl.SourceColumnType), "NUMBER") {
 			switch {
 			case strings.Contains(strings.ToUpper(tbl.SourceColumnType), "*") && strings.Contains(strings.ToUpper(tbl.SourceColumnType), ","):
-				if strings.ToUpper(strings.Replace(tbl.SourceColumnType, "*", "38", -1)) == strings.ToUpper(originColumnType) &&
+				if strings.EqualFold(strings.Replace(tbl.SourceColumnType, "*", "38", -1), originColumnType) &&
 					tbl.TargetColumnType != "" {
 					return strings.ToUpper(tbl.TargetColumnType)
 				}
 			case strings.Contains(strings.ToUpper(tbl.SourceColumnType), "*") && !strings.Contains(strings.ToUpper(tbl.SourceColumnType), ","):
-				if "NUMBER(38,127)" == strings.ToUpper(originColumnType) &&
+				if strings.EqualFold("NUMBER(38,127)", originColumnType) &&
 					tbl.TargetColumnType != "" {
 					return strings.ToUpper(tbl.TargetColumnType)
 				}
 			case !strings.Contains(strings.ToUpper(tbl.SourceColumnType), "(") && !strings.Contains(strings.ToUpper(tbl.SourceColumnType), ")"):
-				if "NUMBER(38,127)" == strings.ToUpper(originColumnType) &&
+				if strings.EqualFold("NUMBER(38,127)", originColumnType) &&
 					tbl.TargetColumnType != "" {
 					return strings.ToUpper(tbl.TargetColumnType)
 				}
 			default:
-				if strings.ToUpper(tbl.SourceColumnType) == strings.ToUpper(originColumnType) && tbl.TargetColumnType != "" {
+				if strings.EqualFold(tbl.SourceColumnType, originColumnType) && tbl.TargetColumnType != "" {
 					return strings.ToUpper(tbl.TargetColumnType)
 				}
 			}
 		} else {
-			if strings.ToUpper(tbl.SourceColumnType) == strings.ToUpper(originColumnType) && tbl.TargetColumnType != "" {
+			if strings.EqualFold(tbl.SourceColumnType, originColumnType) && tbl.TargetColumnType != "" {
 				return strings.ToUpper(tbl.TargetColumnType)
 			}
 		}
@@ -579,27 +578,27 @@ func loadDataTypeRuleOnlyUsingSchema(originColumnType, buildInColumnType string,
 		if strings.Contains(strings.ToUpper(tbl.SourceColumnType), "NUMBER") {
 			switch {
 			case strings.Contains(strings.ToUpper(tbl.SourceColumnType), "*") && strings.Contains(strings.ToUpper(tbl.SourceColumnType), ","):
-				if strings.ToUpper(strings.Replace(tbl.SourceColumnType, "*", "38", -1)) == strings.ToUpper(originColumnType) &&
+				if strings.EqualFold(strings.Replace(tbl.SourceColumnType, "*", "38", -1), originColumnType) &&
 					tbl.TargetColumnType != "" {
 					return strings.ToUpper(tbl.TargetColumnType)
 				}
 			case strings.Contains(strings.ToUpper(tbl.SourceColumnType), "*") && !strings.Contains(strings.ToUpper(tbl.SourceColumnType), ","):
-				if "NUMBER(38,127)" == strings.ToUpper(originColumnType) &&
+				if strings.EqualFold("NUMBER(38,127)", originColumnType) &&
 					tbl.TargetColumnType != "" {
 					return strings.ToUpper(tbl.TargetColumnType)
 				}
 			case !strings.Contains(strings.ToUpper(tbl.SourceColumnType), "(") && !strings.Contains(strings.ToUpper(tbl.SourceColumnType), ")"):
-				if "NUMBER(38,127)" == strings.ToUpper(originColumnType) &&
+				if strings.EqualFold("NUMBER(38,127)", originColumnType) &&
 					tbl.TargetColumnType != "" {
 					return strings.ToUpper(tbl.TargetColumnType)
 				}
 			default:
-				if strings.ToUpper(tbl.SourceColumnType) == strings.ToUpper(originColumnType) && tbl.TargetColumnType != "" {
+				if strings.EqualFold(tbl.SourceColumnType, originColumnType) && tbl.TargetColumnType != "" {
 					return strings.ToUpper(tbl.TargetColumnType)
 				}
 			}
 		} else {
-			if strings.ToUpper(tbl.SourceColumnType) == strings.ToUpper(originColumnType) && tbl.TargetColumnType != "" {
+			if strings.EqualFold(tbl.SourceColumnType, originColumnType) && tbl.TargetColumnType != "" {
 				return strings.ToUpper(tbl.TargetColumnType)
 			}
 		}
@@ -613,7 +612,7 @@ func loadDataTypeRuleOnlyUsingColumn(columnName string, originColumnType string,
 		return buildInColumnType
 	}
 	for _, tbl := range columnDataTypeMapSlice {
-		if strings.ToUpper(tbl.SourceColumnName) == strings.ToUpper(columnName) {
+		if strings.EqualFold(tbl.SourceColumnName, columnName) {
 			/*
 				number 类型处理：函数匹配 ->  GetOracleTableColumn
 				- number(*,10) -> number(38,10)
@@ -626,27 +625,27 @@ func loadDataTypeRuleOnlyUsingColumn(columnName string, originColumnType string,
 			if strings.Contains(strings.ToUpper(tbl.SourceColumnType), "NUMBER") {
 				switch {
 				case strings.Contains(strings.ToUpper(tbl.SourceColumnType), "*") && strings.Contains(strings.ToUpper(tbl.SourceColumnType), ","):
-					if strings.ToUpper(strings.Replace(tbl.SourceColumnType, "*", "38", -1)) == strings.ToUpper(originColumnType) &&
+					if strings.EqualFold(strings.Replace(tbl.SourceColumnType, "*", "38", -1), originColumnType) &&
 						tbl.TargetColumnType != "" {
 						return strings.ToUpper(tbl.TargetColumnType)
 					}
 				case strings.Contains(strings.ToUpper(tbl.SourceColumnType), "*") && !strings.Contains(strings.ToUpper(tbl.SourceColumnType), ","):
-					if "NUMBER(38,127)" == strings.ToUpper(originColumnType) &&
+					if strings.EqualFold("NUMBER(38,127)", originColumnType) &&
 						tbl.TargetColumnType != "" {
 						return strings.ToUpper(tbl.TargetColumnType)
 					}
 				case !strings.Contains(strings.ToUpper(tbl.SourceColumnType), "(") && !strings.Contains(strings.ToUpper(tbl.SourceColumnType), ")"):
-					if "NUMBER(38,127)" == strings.ToUpper(originColumnType) &&
+					if strings.EqualFold("NUMBER(38,127)", originColumnType) &&
 						tbl.TargetColumnType != "" {
 						return strings.ToUpper(tbl.TargetColumnType)
 					}
 				default:
-					if strings.ToUpper(tbl.SourceColumnType) == strings.ToUpper(originColumnType) && tbl.TargetColumnType != "" {
+					if strings.EqualFold(tbl.SourceColumnType, originColumnType) && tbl.TargetColumnType != "" {
 						return strings.ToUpper(tbl.TargetColumnType)
 					}
 				}
 			} else {
-				if strings.ToUpper(tbl.SourceColumnType) == strings.ToUpper(originColumnType) && tbl.TargetColumnType != "" {
+				if strings.EqualFold(tbl.SourceColumnType, originColumnType) && tbl.TargetColumnType != "" {
 					return strings.ToUpper(tbl.TargetColumnType)
 				}
 			}

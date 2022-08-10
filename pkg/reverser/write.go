@@ -114,7 +114,7 @@ func (d *ReverseWriter) Reverse() error {
 
 	// 表 with 主键
 	sqlRev.WriteString("/*\n")
-	sqlRev.WriteString(fmt.Sprintf(" oracle table reverse sql \n"))
+	sqlRev.WriteString(" oracle table reverse sql \n")
 
 	sw := table.NewWriter()
 	sw.SetStyle(table.StyleLight)
@@ -129,7 +129,7 @@ func (d *ReverseWriter) Reverse() error {
 	// 兼容项处理
 	if len(d.CreateFK) > 0 || len(d.CreateCK) > 0 || len(d.CreateCompIndex) > 0 {
 		sqlComp.WriteString("/*\n")
-		sqlComp.WriteString(fmt.Sprintf(" oracle table index or consrtaint maybe mysql has compatibility, skip\n"))
+		sqlComp.WriteString(" oracle table index or consrtaint maybe mysql has compatibility, skip\n")
 		tw := table.NewWriter()
 		tw.SetStyle(table.StyleLight)
 		tw.AppendHeader(table.Row{"#", "ORACLE", "MYSQL", "SUGGEST"})
@@ -242,7 +242,7 @@ func GenCreateSchema(file *FileMW, engine *service.Engine, sourceSchema, targetS
 	}
 
 	sqlRev.WriteString("/*\n")
-	sqlRev.WriteString(fmt.Sprintf(" oracle schema reverse mysql database\n"))
+	sqlRev.WriteString(" oracle schema reverse mysql database\n")
 	t := table.NewWriter()
 	t.SetStyle(table.StyleLight)
 	t.AppendHeader(table.Row{"#", "ORACLE", "MYSQL", "SUGGEST"})
@@ -281,7 +281,7 @@ func CompatibilityDBTips(file *FileMW, sourceSchema string, partition, temporary
 		var sqlComp strings.Builder
 
 		sqlComp.WriteString("/*\n")
-		sqlComp.WriteString(fmt.Sprintf(" oracle table maybe mysql has compatibility, will convert to normal table, please manual process\n"))
+		sqlComp.WriteString(" oracle table maybe mysql has compatibility, will convert to normal table, please manual process\n")
 		t := table.NewWriter()
 		t.SetStyle(table.StyleLight)
 		t.AppendHeader(table.Row{"SCHEMA", "TABLE NAME", "ORACLE TABLE TYPE", "SUGGEST"})

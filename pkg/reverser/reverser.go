@@ -71,7 +71,7 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 	if _, ok := utils.OracleCollationMap[strings.ToUpper(nlsComp)]; !ok {
 		return fmt.Errorf("oracle db nls comp [%s] isn't support", nlsComp)
 	}
-	if strings.ToUpper(nlsSort) != strings.ToUpper(nlsComp) {
+	if !strings.EqualFold(nlsSort, nlsComp) {
 		return fmt.Errorf("oracle db nls_sort [%s] and nls_comp [%s] isn't different, need be equal; because mysql db isn't support", nlsSort, nlsComp)
 	}
 

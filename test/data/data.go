@@ -18,17 +18,18 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/pingcap/log"
-	"github.com/wentaojin/transferdb/server"
-	"github.com/wentaojin/transferdb/service"
-	"github.com/wentaojin/transferdb/utils"
-	"go.uber.org/zap"
 	"math"
 	"math/rand"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/pingcap/log"
+	"github.com/wentaojin/transferdb/server"
+	"github.com/wentaojin/transferdb/service"
+	"github.com/wentaojin/transferdb/utils"
+	"go.uber.org/zap"
 )
 
 var (
