@@ -469,7 +469,7 @@ func LoadDataDefaultValueRule(defaultValue string, defaultValueMapSlice []servic
 	}
 
 	for _, dv := range defaultValueMapSlice {
-		if strings.EqualFold(dv.SourceDefaultValue, defaultValue) && dv.TargetDefaultValue != "" {
+		if strings.EqualFold(strings.TrimSpace(dv.SourceDefaultValue), strings.TrimSpace(defaultValue)) && dv.TargetDefaultValue != "" {
 			return dv.TargetDefaultValue
 		}
 	}

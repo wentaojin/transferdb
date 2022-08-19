@@ -34,6 +34,7 @@ func OracleMigrateMySQLCostEvaluate(engine *service.Engine, cfg *service.CfgFile
 
 	var (
 		usernameSQL   string
+		fileName      string
 		usernameArray []string
 	)
 	if cfg.SourceConfig.SchemaName == "" {
@@ -86,8 +87,11 @@ func OracleMigrateMySQLCostEvaluate(engine *service.Engine, cfg *service.CfgFile
 			'FLOWS_FILES',
 			'OWBSYS'
 		)`
+
+		fileName = "report_all.html"
 	} else {
 		usernameSQL = fmt.Sprintf(`select username from dba_users where username = '%s'`, strings.ToUpper(cfg.SourceConfig.SchemaName))
+		fileName = fmt.Sprintf("report_%s.html", cfg.SourceConfig.SchemaName)
 	}
 	_, usernameMapArray, err := service.Query(engine.OracleDB, usernameSQL)
 	if err != nil {
@@ -109,7 +113,6 @@ func OracleMigrateMySQLCostEvaluate(engine *service.Engine, cfg *service.CfgFile
 		return err
 	}
 
-	fileName := fmt.Sprintf("report_%s.html", cfg.SourceConfig.SchemaName)
 	file, err := os.OpenFile(filepath.Join(pwdDir, fileName), os.O_WRONLY|os.O_CREATE|os.O_APPEND|os.O_TRUNC, 0666)
 	if err != nil {
 		return err

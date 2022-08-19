@@ -18,13 +18,14 @@ package server
 import (
 	"database/sql"
 	"fmt"
-	"github.com/godror/godror/dsn"
-	"github.com/wentaojin/transferdb/service"
-	"github.com/wentaojin/transferdb/utils"
 	"os"
 	"runtime"
 	"strconv"
 	"strings"
+
+	"github.com/godror/godror/dsn"
+	"github.com/wentaojin/transferdb/service"
+	"github.com/wentaojin/transferdb/utils"
 
 	"github.com/godror/godror"
 
@@ -43,7 +44,8 @@ func NewOracleDBEngine(oraCfg service.SourceConfig) (*sql.DB, error) {
 		oraDSN     dsn.ConnectionParams
 		err        error
 	)
-	if strings.ToUpper(oraCfg.SchemaName) == strings.ToUpper(oraCfg.Username) {
+
+	if strings.EqualFold(oraCfg.SchemaName, oraCfg.Username) {
 		connString = fmt.Sprintf("oracle://%s:%s@%s/%s?connectionClass=POOL_CONNECTION_CLASS&heterogeneousPool=1&%s",
 			oraCfg.Username, oraCfg.Password, utils.StringsBuilder(oraCfg.Host, ":", strconv.Itoa(oraCfg.Port)),
 			oraCfg.ServiceName, oraCfg.ConnectParams)

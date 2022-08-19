@@ -120,11 +120,11 @@ worker-threads = 64
 [source]
 # 源端 oracle 连接串
 # 若需要增量数据同步，则需要 logminer 权限
-username = "marvin"
-password = "marvin"
-host = "10.16.41.817"
+username = "transferdb"
+password = "transferdb"
+host = "12.106.11.62"
 port = 1521
-service-name = "oratidb"
+service-name = "orcl"
 # oracle instance client dir
 lib-dir = "/Users/marvin/storehouse/oracle/instantclient_19_8"
 # 配置 oracle 连接参数
@@ -136,11 +136,11 @@ connect-params = "poolMinSessions=50&poolMaxSessions=1000&poolWaitTimeout=360s&p
 # Interval Year/Day 数据字符 TO_CHAR 格式化
 session-params = []
 # 配置 oracle 迁移 schema（gather 阶段可设置可不设置，不设置则表示 gather 库内所有 schema，其他阶段必须设置）
-schema-name = "marvin"
+schema-name = "XZ_TEST"
 # 源端迁移任务表（只用于 prepare/reverse/check/all/full 阶段，gather 阶段不适用，gather 只适用于 schema 级别）
 # include-table 和 exclude-table 不能同时配置，两者只能配置一个,如果两个都没配置则 Schema 内表全迁移
 # include-table 和 exclude-table 支持正则表达式以及通配符（tab_*/tab*）
-include-table = ["n*"]
+include-table = []
 exclude-table = []
 
 # 只用于 prepare/reverse/check/all/full 阶段，gather 阶段不适用
@@ -150,7 +150,7 @@ db-type = "tidb"
 # 目标端连接串
 username = "root"
 password = ""
-host = "11.2.11.30"
+host = "12.160.11.82"
 port = 4000
 # mysql 链接参数
 connect-params = "charset=utf8mb4&multiStatements=true&parseTime=True&loc=Local"
@@ -158,7 +158,7 @@ connect-params = "charset=utf8mb4&multiStatements=true&parseTime=True&loc=Local"
 # CREATE DATABASE IF NOT EXIST db_meta
 meta-schema = "db_meta"
 # 目标端导入 schema
-schema-name = "marvin"
+schema-name = "transferdb"
 # 表后缀可选项 - Only 适用于 TiDB
 # TiDB 数据库全局生效（自动读取下游数据参数判定生效与否）：
 # tidb_enable_clustered_index = on 全局聚簇索引，table-option 不生效
