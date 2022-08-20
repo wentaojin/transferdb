@@ -45,17 +45,10 @@ func NewOracleDBEngine(oraCfg service.SourceConfig) (*sql.DB, error) {
 		err        error
 	)
 
-	if strings.EqualFold(oraCfg.SchemaName, oraCfg.Username) {
-		connString = fmt.Sprintf("oracle://%s:%s@%s/%s?connectionClass=POOL_CONNECTION_CLASS&heterogeneousPool=1&%s",
-			oraCfg.Username, oraCfg.Password, utils.StringsBuilder(oraCfg.Host, ":", strconv.Itoa(oraCfg.Port)),
-			oraCfg.ServiceName, oraCfg.ConnectParams)
-		oraDSN, err = godror.ParseDSN(connString)
-		if err != nil {
-			return nil, err
-		}
-
-		oraDSN.OnInitStmts = oraCfg.SessionParams
-	} else {
+	switch {
+	// CDB 架构，程序用户 c## 开头
+	case strings.EqualFold(oraCfg.OraArch, "CDB") && !strings.EqualFold(oraCfg.SchemaName, oraCfg.Username) &&
+		strings.HasPrefix(strings.ToUpper(oraCfg.Username), "C##"):
 		// 启用异构池 heterogeneousPool 即程序连接用户与访问 oracle schema 用户名不一致
 		connString = fmt.Sprintf("oracle://@%s/%s?connectionClass=POOL_CONNECTION_CLASS&heterogeneousPool=1&%s",
 			utils.StringsBuilder(oraCfg.Host, ":", strconv.Itoa(oraCfg.Port)),
@@ -69,6 +62,18 @@ func NewOracleDBEngine(oraCfg service.SourceConfig) (*sql.DB, error) {
 		// Using 12.2 or later client libraries
 		// 异构连接池
 		oraDSN.Username, oraDSN.Password = utils.StringsBuilder(oraCfg.Username, "[", oraCfg.SchemaName, "]"), godror.NewPassword(oraCfg.Password)
+		oraDSN.OnInitStmts = oraCfg.SessionParams
+
+	default:
+		// 启用异构池 heterogeneousPool 即程序连接用户与访问 oracle schema 用户名不一致
+		connString = fmt.Sprintf("oracle://%s:%s@%s/%s?connectionClass=POOL_CONNECTION_CLASS&heterogeneousPool=1&%s",
+			oraCfg.Username, oraCfg.Password, utils.StringsBuilder(oraCfg.Host, ":", strconv.Itoa(oraCfg.Port)),
+			oraCfg.ServiceName, oraCfg.ConnectParams)
+		oraDSN, err = godror.ParseDSN(connString)
+		if err != nil {
+			return nil, err
+		}
+
 		oraDSN.OnInitStmts = oraCfg.SessionParams
 	}
 

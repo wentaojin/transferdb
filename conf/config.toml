@@ -118,11 +118,14 @@ worker-queue = 128
 worker-threads = 64
 
 [source]
-# 源端 oracle 连接串
-# 若需要增量数据同步，则需要 logminer 权限
+# Oracle 架构 -> only cdb/noncdb
+ora-arch = "noncdb"
+# All 模式特别说明：
+# 1、CDB 架构需要 c## 开头的用户且具备 logminer 权限
+# 2、Non-CDB 架构需要具备 logminer 权限用户
 username = "transferdb"
 password = "transferdb"
-host = "12.106.11.62"
+host = "172.16.11.62"
 port = 1521
 service-name = "orcl"
 # oracle instance client dir
@@ -149,8 +152,8 @@ exclude-table = []
 db-type = "tidb"
 # 目标端连接串
 username = "root"
-password = ""
-host = "12.160.11.82"
+password = "123456"
+host = "172.16.11.62"
 port = 4000
 # mysql 链接参数
 connect-params = "charset=utf8mb4&multiStatements=true&parseTime=True&loc=Local"

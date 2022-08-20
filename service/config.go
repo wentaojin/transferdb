@@ -96,6 +96,7 @@ type AllConfig struct {
 }
 
 type SourceConfig struct {
+	OraArch       string   `toml:"ora-arch" json:"ora-arch"`
 	Username      string   `toml:"username" json:"username"`
 	Password      string   `toml:"password" json:"password"`
 	Host          string   `toml:"host" json:"host"`
