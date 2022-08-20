@@ -1,0 +1,73 @@
+{
+    "categories": [
+      {
+        "title": "🚀 Features",
+        "labels": ["feature","enhancement","kind/feature"]
+      },
+      {
+        "title": "🐛 Bug Fixes",
+        "labels": ["fix","fixed","bug","bugfix","kind/bug"]
+      },
+      {
+        "title": "📝 Documentation updates",
+        "labels": ["doc","documentation","kind/doc"]
+      },
+      {
+        "title": "🚦 Tests",
+        "labels": ["test","tests"]
+      },
+      {
+        "title": "🧪 Tests and some 🪄 Magic",
+        "labels": ["test", "magic"],
+        "exclude_labels": ["no-magic"],
+        "exhaustive": true,
+        "empty_content": "- no matching PRs"
+      }
+    ],
+    "ignore_labels": [
+      "ignore"
+    ],
+    "sort": {
+      "order": "ASC",
+      "on_property": "mergedAt"
+    },
+    "template": "${{CHANGELOG}}\n\n<details>\n<summary>Uncategorized</summary>\n\n${{UNCATEGORIZED}}\n</details>",
+    "pr_template": "- ${{TITLE}} PR: #${{NUMBER}}",
+    "empty_template": "- no changes",
+    "label_extractor": [
+      {
+        "pattern": "(.) (.+)",
+        "target": "$1",
+        "flags": "enhancement"
+      },
+      {
+        "pattern": "(.) (.+)",
+        "target": "$1",
+        "flags": "documentation"
+      },
+      {
+        "pattern": "(.) (.+)",
+        "target": "$1",
+        "flags": "bug"
+      },
+      {
+        "pattern": "\\[Issue\\]",
+        "on_property": "title",
+        "method": "match"
+      }
+    ],
+    "duplicate_filter": {
+      "pattern": "\\[ABC-....\\]",
+      "on_property": "title",
+      "method": "match"
+    },
+    "transformers": [
+      {
+        "pattern": "[\\-\\*] (\\[(...|TEST|CI|SKIP)\\])( )?(.+?)\n(.+?[\\-\\*] )(.+)",
+        "target": "- $4\n  - $6"
+      }
+    ],
+    "max_tags_to_fetch": 200,
+    "max_pull_requests": 200,
+    "max_back_track_time_days": 365
+}
