@@ -115,106 +115,6 @@ $ ./transferdb --config config.toml --mode csv
 $ ./transferdb --config config.toml --mode prepare
 $ ./transferdb --config config.toml --mode diff
 ```
-##### NonCDB ORACLE 程序用户创建
-```sql
-/* NONCDB 程序用户创建*/
-/*创建表空间*/
-create tablespace TRANSFERDB_TBL
-datafile '/data1/oracle/app/oracle/oradata/orcl/transferdb_tbl.dbf'
-size 50M autoextend on next 5M maxsize unlimited;
-
-/*创建临时表空间*/
-create temporary tablespace TRANSFERDB_TMP_TBL
-tempfile '/data1/oracle/app/oracle/oradata/orcl/transferdb_tmp.dbf'
-size 50m autoextend on next 50m maxsize 20480m;
-
-/*创建用户*/
-CREATE USER transferdb IDENTIFIED BY transferdb
-DEFAULT tablespace TRANSFERDB_TBL
-temporary tablespace TRANSFERDB_TMP_TBL;
-
-/* 创建用户 NonCDB 角色 */
-create role transferdb_privs;
-
--- 基础权限授权
-grant create session,select any transaction,select any table,select any dictionary to transferdb_privs;
-grant select on V_$DATABASE to transferdb_privs;
-grant select_catalog_role,EXECUTE_CATALOG_ROLE to transferdb_privs;
-grant RESOURCE,CONNECT TO transferdb_privs;
-
--- logminer 权限
--- 若需要使用 logminer，则需要授权
-grant select on SYSTEM.LOGMNR_COL$ to transferdb_privs;
-grant select on SYSTEM.LOGMNR_OBJ$ to transferdb_privs;
-grant select on SYSTEM.LOGMNR_USER$ to transferdb_privs;
-grant select on SYSTEM.LOGMNR_UID$ to transferdb_privs;
-grant EXECUTE ON DBMS_LOGMNR TO transferdb_privs;
-grant select on v_$logmnr_contents to transferdb_privs;
--- 仅当Oracle为12c版本时，才需要添加，否则删除此行内容
-grant LOGMINING to transferdb_privs;
-
--- 程序用户角色授权
--- 对应参数配置文件 [source] -> username
--- 对应参数文件 [source] -> schema-name 代表计划迁移或者操作的数据库，username 可与 schema-name 同名，但 schema-name 需要具备对应权限
-grant transferdb_privs to transferdb;
-```
-##### CDB ORACLE 程序用户创建
-```sql
-/* CDB 程序用户创建 */
--- CDB/PDB 切换
-alter session set container=CDB$ROOT;
-alter session set container=ORCLPDB;
-
--- CDB 内创建表空间(需要所有 PDBS 创建同样表空间名)
--- datafile '/deploy/oracle/oradata/ORCLPDB/transferdb_tbl01.dbf'  数据文件名不一样
-create tablespace TRANSFERDB_TBL
-datafile '/deploy/oracle/oradata/ORCLCDB/transferdb_tbl00.dbf'
-size 50M autoextend on next 5M maxsize unlimited;
-
--- CDB 内创建临时表空间(需要所有 PDBS 创建同样表空间名)
--- tempfile '/deploy/oracle/oradata/ORCLPDB/transferdb_tmp01.dbf' 数据文件名不一样
-create temporary tablespace TRANSFERDB_TMP_TBL
-tempfile '/deploy/oracle/oradata/ORCLCDB/transferdb_tmp00.dbf'
-size 50m autoextend on next 50m maxsize unlimited;
-
--- 创建 CDB 用户(如果设置 CDB 用户默认表空间或者临时表空间，则需要所有 PDBS 内创建同样的表空间名，数据文件名不一样)
-CREATE USER c##transferdb IDENTIFIED BY transferdb
-DEFAULT tablespace TRANSFERDB_TBL
-temporary tablespace TRANSFERDB_TMP_TBL;
-
-ALTER USER c##transferdb quota unlimited on users;
-
--- 允许 CDB 用户访问所有 PDBS
-ALTER USER c##transferdb SET CONTAINER_DATA=ALL CONTAINER=CURRENT;
-
--- CDB 用户授权
-GRANT DBA to c##transferdb CONTAINER=ALL;
-GRANT CREATE SESSION TO c##transferdb CONTAINER=ALL;
-GRANT CREATE TABLE TO c##transferdb CONTAINER=ALL;
-GRANT EXECUTE_CATALOG_ROLE TO c##transferdb CONTAINER=ALL;
-GRANT RESOURCE, CONNECT TO c##logminer CONTAINER=ALL;
-
--- logminer 权限
--- 若需要使用 logminer，则需要授权
-GRANT EXECUTE ON DBMS_LOGMNR TO c##transferdb CONTAINER=ALL;
-GRANT SELECT ON V_$DATABASE TO c##transferdb CONTAINER=ALL;
-GRANT SELECT ON V_$LOGMNR_CONTENTS TO c##transferdb CONTAINER=ALL;
-GRANT SELECT ON V_$ARCHIVED_LOG TO c##transferdb CONTAINER=ALL;
-GRANT SELECT ON V_$LOG TO c##transferdb CONTAINER=ALL;
-GRANT SELECT ON V_$LOGFILE TO c##transferdb CONTAINER=ALL;
-
-
--- 切换 PDB 用户
--- sqlplus marvin/marvin@192.168.10.100:1521/orclpdb
-alter session set container=ORCLPDB;
-
--- 授权数据库架构通过程序用户访问
--- ${schema-name} 指配置文件 [source] 参数 schema-name
-alter user ${schema-name} grant connect through c##transferdb;
-
--- 权限回收用法(如不需要时可使用)
-alter user ${schema-name} revoke connect through c##transferdb;
-```
 #### ALL 模式同步
 ##### 附加日志
 ```sql
@@ -259,6 +159,102 @@ select * from dba_log_groups where upper(owner) = upper('marvin');
 
 -- 查看不同用户的连接数
 select username,count(username) from v$session where username is not null group by username;
+```
+##### NonCDB ORACLE
+```sql
+/* NONCDB 用户创建*/
+/*创建表空间*/
+create tablespace LOGMINER_TBS
+datafile '/data1/oracle/app/oracle/oradata/orcl/logminer.dbf'
+size 50M autoextend on next 5M maxsize unlimited;
+
+/*创建临时表空间*/
+create temporary tablespace LOGMINER_TMP_TBL
+tempfile '/data1/oracle/app/oracle/oradata/orcl/logminer_tmp.dbf'
+size 50m autoextend on next 50m maxsize 20480m;
+
+/*创建用户*/
+CREATE USER logminer IDENTIFIED BY logminer
+DEFAULT tablespace LOGMINER_TBS
+temporary tablespace LOGMINER_TMP_TBL;
+
+/* 配置文件 [source] schema-name 同步用户授权 */
+-- 创建用户 NonCDB 角色
+create role logminer_privs;
+
+-- 角色授权
+grant create session,
+EXECUTE_CATALOG_ROLE,
+select any transaction,
+select any table,
+select any dictionary to logminer_privs;
+grant select on SYSTEM.LOGMNR_COL$ to logminer_privs;
+grant select on SYSTEM.LOGMNR_OBJ$ to logminer_privs;
+grant select on SYSTEM.LOGMNR_USER$ to logminer_privs;
+grant select on SYSTEM.LOGMNR_UID$ to logminer_privs;
+grant select on V_$DATABASE to logminer_privs;
+grant select_catalog_role to logminer_privs;
+grant RESOURCE,CONNECT TO logminer_privs;
+grant EXECUTE ON DBMS_LOGMNR TO logminer_privs;
+grant select on v_$logmnr_contents to logminer_privs;
+
+-- 仅当Oracle为12c版本时，才需要添加，否则删除此行内容
+grant LOGMINING to logminer_privs;
+
+-- 用户角色授权
+grant logminer_privs to logminer;
+```
+##### CDB ORACLE
+```sql
+/* CDB 用户创建 */
+-- CDB/PDB 切换
+alter session set container=CDB$ROOT;
+alter session set container=ORCLPDB;
+
+-- CDB 内创建表空间(需要所有 PDBS 创建同样表空间名)
+-- datafile '/deploy/oracle/oradata/ORCLPDB/logminer01.dbf'  数据文件名不一样
+create tablespace LOGMINER_TBS
+datafile '/deploy/oracle/oradata/ORCLCDB/logminer00.dbf'
+size 50M autoextend on next 5M maxsize unlimited;
+
+-- CDB 内创建临时表空间(需要所有 PDBS 创建同样表空间名)
+-- tempfile '/deploy/oracle/oradata/ORCLPDB/logminer_tmp01.dbf' 数据文件名不一样
+create temporary tablespace LOGMINER_TMP_TBL
+tempfile '/deploy/oracle/oradata/ORCLCDB/logminer_tmp00.dbf'
+size 50m autoextend on next 50m maxsize unlimited;
+
+-- 创建 CDB 用户(如果设置 CDB 用户默认表空间或者临时表空间，则需要所有 PDBS 内创建同样的表空间名，数据文件名不一样)
+CREATE USER c##logminer IDENTIFIED BY logminer
+DEFAULT tablespace LOGMINER_TBS
+temporary tablespace LOGMINER_TMP_TBL;
+
+ALTER USER c##logminer quota unlimited on users;
+
+-- 允许 CDB 用户访问所有 PDBS
+ALTER USER c##logminer SET CONTAINER_DATA=ALL CONTAINER=CURRENT;
+
+-- CDB 用户授权
+GRANT DBA to c##logminer CONTAINER=ALL;
+GRANT CREATE SESSION TO c##logminer CONTAINER=ALL;
+GRANT CREATE TABLE TO c##logminer CONTAINER=ALL;
+GRANT EXECUTE_CATALOG_ROLE TO c##logminer CONTAINER=ALL;
+GRANT EXECUTE ON DBMS_LOGMNR TO c##logminer CONTAINER=ALL;
+GRANT SELECT ON V_$DATABASE TO c##logminer CONTAINER=ALL;
+GRANT SELECT ON V_$LOGMNR_CONTENTS TO c##logminer CONTAINER=ALL;
+GRANT SELECT ON V_$ARCHIVED_LOG TO c##logminer CONTAINER=ALL;
+GRANT SELECT ON V_$LOG TO c##logminer CONTAINER=ALL;
+GRANT SELECT ON V_$LOGFILE TO c##logminer CONTAINER=ALL;
+GRANT RESOURCE, CONNECT TO c##logminer CONTAINER=ALL;
+
+-- 切换 PDB 用户
+-- sqlplus marvin/marvin@192.168.10.100:1521/orclpdb
+alter session set container=ORCLPDB;
+-- 授权数据库架构通过程序用户访问
+-- ${schema-name} 指配置文件 [source] 参数 schema-name
+alter user ${schema-name} grant connect through c##logminer;
+
+-- 权限回收用法(如不需要时可使用)
+alter user ${schema-name} revoke connect through c##logminer;
 ```
 若直接在命令行中用 `nohup` 启动程序，可能会因为 SIGHUP 信号而退出，建议把 `nohup` 放到脚本里面且不建议用 kill -9，如：
 

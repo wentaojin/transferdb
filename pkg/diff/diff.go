@@ -17,14 +17,15 @@ package diff
 
 import (
 	"fmt"
-	"github.com/thinkeridea/go-extend/exstrings"
-	"golang.org/x/sync/errgroup"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/thinkeridea/go-extend/exstrings"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/jedib0t/go-pretty/v6/table"
 
@@ -169,7 +170,7 @@ func OracleDiffMySQLTable(engine *service.Engine, cfg *service.CfgFile) error {
 	if _, ok := utils.OracleCollationMap[strings.ToUpper(nlsComp)]; !ok {
 		return fmt.Errorf("oracle db nls comp [%s] isn't support", nlsComp)
 	}
-	if strings.ToUpper(nlsSort) != strings.ToUpper(nlsComp) {
+	if !strings.EqualFold(nlsSort, nlsComp) {
 		return fmt.Errorf("oracle db nls_sort [%s] and nls_comp [%s] isn't different, need be equal; because mysql db isn't support", nlsSort, nlsComp)
 	}
 
@@ -323,98 +324,91 @@ func startTableDiffCheck(cfg *service.CfgFile, engine *service.Engine, partSyncT
 
 		// 设置工作池
 		// 设置 goroutine 数
-		wg := sync.WaitGroup{}
-		ch := make(chan service.DataDiffMeta, utils.BufferSize)
+		g := &errgroup.Group{}
+		g.SetLimit(cfg.DiffConfig.DiffThreads + 1)
 
-		go func() {
-			for _, meta := range diffMetas {
-				ch <- meta
-			}
-			close(ch)
-		}()
+		reportResCh := make(chan ReportSummary, utils.BufferSize)
 
-		for c := 0; c < cfg.DiffConfig.DiffThreads; c++ {
-			wg.Add(1)
-			go func(targetSchema string, e *service.Engine, fixFileMW *reverser.FileMW) {
-				defer wg.Done()
-				for meta := range ch {
-					// 数据对比报告
-					r, err := Report(strings.ToUpper(targetSchema), meta, e)
-					if err != nil {
-						if err = e.GormDB.Create(&service.TableErrorDetail{
-							SourceSchemaName: meta.SourceSchemaName,
-							SourceTableName:  meta.SourceTableName,
-							RunMode:          utils.DiffMode,
-							InfoSources:      utils.DiffMode,
-							RunStatus:        "Failed",
-							Detail:           meta.String(),
-							Error:            err.Error(),
-						}).Error; err != nil {
-							zap.L().Error("diff table oracle to mysql failed",
-								zap.String("schema", meta.SourceSchemaName),
-								zap.String("table", meta.SourceTableName),
-								zap.Error(
-									fmt.Errorf("func [Report] diff table task failed, detail see [table_error_detail], please rerunning")))
-							panic(
-								fmt.Errorf("func [Report] diff table task failed, detail see [table_error_detail], please rerunning, error: %v", err))
-						}
-						continue
+		g.Go(func() error {
+			// 数据文件写入
+			if !cfg.DiffConfig.OnlyCheckRows {
+				for report := range reportResCh {
+					if _, err := fmt.Fprintln(fixFileMW, report.CRC32Result); err != nil {
+						return fmt.Errorf("fix sql file write [only-check-rows = false] failed: %v", err.Error())
 					}
-
-					// fixSQL 文件写入
-					if r != "" {
-						if _, err = fmt.Fprintln(fixFileMW, r); err != nil {
-							if err = e.GormDB.Create(&service.TableErrorDetail{
-								SourceSchemaName: meta.SourceSchemaName,
-								SourceTableName:  meta.SourceTableName,
-								RunMode:          utils.DiffMode,
-								InfoSources:      utils.DiffMode,
-								RunStatus:        "Failed",
-								Detail:           meta.String(),
-								Error:            fmt.Sprintf("fix sql file write failed: %v", err.Error()),
-							}).Error; err != nil {
-								zap.L().Error("diff table oracle to mysql failed",
-									zap.String("schema", meta.SourceSchemaName),
-									zap.String("table", meta.SourceTableName),
-									zap.Error(
-										fmt.Errorf("func [Report] diff table task failed, detail see [table_error_detail], please rerunning")))
-								panic(
-									fmt.Errorf("func [Report] diff table task failed, detail see [table_error_detail], please rerunning, error: %v", err))
-							}
-							continue
-						}
-					}
-
-					// 清理记录
-					if err = engine.DeleteDataDiffMeta(meta.SourceSchemaName, meta.SourceTableName, meta.Range); err != nil {
-						if err = e.GormDB.Create(&service.TableErrorDetail{
-							SourceSchemaName: meta.SourceSchemaName,
-							SourceTableName:  meta.SourceTableName,
-							RunMode:          utils.DiffMode,
-							InfoSources:      utils.DiffMode,
-							RunStatus:        "Failed",
-							Detail:           meta.String(),
-							Error:            fmt.Sprintf("delete [data_diff_meta] record write failed: %v", err.Error()),
-						}).Error; err != nil {
-							zap.L().Error("diff table oracle to mysql failed",
-								zap.String("schema", meta.SourceSchemaName),
-								zap.String("table", meta.SourceTableName),
-								zap.Error(
-									fmt.Errorf("func [Report] diff table task failed, detail see [table_error_detail], please rerunning")))
-							panic(
-								fmt.Errorf("func [Report] diff table task failed, detail see [table_error_detail], please rerunning, error: %v", err))
-						}
-						continue
-					}
-
 				}
-			}(cfg.TargetConfig.SchemaName, engine, fixFileMW)
+				return nil
+			}
+
+			for report := range reportResCh {
+				sw := table.NewWriter()
+				sw.SetStyle(table.StyleLight)
+				sw.AppendHeader(table.Row{"SOURCE TABLE", "SOURCE TABLE COUNTS", "TARGET TABLE", "TARGET TABLE COUNTS", "RANGE"})
+				sw.AppendRows([]table.Row{
+					{
+						report.SourceName,
+						report.SourceRows[report.SourceName],
+						report.TargetName,
+						report.TargetRows[report.TargetName],
+						report.Range,
+					},
+				})
+				if _, err := fmt.Fprintln(fixFileMW, fmt.Sprintf("/* \n\tmysql table [%s] chunk [%s] data rows aren't equal\n */\n", report.SourceName, report.Range)+sw.Render()+"\n"); err != nil {
+					return fmt.Errorf("fix sql file write [only-check-rows = true] failed: %v", err.Error())
+				}
+			}
+			return nil
+		})
+
+		for _, diffMeta := range diffMetas {
+			meta := diffMeta
+			targetSchema := cfg.TargetConfig.SchemaName
+			reportRes := reportResCh
+			g.Go(func() error {
+				// 数据对比报告
+				if err := Report(strings.ToUpper(targetSchema), meta, engine, reportRes, cfg.DiffConfig.OnlyCheckRows); err != nil {
+					if err = engine.GormDB.Create(&service.TableErrorDetail{
+						SourceSchemaName: meta.SourceSchemaName,
+						SourceTableName:  meta.SourceTableName,
+						RunMode:          utils.DiffMode,
+						InfoSources:      utils.DiffMode,
+						RunStatus:        "Failed",
+						Detail:           meta.String(),
+						Error:            fmt.Sprintf("data diff record report failed: %v", err.Error()),
+					}).Error; err != nil {
+						return fmt.Errorf("func [Report] diff table [%s] chunk [%s] task failed, detail see [table_error_detail], please rerunning, error: %v", utils.StringsBuilder(meta.SourceSchemaName, ".", meta.SourceTableName), meta.Range, err)
+					}
+				}
+
+				// 清理记录
+				if err = engine.DeleteDataDiffMeta(meta.SourceSchemaName, meta.SourceTableName, meta.Range); err != nil {
+					if err = engine.GormDB.Create(&service.TableErrorDetail{
+						SourceSchemaName: meta.SourceSchemaName,
+						SourceTableName:  meta.SourceTableName,
+						RunMode:          utils.DiffMode,
+						InfoSources:      utils.DiffMode,
+						RunStatus:        "Failed",
+						Detail:           meta.String(),
+						Error:            fmt.Sprintf("delete [data_diff_meta] record write failed: %v", err.Error()),
+					}).Error; err != nil {
+						return fmt.Errorf("func [Report] diff table task failed, detail see [table_error_detail], please rerunning, error: %v", err)
+					}
+				}
+				close(reportResCh)
+				return nil
+			})
 		}
 
-		wg.Wait()
+		if err := g.Wait(); err != nil {
+			zap.L().Error("diff table oracle to mysql failed",
+				zap.String("schema", d.SourceSchema),
+				zap.String("table", d.SourceTable),
+				zap.Error(fmt.Errorf("func [Report] diff table task failed, detail see [table_error_detail], please rerunning")))
+			// 忽略错误 continue
+			continue
+		}
 
 		// 更新记录
-
 		if err = engine.ModifyWaitSyncTableMetaRecord(
 			cfg.TargetConfig.MetaSchema,
 			cfg.SourceConfig.SchemaName, d.SourceTable, utils.DiffMode); err != nil {
@@ -548,13 +542,23 @@ func PreSplitChunk(cfg *service.CfgFile, engine *service.Engine, exportTableSlic
 }
 
 // 数据对比报告
-type ReportSummary struct {
+type DBSummary struct {
 	Columns   []string
 	StringSet *strset.Set
 	Crc32Val  uint32
+	Rows      int64
 }
 
-func Report(targetSchema string, dm service.DataDiffMeta, engine *service.Engine) (string, error) {
+type ReportSummary struct {
+	CRC32Result string
+	SourceName  string
+	TargetName  string
+	SourceRows  map[string]int64
+	TargetRows  map[string]int64
+	Range       string
+}
+
+func Report(targetSchema string, dm service.DataDiffMeta, engine *service.Engine, reportRes chan<- ReportSummary, onlyCheckRows bool) error {
 	var oraQuery, mysqlQuery string
 	if dm.NumberColumn == "" {
 		oraQuery = utils.StringsBuilder(
@@ -572,18 +576,31 @@ func Report(targetSchema string, dm service.DataDiffMeta, engine *service.Engine
 			" ORDER BY ", dm.NumberColumn, " DESC")
 	}
 
-	// 多线程
+	if onlyCheckRows {
+		if err := reportCheckRows(targetSchema, oraQuery, mysqlQuery, dm, engine, reportRes); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	if err := reportCheckCRC32(targetSchema, oraQuery, mysqlQuery, dm, engine, reportRes); err != nil {
+		return err
+	}
+	return nil
+}
+
+func reportCheckCRC32(targetSchema string, oraQuery, mysqlQuery string, dm service.DataDiffMeta, engine *service.Engine, reportRes chan<- ReportSummary) error {
 	errORA := &errgroup.Group{}
 	errMySQL := &errgroup.Group{}
-	oraChan := make(chan ReportSummary, 1)
-	mysqlChan := make(chan ReportSummary, 1)
+	oraChan := make(chan DBSummary, 1)
+	mysqlChan := make(chan DBSummary, 1)
 
 	errORA.Go(func() error {
 		oraColumns, oraStringSet, oraCrc32Val, err := engine.GetOracleDataRowStrings(oraQuery)
 		if err != nil {
 			return fmt.Errorf("get oracle data row strings failed: %v", err)
 		}
-		oraChan <- ReportSummary{
+		oraChan <- DBSummary{
 			Columns:   oraColumns,
 			StringSet: oraStringSet,
 			Crc32Val:  oraCrc32Val,
@@ -596,7 +613,7 @@ func Report(targetSchema string, dm service.DataDiffMeta, engine *service.Engine
 		if err != nil {
 			return fmt.Errorf("get mysql data row strings failed: %v", err)
 		}
-		mysqlChan <- ReportSummary{
+		mysqlChan <- DBSummary{
 			Columns:   mysqlColumns,
 			StringSet: mysqlStringSet,
 			Crc32Val:  mysqlCrc32Val,
@@ -605,10 +622,10 @@ func Report(targetSchema string, dm service.DataDiffMeta, engine *service.Engine
 	})
 
 	if err := errORA.Wait(); err != nil {
-		return "", err
+		return err
 	}
 	if err := errMySQL.Wait(); err != nil {
-		return "", err
+		return err
 	}
 
 	oraReport := <-oraChan
@@ -624,7 +641,7 @@ func Report(targetSchema string, dm service.DataDiffMeta, engine *service.Engine
 			zap.Uint32("mysql crc32 values", mysqlReport.Crc32Val),
 			zap.String("oracle sql", oraQuery),
 			zap.String("mysql sql", mysqlQuery))
-		return "", nil
+		return nil
 	}
 
 	zap.L().Info("oracle table chunk diff isn't equal",
@@ -647,7 +664,7 @@ func Report(targetSchema string, dm service.DataDiffMeta, engine *service.Engine
 	targetMore := strset.Difference(mysqlReport.StringSet, oraReport.StringSet).List()
 	if len(targetMore) > 0 {
 		fixSQL.WriteString("/*\n")
-		fixSQL.WriteString(fmt.Sprintf(" mysql table [%s.%s] chunk data rows are more \n", targetSchema, dm.SourceTableName))
+		fixSQL.WriteString(fmt.Sprintf(" mysql table [%s.%s] chunk [%s] data rows are more \n", targetSchema, dm.SourceTableName, dm.Range))
 
 		sw := table.NewWriter()
 		sw.SetStyle(table.StyleLight)
@@ -669,7 +686,7 @@ func Report(targetSchema string, dm service.DataDiffMeta, engine *service.Engine
 			// 计算字段列个数
 			colValues := strings.Split(t, ",")
 			if len(mysqlReport.Columns) != len(colValues) {
-				return "", fmt.Errorf("mysql schema [%s] table [%s] column counts [%d] isn't match values counts [%d]",
+				return fmt.Errorf("mysql schema [%s] table [%s] column counts [%d] isn't match values counts [%d]",
 					targetSchema, dm.SourceTableName, len(mysqlReport.Columns), len(colValues))
 			}
 			for i := 0; i < len(mysqlReport.Columns); i++ {
@@ -684,7 +701,7 @@ func Report(targetSchema string, dm service.DataDiffMeta, engine *service.Engine
 	sourceMore := strset.Difference(oraReport.StringSet, mysqlReport.StringSet).List()
 	if len(sourceMore) > 0 {
 		fixSQL.WriteString("/*\n")
-		fixSQL.WriteString(fmt.Sprintf(" mysql table [%s.%s] chunk data rows are less \n", targetSchema, dm.SourceTableName))
+		fixSQL.WriteString(fmt.Sprintf(" mysql table [%s.%s] chunk [%s] data rows are less \n", targetSchema, dm.SourceTableName, dm.Range))
 
 		sw := table.NewWriter()
 		sw.SetStyle(table.StyleLight)
@@ -705,5 +722,89 @@ func Report(targetSchema string, dm service.DataDiffMeta, engine *service.Engine
 		}
 	}
 
-	return fixSQL.String(), nil
+	// 文件写入
+	if fixSQL.String() != "" {
+		reportRes <- ReportSummary{
+			CRC32Result: fixSQL.String(),
+			SourceName:  utils.StringsBuilder(dm.SourceSchemaName, ".", dm.SourceTableName),
+			TargetName:  utils.StringsBuilder(targetSchema, ".", dm.SourceTableName),
+			Range:       dm.Range,
+		}
+	}
+	return nil
+}
+
+func reportCheckRows(targetSchema string, oraQuery, mysqlQuery string, dm service.DataDiffMeta, engine *service.Engine, reportRes chan<- ReportSummary) error {
+	errORA := &errgroup.Group{}
+	errMySQL := &errgroup.Group{}
+
+	oraChan := make(chan DBSummary, 1)
+	mysqlChan := make(chan DBSummary, 1)
+
+	errORA.Go(func() error {
+		rows, err := engine.GetOracleTableActualRows(oraQuery)
+		if err != nil {
+			return err
+		}
+		oraChan <- DBSummary{
+			Rows: rows,
+		}
+		return nil
+	})
+
+	errMySQL.Go(func() error {
+		rows, err := engine.GetMySQLTableActualRows(mysqlQuery)
+		if err != nil {
+			return err
+		}
+		mysqlChan <- DBSummary{
+			Rows: rows,
+		}
+		return nil
+	})
+
+	if err := errORA.Wait(); err != nil {
+		return err
+	}
+	if err := errMySQL.Wait(); err != nil {
+		return err
+	}
+
+	oraReport := <-oraChan
+	mysqlReport := <-mysqlChan
+
+	if oraReport.Rows == mysqlReport.Rows {
+		zap.L().Info("oracle table chunk diff equal",
+			zap.String("oracle schema", dm.SourceSchemaName),
+			zap.String("mysql schema", targetSchema),
+			zap.String("table", dm.SourceTableName),
+			zap.Int64("oracle rows count", oraReport.Rows),
+			zap.Int64("mysql rows count", mysqlReport.Rows),
+			zap.String("oracle sql", oraQuery),
+			zap.String("mysql sql", mysqlQuery))
+		return nil
+	}
+
+	zap.L().Info("oracle table chunk diff isn't equal",
+		zap.String("oracle schema", dm.SourceSchemaName),
+		zap.String("mysql schema", targetSchema),
+		zap.String("table", dm.SourceTableName),
+		zap.Int64("oracle rows count", oraReport.Rows),
+		zap.Int64("mysql rows count", mysqlReport.Rows),
+		zap.String("oracle sql", oraQuery),
+		zap.String("mysql sql", mysqlQuery))
+
+	reportRes <- ReportSummary{
+		SourceName: utils.StringsBuilder(dm.SourceSchemaName, ".", dm.SourceTableName),
+		TargetName: utils.StringsBuilder(targetSchema, ".", dm.SourceTableName),
+		SourceRows: map[string]int64{
+			utils.StringsBuilder(dm.SourceSchemaName, ".", dm.SourceTableName): oraReport.Rows,
+		},
+		TargetRows: map[string]int64{
+			utils.StringsBuilder(targetSchema, ".", dm.SourceTableName): mysqlReport.Rows,
+		},
+		Range: dm.Range,
+	}
+
+	return nil
 }

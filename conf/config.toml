@@ -33,7 +33,7 @@ chunk-size = 50000
 diff-threads = 128
 # 只检查数据行数
 # 设置 true 代表只检查数据行数，设置 false 代表使用 checksum 数据对比以及输出对应差异数据
-only-check-rows = false
+only-check-rows = true
 # 断点续检，代表从上次 checkpoint 开始检查
 enable-checkpoint = true
 # 忽略表结构、collation 以及 character 检查，数据校验是否校验表结构，以上游表结构为准
@@ -125,7 +125,7 @@ ora-arch = "noncdb"
 # 2、Non-CDB 架构需要具备 logminer 权限用户
 username = "transferdb"
 password = "transferdb"
-host = "12.16.110.62"
+host = "172.16.110.622"
 port = 1521
 service-name = "orcl"
 # oracle instance client dir
@@ -139,11 +139,11 @@ connect-params = "poolMinSessions=50&poolMaxSessions=1000&poolWaitTimeout=360s&p
 # Interval Year/Day 数据字符 TO_CHAR 格式化
 session-params = []
 # 配置 oracle 迁移 schema（gather 阶段可设置可不设置，不设置则表示 gather 库内所有 schema，其他阶段必须设置）
-schema-name = "XZ_TEST"
+schema-name = "transferdb"
 # 源端迁移任务表（只用于 prepare/reverse/check/all/full 阶段，gather 阶段不适用，gather 只适用于 schema 级别）
 # include-table 和 exclude-table 不能同时配置，两者只能配置一个,如果两个都没配置则 Schema 内表全迁移
 # include-table 和 exclude-table 支持正则表达式以及通配符（tab_*/tab*）
-include-table = []
+include-table = ["marvin","marvin1"]
 exclude-table = []
 
 # 只用于 prepare/reverse/check/all/full 阶段，gather 阶段不适用
@@ -153,7 +153,7 @@ db-type = "tidb"
 # 目标端连接串
 username = "root"
 password = "123456"
-host = "12.160.11.62"
+host = "172.16.101.622"
 port = 4000
 # mysql 链接参数
 connect-params = "charset=utf8mb4&multiStatements=true&parseTime=True&loc=Local"

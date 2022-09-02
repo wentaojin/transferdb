@@ -260,3 +260,27 @@ FROM user_parallel_execute_chunks WHERE  task_name = '`, taskName, `' ORDER BY c
 
 	return len(fullMetas), nil
 }
+
+func (e *Engine) GetOracleTableActualRows(oraQuery string) (int64, error) {
+	_, res, err := Query(e.OracleDB, oraQuery)
+	if err != nil {
+		return 0, err
+	}
+	rowsCount, err := strconv.ParseInt(res[0]["COUNT(1)"], 10, 64)
+	if err != nil {
+		return rowsCount, fmt.Errorf("error on FUNC GetOracleTableActualRows failed: %v", err)
+	}
+	return rowsCount, nil
+}
+
+func (e *Engine) GetMySQLTableActualRows(mysqlQuery string) (int64, error) {
+	_, res, err := Query(e.MysqlDB, mysqlQuery)
+	if err != nil {
+		return 0, err
+	}
+	rowsCount, err := strconv.ParseInt(res[0]["COUNT(1)"], 10, 64)
+	if err != nil {
+		return rowsCount, fmt.Errorf("error on FUNC GetMySQLTableActualRows failed: %v", err)
+	}
+	return rowsCount, nil
+}

@@ -139,7 +139,7 @@ func AdjustTableSelectColumn(e *service.Engine, schemaName, tableName string, so
 
 	// 只对比数据行数
 	if onlyCheckRows {
-		return numberCols, "COUNT(*)", "COUNT(*)", nil
+		return numberCols, "COUNT(1)", "COUNT(1)", nil
 	}
 
 	columns, _, err := check.GetOracleTableColumn(schemaName, tableName, e,
@@ -195,7 +195,7 @@ func AdjustTableSelectColumn(e *service.Engine, schemaName, tableName string, so
 // 如果表没有索引 NUMBER 字段或者没有 NUMBER 字段则输出
 func FilterOracleNUMBERColumn(e *service.Engine, schemaName, tableName, indexFiledName string, numberCols []string, onlyCheckRows bool) (string, error) {
 	// 只对比数据行，忽略 numberCol 字段
-	// SELECT COUNT(*) FROM TAB WHERE 1=1
+	// SELECT COUNT(1) FROM TAB WHERE 1=1
 	if onlyCheckRows {
 		return "", nil
 	}

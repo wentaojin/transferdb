@@ -65,7 +65,6 @@ func NewOracleDBEngine(oraCfg service.SourceConfig) (*sql.DB, error) {
 		oraDSN.OnInitStmts = oraCfg.SessionParams
 
 	default:
-		// 启用异构池 heterogeneousPool 即程序连接用户与访问 oracle schema 用户名不一致
 		connString = fmt.Sprintf("oracle://%s:%s@%s/%s?connectionClass=POOL_CONNECTION_CLASS&heterogeneousPool=1&%s",
 			oraCfg.Username, oraCfg.Password, utils.StringsBuilder(oraCfg.Host, ":", strconv.Itoa(oraCfg.Port)),
 			oraCfg.ServiceName, oraCfg.ConnectParams)
