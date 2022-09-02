@@ -191,8 +191,8 @@ func AdjustTableSelectColumn(e *service.Engine, schemaName, tableName string, so
 // 筛选 NUMBER 字段以及判断表是否存在主键/唯一键/唯一索引
 // 第一优先级配置文件指定字段【忽略是否存在索引】
 // 第二优先级任意取某个主键/唯一索引 NUMBER 字段
-// 第三优先级任意取某个索引 NUMBER 字段
-// 如果表没有索引 NUMBER 字段或者没有 NUMBER 字段则输出
+// 第三优先级取某个唯一性 DISTINCT 高的索引 NUMBER 字段
+// 如果表没有索引 NUMBER 字段或者没有 NUMBER 字段则报错
 func FilterOracleNUMBERColumn(e *service.Engine, schemaName, tableName, indexFiledName string, numberCols []string, onlyCheckRows bool) (string, error) {
 	// 只对比数据行，忽略 numberCol 字段
 	// SELECT COUNT(1) FROM TAB WHERE 1=1
@@ -209,7 +209,7 @@ func FilterOracleNUMBERColumn(e *service.Engine, schemaName, tableName, indexFil
 	}
 
 	if len(numberCols) == 0 {
-		return "", fmt.Errorf("oracle schema [%s] table [%s] number column isn't exist, skip", schemaName, tableName)
+		return "", fmt.Errorf("oracle schema [%s] table [%s] number column isn't exist, not support, pelase exclude skip or add number column index", schemaName, tableName)
 	}
 
 	puKeys, _, _, err := check.GetOracleConstraint(schemaName, tableName, e)
@@ -217,12 +217,18 @@ func FilterOracleNUMBERColumn(e *service.Engine, schemaName, tableName, indexFil
 		return "", err
 	}
 
+	// 存放联合主键，联合唯一约束、联合唯一索引以及普通索引
+	var indexArr []string
+
 	if len(puKeys) > 0 {
 		for _, pu := range puKeys {
-			// 联合主键/唯一约束引导字段列判断
-			if utils.IsContainString(numberCols, strings.ToUpper(strings.Split(pu.ConstraintColumn, ",")[0])) {
+			// 单列主键/唯一约束
+			// 联合主键/唯一约束引导字段，跟普通索引 PK字段选择率
+			str := strings.Split(pu.ConstraintColumn, ",")
+			if len(str) == 1 && utils.IsContainString(numberCols, strings.ToUpper(str[0])) {
 				return strings.ToUpper(strings.Split(pu.ConstraintColumn, ",")[0]), nil
 			}
+			indexArr = append(indexArr, pu.ConstraintColumn)
 		}
 	}
 
@@ -245,10 +251,13 @@ func FilterOracleNUMBERColumn(e *service.Engine, schemaName, tableName, indexFil
 
 	if len(ukIndex) > 0 {
 		for _, uk := range ukIndex {
-			// 联合主键/唯一约束引导字段列判断
-			if utils.IsContainString(numberCols, strings.ToUpper(strings.Split(uk, ",")[0])) {
-				return strings.ToUpper(strings.Split(uk, ",")[0]), nil
+			// 单列唯一索引
+			// 联合唯一索引引导字段，跟普通索引 PK 字段选择率
+			str := strings.Split(uk, ",")
+			if len(str) == 1 && utils.IsContainString(numberCols, strings.ToUpper(str[0])) {
+				return strings.ToUpper(str[0]), nil
 			}
+			indexArr = append(indexArr, uk)
 		}
 	}
 
@@ -257,11 +266,20 @@ func FilterOracleNUMBERColumn(e *service.Engine, schemaName, tableName, indexFil
 		return "", fmt.Errorf("oracle schema [%s] table [%s] pk/uk/unique index isn't exist, it's not support, please skip", schemaName, tableName)
 	}
 
-	if len(nonUkIndex) > 0 {
-		for _, idx := range nonUkIndex {
-			// 联合主键/唯一约束引导字段列判断
-			if utils.IsContainString(numberCols, strings.ToUpper(strings.Split(idx, ",")[0])) {
-				return strings.ToUpper(strings.Split(idx, ",")[0]), nil
+	// 普通索引、联合主键/联合唯一键/联合唯一索引，选择 number distinct 高的字段
+	indexArr = append(indexArr, nonUkIndex...)
+
+	orderCols, err := e.GetOracleTableColumnDistinctValue(schemaName, tableName, numberCols)
+	if err != nil {
+		return "", fmt.Errorf("get oracle schema [%s] table [%s] column distinct values failed: %v", schemaName, tableName, err)
+	}
+
+	if len(indexArr) > 0 {
+		for _, c := range orderCols {
+			for _, index := range indexArr {
+				if strings.EqualFold(c, strings.Split(index, ",")[0]) {
+					return c, nil
+				}
 			}
 		}
 	}

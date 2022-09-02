@@ -284,3 +284,26 @@ func (e *Engine) GetMySQLTableActualRows(mysqlQuery string) (int64, error) {
 	}
 	return rowsCount, nil
 }
+
+func (e *Engine) GetOracleTableColumnDistinctValue(schemaName, tableName string, columnList []string) ([]string, error) {
+	var (
+		colList  []string
+		orderCol []string
+	)
+	for _, col := range columnList {
+		colList = append(colList, utils.StringsBuilder("'", strings.ToUpper(col), "'"))
+	}
+	sql := fmt.Sprintf("SELECT COLUMN_NAME FROM DBA_TAB_COLS WHERE OWNER = '%s' AND TABLE_NAME = '%s' AND COLUMN_NAME IN (%s) ORDER BY NUM_DISTINCT DESC",
+		strings.ToUpper(schemaName), strings.ToUpper(tableName), strings.Join(colList, ","))
+
+	_, res, err := Query(e.OracleDB, sql)
+	if err != nil {
+		return orderCol, err
+	}
+
+	for _, r := range res {
+		orderCol = append(orderCol, r["COLUMN_NAME"])
+	}
+
+	return orderCol, nil
+}

@@ -125,7 +125,7 @@ ora-arch = "noncdb"
 # 2、Non-CDB 架构需要具备 logminer 权限用户
 username = "transferdb"
 password = "transferdb"
-host = "172.16.110.622"
+host = "172.16.101.622"
 port = 1521
 service-name = "orcl"
 # oracle instance client dir
@@ -153,7 +153,7 @@ db-type = "tidb"
 # 目标端连接串
 username = "root"
 password = "123456"
-host = "172.16.101.622"
+host = "172.16.101.602"
 port = 4000
 # mysql 链接参数
 connect-params = "charset=utf8mb4&multiStatements=true&parseTime=True&loc=Local"

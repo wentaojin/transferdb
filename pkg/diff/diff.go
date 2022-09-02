@@ -508,30 +508,23 @@ func PreSplitChunk(cfg *service.CfgFile, engine *service.Engine, exportTableSlic
 
 	// 设置工作池
 	// 设置 goroutine 数
-	wg := sync.WaitGroup{}
-	ch := make(chan Diff, utils.BufferSize)
+	g := &errgroup.Group{}
+	g.SetLimit(cfg.DiffConfig.DiffThreads)
 
-	go func() {
-		for _, d := range diffs {
-			ch <- d
-		}
-		close(ch)
-	}()
-
-	for c := 0; c < cfg.DiffConfig.DiffThreads; c++ {
-		wg.Add(1)
-		go func(workerID int, globalSCN uint64) {
-			defer wg.Done()
-			for d := range ch {
-				if err = d.SplitChunk(workerID, globalSCN); err != nil {
-					zap.L().Panic("pre split table chunk failed", zap.String("table", d.String()), zap.Error(err))
-					panic(fmt.Errorf("pre split table [%v] chunk failed, failed table detail please see logfile, error: [%v]", d.String(), err))
-				}
+	for idx, d := range diffs {
+		workerID := idx
+		diff := d
+		g.Go(func() error {
+			if err = diff.SplitChunk(workerID, globalSCN); err != nil {
+				return fmt.Errorf("pre split table [%v] chunk failed, failed table detail please see logfile, error: [%v]", d.String(), err)
 			}
-		}(c, globalSCN)
+			return nil
+		})
 	}
 
-	wg.Wait()
+	if err := g.Wait(); err != nil {
+		return diffs, err
+	}
 
 	endTime := time.Now()
 	zap.L().Info("pre split oracle and mysql table chunk finished",
