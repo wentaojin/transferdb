@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/wentaojin/transferdb/config"
 	"github.com/wentaojin/transferdb/utils"
 
 	"github.com/wentaojin/transferdb/service"
@@ -92,7 +93,7 @@ func applierTableIncrementRecord(p *IncrPayload) error {
 	return nil
 }
 
-func applyOracleRedoIncrementRecord(cfg *service.CfgFile, engine *service.Engine, logminerContentMap map[string][]service.LogminerContent) error {
+func applyOracleRedoIncrementRecord(cfg *config.CfgFile, engine *service.Engine, logminerContentMap map[string][]service.LogminerContent) error {
 	// 应用当前日志文件中所有记录
 	wp := workpool.New(cfg.AllConfig.ApplyThreads)
 	for tableName, lcs := range logminerContentMap {
@@ -113,7 +114,7 @@ func applyOracleRedoIncrementRecord(cfg *service.CfgFile, engine *service.Engine
 					defer func() {
 						if err := recover(); err != nil {
 							zap.L().Fatal("translatorAndApplyOracleIncrementRecord",
-								zap.String("schema", cfg.TargetConfig.SchemaName),
+								zap.String("schema", cfg.MySQLConfig.SchemaName),
 								zap.String("table", tbl),
 								zap.Error(fmt.Errorf("%v", err)))
 						}
@@ -125,7 +126,7 @@ func applyOracleRedoIncrementRecord(cfg *service.CfgFile, engine *service.Engine
 						rowsResult, taskQueue); err != nil {
 						return
 					}
-				}(engine, tbl, cfg.TargetConfig.SchemaName, rowsResult, taskQueue)
+				}(engine, tbl, cfg.MySQLConfig.SchemaName, rowsResult, taskQueue)
 
 				// 必须在任务分配和获取结果后创建工作池
 				go CreateWorkerPool(cfg.AllConfig.WorkerThreads, taskQueue, resultQueue)
@@ -135,7 +136,7 @@ func applyOracleRedoIncrementRecord(cfg *service.CfgFile, engine *service.Engine
 				return nil
 			}
 			zap.L().Warn("increment table log file logminer null data, transferdb will continue to capture",
-				zap.String("mysql schema", cfg.TargetConfig.SchemaName),
+				zap.String("mysql schema", cfg.MySQLConfig.SchemaName),
 				zap.String("table", tbl),
 				zap.String("status", "success"))
 			return nil

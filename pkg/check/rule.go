@@ -17,11 +17,12 @@ package check
 
 import (
 	"fmt"
-	"github.com/wentaojin/transferdb/pkg/reverser"
-	"github.com/wentaojin/transferdb/service"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/wentaojin/transferdb/pkg/reverse"
+	"github.com/wentaojin/transferdb/service"
 
 	"github.com/wentaojin/transferdb/utils"
 
@@ -59,19 +60,19 @@ func OracleTableColumnMapRuleReverse(
 	}
 
 	// 获取自定义映射规则
-	columnDataTypeMapSlice, err := engine.GetColumnRuleMap(sourceSchema, sourceTableName)
+	columnDataTypeMapSlice, err := engine.GetColumnRuleMap(sourceSchema, sourceTableName, utils.ReverseModeO2M)
 	if err != nil {
 		return columnMeta, err
 	}
-	tableDataTypeMapSlice, err := engine.GetTableRuleMap(sourceSchema, sourceTableName)
+	tableDataTypeMapSlice, err := engine.GetTableRuleMap(sourceSchema, sourceTableName, utils.ReverseModeO2M)
 	if err != nil {
 		return columnMeta, err
 	}
-	schemaDataTypeMapSlice, err := engine.GetSchemaRuleMap(sourceSchema)
+	schemaDataTypeMapSlice, err := engine.GetSchemaRuleMap(sourceSchema, utils.ReverseModeO2M)
 	if err != nil {
 		return columnMeta, err
 	}
-	defaultValueMapSlice, err := engine.GetDefaultValueMap()
+	defaultValueMapSlice, err := engine.GetDefaultValueMap(utils.ReverseModeO2M)
 	if err != nil {
 		return columnMeta, err
 	}
@@ -122,12 +123,12 @@ func OracleTableColumnMapRuleReverse(
 				buildInColumnType = fmt.Sprintf("DECIMAL(%d)", 65)
 			}
 		}
-		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		modifyColumnType = reverse.ChangeTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
 		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, "", "", defaultValueMapSlice)
 	case "BFILE":
 		originColumnType = "BFILE"
 		buildInColumnType = "VARCHAR(255)"
-		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		modifyColumnType = reverse.ChangeTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
 		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, columnCharacter, columnCollation, defaultValueMapSlice)
 	case "CHAR":
 		originColumnType = fmt.Sprintf("CHAR(%d)", dataLength)
@@ -136,7 +137,7 @@ func OracleTableColumnMapRuleReverse(
 		} else {
 			buildInColumnType = fmt.Sprintf("VARCHAR(%d)", dataLength)
 		}
-		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		modifyColumnType = reverse.ChangeTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
 		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, columnCharacter, columnCollation, defaultValueMapSlice)
 	case "CHARACTER":
 		originColumnType = fmt.Sprintf("CHARACTER(%d)", dataLength)
@@ -145,22 +146,22 @@ func OracleTableColumnMapRuleReverse(
 		} else {
 			buildInColumnType = fmt.Sprintf("VARCHAR(%d)", dataLength)
 		}
-		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		modifyColumnType = reverse.ChangeTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
 		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, columnCharacter, columnCollation, defaultValueMapSlice)
 	case "CLOB":
 		originColumnType = "CLOB"
 		buildInColumnType = "LONGTEXT"
-		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		modifyColumnType = reverse.ChangeTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
 		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, columnCharacter, columnCollation, defaultValueMapSlice)
 	case "BLOB":
 		originColumnType = "BLOB"
 		buildInColumnType = "BLOB"
-		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		modifyColumnType = reverse.ChangeTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
 		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, columnCharacter, columnCollation, defaultValueMapSlice)
 	case "DATE":
 		originColumnType = "DATE"
 		buildInColumnType = "DATETIME"
-		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		modifyColumnType = reverse.ChangeTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
 		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, "", "", defaultValueMapSlice)
 	case "DECIMAL":
 		switch {
@@ -171,7 +172,7 @@ func OracleTableColumnMapRuleReverse(
 			originColumnType = fmt.Sprintf("DECIMAL(%d,%d)", dataPrecision, dataScale)
 			buildInColumnType = fmt.Sprintf("DECIMAL(%d,%d)", dataPrecision, dataScale)
 		}
-		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		modifyColumnType = reverse.ChangeTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
 		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, "", "", defaultValueMapSlice)
 	case "DEC":
 		switch {
@@ -182,12 +183,12 @@ func OracleTableColumnMapRuleReverse(
 			originColumnType = fmt.Sprintf("DECIMAL(%d,%d)", dataPrecision, dataScale)
 			buildInColumnType = fmt.Sprintf("DECIMAL(%d,%d)", dataPrecision, dataScale)
 		}
-		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		modifyColumnType = reverse.ChangeTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
 		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, "", "", defaultValueMapSlice)
 	case "DOUBLE PRECISION":
 		originColumnType = "DOUBLE PRECISION"
 		buildInColumnType = "DOUBLE PRECISION"
-		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		modifyColumnType = reverse.ChangeTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
 		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, "", "", defaultValueMapSlice)
 	case "FLOAT":
 		originColumnType = "FLOAT"
@@ -196,37 +197,37 @@ func OracleTableColumnMapRuleReverse(
 		} else {
 			buildInColumnType = "DOUBLE"
 		}
-		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		modifyColumnType = reverse.ChangeTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
 		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, "", "", defaultValueMapSlice)
 	case "INTEGER":
 		originColumnType = "INTEGER"
 		buildInColumnType = "INT"
-		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		modifyColumnType = reverse.ChangeTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
 		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, "", "", defaultValueMapSlice)
 	case "INT":
 		originColumnType = "INTEGER"
 		buildInColumnType = "INT"
-		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		modifyColumnType = reverse.ChangeTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
 		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, "", "", defaultValueMapSlice)
 	case "LONG":
 		originColumnType = "LONG"
 		buildInColumnType = "LONGTEXT"
-		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		modifyColumnType = reverse.ChangeTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
 		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, columnCharacter, columnCollation, defaultValueMapSlice)
 	case "LONG RAW":
 		originColumnType = "LONG RAW"
 		buildInColumnType = "LONGBLOB"
-		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		modifyColumnType = reverse.ChangeTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
 		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, columnCharacter, columnCollation, defaultValueMapSlice)
 	case "BINARY_FLOAT":
 		originColumnType = "BINARY_FLOAT"
 		buildInColumnType = "DOUBLE"
-		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		modifyColumnType = reverse.ChangeTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
 		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, "", "", defaultValueMapSlice)
 	case "BINARY_DOUBLE":
 		originColumnType = "BINARY_DOUBLE"
 		buildInColumnType = "DOUBLE"
-		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		modifyColumnType = reverse.ChangeTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
 		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, "", "", defaultValueMapSlice)
 	case "NCHAR":
 		originColumnType = fmt.Sprintf("NCHAR(%d)", dataLength)
@@ -235,27 +236,27 @@ func OracleTableColumnMapRuleReverse(
 		} else {
 			buildInColumnType = fmt.Sprintf("NVARCHAR(%d)", dataLength)
 		}
-		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		modifyColumnType = reverse.ChangeTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
 		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, columnCharacter, columnCollation, defaultValueMapSlice)
 	case "NCHAR VARYING":
 		originColumnType = "NCHAR VARYING"
 		buildInColumnType = fmt.Sprintf("NCHAR VARYING(%d)", dataLength)
-		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		modifyColumnType = reverse.ChangeTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
 		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, columnCharacter, columnCollation, defaultValueMapSlice)
 	case "NCLOB":
 		originColumnType = "NCLOB"
 		buildInColumnType = "TEXT"
-		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		modifyColumnType = reverse.ChangeTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
 		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, columnCharacter, columnCollation, defaultValueMapSlice)
 	case "NUMERIC":
 		originColumnType = fmt.Sprintf("NUMERIC(%d,%d)", dataPrecision, dataScale)
 		buildInColumnType = fmt.Sprintf("NUMERIC(%d,%d)", dataPrecision, dataScale)
-		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		modifyColumnType = reverse.ChangeTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
 		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, "", "", defaultValueMapSlice)
 	case "NVARCHAR2":
 		originColumnType = fmt.Sprintf("NVARCHAR2(%d)", dataLength)
 		buildInColumnType = fmt.Sprintf("NVARCHAR(%d)", dataLength)
-		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		modifyColumnType = reverse.ChangeTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
 		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, columnCharacter, columnCollation, defaultValueMapSlice)
 	case "RAW":
 		originColumnType = fmt.Sprintf("RAW(%d)", dataLength)
@@ -267,48 +268,48 @@ func OracleTableColumnMapRuleReverse(
 		//	buildInColumnType = fmt.Sprintf("VARBINARY(%d)", dataLength)
 		//}
 		buildInColumnType = fmt.Sprintf("VARBINARY(%d)", dataLength)
-		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		modifyColumnType = reverse.ChangeTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
 		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, columnCharacter, columnCollation, defaultValueMapSlice)
 	case "REAL":
 		originColumnType = "real"
 		buildInColumnType = "DOUBLE"
-		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		modifyColumnType = reverse.ChangeTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
 		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, "", "", defaultValueMapSlice)
 	case "ROWID":
 		originColumnType = "ROWID"
 		buildInColumnType = "CHAR(10)"
-		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		modifyColumnType = reverse.ChangeTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
 		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, columnCharacter, columnCollation, defaultValueMapSlice)
 	case "SMALLINT":
 		originColumnType = "SMALLINT"
 		buildInColumnType = "DECIMAL(38)"
-		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		modifyColumnType = reverse.ChangeTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
 		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, "", "", defaultValueMapSlice)
 	case "UROWID":
 		originColumnType = "UROWID"
 		buildInColumnType = fmt.Sprintf("VARCHAR(%d)", dataLength)
-		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		modifyColumnType = reverse.ChangeTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
 		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, columnCharacter, columnCollation, defaultValueMapSlice)
 	case "VARCHAR2":
 		originColumnType = fmt.Sprintf("VARCHAR2(%d)", dataLength)
 		buildInColumnType = fmt.Sprintf("VARCHAR(%d)", dataLength)
-		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		modifyColumnType = reverse.ChangeTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
 		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, columnCharacter, columnCollation, defaultValueMapSlice)
 	case "VARCHAR":
 		originColumnType = fmt.Sprintf("VARCHAR(%d)", dataLength)
 		buildInColumnType = fmt.Sprintf("VARCHAR(%d)", dataLength)
-		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		modifyColumnType = reverse.ChangeTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
 		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, columnCharacter, columnCollation, defaultValueMapSlice)
 	case "XMLTYPE":
 		originColumnType = "XMLTYPE"
 		buildInColumnType = "LONGTEXT"
-		modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+		modifyColumnType = reverse.ChangeTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
 		columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, columnCharacter, columnCollation, defaultValueMapSlice)
 	default:
 		if strings.Contains(dataType, "INTERVAL") {
 			originColumnType = dataType
 			buildInColumnType = "VARCHAR(30)"
-			modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+			modifyColumnType = reverse.ChangeTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
 			columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, columnCharacter, columnCollation, defaultValueMapSlice)
 		} else if strings.Contains(dataType, "TIMESTAMP") {
 			originColumnType = dataType
@@ -325,12 +326,12 @@ func OracleTableColumnMapRuleReverse(
 					buildInColumnType = fmt.Sprintf("TIMESTAMP(%d)", 6)
 				}
 			}
-			modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+			modifyColumnType = reverse.ChangeTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
 			columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, "", "", defaultValueMapSlice)
 		} else {
 			originColumnType = dataType
 			buildInColumnType = "TEXT"
-			modifyColumnType = reverser.ChangeOracleTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+			modifyColumnType = reverse.ChangeTableColumnType(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice, tableDataTypeMapSlice, schemaDataTypeMapSlice)
 			columnMeta = genOracleTableColumnMeta(columnName, modifyColumnType, dataNullable, comments, dataDefault, columnCharacter, columnCollation, defaultValueMapSlice)
 		}
 	}
@@ -374,7 +375,7 @@ column [%v] column type [%v] column character set [%v] and collation [%v] must b
 	}
 
 	if defaultValue != "" {
-		dataDefault = reverser.LoadDataDefaultValueRule(defaultValue, defaultValueMapSlice)
+		dataDefault = reverse.LoadDataDefaultValueRule(defaultValue, defaultValueMapSlice)
 	} else {
 		dataDefault = defaultValue
 	}

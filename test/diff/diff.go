@@ -18,13 +18,16 @@ package main
 import (
 	"fmt"
 
+	"github.com/wentaojin/transferdb/config"
 	"github.com/wentaojin/transferdb/pkg/diff"
 	"github.com/wentaojin/transferdb/server"
 	"github.com/wentaojin/transferdb/service"
+	"github.com/wentaojin/transferdb/utils"
+	"golang.org/x/sync/errgroup"
 )
 
 func main() {
-	oraCfg := service.SourceConfig{
+	oraCfg := config.OracleConfig{
 		Username:      "c##logminer",
 		Password:      "logminer",
 		Host:          "172.16.4.93",
@@ -36,7 +39,7 @@ func main() {
 		IncludeTable:  nil,
 		ExcludeTable:  nil,
 	}
-	mysqlCfg := service.TargetConfig{
+	mysqlCfg := config.MySQLConfig{
 		Username:      "marvin",
 		Password:      "marvin",
 		Host:          "172.16.4.93",
@@ -66,10 +69,24 @@ func main() {
 		NumberColumn:     "N1",
 	}
 
-	fixSQL, err := diff.Report("STEVEN", dataDiff, engine)
-	if err != nil {
-		fmt.Println(err)
-	}
+	g := &errgroup.Group{}
+	g.SetLimit(2)
+	reportResCh := make(chan diff.ReportSummary, utils.BufferSize)
 
-	fmt.Println(fixSQL)
+	g.Go(func() error {
+		for report := range reportResCh {
+			fmt.Println(report)
+		}
+		return nil
+	})
+
+	g.Go(func() error {
+		err := diff.Report("STEVEN", dataDiff, engine, reportResCh, false)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+
+	g.Wait()
 }

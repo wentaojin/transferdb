@@ -48,10 +48,6 @@ const (
 	CKConstraintJSON = "CK"
 	PartitionJSON    = "PARTITION"
 
-	// 默认值规则
-	DefaultValueSysdate    = "SYSDATE"
-	DefaultValueSysdateMap = "NOW()"
-
 	// 目标数据库类型
 	TiDBTargetDBType  = "TIDB"
 	MySQLTargetDBType = "MYSQL"
@@ -83,6 +79,10 @@ const (
 	TiDBClusteredIndexIntOnlyValue = "INT_ONLY"
 	TiDBClusteredIndexONValue      = "ON"
 	TiDBClusteredIndexOFFValue     = "OFF"
+
+	// Reverse 模式
+	ReverseModeO2M = "O2M"
+	ReverseModeM2O = "M2O"
 )
 
 // alter-primary-key = fase 主键整型数据类型列表
@@ -120,3 +120,44 @@ var OracleDBCSVCharacterSetMap = map[string]string{
 	"UTF8":     "UTF8",
 	"ZHS16GBK": "GBK",
 }
+
+// ORACLE 默认值规则映射规则
+const (
+	DefaultValueSysdate    = "SYSDATE"
+	DefaultValueSysdateMap = "NOW()"
+)
+
+// MySQL 字符集映射规则
+var MySQLDBCharacterSetMap = map[string]string{
+	"UTF8MB4": "AL32UTF8",
+	"UTF8":    "AL32UTF8",
+	"GBK":     "AL32UTF8",
+}
+
+var MySQLDBCollationMap = map[string]string{
+	// ORACLE 12.2 及以上版本
+	// 不区分大小写，但区分重音
+	// MySQL 8.0 ONlY
+	"utf8mb4_0900_as_ci": "BINARY_CI",
+	// 不区分大小写和重音
+	"utf8mb4_general_ci": "BINARY_AI",
+	// 区分大小写和重音，如果不使用扩展名下，该规则是 ORACLE 默认值 BINARY_CS
+	// ORACLE 12.2 以下版本：区分大小写和重音 BINARY
+	"utf8mb4_bin": "BINARY/BINARY_CS",
+	// MySQL 8.0 ONlY
+	"utf8_0900_as_ci": "BINARY_CI",
+	// 不区分大小写和重音
+	"utf8_general_ci": "BINARY_AI",
+	// 区分大小写和重音，如果不使用扩展名下，该规则是 ORACLE 默认值 BINARY_CS
+	// ORACLE 12.2 以下版本：区分大小写和重音 BINARY
+	"utf8_bin": "BINARY/BINARY_CS",
+}
+
+// Oracle 不支持数据类型 -> M2O
+var OracleIsNotSupportDataType = []string{"ENUM", "SET"}
+
+// MySQL 默认值规则映射规则
+const (
+	DefaultValueNow    = "CURRENT_TIMESTAMP"
+	DefaultValueNowMAP = "SYSDATE"
+)

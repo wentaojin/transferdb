@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package reverser
+package o2m
 
 import (
 	"fmt"
@@ -23,6 +23,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/wentaojin/transferdb/config"
+	"github.com/wentaojin/transferdb/pkg/filter"
 	"github.com/wentaojin/transferdb/utils"
 
 	"github.com/wentaojin/transferdb/service"
@@ -30,30 +32,30 @@ import (
 	"go.uber.org/zap"
 )
 
-func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) error {
+func OracleReverseToMySQLTable(engine *service.Engine, cfg *config.CfgFile) error {
 	startTime := time.Now()
 	zap.L().Info("reverse table oracle to mysql start",
-		zap.String("schema", cfg.SourceConfig.SchemaName))
+		zap.String("schema", cfg.OracleConfig.SchemaName))
 
 	// 获取配置文件待同步表列表
-	exporterTableSlice, err := cfg.GenerateTables(engine)
+	exporterTableSlice, err := filter.FilterCFGOracleTables(cfg, engine)
 	if err != nil {
 		return err
 	}
 
 	if len(exporterTableSlice) == 0 {
 		zap.L().Warn("there are no table objects in the oracle schema",
-			zap.String("schema", cfg.SourceConfig.SchemaName))
+			zap.String("schema", cfg.OracleConfig.SchemaName))
 		return nil
 	}
 
 	// 判断 table_error_detail 是否存在错误记录，是否可进行 reverse
-	errorTotals, err := engine.GetTableErrorDetailCountByMode(cfg.SourceConfig.SchemaName, utils.ReverseMode)
+	errorTotals, err := engine.GetTableErrorDetailCountByMode(cfg.OracleConfig.SchemaName, utils.ReverseMode)
 	if err != nil {
-		return fmt.Errorf("func [GetTableErrorDetailCountByMode] reverse schema [%s] table mode [%s] task failed, error: %v", strings.ToUpper(cfg.SourceConfig.SchemaName), utils.ReverseMode, err)
+		return fmt.Errorf("func [GetTableErrorDetailCountByMode] reverse schema [%s] table mode [%s] task failed, error: %v", strings.ToUpper(cfg.OracleConfig.SchemaName), utils.ReverseMode, err)
 	}
 	if errorTotals > 0 {
-		return fmt.Errorf("func [GetTableErrorDetailCountByMode] reverse schema [%s] table mode [%s] task failed, table [table_error_detail] exist failed error, please clear and rerunning", strings.ToUpper(cfg.SourceConfig.SchemaName), utils.ReverseMode)
+		return fmt.Errorf("func [GetTableErrorDetailCountByMode] reverse schema [%s] table mode [%s] task failed, table [table_error_detail] exist failed error, please clear and rerunning", strings.ToUpper(cfg.OracleConfig.SchemaName), utils.ReverseMode)
 	}
 
 	// oracle db collation
@@ -66,17 +68,17 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 		return err
 	}
 	if _, ok := utils.OracleCollationMap[strings.ToUpper(nlsSort)]; !ok {
-		return fmt.Errorf("oracle db nls sort [%s] isn't support", nlsSort)
+		return fmt.Errorf("oracle db nls sort [%s] , mysql db isn't support", nlsSort)
 	}
 	if _, ok := utils.OracleCollationMap[strings.ToUpper(nlsComp)]; !ok {
-		return fmt.Errorf("oracle db nls comp [%s] isn't support", nlsComp)
+		return fmt.Errorf("oracle db nls comp [%s] , mysql db isn't support", nlsComp)
 	}
 	if !strings.EqualFold(nlsSort, nlsComp) {
 		return fmt.Errorf("oracle db nls_sort [%s] and nls_comp [%s] isn't different, need be equal; because mysql db isn't support", nlsSort, nlsComp)
 	}
 
-	// 表列表
-	tables, partitionTableList, temporaryTableList, clusteredTableList, err := LoadOracleToMySQLTableList(
+	// reverse 表任务列表
+	tables, partitionTableList, temporaryTableList, clusteredTableList, err := GenOracleToMySQLTableList(
 		engine, cfg, exporterTableSlice, nlsSort, nlsComp)
 	if err != nil {
 		return err
@@ -91,13 +93,13 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 		return err
 	}
 
-	fileReverse, err = os.OpenFile(filepath.Join(pwdDir, fmt.Sprintf("reverse_%s.sql", cfg.SourceConfig.SchemaName)), os.O_WRONLY|os.O_CREATE|os.O_APPEND|os.O_TRUNC, 0666)
+	fileReverse, err = os.OpenFile(filepath.Join(pwdDir, fmt.Sprintf("reverse_%s.sql", cfg.OracleConfig.SchemaName)), os.O_WRONLY|os.O_CREATE|os.O_APPEND|os.O_TRUNC, 0666)
 	if err != nil {
 		return err
 	}
 	defer fileReverse.Close()
 
-	fileCompatibility, err = os.OpenFile(filepath.Join(pwdDir, fmt.Sprintf("compatibility_%s.sql", cfg.SourceConfig.SchemaName)), os.O_WRONLY|os.O_CREATE|os.O_APPEND|os.O_TRUNC, 0666)
+	fileCompatibility, err = os.OpenFile(filepath.Join(pwdDir, fmt.Sprintf("compatibility_%s.sql", cfg.OracleConfig.SchemaName)), os.O_WRONLY|os.O_CREATE|os.O_APPEND|os.O_TRUNC, 0666)
 	if err != nil {
 		return err
 	}
@@ -107,12 +109,12 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 	wrComp := &FileMW{sync.Mutex{}, fileCompatibility}
 
 	// 创建 Schema
-	if err := GenCreateSchema(wrReverse, engine, strings.ToUpper(cfg.SourceConfig.SchemaName), strings.ToUpper(cfg.TargetConfig.SchemaName), nlsComp); err != nil {
+	if err := GenCreateSchema(wrReverse, engine, strings.ToUpper(cfg.OracleConfig.SchemaName), strings.ToUpper(cfg.MySQLConfig.SchemaName), nlsComp); err != nil {
 		return err
 	}
 
 	// 不兼容项 - 表提示
-	if err = CompatibilityDBTips(wrComp, strings.ToUpper(cfg.SourceConfig.SchemaName), partitionTableList, temporaryTableList, clusteredTableList); err != nil {
+	if err = CompatibilityDBTips(wrComp, strings.ToUpper(cfg.OracleConfig.SchemaName), partitionTableList, temporaryTableList, clusteredTableList); err != nil {
 		return err
 	}
 
@@ -180,16 +182,16 @@ func ReverseOracleToMySQLTable(engine *service.Engine, cfg *service.CfgFile) err
 
 	wg.Wait()
 
-	errorTotals, err = engine.GetTableErrorDetailCountByMode(cfg.SourceConfig.SchemaName, utils.ReverseMode)
+	errorTotals, err = engine.GetTableErrorDetailCountByMode(cfg.OracleConfig.SchemaName, utils.ReverseMode)
 	if err != nil {
-		return fmt.Errorf("func [GetTableErrorDetailCountByMode] reverse schema [%s] mode [%s] table task failed, error: %v", strings.ToUpper(cfg.SourceConfig.SchemaName), utils.ReverseMode, err)
+		return fmt.Errorf("func [GetTableErrorDetailCountByMode] reverse schema [%s] mode [%s] table task failed, error: %v", strings.ToUpper(cfg.OracleConfig.SchemaName), utils.ReverseMode, err)
 	}
 
 	endTime := time.Now()
 	zap.L().Info("reverse", zap.String("create table and index output", filepath.Join(pwdDir,
-		fmt.Sprintf("reverse_%s.sql", cfg.SourceConfig.SchemaName))))
+		fmt.Sprintf("reverse_%s.sql", cfg.OracleConfig.SchemaName))))
 	zap.L().Info("compatibility", zap.String("maybe exist compatibility output", filepath.Join(pwdDir,
-		fmt.Sprintf("compatibility_%s.sql", cfg.SourceConfig.SchemaName))))
+		fmt.Sprintf("compatibility_%s.sql", cfg.OracleConfig.SchemaName))))
 	if errorTotals == 0 {
 		zap.L().Info("reverse table oracle to mysql finished",
 			zap.Int("table totals", len(tables)),

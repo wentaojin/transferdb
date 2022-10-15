@@ -29,7 +29,9 @@ import (
 
 	"github.com/jedib0t/go-pretty/v6/table"
 
-	"github.com/wentaojin/transferdb/pkg/reverser"
+	"github.com/wentaojin/transferdb/config"
+	"github.com/wentaojin/transferdb/pkg/filter"
+	"github.com/wentaojin/transferdb/pkg/reverse/o2m"
 
 	"github.com/scylladb/go-set/strset"
 	"github.com/wentaojin/transferdb/pkg/check"
@@ -41,10 +43,10 @@ import (
 	"github.com/wentaojin/transferdb/service"
 )
 
-func OracleDiffMySQLTable(engine *service.Engine, cfg *service.CfgFile) error {
+func OracleDiffMySQLTable(engine *service.Engine, cfg *config.CfgFile) error {
 	startTime := time.Now()
 	zap.L().Info("diff table oracle to mysql start",
-		zap.String("schema", cfg.SourceConfig.SchemaName))
+		zap.String("schema", cfg.OracleConfig.SchemaName))
 
 	// 判断上游 Oracle 数据库版本
 	// 需要 oracle 11g 及以上
@@ -57,34 +59,34 @@ func OracleDiffMySQLTable(engine *service.Engine, cfg *service.CfgFile) error {
 	}
 
 	// 获取配置文件待同步表列表
-	exporterTableSlice, err := cfg.GenerateTables(engine)
+	exporterTableSlice, err := filter.FilterCFGOracleTables(cfg, engine)
 	if err != nil {
 		return err
 	}
 
 	if len(exporterTableSlice) == 0 {
 		zap.L().Warn("there are no table objects in the oracle schema",
-			zap.String("schema", cfg.SourceConfig.SchemaName))
+			zap.String("schema", cfg.OracleConfig.SchemaName))
 		return nil
 	}
 
 	// 判断 table_error_detail 是否存在错误记录，是否可进行 diff
-	errorTotals, err := engine.GetTableErrorDetailCountByMode(cfg.SourceConfig.SchemaName, utils.DiffMode)
+	errorTotals, err := engine.GetTableErrorDetailCountByMode(cfg.OracleConfig.SchemaName, utils.DiffMode)
 	if err != nil {
-		return fmt.Errorf("func [GetTableErrorDetailCountByMode] reverse schema [%s] table mode [%s] task failed, error: %v", strings.ToUpper(cfg.SourceConfig.SchemaName), utils.DiffMode, err)
+		return fmt.Errorf("func [GetTableErrorDetailCountByMode] reverse schema [%s] table mode [%s] task failed, error: %v", strings.ToUpper(cfg.OracleConfig.SchemaName), utils.DiffMode, err)
 	}
 	if errorTotals > 0 {
-		return fmt.Errorf("func [GetTableErrorDetailCountByMode] reverse schema [%s] table mode [%s] task failed, table [table_error_detail] exist failed error, please clear and rerunning", strings.ToUpper(cfg.SourceConfig.SchemaName), utils.DiffMode)
+		return fmt.Errorf("func [GetTableErrorDetailCountByMode] reverse schema [%s] table mode [%s] task failed, table [table_error_detail] exist failed error, please clear and rerunning", strings.ToUpper(cfg.OracleConfig.SchemaName), utils.DiffMode)
 	}
 
 	// 判断并记录待同步表列表
 	for _, tableName := range exporterTableSlice {
-		isExist, err := engine.IsExistWaitSyncTableMetaRecord(cfg.SourceConfig.SchemaName, tableName, utils.DiffMode)
+		isExist, err := engine.IsExistWaitSyncTableMetaRecord(cfg.OracleConfig.SchemaName, tableName, utils.DiffMode)
 		if err != nil {
 			return err
 		}
 		if !isExist {
-			if err := engine.InitWaitSyncTableMetaRecord(cfg.SourceConfig.SchemaName, []string{tableName}, utils.DiffMode); err != nil {
+			if err := engine.InitWaitSyncTableMetaRecord(cfg.OracleConfig.SchemaName, []string{tableName}, utils.DiffMode); err != nil {
 				return err
 			}
 		}
@@ -92,20 +94,20 @@ func OracleDiffMySQLTable(engine *service.Engine, cfg *service.CfgFile) error {
 
 	// 关于全量断点恢复
 	if !cfg.DiffConfig.EnableCheckpoint {
-		if err := engine.TruncateDataDiffMetaRecord(cfg.TargetConfig.MetaSchema); err != nil {
+		if err := engine.TruncateDataDiffMetaRecord(cfg.MySQLConfig.MetaSchema); err != nil {
 			return err
 		}
 		for _, tableName := range exporterTableSlice {
-			if err := engine.DeleteWaitSyncTableMetaRecord(cfg.TargetConfig.MetaSchema, cfg.SourceConfig.SchemaName, tableName, utils.DiffMode); err != nil {
+			if err := engine.DeleteWaitSyncTableMetaRecord(cfg.MySQLConfig.MetaSchema, cfg.OracleConfig.SchemaName, tableName, utils.DiffMode); err != nil {
 				return err
 			}
 			// 判断并记录待同步表列表
-			isExist, err := engine.IsExistWaitSyncTableMetaRecord(cfg.SourceConfig.SchemaName, tableName, utils.DiffMode)
+			isExist, err := engine.IsExistWaitSyncTableMetaRecord(cfg.OracleConfig.SchemaName, tableName, utils.DiffMode)
 			if err != nil {
 				return err
 			}
 			if !isExist {
-				if err := engine.InitWaitSyncTableMetaRecord(cfg.SourceConfig.SchemaName, []string{tableName}, utils.DiffMode); err != nil {
+				if err := engine.InitWaitSyncTableMetaRecord(cfg.OracleConfig.SchemaName, []string{tableName}, utils.DiffMode); err != nil {
 					return err
 				}
 			}
@@ -113,32 +115,32 @@ func OracleDiffMySQLTable(engine *service.Engine, cfg *service.CfgFile) error {
 	}
 
 	// 获取等待同步以及未同步完成的表列表
-	waitSyncTableMetas, waitSyncTableInfo, err := engine.GetWaitSyncTableMetaRecord(cfg.SourceConfig.SchemaName, utils.DiffMode)
+	waitSyncTableMetas, waitSyncTableInfo, err := engine.GetWaitSyncTableMetaRecord(cfg.OracleConfig.SchemaName, utils.DiffMode)
 	if err != nil {
 		return err
 	}
 
-	partSyncTableMetas, partSyncTableInfo, err := engine.GetPartSyncTableMetaRecord(cfg.SourceConfig.SchemaName, utils.DiffMode)
+	partSyncTableMetas, partSyncTableInfo, err := engine.GetPartSyncTableMetaRecord(cfg.OracleConfig.SchemaName, utils.DiffMode)
 	if err != nil {
 		return err
 	}
 	if len(waitSyncTableMetas) == 0 && len(partSyncTableMetas) == 0 {
 		endTime := time.Now()
 		zap.L().Info("all oracle table data diff finished",
-			zap.String("schema", cfg.SourceConfig.SchemaName),
+			zap.String("schema", cfg.OracleConfig.SchemaName),
 			zap.String("cost", endTime.Sub(startTime).String()))
 		return nil
 	}
 
 	// 判断能否断点续传
-	panicCheckpointTables, err := engine.JudgingCheckpointResume(cfg.SourceConfig.SchemaName, partSyncTableMetas, utils.DiffMode)
+	panicCheckpointTables, err := engine.JudgingCheckpointResume(cfg.OracleConfig.SchemaName, partSyncTableMetas, utils.DiffMode)
 	if err != nil {
 		return err
 	}
 	if len(panicCheckpointTables) != 0 {
 		endTime := time.Now()
 		zap.L().Error("all oracle table data diff error",
-			zap.String("schema", cfg.SourceConfig.SchemaName),
+			zap.String("schema", cfg.OracleConfig.SchemaName),
 			zap.String("cost", endTime.Sub(startTime).String()),
 			zap.Strings("panic tables", panicCheckpointTables))
 
@@ -181,7 +183,7 @@ func OracleDiffMySQLTable(engine *service.Engine, cfg *service.CfgFile) error {
 	}
 	finishTime := time.Now()
 	zap.L().Info("get oracle db character and version finished",
-		zap.String("schema", cfg.SourceConfig.SchemaName),
+		zap.String("schema", cfg.OracleConfig.SchemaName),
 		zap.String("db version", oraDBVersion),
 		zap.String("db character", characterSet),
 		zap.Int("table totals", len(exporterTableSlice)),
@@ -195,17 +197,17 @@ func OracleDiffMySQLTable(engine *service.Engine, cfg *service.CfgFile) error {
 
 	if oraCollation {
 		beginTime = time.Now()
-		schemaCollation, err = engine.GetOracleSchemaCollation(strings.ToUpper(cfg.SourceConfig.SchemaName))
+		schemaCollation, err = engine.GetOracleSchemaCollation(strings.ToUpper(cfg.OracleConfig.SchemaName))
 		if err != nil {
 			return err
 		}
-		tblCollation, err = engine.GetOracleTableCollation(strings.ToUpper(cfg.SourceConfig.SchemaName), schemaCollation)
+		tblCollation, err = engine.GetOracleTableCollation(strings.ToUpper(cfg.OracleConfig.SchemaName), schemaCollation)
 		if err != nil {
 			return err
 		}
 		finishTime = time.Now()
 		zap.L().Info("get oracle schema and table collation finished",
-			zap.String("schema", cfg.SourceConfig.SchemaName),
+			zap.String("schema", cfg.OracleConfig.SchemaName),
 			zap.String("db version", oraDBVersion),
 			zap.String("db character", characterSet),
 			zap.Int("table totals", len(exporterTableSlice)),
@@ -229,7 +231,7 @@ func OracleDiffMySQLTable(engine *service.Engine, cfg *service.CfgFile) error {
 	}
 	defer fixSqlFile.Close()
 
-	fixFileMW := &reverser.FileMW{Mutex: sync.Mutex{}, Writer: fixSqlFile}
+	fixFileMW := &o2m.FileMW{Mutex: sync.Mutex{}, Writer: fixSqlFile}
 
 	// 数据对比
 	if err = StartTableDiff(partSyncTableInfo, waitSyncTableInfo, cfg, engine,
@@ -238,9 +240,9 @@ func OracleDiffMySQLTable(engine *service.Engine, cfg *service.CfgFile) error {
 	}
 
 	// 错误核对
-	errorTotals, err = engine.GetTableErrorDetailDistinctCountByMode(cfg.SourceConfig.SchemaName, utils.DiffMode)
+	errorTotals, err = engine.GetTableErrorDetailDistinctCountByMode(cfg.OracleConfig.SchemaName, utils.DiffMode)
 	if err != nil {
-		return fmt.Errorf("func [GetTableErrorDetailDistinctCountByMode] diff schema [%s] mode [%s] table task failed, error: %v", strings.ToUpper(cfg.SourceConfig.SchemaName), utils.DiffMode, err)
+		return fmt.Errorf("func [GetTableErrorDetailDistinctCountByMode] diff schema [%s] mode [%s] table task failed, error: %v", strings.ToUpper(cfg.OracleConfig.SchemaName), utils.DiffMode, err)
 	}
 
 	endTime := time.Now()
@@ -263,8 +265,8 @@ func OracleDiffMySQLTable(engine *service.Engine, cfg *service.CfgFile) error {
 
 }
 
-func StartTableDiff(partSyncTableInfo, waitSyncTableInfo []string, cfg *service.CfgFile, engine *service.Engine,
-	characterSet string, nlsComp string, tblCollation map[string]string, schemaCollation string, oraCollation bool, fixFileMW *reverser.FileMW) error {
+func StartTableDiff(partSyncTableInfo, waitSyncTableInfo []string, cfg *config.CfgFile, engine *service.Engine,
+	characterSet string, nlsComp string, tblCollation map[string]string, schemaCollation string, oraCollation bool, fixFileMW *o2m.FileMW) error {
 	// 优先存在断点的表同步
 	if len(partSyncTableInfo) > 0 {
 		if err := startTableDiffCheck(cfg, engine, partSyncTableInfo, waitSyncTableInfo, characterSet, nlsComp, tblCollation, schemaCollation, oraCollation, fixFileMW, true); err != nil {
@@ -280,8 +282,8 @@ func StartTableDiff(partSyncTableInfo, waitSyncTableInfo []string, cfg *service.
 }
 
 // 数据校验
-func startTableDiffCheck(cfg *service.CfgFile, engine *service.Engine, partSyncTableInfo, waitSyncTableInfo []string,
-	characterSet string, nlsComp string, tblCollation map[string]string, schemaCollation string, oraCollation bool, fixFileMW *reverser.FileMW, isCheckpoint bool) error {
+func startTableDiffCheck(cfg *config.CfgFile, engine *service.Engine, partSyncTableInfo, waitSyncTableInfo []string,
+	characterSet string, nlsComp string, tblCollation map[string]string, schemaCollation string, oraCollation bool, fixFileMW *o2m.FileMW, isCheckpoint bool) error {
 	var (
 		diffs []Diff
 		err   error
@@ -362,7 +364,7 @@ func startTableDiffCheck(cfg *service.CfgFile, engine *service.Engine, partSyncT
 
 		for _, diffMeta := range diffMetas {
 			meta := diffMeta
-			targetSchema := cfg.TargetConfig.SchemaName
+			targetSchema := cfg.MySQLConfig.SchemaName
 			reportRes := reportResCh
 			g.Go(func() error {
 				// 数据对比报告
@@ -410,8 +412,8 @@ func startTableDiffCheck(cfg *service.CfgFile, engine *service.Engine, partSyncT
 
 		// 更新记录
 		if err = engine.ModifyWaitSyncTableMetaRecord(
-			cfg.TargetConfig.MetaSchema,
-			cfg.SourceConfig.SchemaName, d.SourceTable, utils.DiffMode); err != nil {
+			cfg.MySQLConfig.MetaSchema,
+			cfg.OracleConfig.SchemaName, d.SourceTable, utils.DiffMode); err != nil {
 			return err
 		}
 
@@ -424,7 +426,7 @@ func startTableDiffCheck(cfg *service.CfgFile, engine *service.Engine, partSyncT
 	return nil
 }
 
-func PreDiffCheck(exporterTableSlice []string, cfg *service.CfgFile, engine *service.Engine) error {
+func PreDiffCheck(exporterTableSlice []string, cfg *config.CfgFile, engine *service.Engine) error {
 	startTime := time.Now()
 
 	// 判断下游是否存在 ORACLE 表
@@ -433,7 +435,7 @@ func PreDiffCheck(exporterTableSlice []string, cfg *service.CfgFile, engine *ser
 	for _, t := range exporterTableSlice {
 		tbls = append(tbls, utils.StringsBuilder("'", t, "'"))
 	}
-	mysqlTables, err := engine.GetMySQLTableName(cfg.TargetConfig.SchemaName, strings.Join(tbls, ","))
+	mysqlTables, err := engine.GetMySQLTableName(cfg.MySQLConfig.SchemaName, strings.Join(tbls, ","))
 	if err != nil {
 		return err
 	}
@@ -448,24 +450,24 @@ func PreDiffCheck(exporterTableSlice []string, cfg *service.CfgFile, engine *ser
 		if err = check.OracleTableToMySQLMappingCheck(engine, cfg); err != nil {
 			return err
 		}
-		checkError, err := engine.GetTableErrorDetailCountBySources(cfg.SourceConfig.SchemaName, utils.CheckMode, utils.CheckMode)
+		checkError, err := engine.GetTableErrorDetailCountBySources(cfg.OracleConfig.SchemaName, utils.CheckMode, utils.CheckMode)
 		if err != nil {
-			return fmt.Errorf("func [GetTableErrorDetailCountBySources] check schema [%s] mode [%s] table task failed, error: %v", strings.ToUpper(cfg.SourceConfig.SchemaName), utils.CheckMode, err)
+			return fmt.Errorf("func [GetTableErrorDetailCountBySources] check schema [%s] mode [%s] table task failed, error: %v", strings.ToUpper(cfg.OracleConfig.SchemaName), utils.CheckMode, err)
 		}
 
-		reverseError, err := engine.GetTableErrorDetailCountBySources(cfg.SourceConfig.SchemaName, utils.CheckMode, utils.ReverseMode)
+		reverseError, err := engine.GetTableErrorDetailCountBySources(cfg.OracleConfig.SchemaName, utils.CheckMode, utils.ReverseMode)
 		if err != nil {
-			return fmt.Errorf("func [GetTableErrorDetailCountBySources] check schema [%s] mode [%s] table task failed, error: %v", strings.ToUpper(cfg.SourceConfig.SchemaName), utils.CheckMode, err)
+			return fmt.Errorf("func [GetTableErrorDetailCountBySources] check schema [%s] mode [%s] table task failed, error: %v", strings.ToUpper(cfg.OracleConfig.SchemaName), utils.CheckMode, err)
 		}
 		if checkError != 0 || reverseError != 0 {
-			return fmt.Errorf("check schema [%s] mode [%s] table task failed, please check log, error: %v", strings.ToUpper(cfg.SourceConfig.SchemaName), utils.CheckMode, err)
+			return fmt.Errorf("check schema [%s] mode [%s] table task failed, please check log, error: %v", strings.ToUpper(cfg.OracleConfig.SchemaName), utils.CheckMode, err)
 		}
 		pwdDir, err := os.Getwd()
 		if err != nil {
 			return err
 		}
 
-		checkFile := filepath.Join(pwdDir, fmt.Sprintf("check_%s.sql", cfg.SourceConfig.SchemaName))
+		checkFile := filepath.Join(pwdDir, fmt.Sprintf("check_%s.sql", cfg.OracleConfig.SchemaName))
 		file, err := os.Open(checkFile)
 		if err != nil {
 			return err
@@ -483,13 +485,13 @@ func PreDiffCheck(exporterTableSlice []string, cfg *service.CfgFile, engine *ser
 
 	endTime := time.Now()
 	zap.L().Info("pre check schema oracle to mysql finished",
-		zap.String("schema", strings.ToUpper(cfg.SourceConfig.SchemaName)),
+		zap.String("schema", strings.ToUpper(cfg.OracleConfig.SchemaName)),
 		zap.String("cost", endTime.Sub(startTime).String()))
 
 	return nil
 }
 
-func PreSplitChunk(cfg *service.CfgFile, engine *service.Engine, exportTableSlice []string, sourceCharacterSet, nlsComp string,
+func PreSplitChunk(cfg *config.CfgFile, engine *service.Engine, exportTableSlice []string, sourceCharacterSet, nlsComp string,
 	sourceTableCollation map[string]string,
 	sourceSchemaCollation string,
 	oracleCollation bool) ([]Diff, error) {
@@ -528,7 +530,7 @@ func PreSplitChunk(cfg *service.CfgFile, engine *service.Engine, exportTableSlic
 
 	endTime := time.Now()
 	zap.L().Info("pre split oracle and mysql table chunk finished",
-		zap.String("schema", cfg.SourceConfig.SchemaName),
+		zap.String("schema", cfg.OracleConfig.SchemaName),
 		zap.String("cost", endTime.Sub(startTime).String()))
 
 	return diffs, nil

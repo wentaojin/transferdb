@@ -24,11 +24,12 @@ import (
 
 	"github.com/jedib0t/go-pretty/v6/table"
 
+	"github.com/wentaojin/transferdb/config"
 	"github.com/wentaojin/transferdb/utils"
 
 	"github.com/wentaojin/transferdb/service"
 
-	"github.com/wentaojin/transferdb/pkg/reverser"
+	"github.com/wentaojin/transferdb/pkg/reverse/o2m"
 
 	"go.uber.org/zap"
 )
@@ -43,9 +44,9 @@ type DiffWriter struct {
 	SourceDBCollation     bool
 	SourceTableCollation  string
 	SourceSchemaCollation string
-	Engine                *service.Engine  `json:"-"`
-	Cfg                   *service.CfgFile `json:"-"`
-	ChkFileMW             *reverser.FileMW `json:"-"`
+	Engine                *service.Engine `json:"-"`
+	Cfg                   *config.CfgFile `json:"-"`
+	ChkFileMW             *o2m.FileMW     `json:"-"`
 }
 
 func NewDiffWriter(sourceSchemaName, targetSchemaName, tableName,
@@ -53,7 +54,7 @@ func NewDiffWriter(sourceSchemaName, targetSchemaName, tableName,
 	sourceTableCollation map[string]string,
 	sourceSchemaCollation string,
 	oracleCollation bool,
-	engine *service.Engine, cfg *service.CfgFile, chkFileMW *reverser.FileMW) *DiffWriter {
+	engine *service.Engine, cfg *config.CfgFile, chkFileMW *o2m.FileMW) *DiffWriter {
 	return &DiffWriter{
 		SourceSchemaName:      strings.ToUpper(sourceSchemaName),
 		TargetSchemaName:      strings.ToUpper(targetSchemaName),
@@ -94,13 +95,13 @@ func (d *DiffWriter) DiffTable() error {
 		return err
 	}
 
-	mysqlTable, mysqlVersion, err := NewMySQLTableINFO(d.TargetSchemaName, d.TableName, d.Cfg.TargetConfig.DBType, d.Engine)
+	mysqlTable, mysqlVersion, err := NewMySQLTableINFO(d.TargetSchemaName, d.TableName, d.Cfg.MySQLConfig.DBType, d.Engine)
 	if err != nil {
 		return err
 	}
 
 	isTiDB := false
-	if strings.ToUpper(d.Cfg.TargetConfig.DBType) == utils.TiDBTargetDBType {
+	if strings.ToUpper(d.Cfg.MySQLConfig.DBType) == utils.TiDBTargetDBType {
 		isTiDB = true
 	}
 
@@ -270,7 +271,7 @@ func (d *DiffWriter) DiffTable() error {
 	return nil
 }
 
-func (d *DiffWriter) partitionRuleCheck(file *reverser.FileMW, oracleTable, mysqlTable *Table) error {
+func (d *DiffWriter) partitionRuleCheck(file *o2m.FileMW, oracleTable, mysqlTable *Table) error {
 	var builder strings.Builder
 	builder.WriteString("/*\n")
 	builder.WriteString(fmt.Sprintf(" oracle table type is different from mysql table type\n"))

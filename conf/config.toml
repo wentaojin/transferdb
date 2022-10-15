@@ -117,17 +117,17 @@ worker-queue = 128
 # apply-threads 每个表并发处理最大任务分发数
 worker-threads = 64
 
-[source]
+[oracle]
 # Oracle 架构 -> only cdb/noncdb
-ora-arch = "noncdb"
+ora-arch = "cdb"
 # All 模式特别说明：
 # 1、CDB 架构需要 c## 开头的用户且具备 logminer 权限
 # 2、Non-CDB 架构需要具备 logminer 权限用户
-username = "transferdb"
-password = "transferdb"
-host = "172.16.101.622"
+username = "c##ggadmin"
+password = "ggadmin"
+host = "10.2.103.31"
 port = 1521
-service-name = "orcl"
+service-name = "orclpdb1"
 # oracle instance client dir
 lib-dir = "/Users/marvin/storehouse/oracle/instantclient_19_8"
 # 配置 oracle 连接参数
@@ -139,30 +139,30 @@ connect-params = "poolMinSessions=50&poolMaxSessions=1000&poolWaitTimeout=360s&p
 # Interval Year/Day 数据字符 TO_CHAR 格式化
 session-params = []
 # 配置 oracle 迁移 schema（gather 阶段可设置可不设置，不设置则表示 gather 库内所有 schema，其他阶段必须设置）
-schema-name = "transferdb"
+schema-name = "marvin"
 # 源端迁移任务表（只用于 prepare/reverse/check/all/full 阶段，gather 阶段不适用，gather 只适用于 schema 级别）
 # include-table 和 exclude-table 不能同时配置，两者只能配置一个,如果两个都没配置则 Schema 内表全迁移
 # include-table 和 exclude-table 支持正则表达式以及通配符（tab_*/tab*）
-include-table = ["marvin","marvin1"]
+include-table = []
 exclude-table = []
 
 # 只用于 prepare/reverse/check/all/full 阶段，gather 阶段不适用
-[target]
+[mysql]
 # 数据库类型，only mysql/tidb
 db-type = "tidb"
 # 目标端连接串
 username = "root"
-password = "123456"
-host = "172.16.101.602"
+password = ""
+host = "10.2.103.30"
 port = 4000
 # mysql 链接参数
 connect-params = "charset=utf8mb4&multiStatements=true&parseTime=True&loc=Local"
 # 目标端元数据库
-# CREATE DATABASE IF NOT EXIST db_meta
-meta-schema = "db_meta"
-# 目标端导入 schema
-schema-name = "transferdb"
-# 表后缀可选项 - Only 适用于 TiDB
+# CREATE DATABASE IF NOT EXIST transferdb
+meta-schema = "transferdb"
+# 目标端 schema
+schema-name = "sbtest"
+# 表后缀可选项 - Only 适用于 Oracle -> TiDB
 # TiDB 数据库全局生效（自动读取下游数据参数判定生效与否）：
 # tidb_enable_clustered_index = on 全局聚簇索引，table-option 不生效
 # tidb_enable_clustered_index = off 全局非聚簇索引，table-option 生效

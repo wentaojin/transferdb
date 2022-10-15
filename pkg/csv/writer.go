@@ -20,13 +20,15 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"github.com/shopspring/decimal"
 	"io"
 	"os"
 	"strings"
 
+	"github.com/shopspring/decimal"
+
 	"go.uber.org/zap"
 
+	"github.com/wentaojin/transferdb/config"
 	"github.com/wentaojin/transferdb/service"
 
 	"github.com/thinkeridea/go-extend/exstrings"
@@ -44,7 +46,7 @@ type FileWriter struct {
 	OutDir        string
 	FileName      string
 	Engine        *service.Engine `json:"-"`
-	service.CSVConfig
+	config.CSVConfig
 }
 
 func (f *FileWriter) WriteFile() error {

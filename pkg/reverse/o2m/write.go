@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package reverser
+package o2m
 
 import (
 	"encoding/json"
@@ -25,6 +25,7 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/wentaojin/transferdb/pkg/reverse"
 	"github.com/wentaojin/transferdb/service"
 
 	"github.com/wentaojin/transferdb/utils"
@@ -74,7 +75,7 @@ func NewReverseWriter(t Table, revFileMW, compFileMW *FileMW) (*ReverseWriter, e
 	}
 
 	// 表名转换
-	modifyTableName := changeOracleTableName(t.SourceTableName, t.TargetTableName)
+	modifyTableName := reverse.ChangeOracleTableName(t.SourceTableName, t.TargetTableName)
 	t.TargetTableName = modifyTableName
 
 	tableStruct, compIndexINFO, err := t.GenCreateTableSQL(modifyTableName)

@@ -13,17 +13,11 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package service
+package config
 
 import (
 	"encoding/json"
 	"fmt"
-	"time"
-
-	"github.com/wentaojin/transferdb/pkg/filter"
-	"github.com/wentaojin/transferdb/utils"
-
-	"go.uber.org/zap"
 
 	"github.com/BurntSushi/toml"
 )
@@ -34,8 +28,8 @@ type CfgFile struct {
 	FullConfig   FullConfig   `toml:"full" json:"full"`
 	CSVConfig    CSVConfig    `toml:"csv" json:"csv"`
 	AllConfig    AllConfig    `toml:"all" json:"all"`
-	SourceConfig SourceConfig `toml:"source" json:"source"`
-	TargetConfig TargetConfig `toml:"target" json:"target"`
+	OracleConfig OracleConfig `toml:"oracle" json:"oracle"`
+	MySQLConfig  MySQLConfig  `toml:"mysql" json:"mysql"`
 	LogConfig    LogConfig    `toml:"log" json:"log"`
 	DiffConfig   DiffConfig   `toml:"diff" json:"diff"`
 }
@@ -95,7 +89,7 @@ type AllConfig struct {
 	WorkerThreads        int `toml:"worker-threads" json:"worker-threads"`
 }
 
-type SourceConfig struct {
+type OracleConfig struct {
 	OraArch       string   `toml:"ora-arch" json:"ora-arch"`
 	Username      string   `toml:"username" json:"username"`
 	Password      string   `toml:"password" json:"password"`
@@ -110,7 +104,7 @@ type SourceConfig struct {
 	ExcludeTable  []string `toml:"exclude-table" json:"exclude-table"`
 }
 
-type TargetConfig struct {
+type MySQLConfig struct {
 	DBType        string `toml:"db-type" json:"db-type"`
 	Username      string `toml:"username" json:"username"`
 	Password      string `toml:"password" json:"password"`
@@ -146,75 +140,6 @@ func (c *CfgFile) configFromFile(file string) error {
 		return fmt.Errorf("failed decode toml config file %s: %v", file, err)
 	}
 	return nil
-}
-
-// 根据配置文件获取表列表
-func (c *CfgFile) GenerateTables(engine *Engine) ([]string, error) {
-	startTime := time.Now()
-	var (
-		exporterTableSlice []string
-		excludeTables      []string
-		err                error
-	)
-	err = engine.IsExistOracleSchema(c.SourceConfig.SchemaName)
-	if err != nil {
-		return []string{}, err
-	}
-
-	// 获取 oracle 所有数据表
-	allTables, err := engine.GetOracleTable(c.SourceConfig.SchemaName)
-	if err != nil {
-		return exporterTableSlice, err
-	}
-
-	switch {
-	case len(c.SourceConfig.IncludeTable) != 0 && len(c.SourceConfig.ExcludeTable) == 0:
-		// 过滤规则加载
-		f, err := filter.Parse(c.SourceConfig.IncludeTable)
-		if err != nil {
-			panic(err)
-		}
-
-		for _, t := range allTables {
-			if f.MatchTable(t) {
-				exporterTableSlice = append(exporterTableSlice, t)
-			}
-		}
-	case len(c.SourceConfig.IncludeTable) == 0 && len(c.SourceConfig.ExcludeTable) != 0:
-		// 过滤规则加载
-		f, err := filter.Parse(c.SourceConfig.ExcludeTable)
-		if err != nil {
-			panic(err)
-		}
-
-		for _, t := range allTables {
-			if f.MatchTable(t) {
-				excludeTables = append(excludeTables, t)
-			}
-		}
-		exporterTableSlice = utils.FilterDifferenceStringItems(allTables, excludeTables)
-
-	case len(c.SourceConfig.IncludeTable) == 0 && len(c.SourceConfig.ExcludeTable) == 0:
-		exporterTableSlice = allTables
-
-	default:
-		return exporterTableSlice, fmt.Errorf("source config params include-table/exclude-table cannot exist at the same time")
-	}
-
-	if len(exporterTableSlice) == 0 {
-		return exporterTableSlice, fmt.Errorf("exporter tables aren't exist, please check config params include-table/exclude-table")
-	}
-
-	endTime := time.Now()
-	zap.L().Info("get oracle to mysql all tables",
-		zap.String("schema", c.SourceConfig.SchemaName),
-		zap.Strings("exporter tables list", exporterTableSlice),
-		zap.Int("include table counts", len(exporterTableSlice)),
-		zap.Int("exclude table counts", len(excludeTables)),
-		zap.Int("all table counts", len(allTables)),
-		zap.String("cost", endTime.Sub(startTime).String()))
-
-	return exporterTableSlice, nil
 }
 
 func (c *CfgFile) String() string {

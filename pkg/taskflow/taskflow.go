@@ -20,6 +20,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/wentaojin/transferdb/config"
+	"github.com/wentaojin/transferdb/pkg/filter"
 	"github.com/wentaojin/transferdb/utils"
 
 	"github.com/wentaojin/transferdb/service"
@@ -36,10 +38,10 @@ const (
 	全量同步任务
 */
 // 全量数据导出导入
-func FullSyncOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service.Engine) error {
+func FullSyncOracleTableRecordToMySQL(cfg *config.CfgFile, engine *service.Engine) error {
 	startTime := time.Now()
 	zap.L().Info("all full table data sync start",
-		zap.String("schema", cfg.SourceConfig.SchemaName))
+		zap.String("schema", cfg.OracleConfig.SchemaName))
 
 	// 判断上游 Oracle 数据库版本
 	// 需要 oracle 11g 及以上
@@ -56,19 +58,19 @@ func FullSyncOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service.Engi
 	}
 
 	// 获取配置文件待同步表列表
-	transferTableSlice, err := cfg.GenerateTables(engine)
+	transferTableSlice, err := filter.FilterCFGOracleTables(cfg, engine)
 	if err != nil {
 		return err
 	}
 
 	// 判断并记录待同步表列表
 	for _, tableName := range transferTableSlice {
-		isExist, err := engine.IsExistWaitSyncTableMetaRecord(cfg.SourceConfig.SchemaName, tableName, FullSyncMode)
+		isExist, err := engine.IsExistWaitSyncTableMetaRecord(cfg.OracleConfig.SchemaName, tableName, FullSyncMode)
 		if err != nil {
 			return err
 		}
 		if !isExist {
-			if err := engine.InitWaitSyncTableMetaRecord(cfg.SourceConfig.SchemaName, []string{tableName}, FullSyncMode); err != nil {
+			if err := engine.InitWaitSyncTableMetaRecord(cfg.OracleConfig.SchemaName, []string{tableName}, FullSyncMode); err != nil {
 				return err
 			}
 		}
@@ -78,24 +80,24 @@ func FullSyncOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service.Engi
 	//  - 若想断点恢复，设置 enable-checkpoint true,首次一旦运行则 batch 数不能调整，
 	//  - 若不想断点恢复或者重新调整 batch 数，设置 enable-checkpoint false,清理元数据表 [wait_sync_meta],重新运行全量任务
 	if !cfg.FullConfig.EnableCheckpoint {
-		if err := engine.TruncateFullSyncTableMetaRecord(cfg.TargetConfig.MetaSchema); err != nil {
+		if err := engine.TruncateFullSyncTableMetaRecord(cfg.MySQLConfig.MetaSchema); err != nil {
 			return err
 		}
 		for _, tableName := range transferTableSlice {
-			if err := engine.DeleteWaitSyncTableMetaRecord(cfg.TargetConfig.MetaSchema, cfg.SourceConfig.SchemaName, tableName, FullSyncMode); err != nil {
+			if err := engine.DeleteWaitSyncTableMetaRecord(cfg.MySQLConfig.MetaSchema, cfg.OracleConfig.SchemaName, tableName, FullSyncMode); err != nil {
 				return err
 			}
 
-			if err := engine.TruncateMySQLTableRecord(cfg.TargetConfig.SchemaName, tableName); err != nil {
+			if err := engine.TruncateMySQLTableRecord(cfg.MySQLConfig.SchemaName, tableName); err != nil {
 				return err
 			}
 			// 判断并记录待同步表列表
-			isExist, err := engine.IsExistWaitSyncTableMetaRecord(cfg.SourceConfig.SchemaName, tableName, FullSyncMode)
+			isExist, err := engine.IsExistWaitSyncTableMetaRecord(cfg.OracleConfig.SchemaName, tableName, FullSyncMode)
 			if err != nil {
 				return err
 			}
 			if !isExist {
-				if err := engine.InitWaitSyncTableMetaRecord(cfg.SourceConfig.SchemaName, []string{tableName}, FullSyncMode); err != nil {
+				if err := engine.InitWaitSyncTableMetaRecord(cfg.OracleConfig.SchemaName, []string{tableName}, FullSyncMode); err != nil {
 					return err
 				}
 			}
@@ -103,32 +105,32 @@ func FullSyncOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service.Engi
 	}
 
 	// 获取等待同步以及未同步完成的表列表
-	waitSyncTableMetas, waitSyncTableInfo, err := engine.GetWaitSyncTableMetaRecord(cfg.SourceConfig.SchemaName, FullSyncMode)
+	waitSyncTableMetas, waitSyncTableInfo, err := engine.GetWaitSyncTableMetaRecord(cfg.OracleConfig.SchemaName, FullSyncMode)
 	if err != nil {
 		return err
 	}
 
-	partSyncTableMetas, partSyncTableInfo, err := engine.GetPartSyncTableMetaRecord(cfg.SourceConfig.SchemaName, FullSyncMode)
+	partSyncTableMetas, partSyncTableInfo, err := engine.GetPartSyncTableMetaRecord(cfg.OracleConfig.SchemaName, FullSyncMode)
 	if err != nil {
 		return err
 	}
 	if len(waitSyncTableMetas) == 0 && len(partSyncTableMetas) == 0 {
 		endTime := time.Now()
 		zap.L().Info("all full table data sync finished",
-			zap.String("schema", cfg.SourceConfig.SchemaName),
+			zap.String("schema", cfg.OracleConfig.SchemaName),
 			zap.String("cost", endTime.Sub(startTime).String()))
 		return nil
 	}
 
 	// 判断能否断点续传
-	panicCheckpointTables, err := engine.JudgingCheckpointResume(cfg.SourceConfig.SchemaName, partSyncTableMetas, FullSyncMode)
+	panicCheckpointTables, err := engine.JudgingCheckpointResume(cfg.OracleConfig.SchemaName, partSyncTableMetas, FullSyncMode)
 	if err != nil {
 		return err
 	}
 	if len(panicCheckpointTables) != 0 {
 		endTime := time.Now()
 		zap.L().Error("all full table data loader error",
-			zap.String("schema", cfg.SourceConfig.SchemaName),
+			zap.String("schema", cfg.OracleConfig.SchemaName),
 			zap.String("cost", endTime.Sub(startTime).String()),
 			zap.Strings("panic tables", panicCheckpointTables))
 
@@ -142,7 +144,7 @@ func FullSyncOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service.Engi
 
 	endTime := time.Now()
 	zap.L().Info("all full table data sync finished",
-		zap.String("schema", cfg.SourceConfig.SchemaName),
+		zap.String("schema", cfg.OracleConfig.SchemaName),
 		zap.String("cost", endTime.Sub(startTime).String()))
 	return nil
 }
@@ -150,8 +152,8 @@ func FullSyncOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service.Engi
 /*
 	增量同步任务
 */
-func IncrementSyncOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service.Engine) error {
-	zap.L().Info("oracle to mysql increment sync table data start", zap.String("schema", cfg.SourceConfig.SchemaName))
+func IncrementSyncOracleTableRecordToMySQL(cfg *config.CfgFile, engine *service.Engine) error {
+	zap.L().Info("oracle to mysql increment sync table data start", zap.String("schema", cfg.OracleConfig.SchemaName))
 
 	// 判断上游 Oracle 数据库版本
 	// 需要 oracle 11g 及以上
@@ -168,13 +170,13 @@ func IncrementSyncOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service
 	}
 
 	// 获取配置文件待同步表列表
-	transferTableSlice, err := cfg.GenerateTables(engine)
+	transferTableSlice, err := filter.FilterCFGOracleTables(cfg, engine)
 	if err != nil {
 		return err
 	}
 
 	// 全量数据导出导入，初始化全量元数据表以及导入完成初始化增量元数据表
-	existTableList, isNotExistTableList, err := engine.IsExistIncrementSyncMetaRecord(cfg.SourceConfig.SchemaName, transferTableSlice)
+	existTableList, isNotExistTableList, err := engine.IsExistIncrementSyncMetaRecord(cfg.OracleConfig.SchemaName, transferTableSlice)
 	if err != nil {
 		return err
 	}
@@ -184,7 +186,7 @@ func IncrementSyncOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service
 		// 配置文件获取表列表等于元数据库表列表，直接增量数据同步
 		if len(existTableList) == len(transferTableSlice) {
 			// 判断表全量是否完成
-			panicTables, err := engine.IsFinishFullSyncMetaRecord(cfg.SourceConfig.SchemaName, transferTableSlice, ALLSyncMode)
+			panicTables, err := engine.IsFinishFullSyncMetaRecord(cfg.OracleConfig.SchemaName, transferTableSlice, ALLSyncMode)
 			if err != nil {
 				return err
 			}
@@ -221,19 +223,19 @@ func IncrementSyncOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service
 	return fmt.Errorf("increment sync taskflow condition isn't match, can't sync")
 }
 
-func syncOracleFullTableRecordToMySQLUsingAllMode(cfg *service.CfgFile, engine *service.Engine, transferTableSlice []string, syncMode string, oracleCollation bool) error {
+func syncOracleFullTableRecordToMySQLUsingAllMode(cfg *config.CfgFile, engine *service.Engine, transferTableSlice []string, syncMode string, oracleCollation bool) error {
 	startTime := time.Now()
 	zap.L().Info("all full table data loader start",
-		zap.String("schema", cfg.SourceConfig.SchemaName))
+		zap.String("schema", cfg.OracleConfig.SchemaName))
 
 	// 判断并记录待同步表列表
 	for _, tableName := range transferTableSlice {
-		isExist, err := engine.IsExistWaitSyncTableMetaRecord(cfg.SourceConfig.SchemaName, tableName, syncMode)
+		isExist, err := engine.IsExistWaitSyncTableMetaRecord(cfg.OracleConfig.SchemaName, tableName, syncMode)
 		if err != nil {
 			return err
 		}
 		if !isExist {
-			if err := engine.InitWaitSyncTableMetaRecord(cfg.SourceConfig.SchemaName, []string{tableName}, syncMode); err != nil {
+			if err := engine.InitWaitSyncTableMetaRecord(cfg.OracleConfig.SchemaName, []string{tableName}, syncMode); err != nil {
 				return err
 			}
 		}
@@ -243,25 +245,25 @@ func syncOracleFullTableRecordToMySQLUsingAllMode(cfg *service.CfgFile, engine *
 	//  - 若想断点恢复，设置 enable-checkpoint true,首次一旦运行则 batch 数不能调整，
 	//  - 若不想断点恢复或者重新调整 batch 数，设置 enable-checkpoint false,清理元数据表 [wait_sync_meta],重新运行全量任务
 	if !cfg.FullConfig.EnableCheckpoint {
-		if err := engine.TruncateFullSyncTableMetaRecord(cfg.TargetConfig.MetaSchema); err != nil {
+		if err := engine.TruncateFullSyncTableMetaRecord(cfg.MySQLConfig.MetaSchema); err != nil {
 			return err
 		}
 		for _, tableName := range transferTableSlice {
 			if err := engine.DeleteWaitSyncTableMetaRecord(
-				cfg.TargetConfig.MetaSchema, cfg.SourceConfig.SchemaName, tableName, syncMode); err != nil {
+				cfg.MySQLConfig.MetaSchema, cfg.OracleConfig.SchemaName, tableName, syncMode); err != nil {
 				return err
 			}
 
-			if err := engine.TruncateMySQLTableRecord(cfg.TargetConfig.SchemaName, tableName); err != nil {
+			if err := engine.TruncateMySQLTableRecord(cfg.MySQLConfig.SchemaName, tableName); err != nil {
 				return err
 			}
 			// 判断并记录待同步表列表
-			isExist, err := engine.IsExistWaitSyncTableMetaRecord(cfg.SourceConfig.SchemaName, tableName, syncMode)
+			isExist, err := engine.IsExistWaitSyncTableMetaRecord(cfg.OracleConfig.SchemaName, tableName, syncMode)
 			if err != nil {
 				return err
 			}
 			if !isExist {
-				if err := engine.InitWaitSyncTableMetaRecord(cfg.SourceConfig.SchemaName, []string{tableName}, syncMode); err != nil {
+				if err := engine.InitWaitSyncTableMetaRecord(cfg.OracleConfig.SchemaName, []string{tableName}, syncMode); err != nil {
 					return err
 				}
 			}
@@ -269,32 +271,32 @@ func syncOracleFullTableRecordToMySQLUsingAllMode(cfg *service.CfgFile, engine *
 	}
 
 	// 获取等待同步以及未同步完成的表列表
-	waitSyncTableMetas, waitSyncTableInfo, err := engine.GetWaitSyncTableMetaRecord(cfg.SourceConfig.SchemaName, syncMode)
+	waitSyncTableMetas, waitSyncTableInfo, err := engine.GetWaitSyncTableMetaRecord(cfg.OracleConfig.SchemaName, syncMode)
 	if err != nil {
 		return err
 	}
 
-	partSyncTableMetas, partSyncTableInfo, err := engine.GetPartSyncTableMetaRecord(cfg.SourceConfig.SchemaName, syncMode)
+	partSyncTableMetas, partSyncTableInfo, err := engine.GetPartSyncTableMetaRecord(cfg.OracleConfig.SchemaName, syncMode)
 	if err != nil {
 		return err
 	}
 	if len(waitSyncTableMetas) == 0 && len(partSyncTableMetas) == 0 {
 		endTime := time.Now()
 		zap.L().Info("all full table data loader finished",
-			zap.String("schema", cfg.SourceConfig.SchemaName),
+			zap.String("schema", cfg.OracleConfig.SchemaName),
 			zap.String("cost", endTime.Sub(startTime).String()))
 		return nil
 	}
 
 	// 判断能否断点续传
-	panicCheckpointTables, err := engine.JudgingCheckpointResume(cfg.SourceConfig.SchemaName, partSyncTableMetas, syncMode)
+	panicCheckpointTables, err := engine.JudgingCheckpointResume(cfg.OracleConfig.SchemaName, partSyncTableMetas, syncMode)
 	if err != nil {
 		return err
 	}
 	if len(panicCheckpointTables) != 0 {
 		endTime := time.Now()
 		zap.L().Error("all full table data loader error",
-			zap.String("schema", cfg.SourceConfig.SchemaName),
+			zap.String("schema", cfg.OracleConfig.SchemaName),
 			zap.String("cost", endTime.Sub(startTime).String()),
 			zap.Strings("panic tables", panicCheckpointTables))
 
@@ -308,20 +310,20 @@ func syncOracleFullTableRecordToMySQLUsingAllMode(cfg *service.CfgFile, engine *
 
 	// 全量任务结束，写入增量源数据表起始 SCN 号
 	//根据配置文件生成同步表元数据 [increment_sync_meta]
-	if err = generateTableIncrementTaskCheckpointMeta(cfg.SourceConfig.SchemaName, engine, syncMode); err != nil {
+	if err = generateTableIncrementTaskCheckpointMeta(cfg.OracleConfig.SchemaName, engine, syncMode); err != nil {
 		return err
 	}
 
 	endTime := time.Now()
 	zap.L().Info("all full table data loader finished",
-		zap.String("schema", cfg.SourceConfig.SchemaName),
+		zap.String("schema", cfg.OracleConfig.SchemaName),
 		zap.String("cost", endTime.Sub(startTime).String()))
 	return nil
 }
 
-func syncOracleTableIncrementRecordToMySQLUsingAllMode(cfg *service.CfgFile, engine *service.Engine) error {
+func syncOracleTableIncrementRecordToMySQLUsingAllMode(cfg *config.CfgFile, engine *service.Engine) error {
 	// 获取增量所需得日志文件
-	logFiles, err := getOracleTableIncrementRecordLogFile(engine, cfg.SourceConfig.SchemaName)
+	logFiles, err := getOracleTableIncrementRecordLogFile(engine, cfg.OracleConfig.SchemaName)
 	if err != nil {
 		return err
 	}
@@ -350,14 +352,14 @@ func syncOracleTableIncrementRecordToMySQLUsingAllMode(cfg *service.CfgFile, eng
 			zap.Uint64("logfile end scn", logFileEndSCN))
 
 		// 获取增量元数据表内所需同步表信息
-		transferTableSlice, transferTableMetaMap, err := engine.GetMySQLTableIncrementMetaRecord(cfg.SourceConfig.SchemaName)
+		transferTableSlice, transferTableMetaMap, err := engine.GetMySQLTableIncrementMetaRecord(cfg.OracleConfig.SchemaName)
 		if err != nil {
 			return err
 		}
 
 		// 获取 logminer query 起始最小 SCN
 		minSourceTableSCN, err := engine.GetMySQLTableIncrementMetaMinSourceTableSCNTime(
-			cfg.SourceConfig.SchemaName)
+			cfg.OracleConfig.SchemaName)
 		if err != nil {
 			return err
 		}
@@ -374,7 +376,7 @@ func syncOracleTableIncrementRecordToMySQLUsingAllMode(cfg *service.CfgFile, eng
 		// 捕获数据
 		rowsResult, err := extractorTableIncrementRecord(
 			engine,
-			cfg.SourceConfig.SchemaName,
+			cfg.OracleConfig.SchemaName,
 			transferTableSlice,
 			log["LOG_FILE"],
 			logFileStartSCN,
@@ -445,7 +447,7 @@ func syncOracleTableIncrementRecordToMySQLUsingAllMode(cfg *service.CfgFile, eng
 					if logFileStartSCN == currentRedoLogFirstChange && log["LOG_FILE"] == currentRedoLogFileName {
 						// 当前所有日志文件内容应用完毕，判断是否直接更新 GLOBAL_SCN 至当前重做日志文件起始 SCN
 						if err := engine.UpdateSingleTableIncrementMetaSCNByCurrentRedo(
-							cfg.SourceConfig.SchemaName,
+							cfg.OracleConfig.SchemaName,
 							currentRedoLogMaxSCN,
 							logFileStartSCN,
 							logFileEndSCN,
@@ -455,7 +457,7 @@ func syncOracleTableIncrementRecordToMySQLUsingAllMode(cfg *service.CfgFile, eng
 					} else {
 						// 当前所有日志文件内容应用完毕，直接更新 GLOBAL_SCN 至日志文件结束 SCN
 						if err := engine.UpdateSingleTableIncrementMetaSCNByNonCurrentRedo(
-							cfg.SourceConfig.SchemaName,
+							cfg.OracleConfig.SchemaName,
 							currentRedoLogMaxSCN,
 							logFileStartSCN,
 							logFileEndSCN,
@@ -487,7 +489,7 @@ func syncOracleTableIncrementRecordToMySQLUsingAllMode(cfg *service.CfgFile, eng
 				}
 				// 当前所有日志文件内容应用完毕，直接更新 GLOBAL_SCN 至日志文件结束 SCN
 				if err := engine.UpdateSingleTableIncrementMetaSCNByArchivedLog(
-					cfg.SourceConfig.SchemaName,
+					cfg.OracleConfig.SchemaName,
 					logFileEndSCN,
 					transferTableSlice,
 				); err != nil {
@@ -504,7 +506,7 @@ func syncOracleTableIncrementRecordToMySQLUsingAllMode(cfg *service.CfgFile, eng
 			if logFileStartSCN == currentRedoLogFirstChange && log["LOG_FILE"] == currentRedoLogFileName {
 				// 当前所有日志文件内容应用完毕，判断是否直接更新 GLOBAL_SCN 至当前重做日志文件起始 SCN
 				if err := engine.UpdateSingleTableIncrementMetaSCNByCurrentRedo(
-					cfg.SourceConfig.SchemaName,
+					cfg.OracleConfig.SchemaName,
 					currentRedoLogMaxSCN,
 					logFileStartSCN,
 					logFileEndSCN,
@@ -514,7 +516,7 @@ func syncOracleTableIncrementRecordToMySQLUsingAllMode(cfg *service.CfgFile, eng
 			} else {
 				// 当前所有日志文件内容应用完毕，判断是否更新 GLOBAL_SCN 至日志文件结束 SCN
 				if err := engine.UpdateSingleTableIncrementMetaSCNByNonCurrentRedo(
-					cfg.SourceConfig.SchemaName,
+					cfg.OracleConfig.SchemaName,
 					currentRedoLogMaxSCN,
 					logFileStartSCN,
 					logFileEndSCN,
@@ -526,7 +528,7 @@ func syncOracleTableIncrementRecordToMySQLUsingAllMode(cfg *service.CfgFile, eng
 		} else {
 			// 当前所有日志文件内容应用完毕，直接更新 GLOBAL_SCN 至日志文件结束 SCN
 			if err := engine.UpdateSingleTableIncrementMetaSCNByArchivedLog(
-				cfg.SourceConfig.SchemaName,
+				cfg.OracleConfig.SchemaName,
 				logFileEndSCN,
 				transferTableSlice,
 			); err != nil {
@@ -581,7 +583,7 @@ func getOracleTableIncrementRecordLogFile(engine *service.Engine, sourceSchemaNa
 /*
 	全量/增量 FUNCTION
 */
-func startOracleTableFullSync(cfg *service.CfgFile, engine *service.Engine, waitSyncTableInfo, partSyncTableInfo []string, syncMode string, oracleCollation bool) error {
+func startOracleTableFullSync(cfg *config.CfgFile, engine *service.Engine, waitSyncTableInfo, partSyncTableInfo []string, syncMode string, oracleCollation bool) error {
 	if len(partSyncTableInfo) > 0 {
 		if err := startOracleTableConsumeByCheckpoint(cfg, engine, partSyncTableInfo, syncMode); err != nil {
 			return err

@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/wentaojin/transferdb/config"
 	"github.com/wentaojin/transferdb/pkg/check"
 
 	"github.com/wentaojin/transferdb/utils"
@@ -46,12 +47,12 @@ type Diff struct {
 	Engine                      *service.Engine `json:"-"`
 }
 
-func NewDiff(cfg *service.CfgFile, engine *service.Engine, exportTableSlice []string, sourceCharacterSet, nlsComp string,
+func NewDiff(cfg *config.CfgFile, engine *service.Engine, exportTableSlice []string, sourceCharacterSet, nlsComp string,
 	sourceTableCollation map[string]string,
 	sourceSchemaCollation string,
 	oracleCollation bool) ([]Diff, error) {
 	// 单独表配置获取
-	tableCFG := make(map[string]service.TableConfig)
+	tableCFG := make(map[string]config.TableConfig)
 	for _, tableCfg := range cfg.DiffConfig.TableConfig {
 		tableCFG[strings.ToUpper(tableCfg.SourceTable)] = tableCfg
 	}
@@ -63,7 +64,7 @@ func NewDiff(cfg *service.CfgFile, engine *service.Engine, exportTableSlice []st
 			DiffThreads:           cfg.DiffConfig.DiffThreads,
 			OnlyCheckRows:         cfg.DiffConfig.OnlyCheckRows,
 			IgnoreStructCheck:     cfg.DiffConfig.IgnoreStructCheck,
-			SourceSchema:          strings.ToUpper(cfg.SourceConfig.SchemaName),
+			SourceSchema:          strings.ToUpper(cfg.OracleConfig.SchemaName),
 			SourceTable:           strings.ToUpper(t),
 			Engine:                engine,
 			SourceCharacterSet:    sourceCharacterSet,

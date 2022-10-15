@@ -13,14 +13,16 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package service
+package logger
 
 import (
+	"strings"
+	"time"
+
+	"github.com/wentaojin/transferdb/config"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/natefinch/lumberjack.v2"
-	"strings"
-	"time"
 )
 
 const (
@@ -28,7 +30,7 @@ const (
 )
 
 // 初始化日志记录器
-func NewZapLogger(cfg *CfgFile) {
+func NewZapLogger(cfg *config.CfgFile) {
 	Encoder := GetEncoder()
 	WriteSyncer := GetWriteSyncer(cfg)
 	LevelEnabler := GetLevelEnabler(cfg.LogConfig.LogLevel)
@@ -66,7 +68,7 @@ func GetConsoleEncoder() zapcore.Encoder {
 }
 
 // GetWriteSyncer 自定义的WriteSyncer
-func GetWriteSyncer(cfg *CfgFile) zapcore.WriteSyncer {
+func GetWriteSyncer(cfg *config.CfgFile) zapcore.WriteSyncer {
 	lumberJackLogger := &lumberjack.Logger{
 		Filename:   cfg.LogConfig.LogFile,
 		MaxSize:    cfg.LogConfig.MaxSize,

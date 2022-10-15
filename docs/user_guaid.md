@@ -2,28 +2,48 @@ TransferDB 使用手册
 -------
 #### 使用说明
 1. 表结构定义转换
-    1. 常规表定义 reverse_${sourcedb}.sql 文件
-    2. 不兼容性对象 compatibility_${sourcedb}.sql 文件【外键、检查约束、分区表、索引等不兼容对象】
-    3. 自定义配置表字段规则映射
-        1. 数据类型自定义 【column -> table -> schema -> 内置】
-           - 库级别数据类型自定义
-           - 表级别数据类型自定义
-           - 字段级别数据类型自定义
-    4. 默认值自定义【global 全局级别】
-        1. 任何 schema/table 转换都需要，内置 sysdate -> now() 转换规则
-    5. 内置数据类型规则映射，[内置数据类型映射规则](buildin_rule.md)
-    6. 表索引定义转换
-    7. 表非空约束、外键约束、检查约束、主键约束、唯一约束转换，主键、唯一、检查、外键等约束 ORACLE ENABLED 状态才会被创建，其他状态忽略创建
-    8. 注意事项
-       1. 分区表统一视为普通表转换，对象输出到 compatibility_${sourcedb}.sql 文件并提供 WARN 日志关键字筛选打印，若有要求，建议 reverse 手工转换
-       2. 临时表统一视为普通表转换，对象输出到 compatibility_${sourcedb}.sql 文件并提供 WARN 日志关键字筛选打印
-       3. 蔟表统一视为普通表转换，对象输出到 compatibility_${sourcedb}.sql 文件并提供 WARN 日志关键字筛选打印
-       4. ORACLE 唯一约束基于唯一索引的字段，下游只会创建唯一索引
-       5. ORACLE 字段函数默认值保持上游值，若是下游不支持的默认值，则当手工执行表创建脚本报错
-       6. ORACLE FUNCTION-BASED NORMAL、BITMAP 不兼容性索引对象输出到 compatibility_${sourcedb}.sql 文件，并提供 WARN 日志关键字筛选打印
-       7. 表结构以及 Schema 定义转换忽略 Oracle 字符集统一以 utf8mb4 转换，但排序规则会根据 Oracle 排序规则予以规则转换
-       8. 程序 reverse 阶段若遇到报错则进程不终止，日志最后会输出警告信息，具体错误表以及对应错误详情见 {元数据库} 内表 [table_error_detail] 数据
-
+   - O2M
+      1. 常规表定义 reverse_${sourcedb}.sql 文件
+      2. 不兼容性对象 compatibility_${sourcedb}.sql 文件【外键、检查约束、分区表、索引等不兼容对象】
+      3. 自定义配置表字段规则映射
+         1. 数据类型自定义 【column -> table -> schema -> 内置】
+            - 库级别数据类型自定义
+            - 表级别数据类型自定义
+            - 字段级别数据类型自定义
+      4. 默认值自定义【global 全局级别】
+         1. 任何 schema/table 转换都需要，内置 sysdate -> now() 转换规则
+      5. 内置数据类型规则映射，[内置数据类型映射规则](buildin_rule_reverse_o.md)
+      6. 表索引定义转换
+      7. 表非空约束、外键约束、检查约束、主键约束、唯一约束转换，主键、唯一、检查、外键等约束 ORACLE ENABLED 状态才会被创建，其他状态忽略创建
+      8. 注意事项
+         1. 分区表统一视为普通表转换，对象输出到 compatibility_${sourcedb}.sql 文件并提供 WARN 日志关键字筛选打印，若有要求，建议 reverse 手工转换
+         2. 临时表统一视为普通表转换，对象输出到 compatibility_${sourcedb}.sql 文件并提供 WARN 日志关键字筛选打印
+         3. 蔟表统一视为普通表转换，对象输出到 compatibility_${sourcedb}.sql 文件并提供 WARN 日志关键字筛选打印
+         4. ORACLE 唯一约束基于唯一索引的字段，下游只会创建唯一索引
+         5. ORACLE 字段函数默认值保持上游值，若是下游不支持的默认值，则当手工执行表创建脚本报错
+         6. ORACLE FUNCTION-BASED NORMAL、BITMAP 不兼容性索引对象输出到 compatibility_${sourcedb}.sql 文件，并提供 WARN 日志关键字筛选打印
+         7. 表结构以及 Schema 定义转换忽略 Oracle 字符集统一以 utf8mb4 转换，但排序规则会根据 Oracle 排序规则予以规则转换
+         8. 程序 reverse 阶段若遇到报错则进程不终止，日志最后会输出警告信息，具体错误表以及对应错误详情见 {元数据库} 内表 [table_error_detail] 数据
+   - M2O
+      1. 常规表定义 reverse_${sourcedb}.sql 文件
+      2. 不兼容性对象 compatibility_${sourcedb}.sql 文件【数据类型 ENUM、SET、BIT 等不兼容对象】
+      3. 自定义配置表字段规则映射
+         1. 数据类型自定义 【column -> table -> schema -> 内置】
+            - 库级别数据类型自定义
+            - 表级别数据类型自定义
+            - 字段级别数据类型自定义
+      4. 默认值自定义【global 全局级别】
+         1. 任何 schema/table 转换都需要，内置 now() -> sysdate 转换规则
+      5. 内置数据类型规则映射，[内置数据类型映射规则](buildin_rule_reverse_m.md)
+      6. 表索引定义转换
+      7. 表非空约束、外键约束、检查约束、主键约束、唯一约束转换
+      8. 注意事项
+         1. MySQL 字段函数默认值保持上游值，若是下游不支持的默认值，则当手工执行表创建脚本报错
+         2. 表结构以及 Schema 定义转换忽略 MySQL 字符集统一以 AL32UTF8 转换，但 ORACLE 12.2 版本及以上排序规则会根据 MySQL 排序规则予以规则转换，其他 ORACLE 版本若 MySQL 表与字段排序规则不一致则输出到不兼容性文件 compatibility_${sourcedb}.sql
+         3. TiDB 临时表统一视为普通表转换，需要人工识别转换
+         4. View 视图会输出到兼容性文件 compatibility_${sourcedb}.sql
+         5. MySQL/TiDB 字段默认值系统视图，未区分数值、字符类型，不统一，比如：对于字符串默认值 1，显示 1，字符串默认值不会自动加单引号，函数 CURRENT_TIMESTAMP 未加括号，当前默认处理 CURRENT_TIMESTAMP 不加单引号，字符串默认值正则未匹配到()，统一视作字符串，自动加单引号
+         6. 程序 reverse 阶段若遇到报错则进程不终止，日志最后会输出警告信息，具体错误表以及对应错误详情见 {元数据库} 内表 [table_error_detail] 数据
 2. 表结构对比【以 ORACLE 为基准】
    1. 表结构对比以 ORACLE 为基准对比
       1. 若上下游对比不一致，对比详情以及相关修复 SQL 语句输出 check_${sourcedb}.sql 文件

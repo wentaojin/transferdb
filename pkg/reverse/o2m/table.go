@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package reverser
+package o2m
 
 import (
 	"encoding/json"
@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/wentaojin/transferdb/config"
 	"github.com/wentaojin/transferdb/utils"
 
 	"github.com/wentaojin/transferdb/service"
@@ -901,16 +902,16 @@ func (t *Table) String() string {
 	return string(jsonStr)
 }
 
-// 加载表列表
-func LoadOracleToMySQLTableList(engine *service.Engine, cfg *service.CfgFile, exporterTableSlice []string, nlsSort, nlsComp string) ([]Table, []string, []string, []string, error) {
+// 表列表过滤 -> 不兼容性的
+func GenOracleToMySQLTableList(engine *service.Engine, cfg *config.CfgFile, exporterTableSlice []string, nlsSort, nlsComp string) ([]Table, []string, []string, []string, error) {
 	var tables []Table
 
-	sourceSchema := strings.ToUpper(cfg.SourceConfig.SchemaName)
+	sourceSchema := strings.ToUpper(cfg.OracleConfig.SchemaName)
 
 	beginTime := time.Now()
 	defer func() {
 		endTime := time.Now()
-		zap.L().Info("load oracle table list finished",
+		zap.L().Info("gen oracle table list finished",
 			zap.String("schema", sourceSchema),
 			zap.Int("table totals", len(exporterTableSlice)),
 			zap.Int("table gens", len(tables)),
@@ -1054,15 +1055,15 @@ func LoadOracleToMySQLTableList(engine *service.Engine, cfg *service.CfgFile, ex
 				// 库名、表名规则
 				tbl := Table{
 					SourceSchemaName:  strings.ToUpper(sourceSchema),
-					TargetSchemaName:  strings.ToUpper(cfg.TargetConfig.SchemaName),
+					TargetSchemaName:  strings.ToUpper(cfg.MySQLConfig.SchemaName),
 					SourceTableName:   strings.ToUpper(ts),
-					TargetDBType:      strings.ToUpper(cfg.TargetConfig.DBType),
+					TargetDBType:      strings.ToUpper(cfg.MySQLConfig.DBType),
 					TargetTableName:   strings.ToUpper(ts),
-					TargetTableOption: strings.ToUpper(cfg.TargetConfig.TableOption),
+					TargetTableOption: strings.ToUpper(cfg.MySQLConfig.TableOption),
 					SourceTableType:   tablesMap[ts],
 					SourceDBNLSSort:   nlsSort,
 					SourceDBNLSComp:   nlsComp,
-					Overwrite:         cfg.TargetConfig.Overwrite,
+					Overwrite:         cfg.MySQLConfig.Overwrite,
 					Engine:            engine,
 				}
 				tbl.OracleCollation = oraCollation

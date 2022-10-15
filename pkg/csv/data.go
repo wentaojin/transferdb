@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/wentaojin/transferdb/config"
 	"github.com/wentaojin/transferdb/service"
 	"go.uber.org/zap"
 )
@@ -52,7 +53,7 @@ func extractorTableFullRecord(engine *service.Engine, sourceSchemaName, sourceTa
 func translatorTableFullRecord(
 	targetSchemaName, targetTableName, sourceDBCharset string, columns []string,
 	engine *service.Engine, sourceSchema, sourceTable, querySQL string,
-	rowsResult *sql.Rows, csvConfig service.CSVConfig, csvFileName string) *FileWriter {
+	rowsResult *sql.Rows, csvConfig config.CSVConfig, csvFileName string) *FileWriter {
 	return &FileWriter{
 		SourceSchema:  sourceSchema,
 		SourceTable:   sourceTable,

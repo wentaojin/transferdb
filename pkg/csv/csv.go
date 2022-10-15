@@ -19,18 +19,20 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/wentaojin/transferdb/config"
 	"github.com/wentaojin/transferdb/utils"
 
+	"github.com/wentaojin/transferdb/pkg/filter"
 	"github.com/wentaojin/transferdb/pkg/taskflow"
 
 	"github.com/wentaojin/transferdb/service"
 	"go.uber.org/zap"
 )
 
-func FullCSVOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service.Engine) error {
+func FullCSVOracleTableRecordToMySQL(cfg *config.CfgFile, engine *service.Engine) error {
 	startTime := time.Now()
 	zap.L().Info("all full table data csv start",
-		zap.String("schema", cfg.SourceConfig.SchemaName))
+		zap.String("schema", cfg.OracleConfig.SchemaName))
 
 	// 判断上游 Oracle 数据库版本
 	// 需要 oracle 11g 及以上
@@ -47,19 +49,19 @@ func FullCSVOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service.Engin
 	}
 
 	// 获取配置文件待同步表列表
-	transferTableSlice, err := cfg.GenerateTables(engine)
+	transferTableSlice, err := filter.FilterCFGOracleTables(cfg, engine)
 	if err != nil {
 		return err
 	}
 
 	// 判断并记录待同步表列表
 	for _, tableName := range transferTableSlice {
-		isExist, err := engine.IsExistWaitSyncTableMetaRecord(cfg.SourceConfig.SchemaName, tableName, taskflow.FullSyncMode)
+		isExist, err := engine.IsExistWaitSyncTableMetaRecord(cfg.OracleConfig.SchemaName, tableName, taskflow.FullSyncMode)
 		if err != nil {
 			return err
 		}
 		if !isExist {
-			if err := engine.InitWaitSyncTableMetaRecord(cfg.SourceConfig.SchemaName, []string{tableName}, taskflow.FullSyncMode); err != nil {
+			if err := engine.InitWaitSyncTableMetaRecord(cfg.OracleConfig.SchemaName, []string{tableName}, taskflow.FullSyncMode); err != nil {
 				return err
 			}
 		}
@@ -69,20 +71,20 @@ func FullCSVOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service.Engin
 	//  - 若想断点恢复，设置 enable-checkpoint true,首次一旦运行则 batch 数不能调整，
 	//  - 若不想断点恢复或者重新调整 batch 数，设置 enable-checkpoint false,清理元数据表 [wait_sync_meta],重新运行全量任务
 	if !cfg.CSVConfig.EnableCheckpoint {
-		if err := engine.TruncateFullSyncTableMetaRecord(cfg.TargetConfig.MetaSchema); err != nil {
+		if err := engine.TruncateFullSyncTableMetaRecord(cfg.MySQLConfig.MetaSchema); err != nil {
 			return err
 		}
 		for _, tableName := range transferTableSlice {
-			if err := engine.DeleteWaitSyncTableMetaRecord(cfg.TargetConfig.MetaSchema, cfg.SourceConfig.SchemaName, tableName, taskflow.FullSyncMode); err != nil {
+			if err := engine.DeleteWaitSyncTableMetaRecord(cfg.MySQLConfig.MetaSchema, cfg.OracleConfig.SchemaName, tableName, taskflow.FullSyncMode); err != nil {
 				return err
 			}
 			// 判断并记录待同步表列表
-			isExist, err := engine.IsExistWaitSyncTableMetaRecord(cfg.SourceConfig.SchemaName, tableName, taskflow.FullSyncMode)
+			isExist, err := engine.IsExistWaitSyncTableMetaRecord(cfg.OracleConfig.SchemaName, tableName, taskflow.FullSyncMode)
 			if err != nil {
 				return err
 			}
 			if !isExist {
-				if err := engine.InitWaitSyncTableMetaRecord(cfg.SourceConfig.SchemaName, []string{tableName}, taskflow.FullSyncMode); err != nil {
+				if err := engine.InitWaitSyncTableMetaRecord(cfg.OracleConfig.SchemaName, []string{tableName}, taskflow.FullSyncMode); err != nil {
 					return err
 				}
 			}
@@ -90,32 +92,32 @@ func FullCSVOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service.Engin
 	}
 
 	// 获取等待同步以及未同步完成的表列表
-	waitSyncTableMetas, waitSyncTableInfo, err := engine.GetWaitSyncTableMetaRecord(cfg.SourceConfig.SchemaName, taskflow.FullSyncMode)
+	waitSyncTableMetas, waitSyncTableInfo, err := engine.GetWaitSyncTableMetaRecord(cfg.OracleConfig.SchemaName, taskflow.FullSyncMode)
 	if err != nil {
 		return err
 	}
 
-	partSyncTableMetas, partSyncTableInfo, err := engine.GetPartSyncTableMetaRecord(cfg.SourceConfig.SchemaName, taskflow.FullSyncMode)
+	partSyncTableMetas, partSyncTableInfo, err := engine.GetPartSyncTableMetaRecord(cfg.OracleConfig.SchemaName, taskflow.FullSyncMode)
 	if err != nil {
 		return err
 	}
 	if len(waitSyncTableMetas) == 0 && len(partSyncTableMetas) == 0 {
 		endTime := time.Now()
 		zap.L().Info("all full table data csv finished",
-			zap.String("schema", cfg.SourceConfig.SchemaName),
+			zap.String("schema", cfg.OracleConfig.SchemaName),
 			zap.String("cost", endTime.Sub(startTime).String()))
 		return nil
 	}
 
 	// 判断能否断点续传
-	panicCheckpointTables, err := engine.JudgingCheckpointResume(cfg.SourceConfig.SchemaName, partSyncTableMetas, taskflow.FullSyncMode)
+	panicCheckpointTables, err := engine.JudgingCheckpointResume(cfg.OracleConfig.SchemaName, partSyncTableMetas, taskflow.FullSyncMode)
 	if err != nil {
 		return err
 	}
 	if len(panicCheckpointTables) != 0 {
 		endTime := time.Now()
 		zap.L().Error("all full table data loader error",
-			zap.String("schema", cfg.SourceConfig.SchemaName),
+			zap.String("schema", cfg.OracleConfig.SchemaName),
 			zap.String("cost", endTime.Sub(startTime).String()),
 			zap.Strings("panic tables", panicCheckpointTables))
 
@@ -129,7 +131,7 @@ func FullCSVOracleTableRecordToMySQL(cfg *service.CfgFile, engine *service.Engin
 
 	endTime := time.Now()
 	zap.L().Info("all full table data csv finished",
-		zap.String("schema", cfg.SourceConfig.SchemaName),
+		zap.String("schema", cfg.OracleConfig.SchemaName),
 		zap.String("cost", endTime.Sub(startTime).String()))
 	return nil
 }

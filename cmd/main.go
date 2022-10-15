@@ -23,7 +23,8 @@ import (
 	"os"
 
 	"github.com/pkg/errors"
-	"github.com/wentaojin/transferdb/service"
+	"github.com/wentaojin/transferdb/config"
+	"github.com/wentaojin/transferdb/logger"
 
 	"github.com/wentaojin/transferdb/pkg/signal"
 
@@ -34,6 +35,7 @@ import (
 var (
 	conf    = flag.String("config", "config.toml", "specify the configuration file, default is config.toml")
 	mode    = flag.String("mode", "", "specify the program running mode: [prepare reverse gather full csv all check diff]")
+	reverse = flag.String("reverse", "", "specify the program reverse running mode: [o2m m2o]")
 	version = flag.Bool("version", false, "view transferdb version info")
 )
 
@@ -41,10 +43,10 @@ func main() {
 	flag.Parse()
 
 	// 获取程序版本
-	service.GetAppVersion(*version)
+	config.GetAppVersion(*version)
 
 	// 读取配置文件
-	cfg, err := service.ReadConfigFile(*conf)
+	cfg, err := config.ReadConfigFile(*conf)
 	if err != nil {
 		log.Fatalf("read config file [%s] failed: %v", *conf, err)
 	}
@@ -57,8 +59,8 @@ func main() {
 	}()
 
 	// 初始化日志 logger
-	service.NewZapLogger(cfg)
-	service.RecordAppVersion("transferdb", zap.L(), cfg)
+	logger.NewZapLogger(cfg)
+	config.RecordAppVersion("transferdb", zap.L(), cfg)
 
 	// 信号量监听处理
 	signal.SetupSignalHandler(func() {
@@ -66,7 +68,7 @@ func main() {
 	})
 
 	// 程序运行
-	if err = server.Run(cfg, *mode); err != nil {
+	if err = server.Run(cfg, *mode, *reverse); err != nil {
 		zap.L().Fatal("server run failed", zap.Error(errors.Cause(err)))
 	}
 }

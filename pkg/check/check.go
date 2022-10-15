@@ -23,43 +23,45 @@ import (
 	"sync"
 	"time"
 
+	"github.com/wentaojin/transferdb/config"
 	"github.com/wentaojin/transferdb/utils"
 
-	"github.com/wentaojin/transferdb/pkg/reverser"
+	"github.com/wentaojin/transferdb/pkg/filter"
+	"github.com/wentaojin/transferdb/pkg/reverse/o2m"
 
 	"go.uber.org/zap"
 
 	"github.com/wentaojin/transferdb/service"
 )
 
-func OracleTableToMySQLMappingCheck(engine *service.Engine, cfg *service.CfgFile) error {
+func OracleTableToMySQLMappingCheck(engine *service.Engine, cfg *config.CfgFile) error {
 	startTime := time.Now()
 	zap.L().Info("check oracle and mysql table start",
-		zap.String("oracleSchema", cfg.SourceConfig.SchemaName),
-		zap.String("mysqlSchema", cfg.TargetConfig.SchemaName))
+		zap.String("oracleSchema", cfg.OracleConfig.SchemaName),
+		zap.String("mysqlSchema", cfg.MySQLConfig.SchemaName))
 
-	exporterTableSlice, err := cfg.GenerateTables(engine)
+	exporterTableSlice, err := filter.FilterCFGOracleTables(cfg, engine)
 	if err != nil {
 		return err
 	}
 
 	// 判断下游数据库是否存在 oracle 表
-	mysqlTables, err := engine.GetMySQLTable(cfg.TargetConfig.SchemaName)
+	mysqlTables, err := engine.GetMySQLTable(cfg.MySQLConfig.SchemaName)
 	if err != nil {
 		return err
 	}
 	ok, noExistTables := utils.IsSubsetString(mysqlTables, exporterTableSlice)
 	if !ok {
-		return fmt.Errorf("oracle tables %v isn't exist in the mysqldb schema [%v], please create", noExistTables, cfg.TargetConfig.SchemaName)
+		return fmt.Errorf("oracle tables %v isn't exist in the mysqldb schema [%v], please create", noExistTables, cfg.MySQLConfig.SchemaName)
 	}
 
 	// 判断 table_error_detail 是否存在错误记录，是否可进行 check
-	errorTotals, err := engine.GetTableErrorDetailCountByMode(cfg.SourceConfig.SchemaName, utils.CheckMode)
+	errorTotals, err := engine.GetTableErrorDetailCountByMode(cfg.OracleConfig.SchemaName, utils.CheckMode)
 	if err != nil {
-		return fmt.Errorf("func [GetTableErrorDetailCountByMode] check schema [%s] mode [%s] table task failed, error: %v", strings.ToUpper(cfg.SourceConfig.SchemaName), utils.CheckMode, err)
+		return fmt.Errorf("func [GetTableErrorDetailCountByMode] check schema [%s] mode [%s] table task failed, error: %v", strings.ToUpper(cfg.OracleConfig.SchemaName), utils.CheckMode, err)
 	}
 	if errorTotals > 0 {
-		return fmt.Errorf("func [GetTableErrorDetailCount] check schema [%s] mode [%s] table task failed, table [table_error_detail] exist failed error, please clear and rerunning", strings.ToUpper(cfg.SourceConfig.SchemaName), utils.CheckMode)
+		return fmt.Errorf("func [GetTableErrorDetailCount] check schema [%s] mode [%s] table task failed, table [table_error_detail] exist failed error, please clear and rerunning", strings.ToUpper(cfg.OracleConfig.SchemaName), utils.CheckMode)
 	}
 
 	pwdDir, err := os.Getwd()
@@ -67,13 +69,13 @@ func OracleTableToMySQLMappingCheck(engine *service.Engine, cfg *service.CfgFile
 		return err
 	}
 	fileCheck, err := os.OpenFile(filepath.Join(pwdDir,
-		fmt.Sprintf("check_%s.sql", cfg.SourceConfig.SchemaName)), os.O_WRONLY|os.O_CREATE|os.O_APPEND|os.O_TRUNC, 0666)
+		fmt.Sprintf("check_%s.sql", cfg.OracleConfig.SchemaName)), os.O_WRONLY|os.O_CREATE|os.O_APPEND|os.O_TRUNC, 0666)
 	if err != nil {
 		return err
 	}
 	defer fileCheck.Close()
 
-	wrCheck := &reverser.FileMW{
+	wrCheck := &o2m.FileMW{
 		Mutex:  sync.Mutex{},
 		Writer: fileCheck}
 
@@ -118,7 +120,7 @@ func OracleTableToMySQLMappingCheck(engine *service.Engine, cfg *service.CfgFile
 	}
 	finishTime := time.Now()
 	zap.L().Info("get oracle db character and version finished",
-		zap.String("schema", cfg.SourceConfig.SchemaName),
+		zap.String("schema", cfg.OracleConfig.SchemaName),
 		zap.String("db version", oraDBVersion),
 		zap.String("db character", characterSet),
 		zap.Int("table totals", len(exporterTableSlice)),
@@ -132,17 +134,17 @@ func OracleTableToMySQLMappingCheck(engine *service.Engine, cfg *service.CfgFile
 
 	if oraCollation {
 		beginTime = time.Now()
-		schemaCollation, err = engine.GetOracleSchemaCollation(strings.ToUpper(cfg.SourceConfig.SchemaName))
+		schemaCollation, err = engine.GetOracleSchemaCollation(strings.ToUpper(cfg.OracleConfig.SchemaName))
 		if err != nil {
 			return err
 		}
-		tblCollation, err = engine.GetOracleTableCollation(strings.ToUpper(cfg.SourceConfig.SchemaName), schemaCollation)
+		tblCollation, err = engine.GetOracleTableCollation(strings.ToUpper(cfg.OracleConfig.SchemaName), schemaCollation)
 		if err != nil {
 			return err
 		}
 		finishTime = time.Now()
 		zap.L().Info("get oracle schema and table collation finished",
-			zap.String("schema", cfg.SourceConfig.SchemaName),
+			zap.String("schema", cfg.OracleConfig.SchemaName),
 			zap.String("db version", oraDBVersion),
 			zap.String("db character", characterSet),
 			zap.Int("table totals", len(exporterTableSlice)),
@@ -167,7 +169,7 @@ func OracleTableToMySQLMappingCheck(engine *service.Engine, cfg *service.CfgFile
 		go func(
 			sourceSchemaName, targetSchemaName, characterSet, nlsSort, nlsComp string,
 			tblCollation map[string]string, schemaCollation string,
-			oraCollation bool, engine *service.Engine, cfg *service.CfgFile, wrCheck *reverser.FileMW) {
+			oraCollation bool, engine *service.Engine, cfg *config.CfgFile, wrCheck *o2m.FileMW) {
 			defer wg.Done()
 			for t := range ch {
 				wr := NewDiffWriter(sourceSchemaName, targetSchemaName, t, characterSet,
@@ -196,19 +198,19 @@ func OracleTableToMySQLMappingCheck(engine *service.Engine, cfg *service.CfgFile
 				}
 			}
 
-		}(cfg.SourceConfig.SchemaName, cfg.TargetConfig.SchemaName, characterSet, nlsSort, nlsComp, tblCollation, schemaCollation, oraCollation,
+		}(cfg.OracleConfig.SchemaName, cfg.MySQLConfig.SchemaName, characterSet, nlsSort, nlsComp, tblCollation, schemaCollation, oraCollation,
 			engine, cfg, wrCheck)
 	}
 
 	wg.Wait()
 
-	checkError, err := engine.GetTableErrorDetailCountByMode(cfg.SourceConfig.SchemaName, utils.CheckMode)
+	checkError, err := engine.GetTableErrorDetailCountByMode(cfg.OracleConfig.SchemaName, utils.CheckMode)
 	if err != nil {
-		return fmt.Errorf("func [GetTableErrorDetailCountBySources] check schema [%s] mode [%s] table task failed, error: %v", strings.ToUpper(cfg.SourceConfig.SchemaName), utils.CheckMode, err)
+		return fmt.Errorf("func [GetTableErrorDetailCountBySources] check schema [%s] mode [%s] table task failed, error: %v", strings.ToUpper(cfg.OracleConfig.SchemaName), utils.CheckMode, err)
 	}
 
 	endTime := time.Now()
-	zap.L().Info("check", zap.String("output", filepath.Join(pwdDir, fmt.Sprintf("check_%s.sql", cfg.SourceConfig.SchemaName))))
+	zap.L().Info("check", zap.String("output", filepath.Join(pwdDir, fmt.Sprintf("check_%s.sql", cfg.OracleConfig.SchemaName))))
 	if checkError == 0 {
 		zap.L().Info("check table oracle to mysql finished",
 			zap.Int("table totals", len(exporterTableSlice)),

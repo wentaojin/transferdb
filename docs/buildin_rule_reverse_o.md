@@ -55,6 +55,3 @@
 | timestamp(p) with time zone        | datetime(p)【精度支持 6位】  |
 | timestamp(p) with local time zone  | datetime(p)【精度支持 6位】  |
 | other data type                    | text                  |
-
-
-

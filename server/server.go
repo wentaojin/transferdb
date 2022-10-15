@@ -18,9 +18,14 @@ package server
 import (
 	"database/sql"
 	"fmt"
-	"github.com/wentaojin/transferdb/pkg/diff"
 	"strings"
 	"time"
+
+	"github.com/wentaojin/transferdb/config"
+	"github.com/wentaojin/transferdb/pkg/diff"
+	"github.com/wentaojin/transferdb/pkg/reverse/m2o"
+	"github.com/wentaojin/transferdb/pkg/reverse/o2m"
+	"github.com/wentaojin/transferdb/utils"
 
 	"github.com/wentaojin/transferdb/pkg/csv"
 
@@ -33,8 +38,6 @@ import (
 	"github.com/wentaojin/transferdb/pkg/prepare"
 
 	"github.com/wentaojin/transferdb/pkg/taskflow"
-
-	"github.com/wentaojin/transferdb/pkg/reverser"
 )
 
 const (
@@ -45,11 +48,11 @@ const (
 )
 
 // 程序运行
-func Run(cfg *service.CfgFile, mode string) error {
+func Run(cfg *config.CfgFile, mode, reverse string) error {
 	switch strings.ToLower(strings.TrimSpace(mode)) {
 	case "gather":
 		// 收集评估改造成本
-		engine, err := NewOracleDBEngine(cfg.SourceConfig)
+		engine, err := NewOracleDBEngine(cfg.OracleConfig)
 		if err != nil {
 			return err
 		}
@@ -58,7 +61,7 @@ func Run(cfg *service.CfgFile, mode string) error {
 		}
 	case "prepare":
 		// 表结构转换 - only prepare 阶段
-		engine, err := NewMySQLEnginePrepareDB(cfg.TargetConfig, cfg.AppConfig.SlowlogThreshold, mysqlMaxConn)
+		engine, err := NewMySQLEnginePrepareDB(cfg.MySQLConfig, cfg.AppConfig.SlowlogThreshold, mysqlMaxConn)
 		if err != nil {
 			return err
 		}
@@ -67,16 +70,29 @@ func Run(cfg *service.CfgFile, mode string) error {
 		}
 	case "reverse":
 		// 表结构转换 - reverse 阶段
-		engine, err := NewEngineDB(cfg.SourceConfig, cfg.TargetConfig, cfg.AppConfig.SlowlogThreshold, mysqlMaxConn)
-		if err != nil {
-			return err
+		// O2M
+		if strings.EqualFold(strings.TrimSpace(reverse), utils.ReverseModeO2M) {
+			engine, err := NewEngineDB(cfg.OracleConfig, cfg.MySQLConfig, cfg.AppConfig.SlowlogThreshold, mysqlMaxConn)
+			if err != nil {
+				return err
+			}
+			if err = o2m.OracleReverseToMySQLTable(engine, cfg); err != nil {
+				return err
+			}
 		}
-		if err = reverser.ReverseOracleToMySQLTable(engine, cfg); err != nil {
-			return err
+		// M2O
+		if strings.EqualFold(strings.TrimSpace(reverse), utils.ReverseModeM2O) {
+			engine, err := NewEngineDB(cfg.OracleConfig, cfg.MySQLConfig, cfg.AppConfig.SlowlogThreshold, mysqlMaxConn)
+			if err != nil {
+				return err
+			}
+			if err = m2o.MySQLReverseToOracleTable(engine, cfg); err != nil {
+				return err
+			}
 		}
 	case "check":
 		// 表结构校验 - 上下游
-		engine, err := NewEngineDB(cfg.SourceConfig, cfg.TargetConfig, cfg.AppConfig.SlowlogThreshold, mysqlMaxConn)
+		engine, err := NewEngineDB(cfg.OracleConfig, cfg.MySQLConfig, cfg.AppConfig.SlowlogThreshold, mysqlMaxConn)
 		if err != nil {
 			return err
 		}
@@ -85,7 +101,7 @@ func Run(cfg *service.CfgFile, mode string) error {
 		}
 	case "diff":
 		// 数据校验 - 以上游为准
-		engine, err := NewEngineDB(cfg.SourceConfig, cfg.TargetConfig, cfg.AppConfig.SlowlogThreshold, mysqlMaxConn)
+		engine, err := NewEngineDB(cfg.OracleConfig, cfg.MySQLConfig, cfg.AppConfig.SlowlogThreshold, mysqlMaxConn)
 		if err != nil {
 			return err
 		}
@@ -95,7 +111,7 @@ func Run(cfg *service.CfgFile, mode string) error {
 	case "full":
 		// 全量数据 ETL 非一致性（基于某个时间点，而是直接基于现有 SCN）抽取，离线环境提供与原库一致性
 		engine, err := NewEngineDB(
-			cfg.SourceConfig, cfg.TargetConfig, cfg.AppConfig.SlowlogThreshold, mysqlMaxConn)
+			cfg.OracleConfig, cfg.MySQLConfig, cfg.AppConfig.SlowlogThreshold, mysqlMaxConn)
 		if err != nil {
 			return err
 		}
@@ -104,7 +120,7 @@ func Run(cfg *service.CfgFile, mode string) error {
 		}
 	case "csv":
 		// csv 全量数据导出
-		engine, err := NewEngineDB(cfg.SourceConfig, cfg.TargetConfig, cfg.AppConfig.SlowlogThreshold, mysqlMaxConn)
+		engine, err := NewEngineDB(cfg.OracleConfig, cfg.MySQLConfig, cfg.AppConfig.SlowlogThreshold, mysqlMaxConn)
 		if err != nil {
 			return err
 		}
@@ -114,7 +130,7 @@ func Run(cfg *service.CfgFile, mode string) error {
 	case "all":
 		// 全量 + 增量数据同步阶段 - logminer
 		engine, err := NewEngineDB(
-			cfg.SourceConfig, cfg.TargetConfig, cfg.AppConfig.SlowlogThreshold, mysqlMaxConn)
+			cfg.OracleConfig, cfg.MySQLConfig, cfg.AppConfig.SlowlogThreshold, mysqlMaxConn)
 		if err != nil {
 			return err
 		}
@@ -128,7 +144,7 @@ func Run(cfg *service.CfgFile, mode string) error {
 }
 
 // 数据库引擎初始化
-func NewEngineDB(sourceCfg service.SourceConfig, targetCfg service.TargetConfig, slowlogThreshold, mysqlMaxOpenConn int) (*service.Engine, error) {
+func NewEngineDB(sourceCfg config.OracleConfig, targetCfg config.MySQLConfig, slowlogThreshold, mysqlMaxOpenConn int) (*service.Engine, error) {
 	var (
 		engine *service.Engine
 		oraDB  *sql.DB

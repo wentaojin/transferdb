@@ -75,6 +75,17 @@ AND upper(index_name) = upper('%s')`, schemaName, tableName, indexName)
 	return true
 }
 
+func (e *Engine) GetOracleExtendedMode() (bool, error) {
+	_, res, err := Query(e.OracleDB, `SELECT VALUE FROM V$PARAMETER WHERE UPPER(NAME) = UPPER('MAX_STRING_SIZE')`)
+	if err != nil {
+		return false, err
+	}
+	if strings.EqualFold(res[0]["VALUE"], "EXTENDED") {
+		return true, nil
+	}
+	return false, nil
+}
+
 func (e *Engine) GetOracleTableComment(schemaName string, tableName string) ([]map[string]string, error) {
 	var (
 		comments []map[string]string
@@ -818,4 +829,62 @@ func (e *Engine) GetTiDBAlterPKValue() (string, error) {
 		return "", nil
 	}
 	return res[0]["VARIABLE_VALUE"], nil
+}
+
+func (e *Engine) GetMySQLNormalTable(schemaName string) ([]string, error) {
+	_, res, err := Query(e.MysqlDB, fmt.Sprintf(`SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES where UPPER(TABLE_SCHEMA) = '%s' AND TABLE_TYPE = 'BASE TABLE'`, strings.ToUpper(schemaName)))
+	if err != nil {
+		return []string{}, err
+	}
+	var tables []string
+	if len(res) > 0 {
+		for _, r := range res {
+			tables = append(tables, r["TABLE_NAME"])
+		}
+	}
+
+	return tables, nil
+}
+
+func (e *Engine) GetMySQLPartitionTable(schemaName string) ([]string, error) {
+	_, res, err := Query(e.MysqlDB, fmt.Sprintf(`SELECT DISTINCT TABLE_NAME FROM INFORMATION_SCHEMA.PARTITIONS WHERE UPPER(TABLE_SCHEMA) = '%s' AND PARTITION_NAME IS NOT NULL`, strings.ToUpper(schemaName)))
+	if err != nil {
+		return []string{}, err
+	}
+	var tables []string
+	if len(res) > 0 {
+		for _, r := range res {
+			tables = append(tables, strings.ToUpper(r["TABLE_NAME"]))
+		}
+	}
+
+	return tables, nil
+}
+
+func (e *Engine) GetMySQLViewTable(schemaName string) ([]string, error) {
+	_, res, err := Query(e.MysqlDB, fmt.Sprintf(`SELECT TABLE_SCHEMA,TABLE_NAME AS VIEW_NAME FROM INFORMATION_SCHEMA.VIEWS WHERE UPPER(TABLE_SCHEMA) = '%s'`, strings.ToUpper(schemaName)))
+	if err != nil {
+		return []string{}, err
+	}
+	var tables []string
+	if len(res) > 0 {
+		for _, r := range res {
+			tables = append(tables, r["VIEW_NAME"])
+		}
+	}
+
+	return tables, nil
+}
+
+func (e *Engine) GetMySQLPartitionTableDetailINFO(schemaName, tableName string) (string, error) {
+	_, res, err := Query(e.MysqlDB, fmt.Sprintf(`SHOW CREATE TABLE %s.%s`, strings.ToUpper(schemaName), strings.ToUpper(tableName)))
+	if err != nil {
+		return "", err
+	}
+
+	partitonINFO := strings.Split(strings.ReplaceAll(res[0]["Create Table"], "`", ""), "PARTITION BY")[1]
+	if err != nil {
+		return partitonINFO, fmt.Errorf("get table paritiotn info failed: %v", res[0]["Create Table"])
+	}
+	return partitonINFO, nil
 }

@@ -18,6 +18,10 @@ package server
 import (
 	"database/sql"
 	"fmt"
+
+	"github.com/wentaojin/transferdb/config"
+	"github.com/wentaojin/transferdb/logger"
+
 	"github.com/wentaojin/transferdb/service"
 	"go.uber.org/zap"
 	"gorm.io/driver/mysql"
@@ -28,13 +32,13 @@ import (
 )
 
 // 创建 mysql 数据库引擎
-func NewMySQLEnginePrepareDB(mysqlCfg service.TargetConfig, slowQueryThreshold, mysqlMaxOpenConn int) (*service.Engine, error) {
+func NewMySQLEnginePrepareDB(mysqlCfg config.MySQLConfig, slowQueryThreshold, mysqlMaxOpenConn int) (*service.Engine, error) {
 	// 通用数据库链接池
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&parseTime=True&loc=Local",
 		mysqlCfg.Username, mysqlCfg.Password, mysqlCfg.Host, mysqlCfg.Port)
 
 	// 初始化 gorm 日志记录器
-	logger := service.NewGormLogger(zap.L(), slowQueryThreshold)
+	logger := logger.NewGormLogger(zap.L(), slowQueryThreshold)
 	logger.SetAsDefault()
 	gormDB, err := gorm.Open(mysql.New(mysql.Config{
 		DriverName: "mysql",
@@ -65,7 +69,7 @@ func NewMySQLEnginePrepareDB(mysqlCfg service.TargetConfig, slowQueryThreshold, 
 	return engine, nil
 }
 
-func NewMySQLEngineGeneralDB(mysqlCfg service.TargetConfig, slowQueryThreshold, mysqlMaxOpenConn int) (*service.Engine, error) {
+func NewMySQLEngineGeneralDB(mysqlCfg config.MySQLConfig, slowQueryThreshold, mysqlMaxOpenConn int) (*service.Engine, error) {
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?%s",
 		mysqlCfg.Username, mysqlCfg.Password, mysqlCfg.Host, mysqlCfg.Port, mysqlCfg.MetaSchema, mysqlCfg.ConnectParams)
 
@@ -77,7 +81,7 @@ func NewMySQLEngineGeneralDB(mysqlCfg service.TargetConfig, slowQueryThreshold, 
 
 	// 初始化 gormDB
 	// 初始化 gorm 日志记录器
-	logger := service.NewGormLogger(zap.L(), slowQueryThreshold)
+	logger := logger.NewGormLogger(zap.L(), slowQueryThreshold)
 	logger.SetAsDefault()
 	gormDB, err = gorm.Open(mysql.New(mysql.Config{
 		DriverName: "mysql",

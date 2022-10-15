@@ -22,22 +22,23 @@ import (
 	"strings"
 	"time"
 
+	"github.com/wentaojin/transferdb/config"
 	"github.com/wentaojin/transferdb/service"
 	"go.uber.org/zap"
 )
 
-func OracleMigrateMySQLCostEvaluate(engine *service.Engine, cfg *service.CfgFile) error {
+func OracleMigrateMySQLCostEvaluate(engine *service.Engine, cfg *config.CfgFile) error {
 	startTime := time.Now()
 	zap.L().Info("evaluate oracle migrate mysql cost start",
-		zap.String("oracleSchema", cfg.SourceConfig.SchemaName),
-		zap.String("mysqlSchema", cfg.TargetConfig.SchemaName))
+		zap.String("oracleSchema", cfg.OracleConfig.SchemaName),
+		zap.String("mysqlSchema", cfg.MySQLConfig.SchemaName))
 
 	var (
 		usernameSQL   string
 		fileName      string
 		usernameArray []string
 	)
-	if cfg.SourceConfig.SchemaName == "" {
+	if cfg.OracleConfig.SchemaName == "" {
 		usernameSQL = `select username from dba_users where username NOT IN (
 			'HR',
 			'DVF',
@@ -90,8 +91,8 @@ func OracleMigrateMySQLCostEvaluate(engine *service.Engine, cfg *service.CfgFile
 
 		fileName = "report_all.html"
 	} else {
-		usernameSQL = fmt.Sprintf(`select username from dba_users where username = '%s'`, strings.ToUpper(cfg.SourceConfig.SchemaName))
-		fileName = fmt.Sprintf("report_%s.html", cfg.SourceConfig.SchemaName)
+		usernameSQL = fmt.Sprintf(`select username from dba_users where username = '%s'`, strings.ToUpper(cfg.OracleConfig.SchemaName))
+		fileName = fmt.Sprintf("report_%s.html", cfg.OracleConfig.SchemaName)
 	}
 	_, usernameMapArray, err := service.Query(engine.OracleDB, usernameSQL)
 	if err != nil {
@@ -99,7 +100,7 @@ func OracleMigrateMySQLCostEvaluate(engine *service.Engine, cfg *service.CfgFile
 	}
 
 	if len(usernameMapArray) == 0 {
-		return fmt.Errorf("oracle schema [%v] not exist", strings.ToUpper(cfg.SourceConfig.SchemaName))
+		return fmt.Errorf("oracle schema [%v] not exist", strings.ToUpper(cfg.OracleConfig.SchemaName))
 	}
 
 	for _, usernameMap := range usernameMapArray {
@@ -120,7 +121,7 @@ func OracleMigrateMySQLCostEvaluate(engine *service.Engine, cfg *service.CfgFile
 	defer file.Close()
 
 	beginTime := time.Now()
-	reportOverview, reportSchema, err := GatherOracleOverview(usernameArray, engine, cfg.SourceConfig.Username, fileName)
+	reportOverview, reportSchema, err := GatherOracleOverview(usernameArray, engine, cfg.OracleConfig.Username, fileName)
 	if err != nil {
 		return err
 	}

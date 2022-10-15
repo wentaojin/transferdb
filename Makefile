@@ -1,4 +1,4 @@
-.PHONY: build gather prepare reverse check all full csv diff gotool clean help
+.PHONY: build gather prepare check reverseO2M reverseM2O all full csv diff gotool clean help
 
 CMDPATH="./cmd"
 BINARYPATH="bin/transferdb"
@@ -21,10 +21,10 @@ GITREF  := $(shell git rev-parse --abbrev-ref HEAD)
 
 
 LDFLAGS := -w -s
-LDFLAGS += -X "$(REPO)/service.Version=$(COMMIT)"
-LDFLAGS += -X "$(REPO)/service.BuildTS=$(BUILDTS)"
-LDFLAGS += -X "$(REPO)/service.GitHash=$(GITHASH)"
-LDFLAGS += -X "$(REPO)/service.GitBranch=$(GITREF)"
+LDFLAGS += -X "$(REPO)/config.Version=$(COMMIT)"
+LDFLAGS += -X "$(REPO)/config.BuildTS=$(BUILDTS)"
+LDFLAGS += -X "$(REPO)/config.GitHash=$(GITHASH)"
+LDFLAGS += -X "$(REPO)/config.GitBranch=$(GITREF)"
 
 
 build: clean gotool
@@ -36,8 +36,11 @@ gather: gotool
 prepare: gotool
 	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode prepare
 
-reverse: gotool
-	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode reverse
+reverseO2M: gotool
+	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode reverse --reverse o2m
+
+reverseM2O: gotool
+	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode reverse --reverse m2o
 
 check: gotool
 	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode check

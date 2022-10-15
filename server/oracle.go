@@ -23,17 +23,14 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/godror/godror/dsn"
-	"github.com/wentaojin/transferdb/service"
-	"github.com/wentaojin/transferdb/utils"
-
 	"github.com/godror/godror"
-
-	_ "github.com/godror/godror"
+	"github.com/godror/godror/dsn"
+	"github.com/wentaojin/transferdb/config"
+	"github.com/wentaojin/transferdb/utils"
 )
 
 // 创建 oracle 数据库引擎
-func NewOracleDBEngine(oraCfg service.SourceConfig) (*sql.DB, error) {
+func NewOracleDBEngine(oraCfg config.OracleConfig) (*sql.DB, error) {
 	// https://pkg.go.dev/github.com/godror/godror
 	// https://github.com/godror/godror/blob/db9cd12d89cdc1c60758aa3f36ece36cf5a61814/doc/connection.md
 	// https://godror.github.io/godror/doc/connection.html

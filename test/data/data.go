@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/pingcap/log"
+	"github.com/wentaojin/transferdb/config"
 	"github.com/wentaojin/transferdb/server"
 	"github.com/wentaojin/transferdb/service"
 	"github.com/wentaojin/transferdb/utils"
@@ -43,7 +44,7 @@ var (
 func main() {
 	flag.Parse()
 
-	oraCfg := service.SourceConfig{
+	oraCfg := config.OracleConfig{
 		Username:      "marvin",
 		Password:      "marvin",
 		Host:          "172.16.4.93",
