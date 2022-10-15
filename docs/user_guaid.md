@@ -106,7 +106,8 @@ lib-dir = "/data1/soft/client/instantclient_19_8"
 
 5、表结构转换，[输出示例](docs/reverse_${sourcedb}.sql 以及 docs/compatibility_${sourcedb}.sql)
 $ ./transferdb --config config.toml --mode prepare
-$ ./transferdb --config config.toml --mode reverse
+$ ./transferdb --config config.toml --mode reverse --reverse o2m
+$ ./transferdb --config config.toml --mode reverse --reverse m2o
 
 元数据库[默认 db_meta]自定义转换规则，规则优先级【字段 -> 表 -> 库 -> 内置】
 文件自定义规则示例：
