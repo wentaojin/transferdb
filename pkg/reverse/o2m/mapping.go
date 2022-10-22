@@ -26,7 +26,7 @@ import (
 )
 
 /*
-	Oracle 表字段映射转换 -> Reverse 阶段
+Oracle 表字段映射转换 -> Reverse 阶段
 */
 func ReverseOracleTableColumnMapRule(
 	sourceSchema, sourceTableName, columnName string,
@@ -48,7 +48,9 @@ func ReverseOracleTableColumnMapRule(
 	if collationMapVal, ok := utils.OracleCollationMap[strings.ToUpper(colCollation)]; ok {
 		columnCollation = collationMapVal
 	} else {
-		return columnMeta, fmt.Errorf(`oracle table column meta generate failed, column [%v] column type [%v] collation [%v], comment [%v], dataDefault [%v] nullable [%v]`, columnName, dataType, colCollation, comments, dataDefault, dataNullable)
+		if !strings.EqualFold(strings.ToUpper(colCollation), "") {
+			return columnMeta, fmt.Errorf(`oracle table column meta generate failed, column [%v] column type [%v] collation [%v], comment [%v], dataDefault [%v] nullable [%v]`, columnName, dataType, colCollation, comments, dataDefault, dataNullable)
+		}
 	}
 
 	dataLength, err := strconv.Atoi(dataLengthValue)
