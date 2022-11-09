@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -228,7 +228,8 @@ func SpecialLetters(bs []byte) string {
 	for _, r := range bytes.Runes(bs) {
 		if unicode.IsPunct(r) || unicode.IsSymbol(r) || unicode.IsSpace(r) {
 			// mysql/tidb % 字符, /% 代表 /%，% 代表 % ,无需转义
-			if r == '%' {
+			// mysql/tidb _ 字符, /_ 代表 /_，_ 代表 _ ,无需转义
+			if r == '%' || r == '_' {
 				chars = append(chars, r)
 			} else {
 				chars = append(chars, '\\', r)

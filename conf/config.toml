@@ -125,7 +125,7 @@ ora-arch = "cdb"
 # 2、Non-CDB 架构需要具备 logminer 权限用户
 username = "c##ggadmin"
 password = "ggadmin"
-host = "10.2.103.31"
+host = "10.2.103.331"
 port = 1521
 service-name = "orclpdb1"
 # oracle instance client dir
@@ -143,7 +143,7 @@ schema-name = "marvin"
 # 源端迁移任务表（只用于 prepare/reverse/check/all/full 阶段，gather 阶段不适用，gather 只适用于 schema 级别）
 # include-table 和 exclude-table 不能同时配置，两者只能配置一个,如果两个都没配置则 Schema 内表全迁移
 # include-table 和 exclude-table 支持正则表达式以及通配符（tab_*/tab*）
-include-table = ["marvin"]
+include-table = ["xiamen"]
 exclude-table = []
 
 # 只用于 prepare/reverse/check/all/full 阶段，gather 阶段不适用
@@ -153,15 +153,15 @@ db-type = "tidb"
 # 目标端连接串
 username = "root"
 password = ""
-host = "10.2.103.30"
-port = 4000
+host = "10.2.103.302"
+port = 5000
 # mysql 链接参数
 connect-params = "charset=utf8mb4&multiStatements=true&parseTime=True&loc=Local"
 # 目标端元数据库
 # CREATE DATABASE IF NOT EXIST transferdb
 meta-schema = "transferdb"
 # 目标端 schema
-schema-name = "sbtest"
+schema-name = "marvin"
 # 表后缀可选项 - Only 适用于 Oracle -> TiDB
 # TiDB 数据库全局生效（自动读取下游数据参数判定生效与否）：
 # tidb_enable_clustered_index = on 全局聚簇索引，table-option 不生效
