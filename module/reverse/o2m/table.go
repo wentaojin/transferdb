@@ -371,7 +371,7 @@ func (t *Table) IsSingleIntegerPK(primaryColumns []string, columnMetas []string)
 			columnName := strings.Fields(columnMeta)[0]
 			columnType := strings.Fields(columnMeta)[1]
 
-			if strings.ToUpper(primaryColumns[0]) == common.StringsBuilder("`", strings.ToUpper(columnName), "`") {
+			if strings.EqualFold(primaryColumns[0], columnName) {
 				// Map 规则转换后的字段对应数据类型
 				// columnMeta 视角 columnName columnType ....
 				for _, integerType := range common.TiDBIntegerPrimaryKeyList {
