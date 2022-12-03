@@ -742,7 +742,8 @@ func (r *Rule) ChangeTableColumnDefaultValue(dataDefault string) (string, error)
 	if err != nil {
 		return defaultVal, err
 	}
-	return loadColumnDefaultValueRule(dataDefault, defaultValueMapSlice.([]model.DefaultValueMap)), nil
+
+	return loadColumnDefaultValueRule(dataDefault, defaultValueMapSlice.([]model.DefaultValueMap))
 }
 
 func (r *Rule) String() string {
@@ -750,17 +751,24 @@ func (r *Rule) String() string {
 	return string(jsonStr)
 }
 
-func loadColumnDefaultValueRule(defaultValue string, defaultValueMapSlice []model.DefaultValueMap) string {
+func loadColumnDefaultValueRule(defaultValue string, defaultValueMapSlice []model.DefaultValueMap) (string, error) {
+	// 额外处理 Oracle 默认值 ('6') 或者 (5) 或者 ('xsddd') 等包含小括号的默认值，而非 '(xxxx)' 之类的默认值
+	// Oracle 对于同类型 ('xxx') 或者 (xxx) 内部会自动处理，所以 O2M/O2T 需要处理成 'xxx' 或者 xxx
+	if strings.HasPrefix(defaultValue, "(") && strings.HasSuffix(defaultValue, ")") {
+		defaultValue = strings.TrimLeft(defaultValue, "(")
+		defaultValue = strings.TrimRight(defaultValue, ")")
+	}
+
 	if len(defaultValueMapSlice) == 0 {
-		return defaultValue
+		return defaultValue, nil
 	}
 
 	for _, dv := range defaultValueMapSlice {
 		if strings.EqualFold(strings.TrimSpace(dv.SourceDefaultValue), strings.TrimSpace(defaultValue)) && dv.TargetDefaultValue != "" {
-			return dv.TargetDefaultValue
+			return dv.TargetDefaultValue, nil
 		}
 	}
-	return defaultValue
+	return defaultValue, nil
 }
 
 func loadDataTypeRuleUsingTableOrSchema(originColumnType string, buildInColumnType string, tableDataTypeMapSlice []model.TableRuleMap,
