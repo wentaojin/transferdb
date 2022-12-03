@@ -81,6 +81,9 @@ func NewOracleDBEngine(oraCfg config.OracleConfig) (*sql.DB, error) {
 		if err = os.Setenv("LD_LIBRARY_PATH", oraCfg.LibDir); err != nil {
 			return nil, fmt.Errorf("set LD_LIBRARY_PATH env failed: %v", err)
 		}
+		if err := os.Setenv("NLS_LANG", oraCfg.NLSLang); err != nil {
+			return nil, fmt.Errorf("set NLS_LANG env failed: %v", err)
+		}
 	case "windows", "darwin":
 		oraDSN.LibDir = oraCfg.LibDir
 	}

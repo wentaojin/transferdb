@@ -21,7 +21,7 @@
 # 用于数据写入 batch 提交事务数
 insert-batch-size = 100
 # 是否开启更新元数据 meta-schema 库表慢日志，单位毫秒
-slowlog-threshold = 10
+slowlog-threshold = 300
 # 任务并发 -- 只用于 reverse/check 模式阶段
 threads = 256
 # pprof 端口
@@ -125,11 +125,14 @@ ora-arch = "cdb"
 # 2、Non-CDB 架构需要具备 logminer 权限用户
 username = "c##ggadmin"
 password = "ggadmin"
-host = "10.2.103.31"
+host = "10.2.133.20"
 port = 1521
 service-name = "orclpdb1"
-# oracle instance client dir
+# oracle instance client dir -> only linux
 lib-dir = "/Users/marvin/storehouse/oracle/instantclient_19_8"
+# client 字符集保持数据库 server 一致 -> only linux
+# select userenv('language') from dual;
+nls-lang = "AMERICAN_AMERICA.AL32UTF8"
 # 配置 oracle 连接参数
 # 配置 oracle 连接会话 session 变量
 connect-params = "poolMinSessions=50&poolMaxSessions=1000&poolWaitTimeout=360s&poolSessionMaxLifetime=2h&poolSessionTimeout=2h&poolIncrement=30&timezone=Local&connect_timeout=15"
@@ -143,7 +146,7 @@ schema-name = "marvin"
 # 源端迁移任务表（只用于 prepare/reverse/check/all/full 阶段，gather 阶段不适用，gather 只适用于 schema 级别）
 # include-table 和 exclude-table 不能同时配置，两者只能配置一个,如果两个都没配置则 Schema 内表全迁移
 # include-table 和 exclude-table 支持正则表达式以及通配符（tab_*/tab*）
-include-table = ["xiamen","xiamen1","xiamen2","xiamen3","xiamen4","xiamen5","xiamen6","xiamen7"]
+include-table = ["xiamen","xiamen1","xiamen2","xiamen3","xiamen4","xiamen5","xiamen6","xiamen7","xiamen8"]
 exclude-table = []
 
 # 只用于 prepare/reverse/check/all/full 阶段，gather 阶段不适用
@@ -153,7 +156,7 @@ db-type = "tidb"
 # 目标端连接串
 username = "root"
 password = ""
-host = "10.2.103.30"
+host = "10.2.123.35"
 port = 5000
 # mysql 链接参数
 connect-params = "charset=utf8mb4&multiStatements=true&parseTime=True&loc=Local"
