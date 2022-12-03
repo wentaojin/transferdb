@@ -125,7 +125,7 @@ ora-arch = "cdb"
 # 2、Non-CDB 架构需要具备 logminer 权限用户
 username = "c##ggadmin"
 password = "ggadmin"
-host = "10.2.103.31"
+host = "10.2.1033.311"
 port = 1521
 service-name = "orclpdb1"
 # oracle instance client dir
@@ -153,7 +153,7 @@ db-type = "tidb"
 # 目标端连接串
 username = "root"
 password = ""
-host = "10.2.103.30"
+host = "10.2.104.32"
 port = 5000
 # mysql 链接参数
 connect-params = "charset=utf8mb4&multiStatements=true&parseTime=True&loc=Local"
