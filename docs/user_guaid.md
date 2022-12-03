@@ -12,6 +12,7 @@ TransferDB 使用手册
             - 字段级别数据类型自定义
       4. 默认值自定义【global 全局级别】
          1. 任何 schema/table 转换都需要，内置 sysdate -> now() 转换规则
+         2. 任何 schema/table 转换都需要，内置 sys_guid() -> uuid() 转换规则
       5. 内置数据类型规则映射，[内置数据类型映射规则](buildin_rule_reverse_o.md)
       6. 表索引定义转换
       7. 表非空约束、外键约束、检查约束、主键约束、唯一约束转换，主键、唯一、检查、外键等约束 ORACLE ENABLED 状态才会被创建，其他状态忽略创建
