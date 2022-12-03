@@ -4,7 +4,6 @@ go 1.19
 
 require (
 	github.com/BurntSushi/toml v0.4.1
-	github.com/go-sql-driver/mysql v1.6.0
 	github.com/godror/godror v0.33.0
 	github.com/jedib0t/go-pretty/v6 v6.2.4
 	github.com/pingcap/log v0.0.0-20201112100606-8f1e84a3abc8
@@ -32,6 +31,7 @@ require (
 	github.com/go-logfmt/logfmt v0.5.1 // indirect
 	github.com/go-logr/logr v1.2.3 // indirect
 	github.com/go-ole/go-ole v1.2.4 // indirect
+	github.com/go-sql-driver/mysql v1.6.0 // indirect
 	github.com/godror/knownpb v0.1.0 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect

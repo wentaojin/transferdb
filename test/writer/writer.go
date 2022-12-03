@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -18,15 +18,14 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"github.com/wentaojin/transferdb/module/migrate/o2m"
 	"math"
 
 	"github.com/xxjwxc/gowp/workpool"
 
 	"golang.org/x/sync/errgroup"
 
-	"github.com/wentaojin/transferdb/pkg/taskflow"
-
-	"github.com/wentaojin/transferdb/utils"
+	"github.com/wentaojin/transferdb/common"
 
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -79,13 +78,13 @@ func main() {
 	if differenceBinds == 0 {
 		// batch 写入
 		// 切分 batch
-		args1 = utils.SplitMultipleSlice(arg, int64(splitNums))
+		args1 = common.SplitMultipleSlice(arg, int64(splitNums))
 
 		// 计算占位符
 		rowBatchCounts := actualBinds / columnCounts / splitNums
 
-		prepareSQL1 = utils.StringsBuilder(taskflow.GenerateMySQLInsertSQLStatementPrefix("db_meta", "test", []string{"id", "name"}, true),
-			taskflow.GenerateMySQLPrepareBindVarStatement(columnCounts, rowBatchCounts))
+		prepareSQL1 = common.StringsBuilder(o2m.GenMySQLInsertSQLStmtPrefix("db_meta", "test", []string{"id", "name"}, true),
+			o2m.GenMySQLPrepareBindVarStmt(columnCounts, rowBatchCounts))
 
 		fmt.Printf("prepareSQL1: %v\n", prepareSQL1)
 		fmt.Printf("prepareArgs1: %v\n", args1)
@@ -93,13 +92,13 @@ func main() {
 		// batch 写入
 		if planIntegerBinds > 0 {
 			// 切分 batch
-			args1 = utils.SplitMultipleSlice(arg[:planIntegerBinds], int64(splitNums))
+			args1 = common.SplitMultipleSlice(arg[:planIntegerBinds], int64(splitNums))
 
 			// 计算占位符
 			rowBatchCounts := planIntegerBinds / columnCounts / splitNums
 
-			prepareSQL1 = utils.StringsBuilder(taskflow.GenerateMySQLInsertSQLStatementPrefix("db_meta", "test", []string{"id", "name"}, true),
-				taskflow.GenerateMySQLPrepareBindVarStatement(columnCounts, rowBatchCounts))
+			prepareSQL1 = common.StringsBuilder(o2m.GenMySQLInsertSQLStmtPrefix("db_meta", "test", []string{"id", "name"}, true),
+				o2m.GenMySQLPrepareBindVarStmt(columnCounts, rowBatchCounts))
 
 			fmt.Printf("prepareSQL1: %v\n", prepareSQL1)
 			fmt.Printf("prepareArgs1: %v\n", args1)
@@ -110,8 +109,8 @@ func main() {
 		// 计算占位符
 		rowBatchCounts := differenceBinds / columnCounts
 
-		prepareSQL2 = utils.StringsBuilder(taskflow.GenerateMySQLInsertSQLStatementPrefix("db_meta", "test", []string{"id", "name"}, true),
-			taskflow.GenerateMySQLPrepareBindVarStatement(columnCounts, rowBatchCounts))
+		prepareSQL2 = common.StringsBuilder(o2m.GenMySQLInsertSQLStmtPrefix("db_meta", "test", []string{"id", "name"}, true),
+			o2m.GenMySQLPrepareBindVarStmt(columnCounts, rowBatchCounts))
 
 		fmt.Printf("prepareSQL2: %v\n", prepareSQL2)
 		fmt.Printf("prepareArgs2: %v\n", args2)

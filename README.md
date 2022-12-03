@@ -19,9 +19,9 @@ Quick Start
 
 Development
 -----------
-信息收集 make gather
+信息评估 make assess
 
-表结构转换 make prepare / make reverse
+表结构转换 make prepare / make reverseO2M/reverseM2O
 
 表结构核对 make check
 
@@ -31,7 +31,7 @@ Development
 
 CSV 数据导出 make csv
 
-数据校验 make diff
+数据校验 make compare
 
 程序编译 make build
 

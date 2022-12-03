@@ -1,0 +1,951 @@
+/*
+Copyright © 2020 Marvin
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+	http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+package o2m
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"github.com/wentaojin/transferdb/model"
+	"github.com/wentaojin/transferdb/module/check/o2m"
+	"github.com/wentaojin/transferdb/module/query/oracle"
+	"go.uber.org/zap"
+	"regexp"
+	"strings"
+
+	"github.com/wentaojin/transferdb/common"
+)
+
+type Rule struct {
+	Ctx               context.Context     `json:"-"`
+	SourceSchema      string              `json:"source_schema"`
+	SourceTableName   string              `json:"source_table_name"`
+	TargetSchema      string              `json:"target_schema"`
+	TargetTableName   string              `json:"target_table_name"`
+	PrimaryKeyINFO    []map[string]string `json:"primary_key_info"`
+	UniqueKeyINFO     []map[string]string `json:"unique_key_info"`
+	ForeignKeyINFO    []map[string]string `json:"foreign_key_info"`
+	CheckKeyINFO      []map[string]string `json:"check_key_info"`
+	UniqueIndexINFO   []map[string]string `json:"unique_index_info"`
+	NormalIndexINFO   []map[string]string `json:"normal_index_info"`
+	TableCommentINFO  []map[string]string `json:"table_comment_info"`
+	TableColumnINFO   []map[string]string `json:"table_column_info"`
+	ColumnCommentINFO []map[string]string `json:"column_comment_info"`
+	OracleCollation   bool                `json:"oracle_collation"`
+
+	Oracle *oracle.Oracle `json:"-"`
+}
+
+func (r *Rule) GenCreateTableDDL() (reverseDDL string, checkKeyDDL []string, foreignKeyDDL []string, compatibleDDL []string, err error) {
+	targetSchema, targetTable := r.GenTablePrefix()
+
+	tableColumnMetas, err := r.GenTableColumn()
+	if err != nil {
+		return reverseDDL, checkKeyDDL, foreignKeyDDL, compatibleDDL, err
+	}
+
+	tableKeyMetas, compDDL, err := r.GenTableKeyMeta()
+	if err != nil {
+		return reverseDDL, checkKeyDDL, foreignKeyDDL, compatibleDDL, err
+	}
+	compatibleDDL = compDDL
+
+	// table create sql -> target
+	reverseDDL = fmt.Sprintf("CREATE TABLE `%s`.`%s` (\n%s,\n%s\n)",
+		targetSchema,
+		targetTable,
+		strings.Join(tableColumnMetas, ",\n"),
+		strings.Join(tableKeyMetas, ",\n"))
+
+	if len(tableKeyMetas) > 0 {
+		reverseDDL = fmt.Sprintf("CREATE TABLE `%s`.`%s` (\n%s,\n%s\n)",
+			targetSchema,
+			targetTable,
+			strings.Join(tableColumnMetas, ",\n"),
+			strings.Join(tableKeyMetas, ",\n"))
+	} else {
+		reverseDDL = fmt.Sprintf("CREATE TABLE `%s`.`%s` (\n%s\n)",
+			targetSchema,
+			targetTable,
+			strings.Join(tableColumnMetas, ",\n"))
+	}
+
+	// table check、foreign -> target
+	checkKeyMetas, err := r.GenTableCheckKey()
+	if err != nil {
+		return reverseDDL, checkKeyDDL, foreignKeyDDL, compatibleDDL, err
+	}
+
+	if len(checkKeyMetas) > 0 {
+		for _, ck := range checkKeyMetas {
+			ckSQL := fmt.Sprintf("ALTER TABLE `%s`.`%s` ADD %s;", targetSchema, targetTable, ck)
+			zap.L().Info("reverse oracle table check key",
+				zap.String("schema", targetSchema),
+				zap.String("table", targetTable),
+				zap.String("ck sql", ckSQL))
+
+			checkKeyDDL = append(checkKeyDDL, ckSQL)
+		}
+	}
+
+	foreignKeyMetas, err := r.GenTableForeignKey()
+	if err != nil {
+		return reverseDDL, checkKeyDDL, foreignKeyDDL, compatibleDDL, err
+	}
+
+	if len(foreignKeyMetas) > 0 {
+		for _, fk := range foreignKeyMetas {
+			addFkSQL := fmt.Sprintf("ALTER TABLE `%s`.`%s` ADD %s;", targetSchema, targetTable, fk)
+			zap.L().Info("reverse oracle table foreign key",
+				zap.String("schema", targetSchema),
+				zap.String("table", targetTable),
+				zap.String("fk sql", addFkSQL))
+
+			foreignKeyDDL = append(foreignKeyDDL, addFkSQL)
+		}
+	}
+
+	zap.L().Info("reverse oracle table struct", zap.String("table", r.String()))
+
+	return reverseDDL, checkKeyDDL, foreignKeyDDL, compatibleDDL, nil
+}
+
+func (r *Rule) GenTableKeyMeta() (tableKeyMetas []string, compatibilityIndexSQL []string, err error) {
+	// 唯一约束/普通索引/唯一索引
+	uniqueKeyMetas, err := r.GenTableUniqueKey()
+	if err != nil {
+		return tableKeyMetas, compatibilityIndexSQL, fmt.Errorf("table json [%v], oracle db reverse table unique constraint failed: %v", r.String(), err)
+	}
+
+	normalIndexMetas, normalIndexCompSQL, err := r.GenTableNormalIndex()
+	if err != nil {
+		return tableKeyMetas, compatibilityIndexSQL, fmt.Errorf("table json [%v], oracle db reverse table key non-unique index failed: %v", r.String(), err)
+	}
+
+	uniqueIndexMetas, uniqueIndexCompSQL, err := r.GenTableUniqueIndex()
+	if err != nil {
+		return tableKeyMetas, compatibilityIndexSQL, fmt.Errorf("table json [%v], oracle db reverse table key unique index failed: %v", r.String(), err)
+	}
+
+	if len(normalIndexCompSQL) > 0 {
+		compatibilityIndexSQL = append(compatibilityIndexSQL, normalIndexCompSQL...)
+	}
+	if len(uniqueIndexCompSQL) > 0 {
+		compatibilityIndexSQL = append(compatibilityIndexSQL, uniqueIndexCompSQL...)
+	}
+
+	// 主键
+	primaryKeyMetas, err := r.GenTablePrimaryKey()
+	if err != nil {
+		return tableKeyMetas, compatibilityIndexSQL, err
+	}
+
+	if len(primaryKeyMetas) > 0 {
+		tableKeyMetas = append(tableKeyMetas, primaryKeyMetas...)
+	}
+
+	if len(uniqueKeyMetas) > 0 {
+		tableKeyMetas = append(tableKeyMetas, uniqueKeyMetas...)
+	}
+
+	if len(uniqueIndexMetas) > 0 {
+		tableKeyMetas = append(tableKeyMetas, uniqueIndexMetas...)
+	}
+
+	if len(normalIndexMetas) > 0 {
+		tableKeyMetas = append(tableKeyMetas, normalIndexMetas...)
+	}
+
+	return tableKeyMetas, compatibilityIndexSQL, nil
+}
+
+func (r *Rule) GenTablePrefix() (string, string) {
+	targetSchema := r.ChangeSchemaName()
+	targetTable := r.ChangeTableName()
+
+	return targetSchema, targetTable
+}
+
+func (r *Rule) GenTablePrimaryKey() (primaryKeyMetas []string, err error) {
+	if len(r.PrimaryKeyINFO) > 1 {
+		return primaryKeyMetas, fmt.Errorf("oracle schema [%s] table [%s] primary key exist multiple values: [%v]", r.SourceSchema, r.SourceTableName, r.PrimaryKeyINFO)
+	}
+	if len(r.PrimaryKeyINFO) > 0 {
+		var primaryColumns []string
+		for _, col := range strings.Split(r.PrimaryKeyINFO[0]["COLUMN_LIST"], ",") {
+			primaryColumns = append(primaryColumns, fmt.Sprintf("`%s`", col))
+		}
+		pk := fmt.Sprintf("PRIMARY KEY (%s)", strings.ToUpper(strings.Join(primaryColumns, ",")))
+		primaryKeyMetas = append(primaryKeyMetas, pk)
+	}
+
+	return primaryKeyMetas, nil
+}
+
+func (r *Rule) GenTableUniqueKey() (uniqueKeyMetas []string, err error) {
+	if len(r.UniqueKeyINFO) > 0 {
+		for _, rowUKCol := range r.UniqueKeyINFO {
+			var ukArr []string
+			for _, col := range strings.Split(rowUKCol["COLUMN_LIST"], ",") {
+				ukArr = append(ukArr, fmt.Sprintf("`%s`", col))
+			}
+			uk := fmt.Sprintf("UNIQUE KEY `%s` (%s)",
+				strings.ToUpper(rowUKCol["CONSTRAINT_NAME"]), strings.ToUpper(strings.Join(ukArr, ",")))
+
+			uniqueKeyMetas = append(uniqueKeyMetas, uk)
+		}
+	}
+	return uniqueKeyMetas, nil
+}
+
+func (r *Rule) GenTableForeignKey() (foreignKeyMetas []string, err error) {
+	if len(r.ForeignKeyINFO) > 0 {
+		for _, rowFKCol := range r.ForeignKeyINFO {
+			if rowFKCol["DELETE_RULE"] == "" || rowFKCol["DELETE_RULE"] == "NO ACTION" {
+				fk := fmt.Sprintf("CONSTRAINT `%s` FOREIGN KEY (%s) REFERENCES `%s`.`%s` (%s)",
+					strings.ToUpper(rowFKCol["CONSTRAINT_NAME"]),
+					strings.ToUpper(rowFKCol["COLUMN_LIST"]),
+					strings.ToUpper(rowFKCol["R_OWNER"]),
+					strings.ToUpper(rowFKCol["RTABLE_NAME"]),
+					strings.ToUpper(rowFKCol["RCOLUMN_LIST"]))
+				foreignKeyMetas = append(foreignKeyMetas, fk)
+			}
+			if rowFKCol["DELETE_RULE"] == "CASCADE" {
+				fk := fmt.Sprintf("CONSTRAINT `%s` FOREIGN KEY (%s) REFERENCES `%s`.`%s`(%s) ON DELETE CASCADE",
+					strings.ToUpper(rowFKCol["CONSTRAINT_NAME"]),
+					strings.ToUpper(rowFKCol["COLUMN_LIST"]),
+					strings.ToUpper(rowFKCol["R_OWNER"]),
+					strings.ToUpper(rowFKCol["RTABLE_NAME"]),
+					strings.ToUpper(rowFKCol["RCOLUMN_LIST"]))
+				foreignKeyMetas = append(foreignKeyMetas, fk)
+			}
+			if rowFKCol["DELETE_RULE"] == "SET NULL" {
+				fk := fmt.Sprintf("CONSTRAINT `%s` FOREIGN KEY(%s) REFERENCES `%s`.`%s`(%s) ON DELETE SET NULL",
+					strings.ToUpper(rowFKCol["CONSTRAINT_NAME"]),
+					strings.ToUpper(rowFKCol["COLUMN_LIST"]),
+					strings.ToUpper(rowFKCol["R_OWNER"]),
+					strings.ToUpper(rowFKCol["RTABLE_NAME"]),
+					strings.ToUpper(rowFKCol["RCOLUMN_LIST"]))
+				foreignKeyMetas = append(foreignKeyMetas, fk)
+			}
+		}
+	}
+
+	return foreignKeyMetas, nil
+}
+
+func (r *Rule) GenTableCheckKey() (checkKeyMetas []string, err error) {
+	if len(r.CheckKeyINFO) > 0 {
+		// 多个检查约束匹配
+		// 比如："LOC" IS noT nUll and loc in ('a','b','c')
+		reg, err := regexp.Compile(`\s+(?i:AND)\s+|\s+(?i:OR)\s+`)
+		if err != nil {
+			return checkKeyMetas, fmt.Errorf("check constraint regexp [AND/OR] failed: %v", err)
+		}
+
+		matchRex, err := regexp.Compile(`(^.*)(?i:IS NOT NULL)`)
+		if err != nil {
+			return checkKeyMetas, fmt.Errorf("check constraint regexp match [IS NOT NULL] failed: %v", err)
+		}
+
+		checkRex, err := regexp.Compile(`(.*)(?i:IS NOT NULL)`)
+		if err != nil {
+			fmt.Printf("check constraint regexp check [IS NOT NULL] failed: %v", err)
+		}
+
+		for _, rowCKCol := range r.CheckKeyINFO {
+			// 排除非空约束检查
+			s := strings.TrimSpace(rowCKCol["SEARCH_CONDITION"])
+
+			if !reg.MatchString(s) {
+				if !matchRex.MatchString(s) {
+					checkKeyMetas = append(checkKeyMetas, fmt.Sprintf("CONSTRAINT `%s` CHECK (%s)",
+						strings.ToUpper(rowCKCol["CONSTRAINT_NAME"]),
+						rowCKCol["SEARCH_CONDITION"]))
+				}
+			} else {
+
+				strArray := strings.Fields(s)
+
+				var (
+					idxArray        []int
+					checkArray      []string
+					constraintArray []string
+				)
+				for idx, val := range strArray {
+					if strings.EqualFold(val, "AND") || strings.EqualFold(val, "OR") {
+						idxArray = append(idxArray, idx)
+					}
+				}
+
+				idxArray = append(idxArray, len(strArray))
+
+				for idx, val := range idxArray {
+					if idx == 0 {
+						checkArray = append(checkArray, strings.Join(strArray[0:val], " "))
+					} else {
+						checkArray = append(checkArray, strings.Join(strArray[idxArray[idx-1]:val], " "))
+					}
+				}
+
+				for _, val := range checkArray {
+					v := strings.TrimSpace(val)
+					if !checkRex.MatchString(v) {
+						constraintArray = append(constraintArray, v)
+					}
+				}
+
+				sd := strings.Join(constraintArray, " ")
+				d := strings.Fields(sd)
+
+				if strings.EqualFold(d[0], "AND") || strings.EqualFold(d[0], "OR") {
+					d = d[1:]
+				}
+				if strings.EqualFold(d[len(d)-1], "AND") || strings.EqualFold(d[len(d)-1], "OR") {
+					d = d[:len(d)-1]
+				}
+
+				checkKeyMetas = append(checkKeyMetas, fmt.Sprintf("CONSTRAINT `%s` CHECK (%s)",
+					strings.ToUpper(rowCKCol["CONSTRAINT_NAME"]),
+					strings.Join(d, " ")))
+			}
+		}
+	}
+
+	return checkKeyMetas, nil
+}
+
+func (r *Rule) GenTableUniqueIndex() (uniqueIndexMetas []string, compatibilityIndexSQL []string, err error) {
+	if len(r.UniqueIndexINFO) > 0 {
+		for _, idxMeta := range r.UniqueIndexINFO {
+			if idxMeta["TABLE_NAME"] != "" && strings.ToUpper(idxMeta["UNIQUENESS"]) == "UNIQUE" {
+				switch idxMeta["INDEX_TYPE"] {
+				case "NORMAL":
+					var uniqueIndex []string
+					for _, col := range strings.Split(idxMeta["COLUMN_LIST"], ",") {
+						uniqueIndex = append(uniqueIndex, fmt.Sprintf("`%s`", col))
+					}
+
+					uniqueIDX := fmt.Sprintf("UNIQUE INDEX `%s` (%s)", strings.ToUpper(idxMeta["INDEX_NAME"]), strings.Join(uniqueIndex, ","))
+
+					uniqueIndexMetas = append(uniqueIndexMetas, uniqueIDX)
+
+					zap.L().Info("reverse unique index",
+						zap.String("schema", r.SourceSchema),
+						zap.String("table", idxMeta["TABLE_NAME"]),
+						zap.String("index name", idxMeta["INDEX_NAME"]),
+						zap.String("index type", idxMeta["INDEX_TYPE"]),
+						zap.String("index column list", idxMeta["COLUMN_LIST"]),
+						zap.String("unique index info", uniqueIDX))
+
+					continue
+
+				case "FUNCTION-BASED NORMAL":
+					sql := fmt.Sprintf("CREATE UNIQUE INDEX `%s` ON `%s`.`%s` (%s);",
+						strings.ToUpper(idxMeta["INDEX_NAME"]), r.TargetSchema, r.TargetTableName,
+						idxMeta["COLUMN_LIST"])
+
+					compatibilityIndexSQL = append(compatibilityIndexSQL, sql)
+
+					zap.L().Warn("reverse unique key",
+						zap.String("schema", r.SourceSchema),
+						zap.String("table", idxMeta["TABLE_NAME"]),
+						zap.String("index name", idxMeta["INDEX_NAME"]),
+						zap.String("index type", idxMeta["INDEX_TYPE"]),
+						zap.String("index column list", idxMeta["COLUMN_LIST"]),
+						zap.String("create unique index sql", sql),
+						zap.String("warn", "mysql not support"))
+
+					continue
+
+				default:
+					zap.L().Error("reverse unique index",
+						zap.String("schema", r.SourceSchema),
+						zap.String("table", idxMeta["TABLE_NAME"]),
+						zap.String("index name", idxMeta["INDEX_NAME"]),
+						zap.String("index type", idxMeta["INDEX_TYPE"]),
+						zap.String("index column list", idxMeta["COLUMN_LIST"]),
+						zap.String("error", "mysql not support"))
+
+					return uniqueIndexMetas, compatibilityIndexSQL, fmt.Errorf("[UNIQUE] oracle schema [%s] table [%s] reverse normal index panic, error: %v", r.SourceSchema, r.SourceTableName, idxMeta)
+				}
+			}
+			zap.L().Error("reverse unique key",
+				zap.String("schema", r.SourceSchema),
+				zap.String("table", idxMeta["TABLE_NAME"]),
+				zap.String("index name", idxMeta["INDEX_NAME"]),
+				zap.String("index type", idxMeta["INDEX_TYPE"]),
+				zap.String("index column list", idxMeta["COLUMN_LIST"]))
+			return uniqueIndexMetas, compatibilityIndexSQL,
+				fmt.Errorf("[NON-UNIQUE] oracle schema [%s] table [%s] panic, error: %v", r.SourceSchema, r.SourceTableName, idxMeta)
+		}
+	}
+
+	return uniqueIndexMetas, compatibilityIndexSQL, err
+}
+
+func (r *Rule) GenTableNormalIndex() (normalIndexMetas []string, compatibilityIndexSQL []string, err error) {
+	// 普通索引【普通索引、函数索引、位图索引、DOMAIN 索引】
+	if len(r.NormalIndexINFO) > 0 {
+		for _, idxMeta := range r.NormalIndexINFO {
+			if idxMeta["TABLE_NAME"] != "" && strings.ToUpper(idxMeta["UNIQUENESS"]) == "NONUNIQUE" {
+				switch idxMeta["INDEX_TYPE"] {
+				case "NORMAL":
+					var normalIndex []string
+					for _, col := range strings.Split(idxMeta["COLUMN_LIST"], ",") {
+						normalIndex = append(normalIndex, fmt.Sprintf("`%s`", col))
+					}
+
+					keyIndex := fmt.Sprintf("KEY `%s` (%s)", strings.ToUpper(idxMeta["INDEX_NAME"]), strings.Join(normalIndex, ","))
+
+					normalIndexMetas = append(normalIndexMetas, keyIndex)
+
+					zap.L().Info("reverse normal index",
+						zap.String("schema", r.SourceSchema),
+						zap.String("table", idxMeta["TABLE_NAME"]),
+						zap.String("index name", idxMeta["INDEX_NAME"]),
+						zap.String("index type", idxMeta["INDEX_TYPE"]),
+						zap.String("index column list", idxMeta["COLUMN_LIST"]),
+						zap.String("key index info", keyIndex))
+
+					continue
+
+				case "FUNCTION-BASED NORMAL":
+					sql := fmt.Sprintf("CREATE INDEX %s ON %s.%s (%s);",
+						strings.ToUpper(idxMeta["INDEX_NAME"]), r.TargetSchema, r.TargetTableName,
+						idxMeta["COLUMN_LIST"])
+
+					compatibilityIndexSQL = append(compatibilityIndexSQL, sql)
+
+					zap.L().Warn("reverse normal index",
+						zap.String("schema", r.SourceSchema),
+						zap.String("table", idxMeta["TABLE_NAME"]),
+						zap.String("index name", idxMeta["INDEX_NAME"]),
+						zap.String("index type", idxMeta["INDEX_TYPE"]),
+						zap.String("index column list", idxMeta["COLUMN_LIST"]),
+						zap.String("create normal index sql", sql),
+						zap.String("warn", "mysql not support"))
+					continue
+
+				case "BITMAP":
+					sql := fmt.Sprintf("CREATE BITMAP INDEX %s ON %s.%s (%s);",
+						strings.ToUpper(idxMeta["INDEX_NAME"]), r.TargetSchema, r.TargetTableName,
+						idxMeta["COLUMN_LIST"])
+
+					compatibilityIndexSQL = append(compatibilityIndexSQL, sql)
+
+					zap.L().Warn("reverse normal index",
+						zap.String("schema", r.SourceSchema),
+						zap.String("table", idxMeta["TABLE_NAME"]),
+						zap.String("index name", idxMeta["INDEX_NAME"]),
+						zap.String("index type", idxMeta["INDEX_TYPE"]),
+						zap.String("index column list", idxMeta["COLUMN_LIST"]),
+						zap.String("create normal index sql", sql),
+						zap.String("warn", "mysql not support"))
+					continue
+
+				case "FUNCTION-BASED BITMAP":
+					sql := fmt.Sprintf("CREATE BITMAP INDEX %s ON %s.%s (%s);",
+						strings.ToUpper(idxMeta["INDEX_NAME"]), r.TargetSchema, r.TargetTableName,
+						idxMeta["COLUMN_LIST"])
+
+					compatibilityIndexSQL = append(compatibilityIndexSQL, sql)
+
+					zap.L().Warn("reverse normal index",
+						zap.String("schema", r.SourceSchema),
+						zap.String("table", idxMeta["TABLE_NAME"]),
+						zap.String("index name", idxMeta["INDEX_NAME"]),
+						zap.String("index type", idxMeta["INDEX_TYPE"]),
+						zap.String("index column list", idxMeta["COLUMN_LIST"]),
+						zap.String("create normal index sql", sql),
+						zap.String("warn", "mysql not support"))
+					continue
+
+				case "DOMAIN":
+					sql := fmt.Sprintf("CREATE INDEX %s ON %s.%s (%s) INDEXTYPE IS %s.%s PARAMETERS ('%s');",
+						strings.ToUpper(idxMeta["INDEX_NAME"]), r.TargetSchema, r.TargetTableName,
+						idxMeta["COLUMN_LIST"],
+						strings.ToUpper(idxMeta["ITYP_OWNER"]),
+						strings.ToUpper(idxMeta["ITYP_NAME"]),
+						idxMeta["PARAMETERS"])
+
+					compatibilityIndexSQL = append(compatibilityIndexSQL, sql)
+
+					zap.L().Warn("reverse normal index",
+						zap.String("schema", r.SourceSchema),
+						zap.String("table", idxMeta["TABLE_NAME"]),
+						zap.String("index name", idxMeta["INDEX_NAME"]),
+						zap.String("index type", idxMeta["INDEX_TYPE"]),
+						zap.String("index column list", idxMeta["COLUMN_LIST"]),
+						zap.String("domain owner", idxMeta["ITYP_OWNER"]),
+						zap.String("domain index name", idxMeta["ITYP_NAME"]),
+						zap.String("domain parameters", idxMeta["PARAMETERS"]),
+						zap.String("create normal index sql", sql),
+						zap.String("warn", "mysql not support"))
+					continue
+
+				default:
+					zap.L().Error("reverse normal index",
+						zap.String("schema", r.SourceSchema),
+						zap.String("table", idxMeta["TABLE_NAME"]),
+						zap.String("index name", idxMeta["INDEX_NAME"]),
+						zap.String("index type", idxMeta["INDEX_TYPE"]),
+						zap.String("index column list", idxMeta["COLUMN_LIST"]),
+						zap.String("domain owner", idxMeta["ITYP_OWNER"]),
+						zap.String("domain index name", idxMeta["ITYP_NAME"]),
+						zap.String("domain parameters", idxMeta["PARAMETERS"]),
+						zap.String("error", "mysql not support"))
+
+					return normalIndexMetas, compatibilityIndexSQL, fmt.Errorf("[NORMAL] oracle schema [%s] table [%s] reverse normal index panic, error: %v", r.SourceSchema, r.SourceTableName, idxMeta)
+				}
+			}
+
+			zap.L().Error("reverse normal index",
+				zap.String("schema", r.SourceSchema),
+				zap.String("table", idxMeta["TABLE_NAME"]),
+				zap.String("index name", idxMeta["INDEX_NAME"]),
+				zap.String("index type", idxMeta["INDEX_TYPE"]),
+				zap.String("index column list", idxMeta["COLUMN_LIST"]),
+				zap.String("domain owner", idxMeta["ITYP_OWNER"]),
+				zap.String("domain index name", idxMeta["ITYP_NAME"]),
+				zap.String("domain parameters", idxMeta["PARAMETERS"]))
+			return normalIndexMetas, compatibilityIndexSQL, fmt.Errorf("[NON-NORMAL] oracle schema [%s] table [%s] reverse normal index panic, error: %v", r.SourceSchema, r.SourceTableName, idxMeta)
+		}
+	}
+
+	return normalIndexMetas, compatibilityIndexSQL, err
+}
+
+func (r *Rule) GenTableComment() (tableComment string, err error) {
+	if r.TableCommentINFO[0]["COMMENTS"] != "" {
+		tableComment = fmt.Sprintf("COMMENT='%s'", r.TableCommentINFO[0]["COMMENTS"])
+	}
+	return tableComment, err
+}
+
+func (r *Rule) GenTableColumn() (columnMetas []string, err error) {
+	for _, rowCol := range r.TableColumnINFO {
+		var (
+			columnCollation string
+			nullable        string
+			comment         string
+			dataDefault     string
+		)
+		if r.OracleCollation {
+			// 字段排序规则检查
+			if collationMapVal, ok := common.OracleCollationMap[strings.ToUpper(rowCol["COLLATION"])]; ok {
+				columnCollation = collationMapVal
+			} else {
+				// 字段数值数据类型不存在排序规则，排除忽略
+				if !strings.EqualFold(rowCol["COLLATION"], "") {
+					return columnMetas, fmt.Errorf(`error on check oracle column [%v] collation: %v`, rowCol["COLUMN_NAME"], rowCol["COLLATION"])
+				}
+				columnCollation = ""
+			}
+		} else {
+			// oracle 12.2 版本以下不支持，置空
+			columnCollation = ""
+		}
+
+		columnType, err := r.ChangeTableColumnType(r.SourceSchema, r.SourceTableName, rowCol["COLUMN_NAME"], o2m.Column{
+			DataType: rowCol["DATA_TYPE"],
+			ColumnInfo: o2m.ColumnInfo{
+				DataLength:    rowCol["DATA_LENGTH"],
+				DataPrecision: rowCol["DATA_PRECISION"],
+				DataScale:     rowCol["DATA_SCALE"],
+				NULLABLE:      rowCol["NULLABLE"],
+				DataDefault:   rowCol["DATA_DEFAULT"],
+				Comment:       rowCol["COMMENTS"],
+			},
+		})
+		if err != nil {
+			return columnMetas, err
+		}
+
+		if strings.EqualFold(rowCol["NULLABLE"], "Y") {
+			nullable = "NULL"
+		} else {
+			nullable = "NOT NULL"
+		}
+
+		if !strings.EqualFold(rowCol["COMMENTS"], "") {
+			comment = "'" + common.SpecialLettersUsingMySQL([]byte(rowCol["COMMENTS"])) + "'"
+		} else {
+			comment = rowCol["COMMENTS"]
+		}
+
+		if !strings.EqualFold(rowCol["DATA_DEFAULT"], "") {
+			dataDefault, err = r.ChangeTableColumnDefaultValue(rowCol["DATA_DEFAULT"])
+			if err != nil {
+				return columnMetas, err
+			}
+		} else {
+			dataDefault = rowCol["DATA_DEFAULT"]
+		}
+
+		if nullable == "NULL" {
+			switch {
+			case columnCollation != "" && comment != "" && dataDefault != "":
+				columnMetas = append(columnMetas, fmt.Sprintf("`%s` %s COLLATE %s DEFAULT %s COMMENT %s", rowCol["COLUMN_NAME"], columnType, columnCollation, dataDefault, comment))
+			case columnCollation != "" && comment == "" && dataDefault != "":
+				columnMetas = append(columnMetas, fmt.Sprintf("`%s` %s COLLATE %s DEFAULT %s", rowCol["COLUMN_NAME"], columnType, columnCollation, dataDefault))
+			case columnCollation != "" && comment == "" && dataDefault == "":
+				columnMetas = append(columnMetas, fmt.Sprintf("`%s` %s COLLATE %s", rowCol["COLUMN_NAME"], columnType, columnCollation))
+			case columnCollation != "" && comment != "" && dataDefault == "":
+				columnMetas = append(columnMetas, fmt.Sprintf("`%s` %s COLLATE %s COMMENT %s", rowCol["COLUMN_NAME"], columnType, columnCollation, comment))
+			case columnCollation == "" && comment != "" && dataDefault != "":
+				columnMetas = append(columnMetas, fmt.Sprintf("`%s` %s DEFAULT %s COMMENT %s", rowCol["COLUMN_NAME"], columnType, dataDefault, comment))
+			case columnCollation == "" && comment == "" && dataDefault != "":
+				columnMetas = append(columnMetas, fmt.Sprintf("`%s` %s DEFAULT %s", rowCol["COLUMN_NAME"], columnType, dataDefault))
+			case columnCollation == "" && comment == "" && dataDefault == "":
+				columnMetas = append(columnMetas, fmt.Sprintf("`%s` %s", rowCol["COLUMN_NAME"], columnType))
+			case columnCollation == "" && comment != "" && dataDefault == "":
+				columnMetas = append(columnMetas, fmt.Sprintf("`%s` %s COMMENT %s", rowCol["COLUMN_NAME"], columnType, comment))
+			default:
+				return columnMetas, fmt.Errorf("error on gen oracle schema table column meta with nullable, rule: %v", r.String())
+			}
+		} else {
+			switch {
+			case columnCollation != "" && comment != "" && dataDefault != "":
+				columnMetas = append(columnMetas, fmt.Sprintf("`%s` %s COLLATE %s %s DEFAULT %s COMMENT %s",
+					rowCol["COLUMN_NAME"], columnType, columnCollation, nullable, dataDefault, comment))
+			case columnCollation != "" && comment != "" && dataDefault == "":
+				columnMetas = append(columnMetas, fmt.Sprintf("`%s` %s COLLATE %s %s COMMENT %s", rowCol["COLUMN_NAME"], columnType, columnCollation, nullable, comment))
+			case columnCollation != "" && comment == "" && dataDefault != "":
+				columnMetas = append(columnMetas, fmt.Sprintf("`%s` %s COLLATE %s %s DEFAULT %s", rowCol["COLUMN_NAME"], columnType, columnCollation, nullable, dataDefault))
+			case columnCollation != "" && comment == "" && dataDefault == "":
+				columnMetas = append(columnMetas, fmt.Sprintf("`%s` %s COLLATE %s %s", rowCol["COLUMN_NAME"], columnType, columnCollation, nullable))
+			case columnCollation == "" && comment != "" && dataDefault != "":
+				columnMetas = append(columnMetas, fmt.Sprintf("`%s` %s %s DEFAULT %s COMMENT %s", rowCol["COLUMN_NAME"], columnType, nullable, dataDefault, comment))
+			case columnCollation == "" && comment != "" && dataDefault == "":
+				columnMetas = append(columnMetas, fmt.Sprintf("`%s` %s %s COMMENT %s", rowCol["COLUMN_NAME"], columnType, nullable, comment))
+			case columnCollation == "" && comment == "" && dataDefault != "":
+				columnMetas = append(columnMetas, fmt.Sprintf("`%s` %s %s DEFAULT %s", rowCol["COLUMN_NAME"], columnType, nullable, dataDefault))
+			case columnCollation == "" && comment == "" && dataDefault == "":
+				columnMetas = append(columnMetas, fmt.Sprintf("`%s` %s %s", rowCol["COLUMN_NAME"], columnType, nullable))
+			default:
+				return columnMetas, fmt.Errorf("error on gen oracle schema table column meta without nullable, rule: %v", r.String())
+			}
+		}
+	}
+
+	return columnMetas, nil
+}
+
+func (r *Rule) GenTableColumnComment() (columnComments []string, err error) {
+	// O2M Skip
+	return
+}
+
+func (r *Rule) ChangeSchemaName() string {
+	if r.TargetSchema == "" {
+		return r.SourceSchema
+	}
+	if r.TargetSchema != "" {
+		return r.TargetSchema
+	}
+	return r.SourceSchema
+}
+
+func (r *Rule) ChangeTableName() string {
+	if r.TargetTableName == "" {
+		return r.SourceTableName
+	}
+	if r.TargetTableName != "" {
+		return r.TargetTableName
+	}
+	return r.SourceTableName
+}
+
+// 数据库查询获取自定义表结构转换规则
+// 加载数据类型转换规则【处理字段级别、表级别、库级别数据类型映射规则】
+// 数据类型转换规则判断，未设置自定义规则，默认采用内置默认字段类型转换
+func (r *Rule) ChangeTableColumnType(sourceSchema, sourceTable, sourceColumn string, column interface{}) (string, error) {
+	var columnType string
+	// 获取内置映射规则
+	originColumnType, buildInColumnType, err := OracleTableColumnMapRule(sourceSchema, sourceTable, column.(o2m.Column))
+	if err != nil {
+		return columnType, err
+	}
+	// 获取自定义映射规则
+	columnDataTypeMapSlice, err := model.NewReverseModel(r.Oracle.GormDB).ColumnRuleMap.Detail(r.Ctx, &model.ColumnRuleMap{
+		SourceSchemaName: r.SourceSchema,
+		SourceTableName:  r.SourceTableName,
+		SourceColumnName: sourceColumn,
+		ReverseMode:      common.ReverseO2MMode,
+	})
+	if err != nil {
+		return columnType, err
+	}
+
+	tableDataTypeMapSlice, err := model.NewReverseModel(r.Oracle.GormDB).TableRuleMap.Detail(r.Ctx, &model.TableRuleMap{
+		SourceSchemaName: r.SourceSchema,
+		SourceTableName:  r.SourceTableName,
+		ReverseMode:      common.ReverseO2MMode,
+	})
+	if err != nil {
+		return columnType, err
+	}
+
+	schemaDataTypeMapSlice, err := model.NewReverseModel(r.Oracle.GormDB).SchemaRuleMap.Detail(r.Ctx, &model.SchemaRuleMap{
+		SourceSchemaName: r.SourceSchema,
+		ReverseMode:      common.ReverseO2MMode,
+	})
+	if err != nil {
+		return columnType, err
+	}
+
+	// 优先级
+	// column > table > schema > buildin
+	if len(columnDataTypeMapSlice.([]model.ColumnRuleMap)) == 0 {
+		return loadDataTypeRuleUsingTableOrSchema(originColumnType, buildInColumnType,
+			tableDataTypeMapSlice.([]model.TableRuleMap), schemaDataTypeMapSlice.([]model.SchemaRuleMap)), nil
+	}
+
+	// only column rule
+	columnTypeFromColumn := loadColumnTypeRuleOnlyUsingColumn(sourceColumn, originColumnType, buildInColumnType, columnDataTypeMapSlice.([]model.ColumnRuleMap))
+
+	// table or schema rule check, return column type
+	columnTypeFromOther := loadDataTypeRuleUsingTableOrSchema(originColumnType, buildInColumnType, tableDataTypeMapSlice.([]model.TableRuleMap), schemaDataTypeMapSlice.([]model.SchemaRuleMap))
+
+	// column or other rule check, return column type
+	switch {
+	case columnTypeFromColumn != buildInColumnType && columnTypeFromOther == buildInColumnType:
+		return strings.ToUpper(columnTypeFromColumn), nil
+	case columnTypeFromColumn != buildInColumnType && columnTypeFromOther != buildInColumnType:
+		return strings.ToUpper(columnTypeFromColumn), nil
+	case columnTypeFromColumn == buildInColumnType && columnTypeFromOther != buildInColumnType:
+		return strings.ToUpper(columnTypeFromOther), nil
+	default:
+		return strings.ToUpper(buildInColumnType), nil
+	}
+}
+
+func (r *Rule) ChangeTableColumnDefaultValue(dataDefault string) (string, error) {
+	var defaultVal string
+	defaultValueMapSlice, err := model.NewReverseModel(r.Oracle.GormDB).DefaultValueMap.Detail(r.Ctx, &model.DefaultValueMap{
+		ReverseMode: common.ReverseO2MMode,
+	})
+	if err != nil {
+		return defaultVal, err
+	}
+	return loadColumnDefaultValueRule(dataDefault, defaultValueMapSlice.([]model.DefaultValueMap)), nil
+}
+
+func (r *Rule) String() string {
+	jsonStr, _ := json.Marshal(r)
+	return string(jsonStr)
+}
+
+func loadColumnDefaultValueRule(defaultValue string, defaultValueMapSlice []model.DefaultValueMap) string {
+	if len(defaultValueMapSlice) == 0 {
+		return defaultValue
+	}
+
+	for _, dv := range defaultValueMapSlice {
+		if strings.EqualFold(strings.TrimSpace(dv.SourceDefaultValue), strings.TrimSpace(defaultValue)) && dv.TargetDefaultValue != "" {
+			return dv.TargetDefaultValue
+		}
+	}
+	return defaultValue
+}
+
+func loadDataTypeRuleUsingTableOrSchema(originColumnType string, buildInColumnType string, tableDataTypeMapSlice []model.TableRuleMap,
+	schemaDataTypeMapSlice []model.SchemaRuleMap) string {
+	switch {
+	case len(tableDataTypeMapSlice) != 0 && len(schemaDataTypeMapSlice) == 0:
+		return loadColumnTypeRuleOnlyUsingTable(originColumnType, buildInColumnType, tableDataTypeMapSlice)
+
+	case len(tableDataTypeMapSlice) != 0 && len(schemaDataTypeMapSlice) != 0:
+		return loadDataTypeRuleUsingTableAndSchema(originColumnType, buildInColumnType, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+
+	case len(tableDataTypeMapSlice) == 0 && len(schemaDataTypeMapSlice) != 0:
+		return loadColumnTypeRuleOnlyUsingSchema(originColumnType, buildInColumnType, schemaDataTypeMapSlice)
+
+	case len(tableDataTypeMapSlice) == 0 && len(schemaDataTypeMapSlice) == 0:
+		return strings.ToUpper(buildInColumnType)
+	default:
+		panic(fmt.Errorf("oracle data type mapping failed, tableDataTypeMapSlice [%v],schemaDataTypeMapSlice [%v]", len(tableDataTypeMapSlice), len(schemaDataTypeMapSlice)))
+	}
+}
+
+func loadDataTypeRuleUsingTableAndSchema(originColumnType string, buildInColumnType string, tableDataTypeMapSlice []model.TableRuleMap, schemaDataTypeMapSlice []model.SchemaRuleMap) string {
+	// 规则判断
+	customTableDataType := loadColumnTypeRuleOnlyUsingTable(originColumnType, buildInColumnType, tableDataTypeMapSlice)
+
+	customSchemaDataType := loadColumnTypeRuleOnlyUsingSchema(originColumnType, buildInColumnType, schemaDataTypeMapSlice)
+
+	switch {
+	case customTableDataType == buildInColumnType && customSchemaDataType != buildInColumnType:
+		return customSchemaDataType
+	case customTableDataType != buildInColumnType && customSchemaDataType == buildInColumnType:
+		return customTableDataType
+	case customTableDataType != buildInColumnType && customSchemaDataType != buildInColumnType:
+		return customTableDataType
+	default:
+		return strings.ToUpper(buildInColumnType)
+	}
+}
+
+/*
+	库、表、字段自定义映射规则
+*/
+// 表级别自定义映射规则
+func loadColumnTypeRuleOnlyUsingTable(originColumnType string, buildInColumnType string, tableDataTypeMapSlice []model.TableRuleMap) string {
+	if len(tableDataTypeMapSlice) == 0 {
+		return buildInColumnType
+	}
+	for _, tbl := range tableDataTypeMapSlice {
+		/*
+			number 类型处理：函数匹配 ->  GetOracleTableColumn
+			- number(*,10) -> number(38,10)
+			- number(*,0) -> number(38,0)
+			- number(*) -> number(38,127)
+			- number -> number(38,127)
+			- number(5) -> number(5)
+			- number(8,9) -> number(8,9)
+		*/
+		if strings.EqualFold(tbl.ReverseMode, common.ReverseO2MMode) {
+			if strings.Contains(strings.ToUpper(tbl.SourceColumnType), "NUMBER") {
+				switch {
+				case strings.Contains(strings.ToUpper(tbl.SourceColumnType), "*") && strings.Contains(strings.ToUpper(tbl.SourceColumnType), ","):
+					if strings.EqualFold(strings.Replace(tbl.SourceColumnType, "*", "38", -1), originColumnType) &&
+						tbl.TargetColumnType != "" {
+						return strings.ToUpper(tbl.TargetColumnType)
+					}
+				case strings.Contains(strings.ToUpper(tbl.SourceColumnType), "*") && !strings.Contains(strings.ToUpper(tbl.SourceColumnType), ","):
+					if strings.EqualFold("NUMBER(38,127)", originColumnType) &&
+						tbl.TargetColumnType != "" {
+						return strings.ToUpper(tbl.TargetColumnType)
+					}
+				case !strings.Contains(strings.ToUpper(tbl.SourceColumnType), "(") && !strings.Contains(strings.ToUpper(tbl.SourceColumnType), ")"):
+					if strings.EqualFold("NUMBER(38,127)", originColumnType) &&
+						tbl.TargetColumnType != "" {
+						return strings.ToUpper(tbl.TargetColumnType)
+					}
+				default:
+					if strings.EqualFold(tbl.SourceColumnType, originColumnType) && tbl.TargetColumnType != "" {
+						return strings.ToUpper(tbl.TargetColumnType)
+					}
+				}
+			} else {
+				if strings.EqualFold(tbl.SourceColumnType, originColumnType) && tbl.TargetColumnType != "" {
+					return strings.ToUpper(tbl.TargetColumnType)
+				}
+			}
+		}
+	}
+	return strings.ToUpper(buildInColumnType)
+}
+
+// 库级别自定义映射规则
+func loadColumnTypeRuleOnlyUsingSchema(originColumnType, buildInColumnType string, schemaDataTypeMapSlice []model.SchemaRuleMap) string {
+	if len(schemaDataTypeMapSlice) == 0 {
+		return buildInColumnType
+	}
+
+	for _, tbl := range schemaDataTypeMapSlice {
+		/*
+			number 类型处理：函数匹配 ->  GetOracleTableColumn
+			- number(*,10) -> number(38,10)
+			- number(*,0) -> number(38,0)
+			- number(*) -> number(38,127)
+			- number -> number(38,127)
+			- number(5) -> number(5)
+			- number(8,9) -> number(8,9)
+		*/
+		if strings.EqualFold(tbl.ReverseMode, common.ReverseO2MMode) {
+			if strings.Contains(strings.ToUpper(tbl.SourceColumnType), "NUMBER") {
+				switch {
+				case strings.Contains(strings.ToUpper(tbl.SourceColumnType), "*") && strings.Contains(strings.ToUpper(tbl.SourceColumnType), ","):
+					if strings.EqualFold(strings.Replace(tbl.SourceColumnType, "*", "38", -1), originColumnType) &&
+						tbl.TargetColumnType != "" {
+						return strings.ToUpper(tbl.TargetColumnType)
+					}
+				case strings.Contains(strings.ToUpper(tbl.SourceColumnType), "*") && !strings.Contains(strings.ToUpper(tbl.SourceColumnType), ","):
+					if strings.EqualFold("NUMBER(38,127)", originColumnType) &&
+						tbl.TargetColumnType != "" {
+						return strings.ToUpper(tbl.TargetColumnType)
+					}
+				case !strings.Contains(strings.ToUpper(tbl.SourceColumnType), "(") && !strings.Contains(strings.ToUpper(tbl.SourceColumnType), ")"):
+					if strings.EqualFold("NUMBER(38,127)", originColumnType) &&
+						tbl.TargetColumnType != "" {
+						return strings.ToUpper(tbl.TargetColumnType)
+					}
+				default:
+					if strings.EqualFold(tbl.SourceColumnType, originColumnType) && tbl.TargetColumnType != "" {
+						return strings.ToUpper(tbl.TargetColumnType)
+					}
+				}
+			} else {
+				if strings.EqualFold(tbl.SourceColumnType, originColumnType) && tbl.TargetColumnType != "" {
+					return strings.ToUpper(tbl.TargetColumnType)
+				}
+			}
+		}
+	}
+	return strings.ToUpper(buildInColumnType)
+}
+
+// 字段级别自定义映射规则
+func loadColumnTypeRuleOnlyUsingColumn(columnName string, originColumnType string, buildInColumnType string, columnDataTypeMapSlice []model.ColumnRuleMap) string {
+	if len(columnDataTypeMapSlice) == 0 {
+		return buildInColumnType
+	}
+	for _, tbl := range columnDataTypeMapSlice {
+		if strings.EqualFold(tbl.SourceColumnName, columnName) {
+			/*
+				number 类型处理：函数匹配 ->  GetOracleTableColumn
+				- number(*,10) -> number(38,10)
+				- number(*,0) -> number(38,0)
+				- number(*) -> number(38,127)
+				- number -> number(38,127)
+				- number(5) -> number(5)
+				- number(8,9) -> number(8,9)
+			*/
+			if strings.EqualFold(tbl.ReverseMode, common.ReverseO2MMode) {
+				if strings.Contains(strings.ToUpper(tbl.SourceColumnType), "NUMBER") {
+					switch {
+					case strings.Contains(strings.ToUpper(tbl.SourceColumnType), "*") && strings.Contains(strings.ToUpper(tbl.SourceColumnType), ","):
+						if strings.EqualFold(strings.Replace(tbl.SourceColumnType, "*", "38", -1), originColumnType) &&
+							tbl.TargetColumnType != "" {
+							return strings.ToUpper(tbl.TargetColumnType)
+						}
+					case strings.Contains(strings.ToUpper(tbl.SourceColumnType), "*") && !strings.Contains(strings.ToUpper(tbl.SourceColumnType), ","):
+						if strings.EqualFold("NUMBER(38,127)", originColumnType) &&
+							tbl.TargetColumnType != "" {
+							return strings.ToUpper(tbl.TargetColumnType)
+						}
+					case !strings.Contains(strings.ToUpper(tbl.SourceColumnType), "(") && !strings.Contains(strings.ToUpper(tbl.SourceColumnType), ")"):
+						if strings.EqualFold("NUMBER(38,127)", originColumnType) &&
+							tbl.TargetColumnType != "" {
+							return strings.ToUpper(tbl.TargetColumnType)
+						}
+					default:
+						if strings.EqualFold(tbl.SourceColumnType, originColumnType) && tbl.TargetColumnType != "" {
+							return strings.ToUpper(tbl.TargetColumnType)
+						}
+					}
+				} else {
+					if strings.EqualFold(tbl.SourceColumnType, originColumnType) && tbl.TargetColumnType != "" {
+						return strings.ToUpper(tbl.TargetColumnType)
+					}
+				}
+			}
+		}
+	}
+	return strings.ToUpper(buildInColumnType)
+}

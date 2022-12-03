@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,21 +17,28 @@ package config
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
+	"github.com/wentaojin/transferdb/errors"
+	"os"
 
 	"github.com/BurntSushi/toml"
 )
 
 // 程序配置文件
-type CfgFile struct {
-	AppConfig    AppConfig    `toml:"app" json:"app"`
-	FullConfig   FullConfig   `toml:"full" json:"full"`
-	CSVConfig    CSVConfig    `toml:"csv" json:"csv"`
-	AllConfig    AllConfig    `toml:"all" json:"all"`
-	OracleConfig OracleConfig `toml:"oracle" json:"oracle"`
-	MySQLConfig  MySQLConfig  `toml:"mysql" json:"mysql"`
-	LogConfig    LogConfig    `toml:"log" json:"log"`
-	DiffConfig   DiffConfig   `toml:"diff" json:"diff"`
+type Config struct {
+	*flag.FlagSet `json:"-"`
+	AppConfig     AppConfig    `toml:"app" json:"app"`
+	FullConfig    FullConfig   `toml:"full" json:"full"`
+	CSVConfig     CSVConfig    `toml:"csv" json:"csv"`
+	AllConfig     AllConfig    `toml:"all" json:"all"`
+	OracleConfig  OracleConfig `toml:"oracle" json:"oracle"`
+	MySQLConfig   MySQLConfig  `toml:"mysql" json:"mysql"`
+	LogConfig     LogConfig    `toml:"log" json:"log"`
+	DiffConfig    DiffConfig   `toml:"diff" json:"diff"`
+	ConfigFile    string       `json:"config-file"`
+	PrintVersion  bool
+	Mode          string `json:"mode"`
 }
 
 type AppConfig struct {
@@ -125,24 +132,56 @@ type LogConfig struct {
 	MaxBackups int    `toml:"max-backups" json:"max-backups"`
 }
 
-// 读取配置文件
-func ReadConfigFile(file string) (*CfgFile, error) {
-	cfg := &CfgFile{}
-	if err := cfg.configFromFile(file); err != nil {
-		return cfg, err
+func NewConfig() *Config {
+	cfg := &Config{}
+	cfg.FlagSet = flag.NewFlagSet("transferdb", flag.ContinueOnError)
+	fs := cfg.FlagSet
+	fs.Usage = func() {
+		fmt.Fprintln(os.Stderr, "Usage of transferdb:")
+		fs.
+			PrintDefaults()
 	}
-	return cfg, nil
+	fs.BoolVar(&cfg.PrintVersion, "V", false, "print version information and exit")
+	fs.StringVar(&cfg.ConfigFile, "config", "./config.toml", "path to the configuration file")
+	fs.StringVar(&cfg.Mode, "mode", "", "specify the program running mode: [prepare assess reverseO2M reverseM2O full csv all check diff]")
+
+	return cfg
+}
+
+func (cfg *Config) Parse(args []string) error {
+	err := cfg.FlagSet.Parse(args)
+	switch err {
+	case nil:
+	case flag.ErrHelp:
+		os.Exit(0)
+	default:
+		os.Exit(2)
+	}
+
+	if cfg.PrintVersion {
+		fmt.Println(GetRawVersionInfo())
+		os.Exit(0)
+	}
+
+	if cfg.ConfigFile != "" {
+		if err = cfg.configFromFile(cfg.ConfigFile); err != nil {
+			return err
+		}
+	} else {
+		return errors.NewMSError(errors.TRANSFERDB, errors.DOMAIN_CONFIG, fmt.Errorf("no config file"))
+	}
+	return nil
 }
 
 // 加载配置文件并解析
-func (c *CfgFile) configFromFile(file string) error {
+func (c *Config) configFromFile(file string) error {
 	if _, err := toml.DecodeFile(file, c); err != nil {
 		return fmt.Errorf("failed decode toml config file %s: %v", file, err)
 	}
 	return nil
 }
 
-func (c *CfgFile) String() string {
+func (c *Config) String() string {
 	cfg, err := json.Marshal(c)
 	if err != nil {
 		return "<nil>"

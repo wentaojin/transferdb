@@ -1,8 +1,8 @@
-.PHONY: build gather prepare check reverseO2M reverseM2O all full csv diff gotool clean help
+.PHONY: build assess prepare check reverseO2M reverseM2O all full csv comapre gotool clean help
 
 CMDPATH="./cmd"
 BINARYPATH="bin/transferdb"
-CONFIGPATH="./conf/config.toml"
+CONFIGPATH="./sample/config.toml"
 
 REPO    := github.com/wentaojin/transferdb
 
@@ -30,17 +30,17 @@ LDFLAGS += -X "$(REPO)/config.GitBranch=$(GITREF)"
 build: clean gotool
 	$(GOBUILD) -ldflags '$(LDFLAGS)' -o $(BINARYPATH) $(CMDPATH)
 
-gather: gotool
-	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode gather
+assess: gotool
+	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode assess
 
 prepare: gotool
 	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode prepare
 
 reverseO2M: gotool
-	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode reverse --reverse o2m
+	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode reverseo2m
 
 reverseM2O: gotool
-	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode reverse --reverse m2o
+	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode reversem2o
 
 check: gotool
 	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode check
@@ -48,8 +48,8 @@ check: gotool
 all: gotool
 	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode all
 
-diff: gotool
-	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode diff
+compare: gotool
+	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode compare
 
 full: gotool
 	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode full

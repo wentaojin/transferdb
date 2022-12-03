@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -18,6 +18,8 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/wentaojin/transferdb/module/engine"
+	"github.com/wentaojin/transferdb/module/query/oracle"
 	"math"
 	"math/rand"
 	"strconv"
@@ -26,10 +28,8 @@ import (
 	"time"
 
 	"github.com/pingcap/log"
+	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/config"
-	"github.com/wentaojin/transferdb/server"
-	"github.com/wentaojin/transferdb/service"
-	"github.com/wentaojin/transferdb/utils"
 	"go.uber.org/zap"
 )
 
@@ -56,43 +56,41 @@ func main() {
 		IncludeTable:  nil,
 		ExcludeTable:  nil,
 	}
-	sqlDB, err := server.NewOracleDBEngine(oraCfg)
+	sqlDB, err := engine.NewOracleDBEngine(oraCfg)
 	if err != nil {
 		panic(err)
 	}
 
-	engine := &service.Engine{
-		OracleDB: sqlDB,
-	}
+	oracle := &oracle.Oracle{OracleDB: sqlDB}
 
 	startTime := time.Now()
-	if err = ClearOraTable(engine, *schemaName, *tablePrefix, *tableNums); err != nil {
+	if err = ClearOraTable(oracle, *schemaName, *tablePrefix, *tableNums); err != nil {
 		panic(err)
 	}
 	log.Info("clear table finished", zap.Int("table nums", *tableNums), zap.String("cost", time.Now().Sub(startTime).String()))
 
-	if err = CreateOraTable(engine, *schemaName, *tablePrefix, *tableNums); err != nil {
+	if err = CreateOraTable(oracle, *schemaName, *tablePrefix, *tableNums); err != nil {
 		panic(err)
 	}
 	log.Info("create table finished", zap.Int("table nums", *tableNums), zap.String("cost", time.Now().Sub(startTime).String()))
 
 	// 随机数生成
-	GenRandomDataSQL(engine, *schemaName, *tablePrefix, *tableNums, *tableCounts, *tableConcurrency)
+	GenRandomDataSQL(oracle, *schemaName, *tablePrefix, *tableNums, *tableCounts, *tableConcurrency)
 	log.Info("gen table data finished", zap.Int("table nums", *tableNums), zap.String("cost", time.Now().Sub(startTime).String()))
 
 	// 收集统计信息
-	AnalyzeOraTable(engine, *schemaName, *tablePrefix, *tableNums)
+	AnalyzeOraTable(oracle, *schemaName, *tablePrefix, *tableNums)
 	log.Info("analyze table data finished", zap.Int("table nums", *tableNums), zap.String("cost", time.Now().Sub(startTime).String()))
 }
 
-func ClearOraTable(engine *service.Engine, schemaName string, tablePrefix string, tableNums int) error {
+func ClearOraTable(oracle *oracle.Oracle, schemaName string, tablePrefix string, tableNums int) error {
 	for i := 0; i <= tableNums; i++ {
 		var rows int
-		if err := engine.OracleDB.QueryRow(fmt.Sprintf("SELECT COUNT(1) FROM USER_TABLES WHERE TABLE_NAME = UPPER('%s%d')", tablePrefix, i)).Scan(&rows); err != nil {
+		if err := oracle.OracleDB.QueryRow(fmt.Sprintf("SELECT COUNT(1) FROM USER_TABLES WHERE TABLE_NAME = UPPER('%s%d')", tablePrefix, i)).Scan(&rows); err != nil {
 			return err
 		}
 		if rows > 0 {
-			if _, err := engine.OracleDB.Exec(fmt.Sprintf("DROP TABLE %s.%s%d", schemaName, tablePrefix, i)); err != nil {
+			if _, err := oracle.OracleDB.Exec(fmt.Sprintf("DROP TABLE %s.%s%d", schemaName, tablePrefix, i)); err != nil {
 				return err
 			}
 		}
@@ -100,9 +98,9 @@ func ClearOraTable(engine *service.Engine, schemaName string, tablePrefix string
 	return nil
 }
 
-func CreateOraTable(engine *service.Engine, schemaName string, tablePrefix string, tableNums int) error {
+func CreateOraTable(oracle *oracle.Oracle, schemaName string, tablePrefix string, tableNums int) error {
 	for i := 0; i <= tableNums; i++ {
-		if _, err := engine.OracleDB.Exec(fmt.Sprintf(`CREATE TABLE %s.%s%d (
+		if _, err := oracle.OracleDB.Exec(fmt.Sprintf(`CREATE TABLE %s.%s%d (
 	n1 NUMBER primary key,
 	n2 NUMBER ( 2 ) NOT NULL,
 	n3 NUMBER ( 6, 2 ),
@@ -127,7 +125,7 @@ func CreateOraTable(engine *service.Engine, schemaName string, tablePrefix strin
 	return nil
 }
 
-func GenRandomDataSQL(engine *service.Engine, schemaName string, tablePrefix string, tableNums, tableCounts, tableConcurrency int) {
+func GenRandomDataSQL(oracle *oracle.Oracle, schemaName string, tablePrefix string, tableNums, tableCounts, tableConcurrency int) {
 	vals := fmt.Sprintf("%d,%v,'%s','%s','%s','%s',%v,'%s',%v,%v,%v,'%s',%v,%v,%v,%v,%v)",
 		RandInt64(1, 50),
 		RandFloat64(1.20, 103.02),
@@ -150,7 +148,7 @@ func GenRandomDataSQL(engine *service.Engine, schemaName string, tablePrefix str
 	insertPrefix := fmt.Sprintf("INSERT INTO %s.%s", schemaName, tablePrefix)
 
 	wg := sync.WaitGroup{}
-	ch := make(chan string, utils.BufferSize)
+	ch := make(chan string, common.BufferSize)
 
 	go func() {
 		for i := 0; i <= tableNums; i++ {
@@ -167,7 +165,7 @@ func GenRandomDataSQL(engine *service.Engine, schemaName string, tablePrefix str
 		go func() {
 			defer wg.Done()
 			for sql := range ch {
-				if _, err := engine.OracleDB.Exec(sql); err != nil {
+				if _, err := oracle.OracleDB.Exec(sql); err != nil {
 					panic(err)
 				}
 			}
@@ -176,13 +174,13 @@ func GenRandomDataSQL(engine *service.Engine, schemaName string, tablePrefix str
 	wg.Wait()
 }
 
-func AnalyzeOraTable(engine *service.Engine, schemaName string, tablePrefix string, tableNums int) {
+func AnalyzeOraTable(oracle *oracle.Oracle, schemaName string, tablePrefix string, tableNums int) {
 	var wg sync.WaitGroup
 	for i := 0; i <= tableNums; i++ {
 		wg.Add(1)
 		go func(tableSuffix int) {
 			defer wg.Done()
-			if _, err := engine.OracleDB.Exec(fmt.Sprintf("ANALYZE TABLE %s.%s%d ESTIMATE STATISTICS SAMPLE 100 PERCENT", schemaName, tablePrefix, tableSuffix)); err != nil {
+			if _, err := oracle.OracleDB.Exec(fmt.Sprintf("ANALYZE TABLE %s.%s%d ESTIMATE STATISTICS SAMPLE 100 PERCENT", schemaName, tablePrefix, tableSuffix)); err != nil {
 				panic(err)
 			}
 		}(i)

@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,7 +17,6 @@ package config
 
 import (
 	"fmt"
-	"os"
 	"runtime"
 
 	"go.uber.org/zap"
@@ -31,26 +30,19 @@ var (
 	GitBranch = "None"
 )
 
-func GetAppVersion(version bool) {
-	if version {
-		fmt.Printf("%v", getRawVersion())
-		os.Exit(1)
-	}
-}
-
 // 版本信息输出重定向到日志
-func RecordAppVersion(app string, logger *zap.Logger, cfg *CfgFile) {
-	logger.Info("Welcome to "+app,
+func RecordAppVersion(app string, cfg *Config) {
+	zap.L().Info("Welcome to "+app,
 		zap.String("Release Version", Version),
 		zap.String("Git Commit Hash", GitHash),
 		zap.String("Git Branch", GitBranch),
 		zap.String("UTC Build Time", BuildTS),
 		zap.String("Go Version", runtime.Version()),
+		zap.Stringer("config", cfg),
 	)
-	logger.Info(app+" config", zap.Stringer("config", cfg))
 }
 
-func getRawVersion() string {
+func GetRawVersionInfo() string {
 	info := ""
 	info += fmt.Sprintf("Release Version: %s\n", Version)
 	info += fmt.Sprintf("Git Commit Hash: %s\n", GitHash)
