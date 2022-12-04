@@ -275,8 +275,8 @@ func (r *O2M) csvPartSyncTable(csvPartTables []string) error {
 				zap.String("table", t))
 
 			fullMetas, err := model.NewSyncMetaModel(r.mysql.GormDB).FullSyncMeta.Detail(r.ctx, &model.FullSyncMeta{
-				SourceSchemaName: r.cfg.OracleConfig.SchemaName,
-				SourceTableName:  t,
+				SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+				SourceTableName:  common.StringUPPER(t),
 				SyncMode:         common.CSVO2MMode,
 			})
 			if err != nil {
@@ -322,7 +322,7 @@ func (r *O2M) csvPartSyncTable(csvPartTables []string) error {
 						r.ctx, &model.FullSyncMeta{
 							SourceSchemaName: m.SourceSchemaName,
 							SourceTableName:  m.SourceTableName,
-							SourceRowidInfo:  m.SourceColumnInfo,
+							SourceRowidInfo:  m.SourceRowidInfo,
 							SyncMode:         common.CSVO2MMode,
 						})
 					if err != nil {
@@ -339,8 +339,8 @@ func (r *O2M) csvPartSyncTable(csvPartTables []string) error {
 
 			// 更新表级别记录
 			err = model.NewSyncMetaModel(r.mysql.GormDB).WaitSyncMeta.ModifyFullSplitTimesZero(r.ctx, &model.WaitSyncMeta{
-				SourceSchemaName: r.cfg.OracleConfig.SchemaName,
-				SourceTableName:  t,
+				SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+				SourceTableName:  common.StringUPPER(t),
 				SyncMode:         common.CSVO2MMode,
 				FullSplitTimes:   0,
 			})
