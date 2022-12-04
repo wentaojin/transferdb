@@ -21,26 +21,21 @@ import (
 	"github.com/wentaojin/transferdb/config"
 	"github.com/wentaojin/transferdb/module/engine"
 	"github.com/wentaojin/transferdb/module/query/oracle"
-	"os"
 )
 
 func main() {
 	oraCfg := config.OracleConfig{
 		Username:      "marvin",
-		Password:      "marvin",
-		Host:          "10.2.103.31",
+		Password:      "XEW#yu%202212",
+		Host:          "10.2.13.51",
 		Port:          1521,
 		ServiceName:   "orclpdb1",
 		ConnectParams: "poolMinSessions=10&poolMaxSessions=1000&poolWaitTimeout=60s&poolSessionMaxLifetime=1h&poolSessionTimeout=5m&poolIncrement=1&timezone=Local",
 		SessionParams: []string{},
 		SchemaName:    "marvin",
+		NLSLang:       "AMERICAN_AMERICA.AL32UTF8",
 		IncludeTable:  []string{"xiamen8"},
 		ExcludeTable:  nil,
-	}
-
-	err := os.Setenv("NLS_LANG", "AMERICAN_AMERICA.AL32UTF8")
-	if err != nil {
-		panic(err)
 	}
 
 	sqlDB, err := engine.NewOracleDBEngine(oraCfg)

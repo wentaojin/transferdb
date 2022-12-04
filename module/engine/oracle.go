@@ -62,14 +62,15 @@ func NewOracleDBEngine(oraCfg config.OracleConfig) (*sql.DB, error) {
 		oraDSN.OnInitStmts = oraCfg.SessionParams
 
 	default:
-		connString = fmt.Sprintf("oracle://%s:%s@%s/%s?connectionClass=POOL_CONNECTION_CLASS&heterogeneousPool=1&%s",
-			oraCfg.Username, oraCfg.Password, common.StringsBuilder(oraCfg.Host, ":", strconv.Itoa(oraCfg.Port)),
+		connString = fmt.Sprintf("oracle://@%s/%s?connectionClass=POOL_CONNECTION_CLASS&heterogeneousPool=1&%s",
+			common.StringsBuilder(oraCfg.Host, ":", strconv.Itoa(oraCfg.Port)),
 			oraCfg.ServiceName, oraCfg.ConnectParams)
 		oraDSN, err = godror.ParseDSN(connString)
 		if err != nil {
 			return nil, err
 		}
 
+		oraDSN.Username, oraDSN.Password = oraCfg.Username, godror.NewPassword(oraCfg.Password)
 		oraDSN.OnInitStmts = oraCfg.SessionParams
 	}
 
