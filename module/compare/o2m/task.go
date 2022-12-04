@@ -34,16 +34,12 @@ import (
 )
 
 type Task struct {
-	ctx                   context.Context
-	cfg                   *config.Config
-	tableName             string
-	oracleDBCharacterSet  string
-	nlsComp               string
-	oracleTableCollation  map[string]string
-	oracleSchemaCollation string
-	oracleCollation       bool
-	mysql                 *mysql.MySQL
-	oracle                *oracle.Oracle
+	ctx             context.Context
+	cfg             *config.Config
+	tableName       string
+	oracleCollation bool
+	mysql           *mysql.MySQL
+	oracle          *oracle.Oracle
 }
 
 func NewPartCompareTableTask(ctx context.Context, cfg *config.Config, compareTables []string, mysql *mysql.MySQL, oracle *oracle.Oracle) []*Task {
@@ -63,61 +59,53 @@ func NewPartCompareTableTask(ctx context.Context, cfg *config.Config, compareTab
 func NewWaitCompareTableTask(ctx context.Context,
 	cfg *config.Config,
 	compareTables []string,
-	oracleDBCharacterSet string,
-	nlsComp string,
-	oracleTableCollation map[string]string,
-	oracleSchemaCollation string,
 	oracleCollation bool,
 	mysql *mysql.MySQL,
 	oracle *oracle.Oracle) []*Task {
 	var tasks []*Task
 	for _, table := range compareTables {
 		tasks = append(tasks, &Task{
-			ctx:                   ctx,
-			cfg:                   cfg,
-			tableName:             table,
-			oracleDBCharacterSet:  oracleDBCharacterSet,
-			nlsComp:               nlsComp,
-			oracleTableCollation:  oracleTableCollation,
-			oracleSchemaCollation: oracleSchemaCollation,
-			oracleCollation:       oracleCollation,
-			mysql:                 mysql,
-			oracle:                oracle,
+			ctx:             ctx,
+			cfg:             cfg,
+			tableName:       table,
+			oracleCollation: oracleCollation,
+			mysql:           mysql,
+			oracle:          oracle,
 		})
 	}
 	return tasks
 }
 
-func (t *Task) PreTableStructCheck() error {
-	startTime := time.Now()
+func PreTableStructCheck(ctx context.Context, cfg *config.Config, oracledb *oracle.Oracle, mysqldb *mysql.MySQL, exporters []string) error {
 	// 表结构检查
-	if !t.cfg.DiffConfig.IgnoreStructCheck {
-		oraCfg := t.cfg.OracleConfig
-		oraCfg.IncludeTable = []string{t.tableName}
-		err := check.ICheck(o2m.NewO2MCheck(t.ctx, &config.Config{
-			AppConfig:    t.cfg.AppConfig,
+	if !cfg.DiffConfig.IgnoreStructCheck {
+		startTime := time.Now()
+		oraCfg := cfg.OracleConfig
+		oraCfg.IncludeTable = exporters
+		err := check.ICheck(o2m.NewO2MCheck(ctx, &config.Config{
+			AppConfig:    cfg.AppConfig,
 			OracleConfig: oraCfg,
-			MySQLConfig:  t.cfg.MySQLConfig,
+			MySQLConfig:  cfg.MySQLConfig,
 		},
-			oracle.NewOracleSQLDB(t.ctx, t.oracle.OracleDB, t.oracle.GormDB),
-			mysql.NewMySQLDB(t.ctx, t.mysql.MySQLDB, t.mysql.GormDB)))
+			oracle.NewOracleSQLDB(ctx, oracledb.OracleDB, oracledb.GormDB),
+			mysql.NewMySQLDB(ctx, mysqldb.MySQLDB, mysqldb.GormDB)))
 		if err != nil {
 			return err
 		}
-		errTotals, err := model.NewTableErrorDetailModel(t.oracle.GormDB).CountsBySchema(t.ctx, &model.TableErrorDetail{
-			SourceSchemaName: common.StringUPPER(t.cfg.OracleConfig.SchemaName),
+		errTotals, err := model.NewTableErrorDetailModel(oracledb.GormDB).CountsBySchema(ctx, &model.TableErrorDetail{
+			SourceSchemaName: common.StringUPPER(cfg.OracleConfig.SchemaName),
 			RunMode:          common.CheckO2MMode,
 		})
 
 		if errTotals != 0 || err != nil {
-			return fmt.Errorf("compare schema [%s] mode [%s] table task failed: %v, please check log, error: %v", strings.ToUpper(t.cfg.OracleConfig.SchemaName), common.CheckO2MMode, err)
+			return fmt.Errorf("compare schema [%s] mode [%s] table task failed: %v, please check log, error: %v", strings.ToUpper(cfg.OracleConfig.SchemaName), common.CheckO2MMode, err)
 		}
 		pwdDir, err := os.Getwd()
 		if err != nil {
 			return err
 		}
 
-		checkFile := filepath.Join(pwdDir, fmt.Sprintf("check_%s.sql", t.cfg.OracleConfig.SchemaName))
+		checkFile := filepath.Join(pwdDir, fmt.Sprintf("check_%s.sql", cfg.OracleConfig.SchemaName))
 		file, err := os.Open(checkFile)
 		if err != nil {
 			return err
@@ -131,12 +119,12 @@ func (t *Task) PreTableStructCheck() error {
 		if string(fd) != "" {
 			return fmt.Errorf("oracle and mysql table struct isn't equal, please check fixed file [%s]", checkFile)
 		}
-	}
 
-	endTime := time.Now()
-	zap.L().Info("pre check schema oracle to mysql finished",
-		zap.String("schema", strings.ToUpper(t.cfg.OracleConfig.SchemaName)),
-		zap.String("cost", endTime.Sub(startTime).String()))
+		endTime := time.Now()
+		zap.L().Info("pre check schema oracle to mysql finished",
+			zap.String("schema", strings.ToUpper(cfg.OracleConfig.SchemaName)),
+			zap.String("cost", endTime.Sub(startTime).String()))
+	}
 
 	return nil
 }

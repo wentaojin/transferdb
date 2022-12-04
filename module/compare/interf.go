@@ -16,7 +16,6 @@ limitations under the License.
 package compare
 
 type Processor interface {
-	PreTableStructCheck() error
 	AdjustDBSelectColumn() (sourceColumnInfo string, targetColumnInfo string, err error)
 	FilterDBWhereColumn() (string, error)
 	IsPartitionTable() (string, error)

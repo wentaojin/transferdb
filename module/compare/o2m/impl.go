@@ -17,14 +17,6 @@ package o2m
 
 import "github.com/wentaojin/transferdb/module/compare"
 
-func IProcessor(p compare.Processor) error {
-	err := p.PreTableStructCheck()
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 func IChunker(c compare.Chunker) error {
 	err := c.Split()
 	if err != nil {

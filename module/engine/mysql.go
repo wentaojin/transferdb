@@ -43,7 +43,12 @@ func NewMetaDBEngine(ctx context.Context, mysqlCfg config.MySQLConfig, slowThres
 	createSchema := fmt.Sprintf(`CREATE DATABASE IF NOT EXISTS %s`, mysqlCfg.MetaSchema)
 	_, err = mysqlDB.ExecContext(ctx, createSchema)
 	if err != nil {
-		return &model.MetaDB{}, errors.NewMSError(errors.TRANSFERDB, errors.DOMAIN_DB, fmt.Errorf("error on exec general database sql [%v]: %v", createSchema, err))
+		return &model.MetaDB{}, errors.NewMSError(errors.TRANSFERDB, errors.DOMAIN_DB, fmt.Errorf("error on exec meta database sql [%v]: %v", createSchema, err))
+	}
+	createSchema = fmt.Sprintf(`CREATE DATABASE IF NOT EXISTS %s`, mysqlCfg.SchemaName)
+	_, err = mysqlDB.ExecContext(ctx, createSchema)
+	if err != nil {
+		return &model.MetaDB{}, errors.NewMSError(errors.TRANSFERDB, errors.DOMAIN_DB, fmt.Errorf("error on exec target database sql [%v]: %v", createSchema, err))
 	}
 	err = mysqlDB.Close()
 	if err != nil {

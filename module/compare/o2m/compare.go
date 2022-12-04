@@ -268,31 +268,6 @@ func (r *O2M) NewCompare() error {
 		zap.Bool("table collation", oracleCollation),
 		zap.String("cost", finishTime.Sub(beginTime).String()))
 
-	var (
-		oracleTableCollation  map[string]string
-		oracleSchemaCollation string
-	)
-
-	if oracleCollation {
-		beginTime = time.Now()
-		oracleSchemaCollation, err = r.oracle.GetOracleSchemaCollation(common.StringUPPER(r.cfg.OracleConfig.SchemaName))
-		if err != nil {
-			return err
-		}
-		oracleTableCollation, err = r.oracle.GetOracleSchemaTableCollation(common.StringUPPER(r.cfg.OracleConfig.SchemaName), oracleSchemaCollation)
-		if err != nil {
-			return err
-		}
-		finishTime = time.Now()
-		zap.L().Info("get oracle schema and table collation finished",
-			zap.String("schema", r.cfg.OracleConfig.SchemaName),
-			zap.String("db version", oraDBVersion),
-			zap.String("db character", oracleDBCharacterSet),
-			zap.Int("table totals", len(exporters)),
-			zap.Bool("table collation", oracleCollation),
-			zap.String("cost", finishTime.Sub(beginTime).String()))
-	}
-
 	// 判断下游是否存在 ORACLE 表
 	var tables []string
 	for _, t := range exporters {
@@ -310,7 +285,7 @@ func (r *O2M) NewCompare() error {
 
 	// compare 任务列表
 	partTableTasks := NewPartCompareTableTask(r.ctx, r.cfg, partSyncTables, r.mysql, r.oracle)
-	waitTableTasks := NewWaitCompareTableTask(r.ctx, r.cfg, waitSyncTables, oracleDBCharacterSet, nlsComp, oracleTableCollation, oracleSchemaCollation, oracleCollation, r.mysql, r.oracle)
+	waitTableTasks := NewWaitCompareTableTask(r.ctx, r.cfg, waitSyncTables, oracleCollation, r.mysql, r.oracle)
 
 	// 数据对比
 	pwdDir, err := os.Getwd()
@@ -329,12 +304,20 @@ func (r *O2M) NewCompare() error {
 	// 优先存在断点的表校验
 	// partTableTask -> waitTableTasks
 	if len(partTableTasks) > 0 {
+		err = PreTableStructCheck(r.ctx, r.cfg, r.oracle, r.mysql, partSyncTables)
+		if err != nil {
+			return err
+		}
 		err = r.comparePartTableTasks(f, partTableTasks)
 		if err != nil {
 			return err
 		}
 	}
 	if len(waitTableTasks) > 0 {
+		err = PreTableStructCheck(r.ctx, r.cfg, r.oracle, r.mysql, partSyncTables)
+		if err != nil {
+			return err
+		}
 		err = r.compareWaitTableTasks(f, waitTableTasks)
 		if err != nil {
 			return err
@@ -370,11 +353,6 @@ func (r *O2M) NewCompare() error {
 
 func (r *O2M) comparePartTableTasks(f *compare.File, partTableTasks []*Task) error {
 	for _, task := range partTableTasks {
-		err := IProcessor(task)
-		if err != nil {
-			return err
-		}
-
 		// 获取对比记录
 		diffStartTime := time.Now()
 		compareMetas, err := model.NewDataCompareMetaModel(r.mysql.GormDB).Detail(r.ctx, &model.DataCompareMeta{
@@ -398,8 +376,8 @@ func (r *O2M) comparePartTableTasks(f *compare.File, partTableTasks []*Task) err
 				// 数据对比报告
 				if err = IReport(newReport, f); err != nil {
 					err := model.NewTableErrorDetailModel(r.mysql.GormDB).Create(r.ctx, &model.TableErrorDetail{
-						SourceSchemaName: newReport.dataCompareMeta.SourceSchemaName,
-						SourceTableName:  newReport.dataCompareMeta.SourceTableName,
+						SourceSchemaName: newReport.DataCompareMeta.SourceSchemaName,
+						SourceTableName:  newReport.DataCompareMeta.SourceTableName,
 						RunMode:          common.CompareO2MMode,
 						InfoSources:      common.CompareO2MMode,
 						RunStatus:        "Failed",
@@ -414,8 +392,8 @@ func (r *O2M) comparePartTableTasks(f *compare.File, partTableTasks []*Task) err
 
 				// 清理元数据记录
 				errCounts, err := model.NewTableErrorDetailModel(r.mysql.GormDB).Counts(r.ctx, &model.TableErrorDetail{
-					SourceSchemaName: newReport.dataCompareMeta.SourceSchemaName,
-					SourceTableName:  newReport.dataCompareMeta.SourceTableName,
+					SourceSchemaName: newReport.DataCompareMeta.SourceSchemaName,
+					SourceTableName:  newReport.DataCompareMeta.SourceTableName,
 					RunMode:          common.CompareO2MMode,
 				})
 				if err != nil {
@@ -427,9 +405,9 @@ func (r *O2M) comparePartTableTasks(f *compare.File, partTableTasks []*Task) err
 				}
 
 				err = model.NewDataCompareMetaModel(r.mysql.GormDB).Delete(r.ctx, &model.DataCompareMeta{
-					SourceSchemaName: newReport.dataCompareMeta.SourceSchemaName,
-					SourceTableName:  newReport.dataCompareMeta.SourceTableName,
-					WhereRange:       newReport.dataCompareMeta.WhereRange,
+					SourceSchemaName: newReport.DataCompareMeta.SourceSchemaName,
+					SourceTableName:  newReport.DataCompareMeta.SourceTableName,
+					WhereRange:       newReport.DataCompareMeta.WhereRange,
 				})
 				if err != nil {
 					return err
@@ -495,10 +473,6 @@ func (r *O2M) compareWaitTableTasks(f *compare.File, waitTableTasks []*Task) err
 
 	var chunks []*Chunk
 	for cid, task := range waitTableTasks {
-		err := task.PreTableStructCheck()
-		if err != nil {
-			return err
-		}
 		sourceColumnInfo, targetColumnInfo, err := task.AdjustDBSelectColumn()
 		if err != nil {
 			return err

@@ -324,6 +324,7 @@ func (r *O2M) fullPartSyncTable(fullPartTables []string) error {
 
 	zap.L().Info("source schema all table data loader finished",
 		zap.String("schema", r.cfg.OracleConfig.SchemaName),
+		zap.Int("table totals", len(fullPartTables)),
 		zap.String("cost", time.Now().Sub(taskTime).String()))
 	return nil
 }

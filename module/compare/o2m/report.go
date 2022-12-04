@@ -39,41 +39,41 @@ type DBSummary struct {
 }
 
 type Report struct {
-	dataCompareMeta model.DataCompareMeta `json:"data_compare_meta"`
-	mysql           *mysql.MySQL          `json:"-"`
-	oracle          *oracle.Oracle        `json:"-"`
-	onlyCheckRows   bool                  `json:"only_check_rows"`
+	DataCompareMeta model.DataCompareMeta `json:"data_compare_meta"`
+	Mysql           *mysql.MySQL          `json:"-"`
+	Oracle          *oracle.Oracle        `json:"-"`
+	OnlyCheckRows   bool                  `json:"only_check_rows"`
 }
 
 func NewReport(dataCompareMeta model.DataCompareMeta, mysql *mysql.MySQL, oracle *oracle.Oracle, onlyCheckRows bool) *Report {
 	return &Report{
-		dataCompareMeta: dataCompareMeta,
-		mysql:           mysql,
-		oracle:          oracle,
-		onlyCheckRows:   onlyCheckRows,
+		DataCompareMeta: dataCompareMeta,
+		Mysql:           mysql,
+		Oracle:          oracle,
+		OnlyCheckRows:   onlyCheckRows,
 	}
 }
 
 func (r *Report) GenDBQuery() (oracleQuery string, mysqlQuery string) {
-	if r.dataCompareMeta.WhereColumn == "" {
+	if r.DataCompareMeta.WhereColumn == "" {
 		oracleQuery = common.StringsBuilder(
-			"SELECT ", r.dataCompareMeta.SourceColumnInfo, " FROM ", r.dataCompareMeta.SourceSchemaName, ".", r.dataCompareMeta.SourceTableName, " WHERE ", r.dataCompareMeta.WhereRange)
+			"SELECT ", r.DataCompareMeta.SourceColumnInfo, " FROM ", r.DataCompareMeta.SourceSchemaName, ".", r.DataCompareMeta.SourceTableName, " WHERE ", r.DataCompareMeta.WhereRange)
 
 		mysqlQuery = common.StringsBuilder(
-			"SELECT ", r.dataCompareMeta.TargetColumnInfo, " FROM ", r.dataCompareMeta.TargetSchemaName, ".", r.dataCompareMeta.TargetTableName, " WHERE ", r.dataCompareMeta.WhereRange)
+			"SELECT ", r.DataCompareMeta.TargetColumnInfo, " FROM ", r.DataCompareMeta.TargetSchemaName, ".", r.DataCompareMeta.TargetTableName, " WHERE ", r.DataCompareMeta.WhereRange)
 	} else {
 		oracleQuery = common.StringsBuilder(
-			"SELECT ", r.dataCompareMeta.SourceColumnInfo, " FROM ", r.dataCompareMeta.SourceSchemaName, ".", r.dataCompareMeta.SourceTableName, " WHERE ", r.dataCompareMeta.WhereRange,
-			" ORDER BY ", r.dataCompareMeta.WhereColumn, " DESC")
+			"SELECT ", r.DataCompareMeta.SourceColumnInfo, " FROM ", r.DataCompareMeta.SourceSchemaName, ".", r.DataCompareMeta.SourceTableName, " WHERE ", r.DataCompareMeta.WhereRange,
+			" ORDER BY ", r.DataCompareMeta.WhereColumn, " DESC")
 
 		mysqlQuery = common.StringsBuilder(
-			"SELECT ", r.dataCompareMeta.TargetColumnInfo, " FROM ", r.dataCompareMeta.TargetSchemaName, ".", r.dataCompareMeta.TargetTableName, " WHERE ", r.dataCompareMeta.WhereRange, " ORDER BY ", r.dataCompareMeta.WhereColumn, " DESC")
+			"SELECT ", r.DataCompareMeta.TargetColumnInfo, " FROM ", r.DataCompareMeta.TargetSchemaName, ".", r.DataCompareMeta.TargetTableName, " WHERE ", r.DataCompareMeta.WhereRange, " ORDER BY ", r.DataCompareMeta.WhereColumn, " DESC")
 	}
 	return
 }
 
 func (r *Report) CheckOracleRows(oracleQuery string) (int64, error) {
-	rows, err := r.oracle.GetOracleTableActualRows(oracleQuery)
+	rows, err := r.Oracle.GetOracleTableActualRows(oracleQuery)
 	if err != nil {
 		return rows, err
 	}
@@ -81,7 +81,7 @@ func (r *Report) CheckOracleRows(oracleQuery string) (int64, error) {
 }
 
 func (r *Report) CheckMySQLRows(mysqlQuery string) (int64, error) {
-	rows, err := r.mysql.GetMySQLTableActualRows(mysqlQuery)
+	rows, err := r.Mysql.GetMySQLTableActualRows(mysqlQuery)
 	if err != nil {
 		return rows, err
 	}
@@ -125,10 +125,10 @@ func (r *Report) ReportCheckRows(f *compare.File) error {
 
 	if oracleRows == mysqlRows {
 		zap.L().Info("oracle table chunk diff equal",
-			zap.String("oracle schema", r.dataCompareMeta.SourceSchemaName),
-			zap.String("mysql schema", r.dataCompareMeta.TargetSchemaName),
-			zap.String("oracle table", r.dataCompareMeta.SourceTableName),
-			zap.String("mysql table", r.dataCompareMeta.TargetTableName),
+			zap.String("oracle schema", r.DataCompareMeta.SourceSchemaName),
+			zap.String("mysql schema", r.DataCompareMeta.TargetSchemaName),
+			zap.String("oracle table", r.DataCompareMeta.SourceTableName),
+			zap.String("mysql table", r.DataCompareMeta.TargetTableName),
 			zap.Int64("oracle rows count", oracleRows),
 			zap.Int64("mysql rows count", mysqlRows),
 			zap.String("oracle sql", oracleQuery),
@@ -137,10 +137,10 @@ func (r *Report) ReportCheckRows(f *compare.File) error {
 	}
 
 	zap.L().Info("oracle table chunk diff isn't equal",
-		zap.String("oracle schema", r.dataCompareMeta.SourceSchemaName),
-		zap.String("mysql schema", r.dataCompareMeta.TargetSchemaName),
-		zap.String("oracle table", r.dataCompareMeta.SourceTableName),
-		zap.String("mysql table", r.dataCompareMeta.TargetTableName),
+		zap.String("oracle schema", r.DataCompareMeta.SourceSchemaName),
+		zap.String("mysql schema", r.DataCompareMeta.TargetSchemaName),
+		zap.String("oracle table", r.DataCompareMeta.SourceTableName),
+		zap.String("mysql table", r.DataCompareMeta.TargetTableName),
 		zap.Int64("oracle rows count", oracleRows),
 		zap.Int64("mysql rows count", mysqlRows),
 		zap.String("oracle sql", oracleQuery),
@@ -151,15 +151,15 @@ func (r *Report) ReportCheckRows(f *compare.File) error {
 	sw.AppendHeader(table.Row{"SOURCE TABLE", "SOURCE TABLE COUNTS", "TARGET TABLE", "TARGET TABLE COUNTS", "RANGE"})
 	sw.AppendRows([]table.Row{
 		{
-			common.StringsBuilder(r.dataCompareMeta.SourceSchemaName, ".", r.dataCompareMeta.SourceTableName),
+			common.StringsBuilder(r.DataCompareMeta.SourceSchemaName, ".", r.DataCompareMeta.SourceTableName),
 			oracleRows,
-			common.StringsBuilder(r.dataCompareMeta.TargetSchemaName, ".", r.dataCompareMeta.TargetTableName),
+			common.StringsBuilder(r.DataCompareMeta.TargetSchemaName, ".", r.DataCompareMeta.TargetTableName),
 			mysqlRows,
-			r.dataCompareMeta.WhereRange,
+			r.DataCompareMeta.WhereRange,
 		},
 	})
 
-	fixSQLStr := fmt.Sprintf("/* \n\toracle and mysql table range [%s] data rows aren't equal\n */\n", r.dataCompareMeta.WhereRange) + sw.Render() + "\n"
+	fixSQLStr := fmt.Sprintf("/* \n\toracle and mysql table range [%s] data rows aren't equal\n */\n", r.DataCompareMeta.WhereRange) + sw.Render() + "\n"
 
 	if _, err := f.CWriteString(fixSQLStr); err != nil {
 		return fmt.Errorf("fix sql file write [only-check-rows = true] failed: %v", err.Error())
@@ -177,7 +177,7 @@ func (r *Report) ReportCheckCRC32(f *compare.File) error {
 	oracleQuery, mysqlQuery := r.GenDBQuery()
 
 	errORA.Go(func() error {
-		oraColumns, oraStringSet, oraCrc32Val, err := r.oracle.GetOracleDataRowStrings(oracleQuery)
+		oraColumns, oraStringSet, oraCrc32Val, err := r.Oracle.GetOracleDataRowStrings(oracleQuery)
 		if err != nil {
 			return fmt.Errorf("get oracle data row strings failed: %v", err)
 		}
@@ -190,7 +190,7 @@ func (r *Report) ReportCheckCRC32(f *compare.File) error {
 	})
 
 	errMySQL.Go(func() error {
-		mysqlColumns, mysqlStringSet, mysqlCrc32Val, err := r.mysql.GetMySQLDataRowStrings(mysqlQuery)
+		mysqlColumns, mysqlStringSet, mysqlCrc32Val, err := r.Mysql.GetMySQLDataRowStrings(mysqlQuery)
 		if err != nil {
 			return fmt.Errorf("get mysql data row strings failed: %v", err)
 		}
@@ -215,10 +215,10 @@ func (r *Report) ReportCheckCRC32(f *compare.File) error {
 	// 数据相同
 	if oraReport.Crc32Val == mysqlReport.Crc32Val {
 		zap.L().Info("oracle table chunk diff equal",
-			zap.String("oracle schema", r.dataCompareMeta.SourceSchemaName),
-			zap.String("mysql schema", r.dataCompareMeta.TargetSchemaName),
-			zap.String("oracle table", r.dataCompareMeta.SourceTableName),
-			zap.String("mysql table", r.dataCompareMeta.TargetTableName),
+			zap.String("oracle schema", r.DataCompareMeta.SourceSchemaName),
+			zap.String("mysql schema", r.DataCompareMeta.TargetSchemaName),
+			zap.String("oracle table", r.DataCompareMeta.SourceTableName),
+			zap.String("mysql table", r.DataCompareMeta.TargetTableName),
 			zap.Uint32("oracle crc32 values", oraReport.Crc32Val),
 			zap.Uint32("mysql crc32 values", mysqlReport.Crc32Val),
 			zap.String("oracle sql", oracleQuery),
@@ -227,10 +227,10 @@ func (r *Report) ReportCheckCRC32(f *compare.File) error {
 	}
 
 	zap.L().Info("oracle table chunk diff isn't equal",
-		zap.String("oracle schema", r.dataCompareMeta.SourceSchemaName),
-		zap.String("mysql schema", r.dataCompareMeta.TargetSchemaName),
-		zap.String("oracle table", r.dataCompareMeta.SourceTableName),
-		zap.String("mysql table", r.dataCompareMeta.TargetTableName),
+		zap.String("oracle schema", r.DataCompareMeta.SourceSchemaName),
+		zap.String("mysql schema", r.DataCompareMeta.TargetSchemaName),
+		zap.String("oracle table", r.DataCompareMeta.SourceTableName),
+		zap.String("mysql table", r.DataCompareMeta.TargetTableName),
 		zap.Uint32("oracle crc32 values", oraReport.Crc32Val),
 		zap.Uint32("mysql crc32 values", mysqlReport.Crc32Val),
 		zap.String("oracle sql", oracleQuery),
@@ -247,22 +247,22 @@ func (r *Report) ReportCheckCRC32(f *compare.File) error {
 	targetMore := strset.Difference(mysqlReport.StringSet, oraReport.StringSet).List()
 	if len(targetMore) > 0 {
 		fixSQL.WriteString("/*\n")
-		fixSQL.WriteString(fmt.Sprintf(" mysql table [%s.%s] chunk [%s] data rows are more \n", r.dataCompareMeta.TargetSchemaName, r.dataCompareMeta.TargetTableName, r.dataCompareMeta.WhereRange))
+		fixSQL.WriteString(fmt.Sprintf(" mysql table [%s.%s] chunk [%s] data rows are more \n", r.DataCompareMeta.TargetSchemaName, r.DataCompareMeta.TargetTableName, r.DataCompareMeta.WhereRange))
 
 		sw := table.NewWriter()
 		sw.SetStyle(table.StyleLight)
 		sw.AppendHeader(table.Row{"DATABASE", "DATA COUNTS SQL", "CRC32"})
 		sw.AppendRows([]table.Row{
 			{"ORACLE",
-				common.StringsBuilder("SELECT COUNT(1)", " FROM ", r.dataCompareMeta.SourceSchemaName, ".", r.dataCompareMeta.SourceTableName, " WHERE ", r.dataCompareMeta.WhereRange),
+				common.StringsBuilder("SELECT COUNT(1)", " FROM ", r.DataCompareMeta.SourceSchemaName, ".", r.DataCompareMeta.SourceTableName, " WHERE ", r.DataCompareMeta.WhereRange),
 				oraReport.Crc32Val},
 			{"MySQL", common.StringsBuilder(
-				"SELECT COUNT(1)", " FROM ", r.dataCompareMeta.TargetSchemaName, ".", r.dataCompareMeta.SourceTableName, " WHERE ", r.dataCompareMeta.WhereRange),
+				"SELECT COUNT(1)", " FROM ", r.DataCompareMeta.TargetSchemaName, ".", r.DataCompareMeta.SourceTableName, " WHERE ", r.DataCompareMeta.WhereRange),
 				mysqlReport.Crc32Val},
 		})
 		fixSQL.WriteString(fmt.Sprintf("%v\n", sw.Render()))
 		fixSQL.WriteString("*/\n")
-		deletePrefix := common.StringsBuilder("DELETE FROM ", r.dataCompareMeta.TargetSchemaName, ".", r.dataCompareMeta.SourceTableName, " WHERE ")
+		deletePrefix := common.StringsBuilder("DELETE FROM ", r.DataCompareMeta.TargetSchemaName, ".", r.DataCompareMeta.SourceTableName, " WHERE ")
 		for _, t := range targetMore {
 			var whereCond []string
 
@@ -270,7 +270,7 @@ func (r *Report) ReportCheckCRC32(f *compare.File) error {
 			colValues := strings.Split(t, ",")
 			if len(mysqlReport.Columns) != len(colValues) {
 				return fmt.Errorf("mysql schema [%s] table [%s] column counts [%d] isn't match values counts [%d]",
-					r.dataCompareMeta.TargetSchemaName, r.dataCompareMeta.SourceTableName, len(mysqlReport.Columns), len(colValues))
+					r.DataCompareMeta.TargetSchemaName, r.DataCompareMeta.SourceTableName, len(mysqlReport.Columns), len(colValues))
 			}
 			for i := 0; i < len(mysqlReport.Columns); i++ {
 				whereCond = append(whereCond, common.StringsBuilder(mysqlReport.Columns[i], "=", colValues[i]))
@@ -284,22 +284,22 @@ func (r *Report) ReportCheckCRC32(f *compare.File) error {
 	sourceMore := strset.Difference(oraReport.StringSet, mysqlReport.StringSet).List()
 	if len(sourceMore) > 0 {
 		fixSQL.WriteString("/*\n")
-		fixSQL.WriteString(fmt.Sprintf(" mysql table [%s.%s] chunk [%s] data rows are less \n", r.dataCompareMeta.TargetSchemaName, r.dataCompareMeta.SourceTableName, r.dataCompareMeta.WhereRange))
+		fixSQL.WriteString(fmt.Sprintf(" mysql table [%s.%s] chunk [%s] data rows are less \n", r.DataCompareMeta.TargetSchemaName, r.DataCompareMeta.SourceTableName, r.DataCompareMeta.WhereRange))
 
 		sw := table.NewWriter()
 		sw.SetStyle(table.StyleLight)
 		sw.AppendHeader(table.Row{"DATABASE", "DATA COUNTS SQL", "CRC32"})
 		sw.AppendRows([]table.Row{
 			{"ORACLE",
-				common.StringsBuilder("SELECT COUNT(1)", " FROM ", r.dataCompareMeta.SourceSchemaName, ".", r.dataCompareMeta.SourceTableName, " WHERE ", r.dataCompareMeta.WhereRange),
+				common.StringsBuilder("SELECT COUNT(1)", " FROM ", r.DataCompareMeta.SourceSchemaName, ".", r.DataCompareMeta.SourceTableName, " WHERE ", r.DataCompareMeta.WhereRange),
 				oraReport.Crc32Val},
 			{"MySQL", common.StringsBuilder(
-				"SELECT COUNT(1)", " FROM ", r.dataCompareMeta.TargetSchemaName, ".", r.dataCompareMeta.SourceTableName, " WHERE ", r.dataCompareMeta.WhereRange),
+				"SELECT COUNT(1)", " FROM ", r.DataCompareMeta.TargetSchemaName, ".", r.DataCompareMeta.SourceTableName, " WHERE ", r.DataCompareMeta.WhereRange),
 				mysqlReport.Crc32Val},
 		})
 		fixSQL.WriteString(fmt.Sprintf("%v\n", sw.Render()))
 		fixSQL.WriteString("*/\n")
-		insertPrefix := common.StringsBuilder("INSERT INTO ", r.dataCompareMeta.TargetSchemaName, ".", r.dataCompareMeta.SourceTableName, " (", strings.Join(oraReport.Columns, ","), ") VALUES (")
+		insertPrefix := common.StringsBuilder("INSERT INTO ", r.DataCompareMeta.TargetSchemaName, ".", r.DataCompareMeta.SourceTableName, " (", strings.Join(oraReport.Columns, ","), ") VALUES (")
 		for _, s := range sourceMore {
 			fixSQL.WriteString(fmt.Sprintf("%v;\n", common.StringsBuilder(insertPrefix, s, ")")))
 		}
@@ -315,7 +315,7 @@ func (r *Report) ReportCheckCRC32(f *compare.File) error {
 }
 
 func (r *Report) Report(f *compare.File) error {
-	if r.onlyCheckRows {
+	if r.OnlyCheckRows {
 		return r.ReportCheckRows(f)
 	}
 	return r.ReportCheckCRC32(f)

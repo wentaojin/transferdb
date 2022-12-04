@@ -67,7 +67,7 @@ func PreCheckCompatibility(cfg *config.Config, mysql *mysql.MySQL, exporters []s
 		if err != nil {
 			return []string{}, errCompatibility, tableCharSetMap, tableCollationMap, fmt.Errorf("get mysql table characterSet and collation falied: %v", err)
 		}
-		_, okTableCharacterSet := common.MySQLDBCharacterSetMap[strings.ToUpper(characterSet)]
+		_, okTableCharacterSet := common.MySQLDBCharacterSetMap[common.StringUPPER(characterSet)]
 		_, okTableCollation := common.MySQLDBCollationMap[strings.ToLower(collation)]
 
 		if !okTableCharacterSet || !okTableCollation {
@@ -134,18 +134,18 @@ func PreCheckCompatibility(cfg *config.Config, mysql *mysql.MySQL, exporters []s
 		}
 
 		if len(errCompINFO) > 0 {
-			errCompatibility[strings.ToUpper(t)] = errCompINFO
+			errCompatibility[common.StringUPPER(t)] = errCompINFO
 		}
 
-		_, okErrCharSet := errCompatibility[strings.ToUpper(t)]
+		_, okErrCharSet := errCompatibility[common.StringUPPER(t)]
 		// 筛选过滤不兼容表
 		// Skip 当前循环，继续
 		if okErrCharSet {
 			continue
 		}
-		tableCharSetMap[strings.ToUpper(t)] = characterSet
-		tableCollationMap[strings.ToUpper(t)] = collation
-		reverseTaskTables = append(reverseTaskTables, strings.ToUpper(t))
+		tableCharSetMap[common.StringUPPER(t)] = characterSet
+		tableCollationMap[common.StringUPPER(t)] = collation
+		reverseTaskTables = append(reverseTaskTables, common.StringUPPER(t))
 	}
 	return reverseTaskTables, errCompatibility, tableCharSetMap, tableCollationMap, nil
 }
@@ -155,8 +155,7 @@ func GenReverseTableTask(cfg *config.Config, mysql *mysql.MySQL, oracle *oracle.
 		tables []*Table
 	)
 
-	sourceSchema := strings.ToUpper(cfg.MySQLConfig.SchemaName)
-
+	sourceSchema := common.StringUPPER(cfg.MySQLConfig.SchemaName)
 	beginTime := time.Now()
 	defer func() {
 		endTime := time.Now()
@@ -174,44 +173,52 @@ func GenReverseTableTask(cfg *config.Config, mysql *mysql.MySQL, oracle *oracle.
 		return tables, err
 	}
 
-	g := &errgroup.Group{}
-	g.SetLimit(cfg.AppConfig.Threads)
-
+	g1 := &errgroup.Group{}
 	tableChan := make(chan *Table, common.BufferSize)
 
-	go func() {
-		for c := range tableChan {
-			tables = append(tables, c)
+	g1.Go(func() error {
+		g2 := &errgroup.Group{}
+		g2.SetLimit(cfg.AppConfig.Threads)
+
+		for _, t := range exporters {
+			ts := t
+			g2.Go(func() error {
+				tbl := &Table{
+					MySQLDBType:             cfg.MySQLConfig.DBType,
+					OracleDBVersion:         oracleDBVersion,
+					OracleExtendedMode:      isExtended,
+					SourceSchemaName:        common.StringUPPER(sourceSchema),
+					TargetSchemaName:        common.StringUPPER(cfg.OracleConfig.SchemaName),
+					SourceTableName:         common.StringUPPER(ts),
+					IsPartition:             common.IsContainString(partitionTables, common.StringUPPER(ts)),
+					TargetTableName:         common.StringUPPER(ts),
+					SourceTableCharacterSet: tableCharSetMap[ts],
+					SourceTableCollation:    tableCollationMap[ts],
+					Overwrite:               cfg.MySQLConfig.Overwrite,
+					MySQL:                   mysql,
+					Oracle:                  oracle,
+				}
+				tableChan <- tbl
+				return nil
+			})
 		}
-	}()
-	for _, table := range exporters {
-		ts := table
-		g.Go(func() error {
-			tbl := &Table{
-				MySQLDBType:             cfg.MySQLConfig.DBType,
-				OracleDBVersion:         oracleDBVersion,
-				OracleExtendedMode:      isExtended,
-				SourceSchemaName:        strings.ToUpper(sourceSchema),
-				TargetSchemaName:        strings.ToUpper(cfg.OracleConfig.SchemaName),
-				SourceTableName:         strings.ToUpper(ts),
-				IsPartition:             common.IsContainString(partitionTables, strings.ToUpper(ts)),
-				TargetTableName:         strings.ToUpper(ts),
-				SourceTableCharacterSet: tableCharSetMap[ts],
-				SourceTableCollation:    tableCollationMap[ts],
-				Overwrite:               cfg.MySQLConfig.Overwrite,
-				MySQL:                   mysql,
-				Oracle:                  oracle,
-			}
-			tableChan <- tbl
-			return nil
-		})
+
+		if err = g2.Wait(); err != nil {
+			return err
+		}
+		close(tableChan)
+		return nil
+	})
+
+	// 数据通道接收
+	for c := range tableChan {
+		tables = append(tables, c)
 	}
 
-	if err = g.Wait(); err != nil {
-		return tables, err
+	err = g1.Wait()
+	if err != nil {
+		return nil, err
 	}
-
-	close(tableChan)
 
 	endTime := time.Now()
 	zap.L().Info("gen mysql slice table finished",
@@ -282,7 +289,7 @@ func GenCreateSchema(f *reverse.File, sourceSchema, targetSchema string) error {
 	sqlRev.WriteString(t.Render() + "\n")
 	sqlRev.WriteString("*/\n")
 
-	sqlRev.WriteString(fmt.Sprintf("CREATE USER %s IDENTIFIED BY %s;\n\n", strings.ToUpper(targetSchema), strings.ToUpper(targetSchema)))
+	sqlRev.WriteString(fmt.Sprintf("CREATE USER %s IDENTIFIED BY %s;\n\n", common.StringUPPER(targetSchema), common.StringUPPER(targetSchema)))
 
 	if _, err := f.RWriteString(sqlRev.String()); err != nil {
 		return err

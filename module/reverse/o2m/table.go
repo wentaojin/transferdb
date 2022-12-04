@@ -143,7 +143,7 @@ func GenReverseTableTask(ctx context.Context, cfg *config.Config, mysql *mysql.M
 
 	var dbVersion string
 
-	if strings.ToUpper(strings.ToUpper(cfg.MySQLConfig.DBType)) == common.TiDBTargetDBType {
+	if common.StringUPPER(common.StringUPPER(cfg.MySQLConfig.DBType)) == common.TiDBTargetDBType {
 		dbVersion = mysqlVersion
 	} else {
 		if strings.Contains(mysqlVersion, common.MySQLVersionDelimiter) {
@@ -154,52 +154,59 @@ func GenReverseTableTask(ctx context.Context, cfg *config.Config, mysql *mysql.M
 	}
 
 	startTime = time.Now()
-	g := &errgroup.Group{}
-	g.SetLimit(cfg.AppConfig.Threads)
+	g1 := &errgroup.Group{}
 	tableChan := make(chan *Table, common.BufferSize)
 
-	go func() {
-		for c := range tableChan {
-			tables = append(tables, c)
+	g1.Go(func() error {
+		g2 := &errgroup.Group{}
+		g2.SetLimit(cfg.AppConfig.Threads)
+		for _, exporter := range exporters {
+			t := exporter
+			g2.Go(func() error {
+				// 库名、表名规则
+				tbl := &Table{
+					Ctx:               ctx,
+					SourceSchemaName:  common.StringUPPER(cfg.OracleConfig.SchemaName),
+					TargetSchemaName:  common.StringUPPER(cfg.MySQLConfig.SchemaName),
+					SourceTableName:   common.StringUPPER(t),
+					TargetDBType:      common.StringUPPER(cfg.MySQLConfig.DBType),
+					TargetDBVersion:   dbVersion,
+					TargetTableName:   common.StringUPPER(t),
+					TargetTableOption: common.StringUPPER(cfg.MySQLConfig.TableOption),
+					SourceTableType:   tablesMap[t],
+					SourceDBNLSSort:   nlsSort,
+					SourceDBNLSComp:   nlsComp,
+					Overwrite:         cfg.MySQLConfig.Overwrite,
+					Oracle:            oracle,
+					MySQL:             mysql,
+				}
+				tbl.OracleCollation = oraCollation
+				if oraCollation {
+					tbl.SourceSchemaCollation = schemaCollation
+					tbl.SourceTableCollation = tblCollation[common.StringUPPER(t)]
+				}
+				tableChan <- tbl
+				return nil
+			})
 		}
-	}()
 
-	for _, exporter := range exporters {
-		table := exporter
-		g.Go(func() error {
-			// 库名、表名规则
-			tbl := &Table{
-				Ctx:               ctx,
-				SourceSchemaName:  strings.ToUpper(cfg.OracleConfig.SchemaName),
-				TargetSchemaName:  strings.ToUpper(cfg.MySQLConfig.SchemaName),
-				SourceTableName:   strings.ToUpper(table),
-				TargetDBType:      strings.ToUpper(cfg.MySQLConfig.DBType),
-				TargetDBVersion:   dbVersion,
-				TargetTableName:   strings.ToUpper(table),
-				TargetTableOption: strings.ToUpper(cfg.MySQLConfig.TableOption),
-				SourceTableType:   tablesMap[table],
-				SourceDBNLSSort:   nlsSort,
-				SourceDBNLSComp:   nlsComp,
-				Overwrite:         cfg.MySQLConfig.Overwrite,
-				Oracle:            oracle,
-				MySQL:             mysql,
-			}
-			tbl.OracleCollation = oraCollation
-			if oraCollation {
-				tbl.SourceSchemaCollation = schemaCollation
-				tbl.SourceTableCollation = tblCollation[strings.ToUpper(table)]
-			}
-			tableChan <- tbl
-			return nil
-		})
+		err = g2.Wait()
+		if err != nil {
+			return err
+		}
+		close(tableChan)
+		return nil
+	})
+
+	// 数据通道接收
+	for c := range tableChan {
+		tables = append(tables, c)
 	}
 
-	err = g.Wait()
+	err = g1.Wait()
 	if err != nil {
 		return nil, err
 	}
-
-	close(tableChan)
 
 	endTime = time.Now()
 	zap.L().Info("gen oracle slice table finished",
@@ -260,7 +267,7 @@ func (t *Table) GenTableSuffix(primaryColumns []string, singleIntegerPK bool) (t
 		if err != nil {
 			return tableSuffix, err
 		}
-		switch strings.ToUpper(clusteredIdxVal) {
+		switch common.StringUPPER(clusteredIdxVal) {
 		case common.TiDBClusteredIndexOFFValue:
 			zap.L().Warn("reverse oracle table suffix",
 				zap.String("table", t.String()),
@@ -269,7 +276,7 @@ func (t *Table) GenTableSuffix(primaryColumns []string, singleIntegerPK bool) (t
 
 			if t.TargetTableOption != "" {
 				tableSuffix = fmt.Sprintf("ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s %s",
-					strings.ToLower(common.MySQLCharacterSet), tableCollation, strings.ToUpper(t.TargetTableOption))
+					strings.ToLower(common.MySQLCharacterSet), tableCollation, common.StringUPPER(t.TargetTableOption))
 			} else {
 				tableSuffix = fmt.Sprintf("ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s",
 					strings.ToLower(common.MySQLCharacterSet), tableCollation)
@@ -292,7 +299,7 @@ func (t *Table) GenTableSuffix(primaryColumns []string, singleIntegerPK bool) (t
 			if !fastjson.Exists([]byte(pkVal), "alter-primary-key") {
 				zap.L().Warn("reverse oracle table suffix",
 					zap.String("table", t.String()),
-					zap.String("tidb_enable_clustered_index", strings.ToUpper(clusteredIdxVal)),
+					zap.String("tidb_enable_clustered_index", common.StringUPPER(clusteredIdxVal)),
 					zap.String("alter-primary-key", "not exist"),
 					zap.String("table-option", "alter-primary-key isn't exits, would be disable"))
 
@@ -314,7 +321,7 @@ func (t *Table) GenTableSuffix(primaryColumns []string, singleIntegerPK bool) (t
 				if !isAlterPK && len(primaryColumns) == 1 && singleIntegerPK {
 					zap.L().Warn("reverse oracle table suffix",
 						zap.String("table", t.String()),
-						zap.String("tidb_enable_clustered_index", strings.ToUpper(clusteredIdxVal)),
+						zap.String("tidb_enable_clustered_index", common.StringUPPER(clusteredIdxVal)),
 						zap.Bool("alter-primary-key", isAlterPK),
 						zap.String("table-option", "integer primary key, would be disable"))
 
@@ -329,13 +336,13 @@ func (t *Table) GenTableSuffix(primaryColumns []string, singleIntegerPK bool) (t
 					if isAlterPK || (!isAlterPK && len(primaryColumns) > 1) || (!isAlterPK && !singleIntegerPK) {
 						zap.L().Warn("reverse oracle table suffix",
 							zap.String("table", t.String()),
-							zap.String("tidb_enable_clustered_index", strings.ToUpper(clusteredIdxVal)),
+							zap.String("tidb_enable_clustered_index", common.StringUPPER(clusteredIdxVal)),
 							zap.Bool("alter-primary-key", isAlterPK),
 							zap.String("table-option", "enabled"))
 
 						if t.TargetTableOption != "" {
 							tableSuffix = fmt.Sprintf("ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s %s",
-								strings.ToLower(common.MySQLCharacterSet), tableCollation, strings.ToUpper(t.TargetTableOption))
+								strings.ToLower(common.MySQLCharacterSet), tableCollation, common.StringUPPER(t.TargetTableOption))
 						} else {
 							tableSuffix = fmt.Sprintf("ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s",
 								strings.ToLower(common.MySQLCharacterSet), tableCollation)
@@ -343,7 +350,7 @@ func (t *Table) GenTableSuffix(primaryColumns []string, singleIntegerPK bool) (t
 					} else {
 						zap.L().Error("reverse oracle table suffix",
 							zap.String("table", t.String()),
-							zap.String("tidb_enable_clustered_index", strings.ToUpper(clusteredIdxVal)),
+							zap.String("tidb_enable_clustered_index", common.StringUPPER(clusteredIdxVal)),
 							zap.Bool("alter-primary-key", isAlterPK),
 							zap.String("table-option", "disabled"),
 							zap.Error(fmt.Errorf("not support")))
@@ -375,7 +382,7 @@ func (t *Table) IsSingleIntegerPK(primaryColumns []string, columnMetas []string)
 				// Map 规则转换后的字段对应数据类型
 				// columnMeta 视角 columnName columnType ....
 				for _, integerType := range common.TiDBIntegerPrimaryKeyList {
-					if find := strings.Contains(strings.ToUpper(columnType), strings.ToUpper(integerType)); find {
+					if find := strings.Contains(common.StringUPPER(columnType), common.StringUPPER(integerType)); find {
 						singleIntegerPK = true
 					}
 				}
@@ -466,15 +473,15 @@ func GenCreateSchema(f *reverse.File, sourceSchema, targetSchema, nlsComp string
 	sqlRev.WriteString("*/\n")
 
 	if oraCollation {
-		if _, ok := common.OracleCollationMap[strings.ToUpper(schemaCollation)]; !ok {
+		if _, ok := common.OracleCollationMap[common.StringUPPER(schemaCollation)]; !ok {
 			return fmt.Errorf("oracle schema collation [%s] isn't support", schemaCollation)
 		}
-		sqlRev.WriteString(fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s DEFAULT CHARACTER SET %s COLLATE %s;\n\n", strings.ToUpper(targetSchema), strings.ToLower(common.MySQLCharacterSet), common.OracleCollationMap[strings.ToUpper(schemaCollation)]))
+		sqlRev.WriteString(fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s DEFAULT CHARACTER SET %s COLLATE %s;\n\n", common.StringUPPER(targetSchema), strings.ToLower(common.MySQLCharacterSet), common.OracleCollationMap[common.StringUPPER(schemaCollation)]))
 	} else {
-		if _, ok := common.OracleCollationMap[strings.ToUpper(nlsComp)]; !ok {
+		if _, ok := common.OracleCollationMap[common.StringUPPER(nlsComp)]; !ok {
 			return fmt.Errorf("oracle db nls_comp collation [%s] isn't support", nlsComp)
 		}
-		sqlRev.WriteString(fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s DEFAULT CHARACTER SET %s COLLATE %s;\n\n", strings.ToUpper(targetSchema), strings.ToLower(common.MySQLCharacterSet), common.OracleCollationMap[strings.ToUpper(nlsComp)]))
+		sqlRev.WriteString(fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s DEFAULT CHARACTER SET %s COLLATE %s;\n\n", common.StringUPPER(targetSchema), strings.ToLower(common.MySQLCharacterSet), common.OracleCollationMap[common.StringUPPER(nlsComp)]))
 	}
 
 	if _, err = f.RWriteString(sqlRev.String()); err != nil {
