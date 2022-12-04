@@ -85,7 +85,7 @@ func (r *O2M) NewCSVer() error {
 	// 判断并记录待同步表列表
 	for _, tableName := range exporters {
 		waitSyncMetas, err := model.NewSyncMetaModel(r.oracle.GormDB).WaitSyncMeta.Detail(r.ctx, &model.WaitSyncMeta{
-			SourceSchemaName: r.cfg.OracleConfig.SchemaName,
+			SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 			SourceTableName:  tableName,
 			SyncMode:         common.CSVO2MMode,
 		})
@@ -134,7 +134,7 @@ func (r *O2M) NewCSVer() error {
 
 			// 判断并记录待同步表列表
 			waitSyncMetas, err := model.NewSyncMetaModel(r.oracle.GormDB).WaitSyncMeta.Detail(r.ctx, &model.WaitSyncMeta{
-				SourceSchemaName: r.cfg.OracleConfig.SchemaName,
+				SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 				SourceTableName:  tableName,
 				SyncMode:         common.CSVO2MMode,
 			})
@@ -434,6 +434,8 @@ func (r *O2M) initWaitSyncTableRowID(csvWaitTables []string, oracleCollation boo
 				err = model.NewCommonModel(r.oracle.GormDB).CreateFullSyncMetaAndUpdateWaitSyncMeta(r.ctx, &model.FullSyncMeta{
 					SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 					SourceTableName:  common.StringUPPER(t),
+					TargetSchemaName: common.StringUPPER(r.cfg.MySQLConfig.SchemaName),
+					TargetTableName:  common.StringUPPER(t),
 					GlobalSCN:        globalSCN,
 					SourceColumnInfo: sourceColumnInfo,
 					SourceRowidInfo:  "1 = 1",
@@ -489,6 +491,8 @@ func (r *O2M) initWaitSyncTableRowID(csvWaitTables []string, oracleCollation boo
 				err = model.NewCommonModel(r.oracle.GormDB).CreateFullSyncMetaAndUpdateWaitSyncMeta(r.ctx, &model.FullSyncMeta{
 					SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 					SourceTableName:  common.StringUPPER(t),
+					TargetSchemaName: common.StringUPPER(r.cfg.MySQLConfig.SchemaName),
+					TargetTableName:  common.StringUPPER(t),
 					GlobalSCN:        globalSCN,
 					SourceColumnInfo: sourceColumnInfo,
 					SourceRowidInfo:  "1 = 1",
@@ -524,6 +528,8 @@ func (r *O2M) initWaitSyncTableRowID(csvWaitTables []string, oracleCollation boo
 				fullMetas = append(fullMetas, model.FullSyncMeta{
 					SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 					SourceTableName:  common.StringUPPER(t),
+					TargetSchemaName: common.StringUPPER(r.cfg.MySQLConfig.SchemaName),
+					TargetTableName:  common.StringUPPER(t),
 					GlobalSCN:        globalSCN,
 					SourceColumnInfo: sourceColumnInfo,
 					SourceRowidInfo:  res["CMD"],

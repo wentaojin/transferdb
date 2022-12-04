@@ -87,7 +87,7 @@ func (r *O2M) NewCompare() error {
 	// 判断并记录待同步表列表
 	for _, tableName := range exporters {
 		waitSyncMetas, err := model.NewSyncMetaModel(r.oracle.GormDB).WaitSyncMeta.Detail(r.ctx, &model.WaitSyncMeta{
-			SourceSchemaName: r.cfg.OracleConfig.SchemaName,
+			SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 			SourceTableName:  tableName,
 			SyncMode:         common.CompareO2MMode,
 		})
@@ -129,7 +129,7 @@ func (r *O2M) NewCompare() error {
 
 			// 判断并记录待同步表列表
 			waitSyncMetas, err := model.NewSyncMetaModel(r.oracle.GormDB).WaitSyncMeta.Detail(r.ctx, &model.WaitSyncMeta{
-				SourceSchemaName: r.cfg.OracleConfig.SchemaName,
+				SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 				SourceTableName:  tableName,
 				SyncMode:         common.CompareO2MMode,
 			})
@@ -389,12 +389,12 @@ func (r *O2M) comparePartTableTasks(f *compare.File, partTableTasks []*Task) err
 
 		// 设置工作池
 		// 设置 goroutine 数
-		g := &errgroup.Group{}
-		g.SetLimit(r.cfg.DiffConfig.DiffThreads)
+		g1 := &errgroup.Group{}
+		g1.SetLimit(r.cfg.DiffConfig.DiffThreads)
 
 		for _, compareMeta := range compareMetas.([]model.DataCompareMeta) {
 			newReport := NewReport(compareMeta, r.mysql, r.oracle, r.cfg.DiffConfig.OnlyCheckRows)
-			g.Go(func() error {
+			g1.Go(func() error {
 				// 数据对比报告
 				if err = IReport(newReport, f); err != nil {
 					err := model.NewTableErrorDetailModel(r.mysql.GormDB).Create(r.ctx, &model.TableErrorDetail{
@@ -441,7 +441,7 @@ func (r *O2M) comparePartTableTasks(f *compare.File, partTableTasks []*Task) err
 			})
 		}
 
-		if err := g.Wait(); err != nil {
+		if err := g1.Wait(); err != nil {
 			zap.L().Error("diff table oracle to mysql failed",
 				zap.String("schema", r.cfg.OracleConfig.SchemaName),
 				zap.String("table", task.tableName),

@@ -15,7 +15,9 @@ limitations under the License.
 */
 package o2m
 
-import "github.com/wentaojin/transferdb/module/migrate"
+import (
+	"github.com/wentaojin/transferdb/module/migrate"
+)
 
 func IExtractor(e migrate.Extractor) ([]string, []string, error) {
 	columnFields, batchResults, err := e.GetTableRows()

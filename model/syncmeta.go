@@ -47,7 +47,7 @@ type FullSyncMeta struct {
 	GlobalSCN        uint64 `gorm:"comment:'全局 SCN'" json:"global_scn"`
 	SourceColumnInfo string `gorm:"type:text;comment:'源端查询字段信息'" json:"source_column_info"`
 	SourceRowidInfo  string `gorm:"type:varchar(300);not null;index:idx_schema_table_rowid;comment:'表 rowid 切分信息'" json:"source_rowid_info"`
-	SyncMode         string `gorm:"not null;index:idx_schema_table_mode,unique;comment:'同步模式'" json:"sync_mode"`
+	SyncMode         string `gorm:"not null;comment:'同步模式'" json:"sync_mode"`
 	IsPartition      string `gorm:"comment:'是否是分区表'" json:"is_partition"` // 同步转换统一转换成非分区表，此处只做标志
 	CSVFile          string `gorm:"type:varchar(300);comment:'csv 文件名'" json:"csv_file"`
 	*BaseModel
@@ -191,8 +191,7 @@ func (rw *FullSyncMeta) DistinctTableName(ctx context.Context, detailS interface
 	ds := detailS.(*FullSyncMeta)
 	var tableNames []string
 	if err := rw.DB(ctx).Model(&FullSyncMeta{}).
-		Where("source_schema_name = ?",
-			common.StringUPPER(ds.SourceSchemaName)).
+		Where("source_schema_name = ?", common.StringUPPER(ds.SourceSchemaName)).
 		Distinct().
 		Pluck("source_table_name", &tableNames).Error; err != nil {
 		return tableNames, errors.NewMSError(errors.TRANSFERDB, errors.DOMAIN_DB, fmt.Errorf("meta schema table [full_sync_meta] query distinct source_table_name record failed: %v", err))

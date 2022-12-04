@@ -72,7 +72,7 @@ func (r *O2M) NewIncr() error {
 	)
 	for _, tbl := range exporters {
 		counts, err := model.NewSyncMetaModel(r.mysql.GormDB).CountsBySchemaTable(r.ctx, &model.IncrSyncMeta{
-			SourceSchemaName: r.cfg.OracleConfig.SchemaName,
+			SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 			SourceTableName:  tbl,
 		})
 		if err != nil {
