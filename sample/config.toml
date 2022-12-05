@@ -33,7 +33,7 @@ chunk-size = 50000
 diff-threads = 128
 # 只检查数据行数
 # 设置 true 代表只检查数据行数，设置 false 代表使用 checksum 数据对比以及输出对应差异数据
-only-check-rows = true
+only-check-rows = false
 # 断点续检，代表从上次 checkpoint 开始检查
 enable-checkpoint = true
 # 忽略表结构、collation 以及 character 检查，数据校验是否校验表结构，以上游表结构为准
@@ -125,7 +125,7 @@ ora-arch = "cdb"
 # 2、Non-CDB 架构需要具备 logminer 权限用户
 username = "c##ggadmin"
 password = "ggadmin"
-host = "10.2.113.33"
+host = "10.2.103.31"
 port = 1521
 service-name = "orclpdb1"
 # oracle instance client dir -> only linux
@@ -146,7 +146,7 @@ schema-name = "marvin"
 # 源端迁移任务表（只用于 prepare/reverse/check/all/full 阶段，gather 阶段不适用，gather 只适用于 schema 级别）
 # include-table 和 exclude-table 不能同时配置，两者只能配置一个,如果两个都没配置则 Schema 内表全迁移
 # include-table 和 exclude-table 支持正则表达式以及通配符（tab_*/tab*）
-include-table = ["xiamen","xiamen1","xiamen2","xiamen3","xiamen4","xiamen5","xiamen6","xiamen7","xiamen8"]
+include-table = ["xiamen9"]
 exclude-table = []
 
 # 只用于 prepare/reverse/check/all/full 阶段，gather 阶段不适用
@@ -156,7 +156,7 @@ db-type = "tidb"
 # 目标端连接串
 username = "root"
 password = ""
-host = "10.2.143.20"
+host = "10.2.103.30"
 port = 5000
 # mysql 链接参数
 connect-params = "charset=utf8mb4&multiStatements=true&parseTime=True&loc=Local"

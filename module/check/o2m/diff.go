@@ -88,7 +88,7 @@ func (c *Check) CheckTableComment() string {
 		zap.String("table comment check", fmt.Sprintf("%s.%s", c.OracleTableINFO.SchemaName, c.OracleTableINFO.TableName)))
 
 	var builder strings.Builder
-	if strings.EqualFold(c.OracleTableINFO.TableComment, c.MySQLTableINFO.TableComment) {
+	if !strings.EqualFold(c.OracleTableINFO.TableComment, c.MySQLTableINFO.TableComment) {
 		builder.WriteString("/*\n")
 		builder.WriteString(fmt.Sprintf(" oracle and mysql table comment\n"))
 
@@ -607,19 +607,20 @@ func (c *Check) CheckColumn() (string, error) {
 
 	var (
 		diffColumnMsgs []string
-		//createColumnMetas []string
-		tableRowArray []table.Row
-		builder       strings.Builder
+		tableRowArray  []table.Row
+		builder        strings.Builder
 	)
 
 	for oracleColName, oracleColInfo := range c.OracleTableINFO.Columns {
 		mysqlColInfo, ok := c.MySQLTableINFO.Columns[oracleColName]
 		if ok {
 			diffColumnMsg, tableRows, err := OracleTableColumnMapRuleCheck(
-				c.OracleTableINFO.SchemaName,
-				c.MySQLTableINFO.SchemaName,
-				c.OracleTableINFO.TableName,
-				oracleColName,
+				c.Ctx,
+				c.Oracle,
+				common.StringUPPER(c.OracleTableINFO.SchemaName),
+				common.StringUPPER(c.MySQLTableINFO.SchemaName),
+				common.StringUPPER(c.OracleTableINFO.TableName),
+				common.StringsBuilder("`", oracleColName, "`"),
 				oracleColInfo,
 				mysqlColInfo)
 			if err != nil {

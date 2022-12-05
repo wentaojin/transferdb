@@ -214,6 +214,15 @@ func GetOracleTableColumn(schemaName, tableName string, oracle *oracle.Oracle, s
 
 		dataDefault = strings.TrimSpace(rowCol["DATA_DEFAULT"])
 
+		// 处理 oracle 默认值 ('xxx') 或者 (xxx)
+		if strings.HasPrefix(dataDefault, "(") && strings.HasSuffix(dataDefault, ")") {
+			dataDefault = strings.TrimLeft(dataDefault, "(")
+			dataDefault = strings.TrimRight(dataDefault, ")")
+		}
+
+		// 修复 mysql 默认值存在单引号问题
+		// oracle 单引号默认值 '''PC''' , mysql 单引号默认值 'PC'
+		// 对比 oracle 会去掉前后一个单引号 ''PC'', mysql 增加前后单引号 ''PC''
 		if strings.HasPrefix(dataDefault, "'") {
 			dataDefault = strings.TrimPrefix(dataDefault, "'")
 		}
@@ -471,7 +480,7 @@ func getMySQLTableColumn(schemaName, tableName string, mysql *mysql.MySQL) (map[
 
 		// 修复 mysql 默认值存在单引号问题
 		// oracle 单引号默认值 '''PC''' , mysql 单引号默认值 'PC'
-		// 对比 oracle 会去掉前后单引号, mysql 增加前后单引号
+		// 对比 oracle 会去掉前后一个单引号 ''PC'', mysql 增加前后单引号 ''PC''
 		dataDefault = strings.TrimSpace(rowCol["DATA_DEFAULT"])
 
 		if strings.HasPrefix(dataDefault, "'") {

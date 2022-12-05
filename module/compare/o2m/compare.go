@@ -323,6 +323,12 @@ func (r *O2M) NewCompare() error {
 			return err
 		}
 	}
+
+	err = f.Close()
+	if err != nil {
+		return err
+	}
+
 	// 错误核对
 	errTotals, err = model.NewTableErrorDetailModel(r.oracle.GormDB).CountsBySchema(r.ctx, &model.TableErrorDetail{
 		SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),

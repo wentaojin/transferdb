@@ -148,18 +148,20 @@ func (r *Report) ReportCheckRows(f *compare.File) error {
 
 	sw := table.NewWriter()
 	sw.SetStyle(table.StyleLight)
-	sw.AppendHeader(table.Row{"SOURCE TABLE", "SOURCE TABLE COUNTS", "TARGET TABLE", "TARGET TABLE COUNTS", "RANGE"})
+	sw.AppendHeader(table.Row{"SOURCE TABLE", "SOURCE SQL", "SOURCE COUNTS", "TARGET TABLE", "TARGET SQL", "TARGET TABLE COUNTS", "RANGE"})
 	sw.AppendRows([]table.Row{
 		{
 			common.StringsBuilder(r.DataCompareMeta.SourceSchemaName, ".", r.DataCompareMeta.SourceTableName),
+			oracleQuery,
 			oracleRows,
 			common.StringsBuilder(r.DataCompareMeta.TargetSchemaName, ".", r.DataCompareMeta.TargetTableName),
+			mysqlQuery,
 			mysqlRows,
 			r.DataCompareMeta.WhereRange,
 		},
 	})
 
-	fixSQLStr := fmt.Sprintf("/* \n\toracle and mysql table range [%s] data rows aren't equal\n */\n", r.DataCompareMeta.WhereRange) + sw.Render() + "\n"
+	fixSQLStr := fmt.Sprintf("/* \n\toracle and mysql table range [%s] data rows aren't equal\n", r.DataCompareMeta.WhereRange) + sw.Render() + "\n*/\n"
 
 	if _, err := f.CWriteString(fixSQLStr); err != nil {
 		return fmt.Errorf("fix sql file write [only-check-rows = true] failed: %v", err.Error())
