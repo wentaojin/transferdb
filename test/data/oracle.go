@@ -19,15 +19,14 @@ import (
 	"context"
 	"fmt"
 	"github.com/wentaojin/transferdb/config"
-	"github.com/wentaojin/transferdb/module/engine"
-	"github.com/wentaojin/transferdb/module/query/oracle"
+	"github.com/wentaojin/transferdb/database/oracle"
 )
 
 func main() {
 	oraCfg := config.OracleConfig{
 		Username:      "marvin",
 		Password:      "XEW#yu%202212",
-		Host:          "10.2.13.51",
+		Host:          "10.32.13.51",
 		Port:          1521,
 		ServiceName:   "orclpdb1",
 		ConnectParams: "poolMinSessions=10&poolMaxSessions=1000&poolWaitTimeout=60s&poolSessionMaxLifetime=1h&poolSessionTimeout=5m&poolIncrement=1&timezone=Local",
@@ -38,14 +37,12 @@ func main() {
 		ExcludeTable:  nil,
 	}
 
-	sqlDB, err := engine.NewOracleDBEngine(oraCfg)
+	oracleDB, err := oracle.NewOracleDBEngine(context.Background(), oraCfg)
 	if err != nil {
 		panic(err)
 	}
 
-	oracle := &oracle.Oracle{Ctx: context.Background(), OracleDB: sqlDB}
-
-	column, err := oracle.GetOracleSchemaTableColumn("MARVIN", "XIAMEN8", true)
+	column, err := oracleDB.GetOracleSchemaTableColumn("MARVIN", "XIAMEN8", true)
 	if err != nil {
 		return
 	}

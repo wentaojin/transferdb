@@ -22,10 +22,10 @@ import (
 	"github.com/scylladb/go-set/strset"
 	"github.com/thinkeridea/go-extend/exstrings"
 	"github.com/wentaojin/transferdb/common"
-	"github.com/wentaojin/transferdb/model"
+	"github.com/wentaojin/transferdb/database/meta"
+	"github.com/wentaojin/transferdb/database/mysql"
+	"github.com/wentaojin/transferdb/database/oracle"
 	"github.com/wentaojin/transferdb/module/compare"
-	"github.com/wentaojin/transferdb/module/query/mysql"
-	"github.com/wentaojin/transferdb/module/query/oracle"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	"strings"
@@ -39,13 +39,13 @@ type DBSummary struct {
 }
 
 type Report struct {
-	DataCompareMeta model.DataCompareMeta `json:"data_compare_meta"`
-	Mysql           *mysql.MySQL          `json:"-"`
-	Oracle          *oracle.Oracle        `json:"-"`
-	OnlyCheckRows   bool                  `json:"only_check_rows"`
+	DataCompareMeta meta.DataCompareMeta `json:"data_compare_meta"`
+	Mysql           *mysql.MySQL         `json:"-"`
+	Oracle          *oracle.Oracle       `json:"-"`
+	OnlyCheckRows   bool                 `json:"only_check_rows"`
 }
 
-func NewReport(dataCompareMeta model.DataCompareMeta, mysql *mysql.MySQL, oracle *oracle.Oracle, onlyCheckRows bool) *Report {
+func NewReport(dataCompareMeta meta.DataCompareMeta, mysql *mysql.MySQL, oracle *oracle.Oracle, onlyCheckRows bool) *Report {
 	return &Report{
 		DataCompareMeta: dataCompareMeta,
 		Mysql:           mysql,

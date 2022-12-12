@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package model
+package meta
 
 import (
 	"context"
@@ -38,10 +38,10 @@ type DataCompareMeta struct {
 	*BaseModel
 }
 
-func NewDataCompareMetaModel(gormDB *gorm.DB) *DataCompareMeta {
+func NewDataCompareMetaModel(m *Meta) *DataCompareMeta {
 	return &DataCompareMeta{
 		BaseModel: &BaseModel{
-			MetaDB: WrapGormDB(gormDB),
+			Meta: m,
 		},
 	}
 }
@@ -86,7 +86,7 @@ func (rw *DataCompareMeta) DistinctTableName(ctx context.Context, detailS interf
 
 func (rw *DataCompareMeta) Truncate(ctx context.Context, truncateS interface{}) error {
 	tableStruct := truncateS.(*DataCompareMeta)
-	stmt := &gorm.Statement{DB: rw.Gorm}
+	stmt := &gorm.Statement{DB: rw.GormDB}
 	err := stmt.Parse(tableStruct)
 	if err != nil {
 		return err

@@ -22,8 +22,8 @@ import (
 	"fmt"
 	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/config"
-	"github.com/wentaojin/transferdb/model"
-	"github.com/wentaojin/transferdb/module/query/mysql"
+	"github.com/wentaojin/transferdb/database/meta"
+	"github.com/wentaojin/transferdb/database/mysql"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	"sync"
@@ -42,6 +42,7 @@ type IncrTask struct {
 	MySQLRedo      []string        `json:"mysql_redo"`  // MySQL 待执行 SQL
 	OperationType  string          `json:"operation_type"`
 	MySQL          *mysql.MySQL    `json:"-"`
+	MetaDB         *meta.Meta      `json:"-"`
 }
 
 type IncrResult struct {
@@ -50,7 +51,7 @@ type IncrResult struct {
 }
 
 // 应用当前日志文件中所有记录
-func applyOracleIncrRecord(ctx context.Context, mysqlDB *mysql.MySQL, cfg *config.Config, logminerMap map[string][]logminer) error {
+func applyOracleIncrRecord(metaDB *meta.Meta, mysqlDB *mysql.MySQL, cfg *config.Config, logminerMap map[string][]logminer) error {
 	g := &errgroup.Group{}
 	g.SetLimit(cfg.AllConfig.ApplyThreads)
 
@@ -68,7 +69,7 @@ func applyOracleIncrRecord(ctx context.Context, mysqlDB *mysql.MySQL, cfg *confi
 				go getIncrResult(done, resultQueue)
 
 				// 转换捕获内容以及数据应用
-				go func(ctx context.Context, mysql *mysql.MySQL, tbl, targetSchema string, rowsResult []logminer, taskQueue chan IncrTask) {
+				go func(mysql *mysql.MySQL, tbl, targetSchema string, rowsResult []logminer, taskQueue chan IncrTask) {
 					defer func() {
 						if err := recover(); err != nil {
 							zap.L().Fatal("translatorAndApplyOracleIncrementRecord",
@@ -78,14 +79,14 @@ func applyOracleIncrRecord(ctx context.Context, mysqlDB *mysql.MySQL, cfg *confi
 						}
 					}()
 					if err := translateAndAddOracleIncrRecord(
-						ctx,
+						metaDB,
 						mysql,
 						tbl,
 						targetSchema,
 						rowsResult, taskQueue); err != nil {
 						return
 					}
-				}(ctx, mysqlDB, tbl, cfg.MySQLConfig.SchemaName, rowsResult, taskQueue)
+				}(mysqlDB, tbl, cfg.MySQLConfig.SchemaName, rowsResult, taskQueue)
 
 				// 必须在任务分配和获取结果后创建工作池
 				go createWorkerPool(cfg.AllConfig.WorkerThreads, taskQueue, resultQueue)
@@ -137,10 +138,10 @@ func (p *IncrTask) IncrApply() error {
 	// 数据写入完毕，更新元数据 checkpoint 表
 	// 如果同步中断，数据同步使用会以 global_scn 为准，也就是会进行重复消费
 	if p.Operation == common.DropTableOperation {
-		err := model.NewCommonModel(p.MySQL.GormDB).DeleteIncrSyncMetaAndWaitSyncMeta(p.Ctx, &model.IncrSyncMeta{
+		err := meta.NewCommonModel(p.MetaDB).DeleteIncrSyncMetaAndWaitSyncMeta(p.Ctx, &meta.IncrSyncMeta{
 			SourceSchemaName: p.SourceSchema,
 			SourceTableName:  p.SourceTable,
-		}, &model.WaitSyncMeta{
+		}, &meta.WaitSyncMeta{
 			SourceSchemaName: p.SourceSchema,
 			SourceTableName:  p.SourceTable,
 			SyncMode:         common.AllO2MMode,
@@ -152,7 +153,7 @@ func (p *IncrTask) IncrApply() error {
 			return err
 		}
 	} else {
-		err := model.NewSyncMetaModel(p.MySQL.GormDB).IncrSyncMeta.Update(p.Ctx, &model.IncrSyncMeta{
+		err := meta.NewIncrSyncMetaModel(p.MetaDB).Update(p.Ctx, &meta.IncrSyncMeta{
 			SourceSchemaName: p.SourceSchema,
 			SourceTableName:  p.SourceTable,
 			GlobalSCN:        p.GlobalSCN,

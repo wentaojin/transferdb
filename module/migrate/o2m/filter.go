@@ -19,8 +19,8 @@ import (
 	"fmt"
 	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/config"
+	"github.com/wentaojin/transferdb/database/oracle"
 	"github.com/wentaojin/transferdb/filter"
-	"github.com/wentaojin/transferdb/module/query/oracle"
 	"go.uber.org/zap"
 	"time"
 )

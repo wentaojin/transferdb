@@ -16,10 +16,10 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
-	"github.com/wentaojin/transferdb/module/engine"
-	"github.com/wentaojin/transferdb/module/query/oracle"
+	"github.com/wentaojin/transferdb/database/oracle"
 	"math"
 	"math/rand"
 	"strconv"
@@ -56,12 +56,10 @@ func main() {
 		IncludeTable:  nil,
 		ExcludeTable:  nil,
 	}
-	sqlDB, err := engine.NewOracleDBEngine(oraCfg)
+	oracle, err := oracle.NewOracleDBEngine(context.Background(), oraCfg)
 	if err != nil {
 		panic(err)
 	}
-
-	oracle := &oracle.Oracle{OracleDB: sqlDB}
 
 	startTime := time.Now()
 	if err = ClearOraTable(oracle, *schemaName, *tablePrefix, *tableNums); err != nil {

@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/wentaojin/transferdb/common"
+	"github.com/wentaojin/transferdb/database/meta"
 	"github.com/wentaojin/transferdb/module/check"
-	"github.com/wentaojin/transferdb/module/query/oracle"
 	"go.uber.org/zap"
 	"reflect"
 	"strings"
@@ -31,21 +31,21 @@ import (
 
 type Check struct {
 	Ctx             context.Context
-	OracleTableINFO *Table         `json:"oracle_table_info"`
-	MySQLTableINFO  *Table         `json:"mysql_table_info"`
-	MySQLDBVersion  string         `json:"mysqldb_version"`
-	MySQLDBType     string         `json:"mysqldb_type"`
-	Oracle          *oracle.Oracle `json:"-"`
+	OracleTableINFO *Table     `json:"oracle_table_info"`
+	MySQLTableINFO  *Table     `json:"mysql_table_info"`
+	MySQLDBVersion  string     `json:"mysqldb_version"`
+	MySQLDBType     string     `json:"mysqldb_type"`
+	MetaDB          *meta.Meta `json:"-"`
 }
 
-func NewChecker(ctx context.Context, oracleTableInfo, mysqlTableInfo *Table, mysqlDBVersion, targetDBType string, oracle *oracle.Oracle) *Check {
+func NewChecker(ctx context.Context, oracleTableInfo, mysqlTableInfo *Table, mysqlDBVersion, targetDBType string, metaDB *meta.Meta) *Check {
 	return &Check{
 		Ctx:             ctx,
 		OracleTableINFO: oracleTableInfo,
 		MySQLTableINFO:  mysqlTableInfo,
 		MySQLDBVersion:  mysqlDBVersion,
 		MySQLDBType:     targetDBType,
-		Oracle:          oracle,
+		MetaDB:          metaDB,
 	}
 }
 
@@ -289,7 +289,7 @@ func (c *Check) CheckColumnCounts() (string, error) {
 				columnMeta string
 				err        error
 			)
-			columnMeta, err = GenOracleTableColumnMeta(c.Ctx, c.Oracle, c.OracleTableINFO.SchemaName, c.OracleTableINFO.TableName, oracleColName, oracleColInfo)
+			columnMeta, err = GenOracleTableColumnMeta(c.Ctx, c.MetaDB, c.OracleTableINFO.SchemaName, c.OracleTableINFO.TableName, oracleColName, oracleColInfo)
 			if err != nil {
 				return columnMeta, err
 			}
@@ -615,8 +615,6 @@ func (c *Check) CheckColumn() (string, error) {
 		mysqlColInfo, ok := c.MySQLTableINFO.Columns[oracleColName]
 		if ok {
 			diffColumnMsg, tableRows, err := OracleTableColumnMapRuleCheck(
-				c.Ctx,
-				c.Oracle,
 				common.StringUPPER(c.OracleTableINFO.SchemaName),
 				common.StringUPPER(c.MySQLTableINFO.SchemaName),
 				common.StringUPPER(c.OracleTableINFO.TableName),

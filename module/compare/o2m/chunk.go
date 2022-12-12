@@ -21,9 +21,9 @@ import (
 	"fmt"
 	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/config"
-	"github.com/wentaojin/transferdb/model"
-	"github.com/wentaojin/transferdb/module/query/mysql"
-	"github.com/wentaojin/transferdb/module/query/oracle"
+	"github.com/wentaojin/transferdb/database/meta"
+	"github.com/wentaojin/transferdb/database/mysql"
+	"github.com/wentaojin/transferdb/database/oracle"
 	"go.uber.org/zap"
 	"strconv"
 	"strings"
@@ -46,9 +46,10 @@ type Chunk struct {
 	Cfg              *config.Config  `json:"-"`
 	Oracle           *oracle.Oracle  `json:"-"`
 	MySQL            *mysql.MySQL    `json:"-"`
+	MetaDB           *meta.Meta      `json:"-"`
 }
 
-func NewChunk(ctx context.Context, cfg *config.Config, oracle *oracle.Oracle, mysql *mysql.MySQL,
+func NewChunk(ctx context.Context, cfg *config.Config, oracle *oracle.Oracle, mysql *mysql.MySQL, metaDB *meta.Meta,
 	chunkID int, sourceGlobalSCN uint64, sourceSchema, sourceTable string, isPartition string, sourceColumnInfo, targetColumnInfo string,
 	whereColumn string, syncMode string) *Chunk {
 	return &Chunk{
@@ -64,6 +65,7 @@ func NewChunk(ctx context.Context, cfg *config.Config, oracle *oracle.Oracle, my
 		SyncMode:         syncMode,
 		Oracle:           oracle,
 		MySQL:            mysql,
+		MetaDB:           metaDB,
 		Cfg:              cfg,
 	}
 }
@@ -118,7 +120,7 @@ func (c *Chunk) Split() error {
 		c.WhereColumn = ""
 		c.WhereRange = "1 = 1"
 
-		err := model.NewCommonModel(c.Oracle.GormDB).CreateDataCompareMetaAndUpdateWaitSyncMeta(c.Ctx, &model.DataCompareMeta{
+		err := meta.NewCommonModel(c.MetaDB).CreateDataCompareMetaAndUpdateWaitSyncMeta(c.Ctx, &meta.DataCompareMeta{
 			SourceSchemaName: common.StringUPPER(c.SourceSchema),
 			SourceTableName:  common.StringUPPER(c.SourceTable),
 			SourceColumnInfo: c.SourceColumnInfo,
@@ -128,7 +130,7 @@ func (c *Chunk) Split() error {
 			WhereColumn:      c.WhereColumn,
 			WhereRange:       c.WhereRange,
 			IsPartition:      c.IsPartition,
-		}, &model.WaitSyncMeta{
+		}, &meta.WaitSyncMeta{
 			SourceSchemaName: common.StringUPPER(c.SourceSchema),
 			SourceTableName:  common.StringUPPER(c.SourceTable),
 			SyncMode:         c.SyncMode,
@@ -155,7 +157,7 @@ func (c *Chunk) Split() error {
 		// select xxx from tab where age > 1 and age < 10
 		c.WhereRange = customRange
 		c.WhereColumn = ""
-		err = model.NewCommonModel(c.Oracle.GormDB).CreateDataCompareMetaAndUpdateWaitSyncMeta(c.Ctx, &model.DataCompareMeta{
+		err = meta.NewCommonModel(c.MetaDB).CreateDataCompareMetaAndUpdateWaitSyncMeta(c.Ctx, &meta.DataCompareMeta{
 			SourceSchemaName: common.StringUPPER(c.SourceSchema),
 			SourceTableName:  common.StringUPPER(c.SourceTable),
 			SourceColumnInfo: c.SourceColumnInfo,
@@ -165,7 +167,7 @@ func (c *Chunk) Split() error {
 			WhereColumn:      c.WhereColumn,
 			WhereRange:       c.WhereRange,
 			IsPartition:      c.IsPartition,
-		}, &model.WaitSyncMeta{
+		}, &meta.WaitSyncMeta{
 			SourceSchemaName: common.StringUPPER(c.SourceSchema),
 			SourceTableName:  common.StringUPPER(c.SourceTable),
 			SyncMode:         c.SyncMode,
@@ -193,7 +195,7 @@ func (c *Chunk) Split() error {
 			zap.Int("statistics rows", tableRowsByStatistics))
 		c.WhereRange = "1 = 1"
 		c.WhereColumn = ""
-		err = model.NewCommonModel(c.Oracle.GormDB).CreateDataCompareMetaAndUpdateWaitSyncMeta(c.Ctx, &model.DataCompareMeta{
+		err = meta.NewCommonModel(c.MetaDB).CreateDataCompareMetaAndUpdateWaitSyncMeta(c.Ctx, &meta.DataCompareMeta{
 			SourceSchemaName: common.StringUPPER(c.SourceSchema),
 			SourceTableName:  common.StringUPPER(c.SourceTable),
 			SourceColumnInfo: c.SourceColumnInfo,
@@ -203,7 +205,7 @@ func (c *Chunk) Split() error {
 			WhereColumn:      c.WhereColumn,
 			WhereRange:       c.WhereRange,
 			IsPartition:      c.IsPartition,
-		}, &model.WaitSyncMeta{
+		}, &meta.WaitSyncMeta{
 			SourceSchemaName: common.StringUPPER(c.SourceSchema),
 			SourceTableName:  common.StringUPPER(c.SourceTable),
 			SyncMode:         c.SyncMode,
@@ -254,7 +256,7 @@ func (c *Chunk) Split() error {
 
 		c.WhereRange = "1 = 1"
 		c.WhereColumn = ""
-		err = model.NewCommonModel(c.Oracle.GormDB).CreateDataCompareMetaAndUpdateWaitSyncMeta(c.Ctx, &model.DataCompareMeta{
+		err = meta.NewCommonModel(c.MetaDB).CreateDataCompareMetaAndUpdateWaitSyncMeta(c.Ctx, &meta.DataCompareMeta{
 			SourceSchemaName: common.StringUPPER(c.SourceSchema),
 			SourceTableName:  common.StringUPPER(c.SourceTable),
 			SourceColumnInfo: c.SourceColumnInfo,
@@ -264,7 +266,7 @@ func (c *Chunk) Split() error {
 			WhereColumn:      c.WhereColumn,
 			WhereRange:       c.WhereRange,
 			IsPartition:      c.IsPartition,
-		}, &model.WaitSyncMeta{
+		}, &meta.WaitSyncMeta{
 			SourceSchemaName: common.StringUPPER(c.SourceSchema),
 			SourceTableName:  common.StringUPPER(c.SourceTable),
 			SyncMode:         c.SyncMode,
@@ -278,9 +280,9 @@ func (c *Chunk) Split() error {
 		return nil
 	}
 
-	var fullMetas []model.DataCompareMeta
+	var fullMetas []meta.DataCompareMeta
 	for _, r := range chunkRes {
-		fullMetas = append(fullMetas, model.DataCompareMeta{
+		fullMetas = append(fullMetas, meta.DataCompareMeta{
 			SourceSchemaName: common.StringUPPER(c.SourceSchema),
 			SourceTableName:  common.StringUPPER(c.SourceTable),
 			TargetSchemaName: common.StringUPPER(c.Cfg.MySQLConfig.SchemaName),
@@ -303,7 +305,7 @@ func (c *Chunk) Split() error {
 	}
 
 	for _, r := range res {
-		fullMetas = append(fullMetas, model.DataCompareMeta{
+		fullMetas = append(fullMetas, meta.DataCompareMeta{
 			SourceSchemaName: common.StringUPPER(c.SourceSchema),
 			SourceTableName:  common.StringUPPER(c.SourceTable),
 			TargetSchemaName: common.StringUPPER(c.Cfg.MySQLConfig.SchemaName),
@@ -314,7 +316,7 @@ func (c *Chunk) Split() error {
 			WhereColumn:      c.WhereColumn,
 			IsPartition:      c.IsPartition,
 		})
-		fullMetas = append(fullMetas, model.DataCompareMeta{
+		fullMetas = append(fullMetas, meta.DataCompareMeta{
 			SourceSchemaName: common.StringUPPER(c.SourceSchema),
 			SourceTableName:  common.StringUPPER(c.SourceTable),
 			TargetSchemaName: common.StringUPPER(c.Cfg.MySQLConfig.SchemaName),
@@ -328,12 +330,12 @@ func (c *Chunk) Split() error {
 	}
 
 	// 元数据库信息 batch 写入
-	err = model.NewDataCompareMetaModel(c.Oracle.GormDB).BatchCreate(c.Ctx, fullMetas, c.Cfg.AppConfig.InsertBatchSize)
+	err = meta.NewDataCompareMetaModel(c.MetaDB).BatchCreate(c.Ctx, fullMetas, c.Cfg.AppConfig.InsertBatchSize)
 	if err != nil {
 		return fmt.Errorf("create table [%s.%s] data_diff_meta [batch size] failed: %v", c.SourceSchema, c.SourceTable, err)
 	}
 
-	err = model.NewSyncMetaModel(c.Oracle.GormDB).WaitSyncMeta.Update(c.Ctx, &model.WaitSyncMeta{
+	err = meta.NewWaitSyncMetaModel(c.MetaDB).Update(c.Ctx, &meta.WaitSyncMeta{
 		SourceSchemaName: common.StringUPPER(c.SourceSchema),
 		SourceTableName:  common.StringUPPER(c.SourceTable),
 		SyncMode:         c.SyncMode,

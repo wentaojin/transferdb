@@ -17,9 +17,8 @@ package o2m
 
 import (
 	"fmt"
-	"github.com/wentaojin/transferdb/module/query/oracle"
-
 	"github.com/jedib0t/go-pretty/v6/text"
+	"github.com/wentaojin/transferdb/database/oracle"
 
 	"github.com/jedib0t/go-pretty/v6/table"
 )

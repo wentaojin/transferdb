@@ -20,7 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/wentaojin/transferdb/common"
-	"github.com/wentaojin/transferdb/module/query/oracle"
+	"github.com/wentaojin/transferdb/database/oracle"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	"strings"

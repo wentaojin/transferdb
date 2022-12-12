@@ -20,11 +20,11 @@ import (
 	"fmt"
 	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/config"
-	"github.com/wentaojin/transferdb/model"
+	"github.com/wentaojin/transferdb/database/meta"
+	"github.com/wentaojin/transferdb/database/mysql"
+	"github.com/wentaojin/transferdb/database/oracle"
 	"github.com/wentaojin/transferdb/module/check"
 	"github.com/wentaojin/transferdb/module/check/o2m"
-	"github.com/wentaojin/transferdb/module/query/mysql"
-	"github.com/wentaojin/transferdb/module/query/oracle"
 	"go.uber.org/zap"
 	"io"
 	"os"
@@ -76,23 +76,25 @@ func NewWaitCompareTableTask(ctx context.Context,
 	return tasks
 }
 
-func PreTableStructCheck(ctx context.Context, cfg *config.Config, oracledb *oracle.Oracle, mysqldb *mysql.MySQL, exporters []string) error {
+func PreTableStructCheck(ctx context.Context, cfg *config.Config, oracledb *oracle.Oracle, mysqldb *mysql.MySQL, metaDB *meta.Meta, exporters []string) error {
 	// 表结构检查
 	if !cfg.DiffConfig.IgnoreStructCheck {
 		startTime := time.Now()
 		oraCfg := cfg.OracleConfig
 		oraCfg.IncludeTable = exporters
-		err := check.ICheck(o2m.NewO2MCheck(ctx, &config.Config{
-			AppConfig:    cfg.AppConfig,
-			OracleConfig: oraCfg,
-			MySQLConfig:  cfg.MySQLConfig,
-		},
-			oracle.NewOracleSQLDB(ctx, oracledb.OracleDB, oracledb.GormDB),
-			mysql.NewMySQLDB(ctx, mysqldb.MySQLDB, mysqldb.GormDB)))
+		err := check.ICheck(o2m.NewO2MCheck(ctx,
+			&config.Config{
+				AppConfig:    cfg.AppConfig,
+				OracleConfig: oraCfg,
+				MySQLConfig:  cfg.MySQLConfig,
+			},
+			oracledb,
+			mysqldb,
+			metaDB))
 		if err != nil {
 			return err
 		}
-		errTotals, err := model.NewTableErrorDetailModel(oracledb.GormDB).CountsBySchema(ctx, &model.TableErrorDetail{
+		errTotals, err := meta.NewTableErrorDetailModel(metaDB).CountsBySchema(ctx, &meta.TableErrorDetail{
 			SourceSchemaName: common.StringUPPER(cfg.OracleConfig.SchemaName),
 			RunMode:          common.CheckO2MMode,
 		})

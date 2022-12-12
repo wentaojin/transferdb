@@ -19,8 +19,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/wentaojin/transferdb/common"
-	"github.com/wentaojin/transferdb/module/query/mysql"
-	"github.com/wentaojin/transferdb/module/query/oracle"
+	"github.com/wentaojin/transferdb/database/mysql"
+	"github.com/wentaojin/transferdb/database/oracle"
 	"strings"
 )
 

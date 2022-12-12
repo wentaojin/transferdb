@@ -19,7 +19,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/wentaojin/transferdb/config"
-	"github.com/wentaojin/transferdb/module/query/oracle"
+	"github.com/wentaojin/transferdb/database/oracle"
 	"go.uber.org/zap"
 	"os"
 	"path/filepath"

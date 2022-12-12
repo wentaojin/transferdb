@@ -20,10 +20,10 @@ import (
 	"fmt"
 	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/config"
-	"github.com/wentaojin/transferdb/model"
+	"github.com/wentaojin/transferdb/database/meta"
+	"github.com/wentaojin/transferdb/database/mysql"
+	"github.com/wentaojin/transferdb/database/oracle"
 	"github.com/wentaojin/transferdb/module/compare"
-	"github.com/wentaojin/transferdb/module/query/mysql"
-	"github.com/wentaojin/transferdb/module/query/oracle"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	"os"
@@ -37,14 +37,16 @@ type O2M struct {
 	cfg    *config.Config
 	oracle *oracle.Oracle
 	mysql  *mysql.MySQL
+	metaDB *meta.Meta
 }
 
-func NewO2MCompare(ctx context.Context, cfg *config.Config, oracle *oracle.Oracle, mysql *mysql.MySQL) *O2M {
+func NewO2MCompare(ctx context.Context, cfg *config.Config, oracle *oracle.Oracle, mysql *mysql.MySQL, metaDB *meta.Meta) *O2M {
 	return &O2M{
 		ctx:    ctx,
 		cfg:    cfg,
 		oracle: oracle,
 		mysql:  mysql,
+		metaDB: metaDB,
 	}
 }
 
@@ -76,7 +78,7 @@ func (r *O2M) NewCompare() error {
 	}
 
 	// 判断 table_error_detail 是否存在错误记录，是否可进行 compare
-	errTotals, err := model.NewTableErrorDetailModel(r.oracle.GormDB).CountsBySchema(r.ctx, &model.TableErrorDetail{
+	errTotals, err := meta.NewTableErrorDetailModel(r.metaDB).CountsBySchema(r.ctx, &meta.TableErrorDetail{
 		SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 		RunMode:          common.CompareO2MMode,
 	})
@@ -86,7 +88,7 @@ func (r *O2M) NewCompare() error {
 
 	// 判断并记录待同步表列表
 	for _, tableName := range exporters {
-		waitSyncMetas, err := model.NewSyncMetaModel(r.oracle.GormDB).WaitSyncMeta.Detail(r.ctx, &model.WaitSyncMeta{
+		waitSyncMetas, err := meta.NewWaitSyncMetaModel(r.metaDB).Detail(r.ctx, &meta.WaitSyncMeta{
 			SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 			SourceTableName:  tableName,
 			SyncMode:         common.CompareO2MMode,
@@ -94,10 +96,10 @@ func (r *O2M) NewCompare() error {
 		if err != nil {
 			return err
 		}
-		if len(waitSyncMetas.([]model.WaitSyncMeta)) == 0 {
+		if len(waitSyncMetas.([]meta.WaitSyncMeta)) == 0 {
 			// 初始同步表全量任务为 -1 表示未进行全量初始化，初始化完成会变更
 			// 全量同步完成，增量阶段，值预期都是 0
-			err = model.NewSyncMetaModel(r.oracle.GormDB).WaitSyncMeta.Create(r.ctx, &model.WaitSyncMeta{
+			err = meta.NewWaitSyncMetaModel(r.metaDB).Create(r.ctx, &meta.WaitSyncMeta{
 				SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 				SourceTableName:  common.StringUPPER(tableName),
 				SyncMode:         common.CompareO2MMode,
@@ -112,13 +114,13 @@ func (r *O2M) NewCompare() error {
 
 	// 关于全量断点恢复
 	if !r.cfg.DiffConfig.EnableCheckpoint {
-		err = model.NewDataCompareMetaModel(r.oracle.GormDB).Truncate(r.ctx, &model.DataCompareMeta{})
+		err = meta.NewDataCompareMetaModel(r.metaDB).Truncate(r.ctx, &meta.DataCompareMeta{})
 		if err != nil {
 			return err
 		}
 
 		for _, tableName := range exporters {
-			err = model.NewSyncMetaModel(r.oracle.GormDB).WaitSyncMeta.Delete(r.ctx, &model.WaitSyncMeta{
+			err = meta.NewWaitSyncMetaModel(r.metaDB).Delete(r.ctx, &meta.WaitSyncMeta{
 				SourceSchemaName: r.cfg.OracleConfig.SchemaName,
 				SourceTableName:  tableName,
 				SyncMode:         common.CompareO2MMode,
@@ -128,7 +130,7 @@ func (r *O2M) NewCompare() error {
 			}
 
 			// 判断并记录待同步表列表
-			waitSyncMetas, err := model.NewSyncMetaModel(r.oracle.GormDB).WaitSyncMeta.Detail(r.ctx, &model.WaitSyncMeta{
+			waitSyncMetas, err := meta.NewWaitSyncMetaModel(r.metaDB).Detail(r.ctx, &meta.WaitSyncMeta{
 				SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 				SourceTableName:  tableName,
 				SyncMode:         common.CompareO2MMode,
@@ -136,10 +138,10 @@ func (r *O2M) NewCompare() error {
 			if err != nil {
 				return err
 			}
-			if len(waitSyncMetas.([]model.WaitSyncMeta)) == 0 {
+			if len(waitSyncMetas.([]meta.WaitSyncMeta)) == 0 {
 				// 初始同步表全量任务为 -1 表示未进行全量初始化，初始化完成会变更
 				// 全量同步完成，增量阶段，值预期都是 0
-				err = model.NewSyncMetaModel(r.oracle.GormDB).WaitSyncMeta.Create(r.ctx, &model.WaitSyncMeta{
+				err = meta.NewWaitSyncMetaModel(r.metaDB).Create(r.ctx, &meta.WaitSyncMeta{
 					SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 					SourceTableName:  common.StringUPPER(tableName),
 					SyncMode:         common.CompareO2MMode,
@@ -155,11 +157,11 @@ func (r *O2M) NewCompare() error {
 
 	// 获取等待同步以及未同步完成的表列表
 	var (
-		waitSyncTableMetas []model.WaitSyncMeta
+		waitSyncTableMetas []meta.WaitSyncMeta
 		waitSyncTables     []string
 	)
 
-	waitSyncDetails, err := model.NewSyncMetaModel(r.oracle.GormDB).WaitSyncMeta.Detail(r.ctx, &model.WaitSyncMeta{
+	waitSyncDetails, err := meta.NewWaitSyncMetaModel(r.metaDB).Detail(r.ctx, &meta.WaitSyncMeta{
 		SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 		SyncMode:         common.CompareO2MMode,
 		FullGlobalSCN:    0,
@@ -168,7 +170,7 @@ func (r *O2M) NewCompare() error {
 	if err != nil {
 		return err
 	}
-	waitSyncTableMetas = waitSyncDetails.([]model.WaitSyncMeta)
+	waitSyncTableMetas = waitSyncDetails.([]meta.WaitSyncMeta)
 	if len(waitSyncTableMetas) > 0 {
 		for _, table := range waitSyncTableMetas {
 			waitSyncTables = append(waitSyncTables, common.StringUPPER(table.SourceTableName))
@@ -176,17 +178,17 @@ func (r *O2M) NewCompare() error {
 	}
 
 	var (
-		partSyncTableMetas []model.WaitSyncMeta
+		partSyncTableMetas []meta.WaitSyncMeta
 		partSyncTables     []string
 	)
-	partSyncDetails, err := model.NewSyncMetaModel(r.oracle.GormDB).WaitSyncMeta.Query(r.ctx, &model.WaitSyncMeta{
+	partSyncDetails, err := meta.NewWaitSyncMetaModel(r.metaDB).Query(r.ctx, &meta.WaitSyncMeta{
 		SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 		SyncMode:         common.CompareO2MMode,
 	})
 	if err != nil {
 		return err
 	}
-	partSyncTableMetas = partSyncDetails.([]model.WaitSyncMeta)
+	partSyncTableMetas = partSyncDetails.([]meta.WaitSyncMeta)
 	if len(partSyncTableMetas) > 0 {
 		for _, table := range partSyncTableMetas {
 			partSyncTables = append(partSyncTables, common.StringUPPER(table.SourceTableName))
@@ -205,7 +207,7 @@ func (r *O2M) NewCompare() error {
 	var panicTblFullSlice []string
 
 	for _, partSyncMeta := range partSyncTableMetas {
-		tableNameArray, err2 := model.NewDataCompareMetaModel(r.oracle.GormDB).DistinctTableName(r.ctx, &model.DataCompareMeta{
+		tableNameArray, err2 := meta.NewDataCompareMetaModel(r.metaDB).DistinctTableName(r.ctx, &meta.DataCompareMeta{
 			SourceSchemaName: r.cfg.OracleConfig.SchemaName})
 		if err2 != nil {
 			return err2
@@ -304,7 +306,7 @@ func (r *O2M) NewCompare() error {
 	// 优先存在断点的表校验
 	// partTableTask -> waitTableTasks
 	if len(partTableTasks) > 0 {
-		err = PreTableStructCheck(r.ctx, r.cfg, r.oracle, r.mysql, partSyncTables)
+		err = PreTableStructCheck(r.ctx, r.cfg, r.oracle, r.mysql, r.metaDB, partSyncTables)
 		if err != nil {
 			return err
 		}
@@ -314,7 +316,7 @@ func (r *O2M) NewCompare() error {
 		}
 	}
 	if len(waitTableTasks) > 0 {
-		err = PreTableStructCheck(r.ctx, r.cfg, r.oracle, r.mysql, partSyncTables)
+		err = PreTableStructCheck(r.ctx, r.cfg, r.oracle, r.mysql, r.metaDB, partSyncTables)
 		if err != nil {
 			return err
 		}
@@ -330,7 +332,7 @@ func (r *O2M) NewCompare() error {
 	}
 
 	// 错误核对
-	errTotals, err = model.NewTableErrorDetailModel(r.oracle.GormDB).CountsBySchema(r.ctx, &model.TableErrorDetail{
+	errTotals, err = meta.NewTableErrorDetailModel(r.metaDB).CountsBySchema(r.ctx, &meta.TableErrorDetail{
 		SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 		RunMode:          common.CompareO2MMode,
 	})
@@ -361,7 +363,7 @@ func (r *O2M) comparePartTableTasks(f *compare.File, partTableTasks []*Task) err
 	for _, task := range partTableTasks {
 		// 获取对比记录
 		diffStartTime := time.Now()
-		compareMetas, err := model.NewDataCompareMetaModel(r.mysql.GormDB).Detail(r.ctx, &model.DataCompareMeta{
+		compareMetas, err := meta.NewDataCompareMetaModel(r.metaDB).Detail(r.ctx, &meta.DataCompareMeta{
 			SourceSchemaName: r.cfg.OracleConfig.SchemaName,
 			SourceTableName:  task.tableName,
 			TargetSchemaName: r.cfg.MySQLConfig.SchemaName,
@@ -376,12 +378,12 @@ func (r *O2M) comparePartTableTasks(f *compare.File, partTableTasks []*Task) err
 		g1 := &errgroup.Group{}
 		g1.SetLimit(r.cfg.DiffConfig.DiffThreads)
 
-		for _, compareMeta := range compareMetas.([]model.DataCompareMeta) {
+		for _, compareMeta := range compareMetas.([]meta.DataCompareMeta) {
 			newReport := NewReport(compareMeta, r.mysql, r.oracle, r.cfg.DiffConfig.OnlyCheckRows)
 			g1.Go(func() error {
 				// 数据对比报告
 				if err = IReport(newReport, f); err != nil {
-					err := model.NewTableErrorDetailModel(r.mysql.GormDB).Create(r.ctx, &model.TableErrorDetail{
+					err := meta.NewTableErrorDetailModel(r.metaDB).Create(r.ctx, &meta.TableErrorDetail{
 						SourceSchemaName: newReport.DataCompareMeta.SourceSchemaName,
 						SourceTableName:  newReport.DataCompareMeta.SourceTableName,
 						RunMode:          common.CompareO2MMode,
@@ -397,7 +399,7 @@ func (r *O2M) comparePartTableTasks(f *compare.File, partTableTasks []*Task) err
 				}
 
 				// 清理元数据记录
-				errCounts, err := model.NewTableErrorDetailModel(r.mysql.GormDB).Counts(r.ctx, &model.TableErrorDetail{
+				errCounts, err := meta.NewTableErrorDetailModel(r.metaDB).Counts(r.ctx, &meta.TableErrorDetail{
 					SourceSchemaName: newReport.DataCompareMeta.SourceSchemaName,
 					SourceTableName:  newReport.DataCompareMeta.SourceTableName,
 					RunMode:          common.CompareO2MMode,
@@ -410,7 +412,7 @@ func (r *O2M) comparePartTableTasks(f *compare.File, partTableTasks []*Task) err
 					return nil
 				}
 
-				err = model.NewDataCompareMetaModel(r.mysql.GormDB).Delete(r.ctx, &model.DataCompareMeta{
+				err = meta.NewDataCompareMetaModel(r.metaDB).Delete(r.ctx, &meta.DataCompareMeta{
 					SourceSchemaName: newReport.DataCompareMeta.SourceSchemaName,
 					SourceTableName:  newReport.DataCompareMeta.SourceTableName,
 					WhereRange:       newReport.DataCompareMeta.WhereRange,
@@ -435,7 +437,7 @@ func (r *O2M) comparePartTableTasks(f *compare.File, partTableTasks []*Task) err
 		}
 
 		// 更新 wait_sync_meta 记录
-		errCounts, err := model.NewTableErrorDetailModel(r.mysql.GormDB).Counts(r.ctx, &model.TableErrorDetail{
+		errCounts, err := meta.NewTableErrorDetailModel(r.metaDB).Counts(r.ctx, &meta.TableErrorDetail{
 			SourceSchemaName: r.cfg.OracleConfig.SchemaName,
 			SourceTableName:  task.tableName,
 			RunMode:          common.CompareO2MMode,
@@ -453,7 +455,7 @@ func (r *O2M) comparePartTableTasks(f *compare.File, partTableTasks []*Task) err
 			return nil
 		}
 
-		err = model.NewSyncMetaModel(r.mysql.GormDB).WaitSyncMeta.ModifyFullSplitTimesZero(r.ctx, &model.WaitSyncMeta{
+		err = meta.NewWaitSyncMetaModel(r.metaDB).ModifyFullSplitTimesZero(r.ctx, &meta.WaitSyncMeta{
 			SourceSchemaName: r.cfg.OracleConfig.SchemaName,
 			SourceTableName:  task.tableName,
 			SyncMode:         common.CompareO2MMode,
@@ -491,7 +493,7 @@ func (r *O2M) compareWaitTableTasks(f *compare.File, waitTableTasks []*Task) err
 		if err != nil {
 			return err
 		}
-		chunks = append(chunks, NewChunk(r.ctx, r.cfg, r.oracle, r.mysql,
+		chunks = append(chunks, NewChunk(r.ctx, r.cfg, r.oracle, r.mysql, r.metaDB,
 			cid, globalSCN, r.cfg.OracleConfig.SchemaName, task.tableName, isPartition, sourceColumnInfo, targetColumnInfo,
 			whereColumn, common.CompareO2MMode))
 	}

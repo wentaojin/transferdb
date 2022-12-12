@@ -18,7 +18,7 @@ package m2o
 import (
 	"fmt"
 	"github.com/wentaojin/transferdb/config"
-	"github.com/wentaojin/transferdb/module/query/mysql"
+	"github.com/wentaojin/transferdb/database/mysql"
 	"go.uber.org/zap"
 	"time"
 )

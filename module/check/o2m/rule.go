@@ -16,11 +16,9 @@ limitations under the License.
 package o2m
 
 import (
-	"context"
 	"fmt"
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/wentaojin/transferdb/common"
-	"github.com/wentaojin/transferdb/module/query/oracle"
 	"strconv"
 	"strings"
 )
@@ -30,8 +28,6 @@ import (
 */
 
 func OracleTableColumnMapRuleCheck(
-	ctx context.Context,
-	oracle *oracle.Oracle,
 	sourceSchema, targetSchema, tableName, columnName string,
 	oracleColInfo, mysqlColInfo Column) (string, table.Row, error) {
 	var tableRows table.Row

@@ -18,12 +18,12 @@ package o2m
 import (
 	"context"
 	"fmt"
-	"github.com/wentaojin/transferdb/module/query/oracle"
+	"github.com/wentaojin/transferdb/database/meta"
 	"github.com/wentaojin/transferdb/module/reverse"
 	"strings"
 )
 
-func IReader(ctx context.Context, oracle *oracle.Oracle, t *Table, rd reverse.Reader) (*Rule, error) {
+func IReader(ctx context.Context, metaDB *meta.Meta, t *Table, rd reverse.Reader) (*Rule, error) {
 	primaryKey, err := rd.GetTablePrimaryKey()
 	if err != nil {
 		return nil, err
@@ -79,7 +79,7 @@ func IReader(ctx context.Context, oracle *oracle.Oracle, t *Table, rd reverse.Re
 		TableColumnINFO:   columnMeta,
 		ColumnCommentINFO: columnComment,
 		OracleCollation:   t.OracleCollation,
-		Oracle:            oracle,
+		MetaDB:            metaDB,
 	}, nil
 }
 

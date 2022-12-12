@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package model
+package meta
 
 import (
 	"context"
@@ -24,11 +24,11 @@ import (
 )
 
 type Transaction struct {
-	*MetaDB
+	*Meta
 }
 
-func NewCommonModel(gormDB *gorm.DB) *Transaction {
-	return &Transaction{WrapGormDB(gormDB)}
+func NewCommonModel(m *Meta) *Transaction {
+	return &Transaction{Meta: m}
 }
 
 func (rw *Transaction) CreateDataCompareMetaAndUpdateWaitSyncMeta(ctx context.Context, dataDiffMeta *DataCompareMeta, waitSyncMeta *WaitSyncMeta) error {

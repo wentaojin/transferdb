@@ -20,9 +20,9 @@ import (
 	"fmt"
 	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/config"
-	"github.com/wentaojin/transferdb/model"
-	"github.com/wentaojin/transferdb/module/query/mysql"
-	"github.com/wentaojin/transferdb/module/query/oracle"
+	"github.com/wentaojin/transferdb/database/meta"
+	"github.com/wentaojin/transferdb/database/mysql"
+	"github.com/wentaojin/transferdb/database/oracle"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	"strconv"
@@ -35,14 +35,16 @@ type O2M struct {
 	cfg    *config.Config
 	oracle *oracle.Oracle
 	mysql  *mysql.MySQL
+	metaDB *meta.Meta
 }
 
-func NewO2MFuller(ctx context.Context, cfg *config.Config, oracle *oracle.Oracle, mysql *mysql.MySQL) *O2M {
+func NewO2MFuller(ctx context.Context, cfg *config.Config, oracle *oracle.Oracle, mysql *mysql.MySQL, metaDB *meta.Meta) *O2M {
 	return &O2M{
 		ctx:    ctx,
 		cfg:    cfg,
 		oracle: oracle,
 		mysql:  mysql,
+		metaDB: metaDB,
 	}
 }
 
@@ -72,7 +74,7 @@ func (r *O2M) NewFuller() error {
 	}
 
 	// 判断 table_error_detail 是否存在错误记录，是否可进行 CSV
-	errTotals, err := model.NewTableErrorDetailModel(r.oracle.GormDB).CountsBySchema(r.ctx, &model.TableErrorDetail{
+	errTotals, err := meta.NewTableErrorDetailModel(r.metaDB).CountsBySchema(r.ctx, &meta.TableErrorDetail{
 		SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 		RunMode:          common.FullO2MMode,
 	})
@@ -82,7 +84,7 @@ func (r *O2M) NewFuller() error {
 
 	// 判断并记录待同步表列表
 	for _, tableName := range exporters {
-		waitSyncMetas, err := model.NewSyncMetaModel(r.oracle.GormDB).WaitSyncMeta.Detail(r.ctx, &model.WaitSyncMeta{
+		waitSyncMetas, err := meta.NewWaitSyncMetaModel(r.metaDB).Detail(r.ctx, &meta.WaitSyncMeta{
 			SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 			SourceTableName:  tableName,
 			SyncMode:         common.FullO2MMode,
@@ -92,10 +94,10 @@ func (r *O2M) NewFuller() error {
 		}
 		// 初始同步表全量任务为 -1 表示未进行全量初始化，初始化完成会变更
 		// 全量同步完成，增量阶段，值预期都是 0
-		if len(waitSyncMetas.([]model.WaitSyncMeta)) == 0 {
+		if len(waitSyncMetas.([]meta.WaitSyncMeta)) == 0 {
 			// 初始同步表全量任务为 -1 表示未进行全量初始化，初始化完成会变更
 			// 全量同步完成，增量阶段，值预期都是 0
-			err = model.NewSyncMetaModel(r.oracle.GormDB).WaitSyncMeta.Create(r.ctx, &model.WaitSyncMeta{
+			err = meta.NewWaitSyncMetaModel(r.metaDB).Create(r.ctx, &meta.WaitSyncMeta{
 				SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 				SourceTableName:  common.StringUPPER(tableName),
 				SyncMode:         common.FullO2MMode,
@@ -112,7 +114,7 @@ func (r *O2M) NewFuller() error {
 	//  - 若想断点恢复，设置 enable-checkpoint true,首次一旦运行则 batch 数不能调整，
 	//  - 若不想断点恢复或者重新调整 batch 数，设置 enable-checkpoint false,清理元数据表 [wait_sync_meta],重新运行全量任务
 	if !r.cfg.FullConfig.EnableCheckpoint {
-		err = model.NewSyncMetaModel(r.oracle.GormDB).FullSyncMeta.DeleteBySchemaSyncMode(r.ctx, &model.FullSyncMeta{
+		err = meta.NewFullSyncMetaModel(r.metaDB).DeleteBySchemaSyncMode(r.ctx, &meta.FullSyncMeta{
 			SourceSchemaName: r.cfg.OracleConfig.SchemaName,
 			SyncMode:         common.FullO2MMode,
 		})
@@ -120,7 +122,7 @@ func (r *O2M) NewFuller() error {
 			return err
 		}
 		for _, tableName := range exporters {
-			err = model.NewSyncMetaModel(r.oracle.GormDB).WaitSyncMeta.Delete(r.ctx, &model.WaitSyncMeta{
+			err = meta.NewWaitSyncMetaModel(r.metaDB).Delete(r.ctx, &meta.WaitSyncMeta{
 				SourceSchemaName: r.cfg.OracleConfig.SchemaName,
 				SourceTableName:  tableName,
 				SyncMode:         common.FullO2MMode,
@@ -133,7 +135,7 @@ func (r *O2M) NewFuller() error {
 				return err
 			}
 			// 判断并记录待同步表列表
-			waitSyncMetas, err := model.NewSyncMetaModel(r.oracle.GormDB).WaitSyncMeta.Detail(r.ctx, &model.WaitSyncMeta{
+			waitSyncMetas, err := meta.NewWaitSyncMetaModel(r.metaDB).Detail(r.ctx, &meta.WaitSyncMeta{
 				SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 				SourceTableName:  tableName,
 				SyncMode:         common.FullO2MMode,
@@ -141,10 +143,10 @@ func (r *O2M) NewFuller() error {
 			if err != nil {
 				return err
 			}
-			if len(waitSyncMetas.([]model.WaitSyncMeta)) == 0 {
+			if len(waitSyncMetas.([]meta.WaitSyncMeta)) == 0 {
 				// 初始同步表全量任务为 -1 表示未进行全量初始化，初始化完成会变更
 				// 全量同步完成，增量阶段，值预期都是 0
-				err = model.NewSyncMetaModel(r.oracle.GormDB).WaitSyncMeta.Create(r.ctx, &model.WaitSyncMeta{
+				err = meta.NewWaitSyncMetaModel(r.metaDB).Create(r.ctx, &meta.WaitSyncMeta{
 					SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 					SourceTableName:  common.StringUPPER(tableName),
 					SyncMode:         common.FullO2MMode,
@@ -160,11 +162,11 @@ func (r *O2M) NewFuller() error {
 
 	// 获取等待同步以及未同步完成的表列表
 	var (
-		waitSyncTableMetas []model.WaitSyncMeta
+		waitSyncTableMetas []meta.WaitSyncMeta
 		waitSyncTables     []string
 	)
 
-	waitSyncDetails, err := model.NewSyncMetaModel(r.oracle.GormDB).WaitSyncMeta.Detail(r.ctx, &model.WaitSyncMeta{
+	waitSyncDetails, err := meta.NewWaitSyncMetaModel(r.metaDB).Detail(r.ctx, &meta.WaitSyncMeta{
 		SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 		SyncMode:         common.FullO2MMode,
 		FullGlobalSCN:    0,
@@ -173,7 +175,7 @@ func (r *O2M) NewFuller() error {
 	if err != nil {
 		return err
 	}
-	waitSyncTableMetas = waitSyncDetails.([]model.WaitSyncMeta)
+	waitSyncTableMetas = waitSyncDetails.([]meta.WaitSyncMeta)
 	if len(waitSyncTableMetas) > 0 {
 		for _, table := range waitSyncTableMetas {
 			waitSyncTables = append(waitSyncTables, common.StringUPPER(table.SourceTableName))
@@ -181,17 +183,17 @@ func (r *O2M) NewFuller() error {
 	}
 
 	var (
-		partSyncTableMetas []model.WaitSyncMeta
+		partSyncTableMetas []meta.WaitSyncMeta
 		partSyncTables     []string
 	)
-	partSyncDetails, err := model.NewSyncMetaModel(r.oracle.GormDB).WaitSyncMeta.Query(r.ctx, &model.WaitSyncMeta{
+	partSyncDetails, err := meta.NewWaitSyncMetaModel(r.metaDB).Query(r.ctx, &meta.WaitSyncMeta{
 		SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 		SyncMode:         common.FullO2MMode,
 	})
 	if err != nil {
 		return err
 	}
-	partSyncTableMetas = partSyncDetails.([]model.WaitSyncMeta)
+	partSyncTableMetas = partSyncDetails.([]meta.WaitSyncMeta)
 	if len(partSyncTableMetas) > 0 {
 		for _, table := range partSyncTableMetas {
 			partSyncTables = append(partSyncTables, common.StringUPPER(table.SourceTableName))
@@ -210,7 +212,7 @@ func (r *O2M) NewFuller() error {
 	var panicTblFullSlice []string
 
 	for _, partSyncMeta := range partSyncTableMetas {
-		tableNameArray, err2 := model.NewSyncMetaModel(r.oracle.GormDB).FullSyncMeta.DistinctTableName(r.ctx, &model.FullSyncMeta{
+		tableNameArray, err2 := meta.NewFullSyncMetaModel(r.metaDB).DistinctTableName(r.ctx, &meta.FullSyncMeta{
 			SourceSchemaName: r.cfg.OracleConfig.SchemaName})
 		if err2 != nil {
 			return err2
@@ -263,7 +265,7 @@ func (r *O2M) fullPartSyncTable(fullPartTables []string) error {
 		t := table
 		g.Go(func() error {
 			startTime := time.Now()
-			fullMetas, err := model.NewSyncMetaModel(r.mysql.GormDB).FullSyncMeta.Detail(r.ctx, &model.FullSyncMeta{
+			fullMetas, err := meta.NewFullSyncMetaModel(r.metaDB).Detail(r.ctx, &meta.FullSyncMeta{
 				SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 				SourceTableName:  common.StringUPPER(t),
 				SyncMode:         common.FullO2MMode,
@@ -274,7 +276,7 @@ func (r *O2M) fullPartSyncTable(fullPartTables []string) error {
 
 			g1 := &errgroup.Group{}
 			g1.SetLimit(r.cfg.FullConfig.SQLThreads)
-			for _, meta := range fullMetas.([]model.FullSyncMeta) {
+			for _, meta := range fullMetas.([]meta.FullSyncMeta) {
 				m := meta
 				g1.Go(func() error {
 					// 数据写入
@@ -300,7 +302,7 @@ func (r *O2M) fullPartSyncTable(fullPartTables []string) error {
 			}
 
 			// 更新表级别记录
-			err = model.NewSyncMetaModel(r.mysql.GormDB).WaitSyncMeta.ModifyFullSplitTimesZero(r.ctx, &model.WaitSyncMeta{
+			err = meta.NewWaitSyncMetaModel(r.metaDB).ModifyFullSplitTimesZero(r.ctx, &meta.WaitSyncMeta{
 				SourceSchemaName: r.cfg.OracleConfig.SchemaName,
 				SourceTableName:  t,
 				SyncMode:         common.FullO2MMode,
@@ -390,7 +392,7 @@ func (r *O2M) initWaitSyncTableRowID(csvWaitTables []string, oracleCollation boo
 					zap.String("where", "1 = 1"),
 					zap.Int("statistics rows", tableRowsByStatistics))
 
-				err = model.NewCommonModel(r.oracle.GormDB).CreateFullSyncMetaAndUpdateWaitSyncMeta(r.ctx, &model.FullSyncMeta{
+				err = meta.NewCommonModel(r.metaDB).CreateFullSyncMetaAndUpdateWaitSyncMeta(r.ctx, &meta.FullSyncMeta{
 					SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 					SourceTableName:  common.StringUPPER(t),
 					TargetSchemaName: common.StringUPPER(r.cfg.MySQLConfig.SchemaName),
@@ -400,7 +402,7 @@ func (r *O2M) initWaitSyncTableRowID(csvWaitTables []string, oracleCollation boo
 					SourceRowidInfo:  "1 = 1",
 					SyncMode:         common.FullO2MMode,
 					IsPartition:      isPartition,
-				}, &model.WaitSyncMeta{
+				}, &meta.WaitSyncMeta{
 					SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 					SourceTableName:  common.StringUPPER(t),
 					SyncMode:         common.FullO2MMode,
@@ -443,7 +445,7 @@ func (r *O2M) initWaitSyncTableRowID(csvWaitTables []string, oracleCollation boo
 					zap.String("where", "1 = 1"),
 					zap.Int("rowids rows", len(chunkRes)))
 
-				err = model.NewCommonModel(r.oracle.GormDB).CreateFullSyncMetaAndUpdateWaitSyncMeta(r.ctx, &model.FullSyncMeta{
+				err = meta.NewCommonModel(r.metaDB).CreateFullSyncMetaAndUpdateWaitSyncMeta(r.ctx, &meta.FullSyncMeta{
 					SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 					SourceTableName:  common.StringUPPER(t),
 					TargetSchemaName: common.StringUPPER(r.cfg.MySQLConfig.SchemaName),
@@ -453,7 +455,7 @@ func (r *O2M) initWaitSyncTableRowID(csvWaitTables []string, oracleCollation boo
 					SourceRowidInfo:  "1 = 1",
 					SyncMode:         common.FullO2MMode,
 					IsPartition:      isPartition,
-				}, &model.WaitSyncMeta{
+				}, &meta.WaitSyncMeta{
 					SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 					SourceTableName:  common.StringUPPER(t),
 					SyncMode:         common.FullO2MMode,
@@ -468,9 +470,9 @@ func (r *O2M) initWaitSyncTableRowID(csvWaitTables []string, oracleCollation boo
 				return nil
 			}
 
-			var fullMetas []model.FullSyncMeta
+			var fullMetas []meta.FullSyncMeta
 			for _, res := range chunkRes {
-				fullMetas = append(fullMetas, model.FullSyncMeta{
+				fullMetas = append(fullMetas, meta.FullSyncMeta{
 					SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 					SourceTableName:  common.StringUPPER(t),
 					TargetSchemaName: common.StringUPPER(r.cfg.MySQLConfig.SchemaName),
@@ -484,13 +486,13 @@ func (r *O2M) initWaitSyncTableRowID(csvWaitTables []string, oracleCollation boo
 			}
 
 			// 元数据库信息 batch 写入
-			err = model.NewSyncMetaModel(r.mysql.GormDB).FullSyncMeta.BatchCreate(r.ctx, fullMetas, r.cfg.AppConfig.InsertBatchSize)
+			err = meta.NewFullSyncMetaModel(r.metaDB).BatchCreate(r.ctx, fullMetas, r.cfg.AppConfig.InsertBatchSize)
 			if err != nil {
 				return err
 			}
 
 			// 更新 wait_sync_meta
-			err = model.NewSyncMetaModel(r.mysql.GormDB).WaitSyncMeta.Update(r.ctx, &model.WaitSyncMeta{
+			err = meta.NewWaitSyncMetaModel(r.metaDB).Update(r.ctx, &meta.WaitSyncMeta{
 				SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 				SourceTableName:  common.StringUPPER(t),
 				SyncMode:         common.FullO2MMode,

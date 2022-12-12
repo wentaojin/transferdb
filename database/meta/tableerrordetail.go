@@ -13,13 +13,12 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package model
+package meta
 
 import (
 	"context"
 	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/errors"
-	"gorm.io/gorm"
 )
 
 // 表错误详情
@@ -36,10 +35,10 @@ type TableErrorDetail struct {
 	*BaseModel
 }
 
-func NewTableErrorDetailModel(gormDB *gorm.DB) *TableErrorDetail {
+func NewTableErrorDetailModel(m *Meta) *TableErrorDetail {
 	return &TableErrorDetail{
 		BaseModel: &BaseModel{
-			MetaDB: WrapGormDB(gormDB),
+			Meta: m,
 		},
 	}
 }

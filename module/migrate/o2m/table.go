@@ -18,9 +18,9 @@ package o2m
 import (
 	"context"
 	"github.com/wentaojin/transferdb/common"
-	"github.com/wentaojin/transferdb/model"
-	"github.com/wentaojin/transferdb/module/query/mysql"
-	"github.com/wentaojin/transferdb/module/query/oracle"
+	"github.com/wentaojin/transferdb/database/meta"
+	"github.com/wentaojin/transferdb/database/mysql"
+	"github.com/wentaojin/transferdb/database/oracle"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	"time"
@@ -28,12 +28,12 @@ import (
 
 type Table struct {
 	Ctx       context.Context
-	SyncMeta  model.FullSyncMeta
+	SyncMeta  meta.FullSyncMeta
 	Oracle    *oracle.Oracle
 	BatchSize int
 }
 
-func NewTable(ctx context.Context, syncMeta model.FullSyncMeta,
+func NewTable(ctx context.Context, syncMeta meta.FullSyncMeta,
 	oracle *oracle.Oracle, batchSize int) *Table {
 	return &Table{
 		Ctx:       ctx,
@@ -64,17 +64,18 @@ func (t *Table) GetTableRows() ([]string, []string, error) {
 
 type Chunk struct {
 	Ctx           context.Context
-	SyncMeta      model.FullSyncMeta
+	SyncMeta      meta.FullSyncMeta
 	ApplyThreads  int
 	BatchSize     int
 	SafeMode      bool
 	MySQL         *mysql.MySQL
 	Oracle        *oracle.Oracle
+	MetaDB        *meta.Meta
 	SourceColumns []string
 	BatchResults  []string
 }
 
-func NewChunk(ctx context.Context, syncMeta model.FullSyncMeta,
+func NewChunk(ctx context.Context, syncMeta meta.FullSyncMeta,
 	oracle *oracle.Oracle, mysql *mysql.MySQL,
 	sourceColumns, batchResults []string, applyThreads, batchSize int, safeMode bool) *Chunk {
 	return &Chunk{
@@ -111,7 +112,7 @@ func (t *Chunk) ApplyTableRows() error {
 			zap.String("info", common.StringsBuilder(`SELECT `, t.SyncMeta.SourceColumnInfo, ` FROM `, t.SyncMeta.SourceSchemaName, `.`, t.SyncMeta.SourceTableName, ` WHERE `, t.SyncMeta.SourceRowidInfo)))
 
 		// 清理 full_sync_meta 记录
-		err := model.NewSyncMetaModel(t.MySQL.GormDB).FullSyncMeta.DeleteBySchemaTableRowid(t.Ctx, &model.FullSyncMeta{
+		err := meta.NewFullSyncMetaModel(t.MetaDB).DeleteBySchemaTableRowid(t.Ctx, &meta.FullSyncMeta{
 			SourceSchemaName: t.SyncMeta.SourceSchemaName,
 			SourceTableName:  t.SyncMeta.SourceTableName,
 			SourceRowidInfo:  t.SyncMeta.SourceRowidInfo,
@@ -144,7 +145,7 @@ func (t *Chunk) ApplyTableRows() error {
 	}
 
 	// 清理 full_sync_meta 记录
-	err := model.NewSyncMetaModel(t.MySQL.GormDB).FullSyncMeta.DeleteBySchemaTableRowid(t.Ctx, &model.FullSyncMeta{
+	err := meta.NewFullSyncMetaModel(t.MetaDB).DeleteBySchemaTableRowid(t.Ctx, &meta.FullSyncMeta{
 		SourceSchemaName: t.SyncMeta.SourceSchemaName,
 		SourceTableName:  t.SyncMeta.SourceTableName,
 		SourceRowidInfo:  t.SyncMeta.SourceRowidInfo,

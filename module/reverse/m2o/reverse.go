@@ -20,9 +20,9 @@ import (
 	"fmt"
 	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/config"
-	"github.com/wentaojin/transferdb/model"
-	"github.com/wentaojin/transferdb/module/query/mysql"
-	"github.com/wentaojin/transferdb/module/query/oracle"
+	"github.com/wentaojin/transferdb/database/meta"
+	"github.com/wentaojin/transferdb/database/mysql"
+	"github.com/wentaojin/transferdb/database/oracle"
 	"github.com/wentaojin/transferdb/module/reverse"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
@@ -36,14 +36,16 @@ type M2O struct {
 	cfg    *config.Config
 	mysql  *mysql.MySQL
 	oracle *oracle.Oracle
+	metaDB *meta.Meta
 }
 
-func NewM2OReverse(ctx context.Context, cfg *config.Config, mysql *mysql.MySQL, oracle *oracle.Oracle) *M2O {
+func NewM2OReverse(ctx context.Context, cfg *config.Config, mysql *mysql.MySQL, oracle *oracle.Oracle, metaDB *meta.Meta) *M2O {
 	return &M2O{
 		ctx:    ctx,
 		cfg:    cfg,
 		mysql:  mysql,
 		oracle: oracle,
+		metaDB: metaDB,
 	}
 }
 
@@ -65,7 +67,7 @@ func (m2o *M2O) NewReverse() error {
 	}
 
 	// 判断 table_error_detail 是否存在错误记录，是否可进行 reverse
-	errTotals, err := model.NewTableErrorDetailModel(m2o.mysql.GormDB).CountsBySchema(m2o.ctx, &model.TableErrorDetail{
+	errTotals, err := meta.NewTableErrorDetailModel(m2o.metaDB).CountsBySchema(m2o.ctx, &meta.TableErrorDetail{
 		SourceSchemaName: common.StringUPPER(m2o.cfg.MySQLConfig.SchemaName),
 		RunMode:          common.ReverseM2OMode,
 	})
@@ -133,9 +135,9 @@ func (m2o *M2O) NewReverse() error {
 	for _, table := range tables {
 		t := table
 		g.Go(func() error {
-			rule, err := IReader(m2o.ctx, m2o.mysql, m2o.oracle, t, t)
+			rule, err := IReader(m2o.ctx, m2o.mysql, m2o.oracle, m2o.metaDB, t, t)
 			if err != nil {
-				if err = model.NewTableErrorDetailModel(m2o.mysql.GormDB).Create(m2o.ctx, &model.TableErrorDetail{
+				if err = meta.NewTableErrorDetailModel(m2o.metaDB).Create(m2o.ctx, &meta.TableErrorDetail{
 					SourceSchemaName: t.SourceSchemaName,
 					SourceTableName:  t.SourceTableName,
 					RunMode:          common.ReverseM2OMode,
@@ -156,7 +158,7 @@ func (m2o *M2O) NewReverse() error {
 			}
 			ddl, err := IReverse(t, rule)
 			if err != nil {
-				if err = model.NewTableErrorDetailModel(m2o.mysql.GormDB).Create(m2o.ctx, &model.TableErrorDetail{
+				if err = meta.NewTableErrorDetailModel(m2o.metaDB).Create(m2o.ctx, &meta.TableErrorDetail{
 					SourceSchemaName: t.SourceSchemaName,
 					SourceTableName:  t.SourceTableName,
 					RunMode:          common.ReverseM2OMode,
@@ -177,7 +179,7 @@ func (m2o *M2O) NewReverse() error {
 			}
 			err = IWriter(f, ddl)
 			if err != nil {
-				if err = model.NewTableErrorDetailModel(m2o.mysql.GormDB).Create(m2o.ctx, &model.TableErrorDetail{
+				if err = meta.NewTableErrorDetailModel(m2o.metaDB).Create(m2o.ctx, &meta.TableErrorDetail{
 					SourceSchemaName: t.SourceSchemaName,
 					SourceTableName:  t.SourceTableName,
 					RunMode:          common.ReverseM2OMode,
@@ -209,7 +211,7 @@ func (m2o *M2O) NewReverse() error {
 		return err
 	}
 
-	errTotals, err = model.NewTableErrorDetailModel(m2o.mysql.GormDB).CountsBySchema(m2o.ctx, &model.TableErrorDetail{
+	errTotals, err = meta.NewTableErrorDetailModel(m2o.metaDB).CountsBySchema(m2o.ctx, &meta.TableErrorDetail{
 		SourceSchemaName: common.StringUPPER(m2o.cfg.MySQLConfig.SchemaName),
 		RunMode:          common.ReverseM2OMode,
 	})

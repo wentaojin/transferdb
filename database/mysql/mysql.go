@@ -19,21 +19,38 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"gorm.io/gorm"
+	"github.com/wentaojin/transferdb/common"
+	"github.com/wentaojin/transferdb/config"
+	"github.com/wentaojin/transferdb/errors"
 )
 
 type MySQL struct {
 	Ctx     context.Context
 	MySQLDB *sql.DB
-	GormDB  *gorm.DB
 }
 
-func NewMySQLDB(ctx context.Context, mysqlDB *sql.DB, GormDB *gorm.DB) *MySQL {
+func NewMySQLDBEngine(ctx context.Context, mysqlCfg config.MySQLConfig) (*MySQL, error) {
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?%s",
+		mysqlCfg.Username, mysqlCfg.Password, mysqlCfg.Host, mysqlCfg.Port, mysqlCfg.SchemaName, mysqlCfg.ConnectParams)
+
+	mysqlDB, err := sql.Open("mysql", dsn)
+	if err != nil {
+		return nil, errors.NewMSError(errors.TRANSFERDB, errors.DOMAIN_DB, fmt.Errorf("error on open mysql database connection [%v]: %v", mysqlCfg.SchemaName, err))
+	}
+
+	mysqlDB.SetMaxIdleConns(common.MysqlMaxIdleConn)
+	mysqlDB.SetMaxOpenConns(common.MysqlMaxConn)
+	mysqlDB.SetConnMaxLifetime(common.MysqlConnMaxLifeTime)
+	mysqlDB.SetConnMaxIdleTime(common.MysqlConnMaxIdleTime)
+
+	if err = mysqlDB.Ping(); err != nil {
+		return nil, errors.NewMSError(errors.TRANSFERDB, errors.DOMAIN_DB, fmt.Errorf("error on ping mysql database connection [%v]: %v", mysqlCfg.SchemaName, err))
+	}
+
 	return &MySQL{
 		Ctx:     ctx,
 		MySQLDB: mysqlDB,
-		GormDB:  GormDB,
-	}
+	}, nil
 }
 
 func Query(ctx context.Context, db *sql.DB, querySQL string) ([]string, []map[string]string, error) {

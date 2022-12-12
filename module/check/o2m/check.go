@@ -20,10 +20,10 @@ import (
 	"fmt"
 	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/config"
-	"github.com/wentaojin/transferdb/model"
+	"github.com/wentaojin/transferdb/database/meta"
+	"github.com/wentaojin/transferdb/database/mysql"
+	"github.com/wentaojin/transferdb/database/oracle"
 	"github.com/wentaojin/transferdb/module/check"
-	"github.com/wentaojin/transferdb/module/query/mysql"
-	"github.com/wentaojin/transferdb/module/query/oracle"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	"os"
@@ -37,14 +37,16 @@ type O2M struct {
 	cfg    *config.Config
 	mysql  *mysql.MySQL
 	oracle *oracle.Oracle
+	metaDB *meta.Meta
 }
 
-func NewO2MCheck(ctx context.Context, cfg *config.Config, oracle *oracle.Oracle, mysql *mysql.MySQL) *O2M {
+func NewO2MCheck(ctx context.Context, cfg *config.Config, oracle *oracle.Oracle, mysql *mysql.MySQL, metaDB *meta.Meta) *O2M {
 	return &O2M{
 		ctx:    ctx,
 		cfg:    cfg,
 		mysql:  mysql,
 		oracle: oracle,
+		metaDB: metaDB,
 	}
 }
 
@@ -70,7 +72,7 @@ func (r *O2M) NewCheck() error {
 	}
 
 	// 判断 table_error_detail 是否存在错误记录，是否可进行 check
-	errTotals, err := model.NewTableErrorDetailModel(r.oracle.GormDB).CountsBySchema(r.ctx, &model.TableErrorDetail{
+	errTotals, err := meta.NewTableErrorDetailModel(r.metaDB).CountsBySchema(r.ctx, &meta.TableErrorDetail{
 		SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 		RunMode:          common.CheckO2MMode,
 	})
@@ -184,7 +186,8 @@ func (r *O2M) NewCheck() error {
 			if err != nil {
 				return err
 			}
-			err = NewChecker(r.ctx, oracleTableInfo, mysqlTableInfo, mysqlDBVersion, r.cfg.MySQLConfig.DBType, r.oracle).Writer(f)
+			err = NewChecker(r.ctx, oracleTableInfo, mysqlTableInfo, mysqlDBVersion,
+				r.cfg.MySQLConfig.DBType, r.metaDB).Writer(f)
 			if err != nil {
 				return err
 			}
@@ -200,7 +203,7 @@ func (r *O2M) NewCheck() error {
 		return err
 	}
 
-	checkError, err := model.NewTableErrorDetailModel(r.oracle.GormDB).CountsBySchema(r.ctx, &model.TableErrorDetail{
+	checkError, err := meta.NewTableErrorDetailModel(r.metaDB).CountsBySchema(r.ctx, &meta.TableErrorDetail{
 		SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 		RunMode:          common.CheckO2MMode,
 	})

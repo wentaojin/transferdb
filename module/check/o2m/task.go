@@ -16,8 +16,8 @@ limitations under the License.
 package o2m
 
 import (
-	"github.com/wentaojin/transferdb/module/query/mysql"
-	"github.com/wentaojin/transferdb/module/query/oracle"
+	"github.com/wentaojin/transferdb/database/mysql"
+	"github.com/wentaojin/transferdb/database/oracle"
 )
 
 type Task struct {

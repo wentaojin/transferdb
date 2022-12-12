@@ -66,10 +66,10 @@ func (o *Oracle) GetOracleTableColumnDistinctValue(schemaName, tableName string,
 	for _, col := range columnList {
 		colList = append(colList, common.StringsBuilder("'", strings.ToUpper(col), "'"))
 	}
-	sql := fmt.Sprintf("SELECT COLUMN_NAME FROM DBA_TAB_COLS WHERE OWNER = '%s' AND TABLE_NAME = '%s' AND COLUMN_NAME IN (%s) ORDER BY NUM_DISTINCT DESC",
+	query := fmt.Sprintf("SELECT COLUMN_NAME FROM DBA_TAB_COLS WHERE OWNER = '%s' AND TABLE_NAME = '%s' AND COLUMN_NAME IN (%s) ORDER BY NUM_DISTINCT DESC",
 		strings.ToUpper(schemaName), strings.ToUpper(tableName), strings.Join(colList, ","))
 
-	_, res, err := Query(o.Ctx, o.OracleDB, sql)
+	_, res, err := Query(o.Ctx, o.OracleDB, query)
 	if err != nil {
 		return orderCol, err
 	}

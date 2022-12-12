@@ -17,8 +17,8 @@ package reverse
 
 import (
 	"bufio"
-	"github.com/wentaojin/transferdb/module/query/mysql"
-	"github.com/wentaojin/transferdb/module/query/oracle"
+	"github.com/wentaojin/transferdb/database/mysql"
+	"github.com/wentaojin/transferdb/database/oracle"
 	"os"
 	"sync"
 )

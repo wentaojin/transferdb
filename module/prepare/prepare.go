@@ -18,7 +18,7 @@ package prepare
 import (
 	"context"
 	"github.com/wentaojin/transferdb/config"
-	"github.com/wentaojin/transferdb/module/engine"
+	"github.com/wentaojin/transferdb/database/meta"
 	"go.uber.org/zap"
 	"time"
 )
@@ -26,7 +26,7 @@ import (
 func TPrepare(ctx context.Context, cfg *config.Config) error {
 	startTime := time.Now()
 	zap.L().Info("prepare tansferdb env start")
-	metaDB, err := engine.NewMetaDBEngine(ctx, cfg.MySQLConfig, cfg.AppConfig.SlowlogThreshold)
+	metaDB, err := meta.NewMetaDBEngine(ctx, cfg.MySQLConfig, cfg.AppConfig.SlowlogThreshold)
 	if err != nil {
 		return err
 	}

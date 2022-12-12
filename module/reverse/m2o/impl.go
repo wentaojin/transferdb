@@ -18,12 +18,13 @@ package m2o
 import (
 	"context"
 	"fmt"
-	"github.com/wentaojin/transferdb/module/query/mysql"
-	"github.com/wentaojin/transferdb/module/query/oracle"
+	"github.com/wentaojin/transferdb/database/meta"
+	"github.com/wentaojin/transferdb/database/mysql"
+	"github.com/wentaojin/transferdb/database/oracle"
 	"github.com/wentaojin/transferdb/module/reverse"
 )
 
-func IReader(ctx context.Context, mysql *mysql.MySQL, oracle *oracle.Oracle, t *Table, rd reverse.Reader) (*Rule, error) {
+func IReader(ctx context.Context, mysql *mysql.MySQL, oracle *oracle.Oracle, metaDB *meta.Meta, t *Table, rd reverse.Reader) (*Rule, error) {
 	primaryKey, err := rd.GetTablePrimaryKey()
 	if err != nil {
 		return nil, err
@@ -81,6 +82,7 @@ func IReader(ctx context.Context, mysql *mysql.MySQL, oracle *oracle.Oracle, t *
 		IsPartition:       t.IsPartition,
 		Oracle:            oracle,
 		MySQL:             mysql,
+		MetaDB:            metaDB,
 	}, nil
 }
 

@@ -19,8 +19,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/wentaojin/transferdb/common"
-	"github.com/wentaojin/transferdb/model"
-	"github.com/wentaojin/transferdb/module/query/oracle"
+	"github.com/wentaojin/transferdb/database/meta"
 	"strconv"
 	"strings"
 )
@@ -28,7 +27,7 @@ import (
 /*
 Oracle 表字段映射转换 -> Check 阶段
 */
-func GenOracleTableColumnMeta(ctx context.Context, oracle *oracle.Oracle, sourceSchema, sourceTableName, columnName string, columnINFO Column) (string, error) {
+func GenOracleTableColumnMeta(ctx context.Context, metaDB *meta.Meta, sourceSchema, sourceTableName, columnName string, columnINFO Column) (string, error) {
 	var (
 		nullable        string
 		dataDefault     string
@@ -78,7 +77,7 @@ func GenOracleTableColumnMeta(ctx context.Context, oracle *oracle.Oracle, source
 	}
 
 	if columnINFO.DataDefault != "" {
-		dataDefault, err = ChangeTableColumnDefaultValue(ctx, oracle, columnINFO.DataDefault)
+		dataDefault, err = ChangeTableColumnDefaultValue(ctx, metaDB, columnINFO.DataDefault)
 		if err != nil {
 			return columnMeta, err
 		}
@@ -86,7 +85,7 @@ func GenOracleTableColumnMeta(ctx context.Context, oracle *oracle.Oracle, source
 		dataDefault = columnINFO.DataDefault
 	}
 
-	columnType, err := ChangeTableColumnType(ctx, oracle, sourceSchema, sourceTableName, columnName, columnINFO)
+	columnType, err := ChangeTableColumnType(ctx, metaDB, sourceSchema, sourceTableName, columnName, columnINFO)
 	if err != nil {
 		return "", err
 	}
@@ -155,7 +154,7 @@ func GenOracleTableColumnMeta(ctx context.Context, oracle *oracle.Oracle, source
 // 数据库查询获取自定义表结构转换规则
 // 加载数据类型转换规则【处理字段级别、表级别、库级别数据类型映射规则】
 // 数据类型转换规则判断，未设置自定义规则，默认采用内置默认字段类型转换
-func ChangeTableColumnType(ctx context.Context, oracle *oracle.Oracle, sourceSchema, sourceTableName, columnName string, columnINFO Column) (string, error) {
+func ChangeTableColumnType(ctx context.Context, metaDB *meta.Meta, sourceSchema, sourceTableName, columnName string, columnINFO Column) (string, error) {
 	var columnType string
 	// 获取内置映射规则
 	originColumnType, buildInColumnType, err := oracleTableColumnMapRuleReverse(columnINFO)
@@ -163,7 +162,7 @@ func ChangeTableColumnType(ctx context.Context, oracle *oracle.Oracle, sourceSch
 		return columnType, err
 	}
 	// 获取自定义映射规则
-	columnDataTypeMapSlice, err := model.NewReverseModel(oracle.GormDB).ColumnRuleMap.Detail(ctx, &model.ColumnRuleMap{
+	columnDataTypeMapSlice, err := meta.NewColumnRuleMapModel(metaDB).Detail(ctx, &meta.ColumnRuleMap{
 		SourceSchemaName: sourceSchema,
 		SourceTableName:  sourceTableName,
 		SourceColumnName: columnName,
@@ -173,7 +172,7 @@ func ChangeTableColumnType(ctx context.Context, oracle *oracle.Oracle, sourceSch
 		return columnType, err
 	}
 
-	tableDataTypeMapSlice, err := model.NewReverseModel(oracle.GormDB).TableRuleMap.Detail(ctx, &model.TableRuleMap{
+	tableDataTypeMapSlice, err := meta.NewTableRuleMapModel(metaDB).Detail(ctx, &meta.TableRuleMap{
 		SourceSchemaName: sourceSchema,
 		SourceTableName:  sourceTableName,
 		ReverseMode:      common.ReverseO2MMode,
@@ -182,7 +181,7 @@ func ChangeTableColumnType(ctx context.Context, oracle *oracle.Oracle, sourceSch
 		return columnType, err
 	}
 
-	schemaDataTypeMapSlice, err := model.NewReverseModel(oracle.GormDB).SchemaRuleMap.Detail(ctx, &model.SchemaRuleMap{
+	schemaDataTypeMapSlice, err := meta.NewSchemaRuleMapModel(metaDB).Detail(ctx, &meta.SchemaRuleMap{
 		SourceSchemaName: sourceSchema,
 		ReverseMode:      common.ReverseO2MMode,
 	})
@@ -192,16 +191,16 @@ func ChangeTableColumnType(ctx context.Context, oracle *oracle.Oracle, sourceSch
 
 	// 优先级
 	// column > table > schema > buildin
-	if len(columnDataTypeMapSlice.([]model.ColumnRuleMap)) == 0 {
+	if len(columnDataTypeMapSlice.([]meta.ColumnRuleMap)) == 0 {
 		return loadDataTypeRuleUsingTableOrSchema(originColumnType, buildInColumnType,
-			tableDataTypeMapSlice.([]model.TableRuleMap), schemaDataTypeMapSlice.([]model.SchemaRuleMap)), nil
+			tableDataTypeMapSlice.([]meta.TableRuleMap), schemaDataTypeMapSlice.([]meta.SchemaRuleMap)), nil
 	}
 
 	// only column rule
-	columnTypeFromColumn := loadColumnTypeRuleOnlyUsingColumn(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice.([]model.ColumnRuleMap))
+	columnTypeFromColumn := loadColumnTypeRuleOnlyUsingColumn(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice.([]meta.ColumnRuleMap))
 
 	// table or schema rule check, return column type
-	columnTypeFromOther := loadDataTypeRuleUsingTableOrSchema(originColumnType, buildInColumnType, tableDataTypeMapSlice.([]model.TableRuleMap), schemaDataTypeMapSlice.([]model.SchemaRuleMap))
+	columnTypeFromOther := loadDataTypeRuleUsingTableOrSchema(originColumnType, buildInColumnType, tableDataTypeMapSlice.([]meta.TableRuleMap), schemaDataTypeMapSlice.([]meta.SchemaRuleMap))
 
 	// column or other rule check, return column type
 	switch {
@@ -216,20 +215,20 @@ func ChangeTableColumnType(ctx context.Context, oracle *oracle.Oracle, sourceSch
 	}
 }
 
-func ChangeTableColumnDefaultValue(ctx context.Context, oracle *oracle.Oracle, dataDefault string) (string, error) {
+func ChangeTableColumnDefaultValue(ctx context.Context, metaDB *meta.Meta, dataDefault string) (string, error) {
 	// 处理 oracle 默认值 ('xxx') 或者 (xxx)
 	if strings.HasPrefix(dataDefault, "(") && strings.HasSuffix(dataDefault, ")") {
 		dataDefault = strings.TrimLeft(dataDefault, "(")
 		dataDefault = strings.TrimRight(dataDefault, ")")
 	}
 
-	defaultValueMapSlice, err := model.NewReverseModel(oracle.GormDB).DefaultValueMap.Detail(ctx, &model.DefaultValueMap{
+	defaultValueMapSlice, err := meta.NewDefaultValueMapModel(metaDB).Detail(ctx, &meta.DefaultValueMap{
 		ReverseMode: common.ReverseO2MMode,
 	})
 	if err != nil {
 		return dataDefault, err
 	}
-	return loadColumnDefaultValueRule(dataDefault, defaultValueMapSlice.([]model.DefaultValueMap)), nil
+	return loadColumnDefaultValueRule(dataDefault, defaultValueMapSlice.([]meta.DefaultValueMap)), nil
 }
 
 func oracleTableColumnMapRuleReverse(columnINFO Column) (string, string, error) {
@@ -516,7 +515,7 @@ func oracleTableColumnMapRuleReverse(columnINFO Column) (string, string, error) 
 	return originColumnType, buildInColumnType, nil
 }
 
-func loadColumnDefaultValueRule(defaultValue string, defaultValueMapSlice []model.DefaultValueMap) string {
+func loadColumnDefaultValueRule(defaultValue string, defaultValueMapSlice []meta.DefaultValueMap) string {
 	if len(defaultValueMapSlice) == 0 {
 		return defaultValue
 	}
@@ -529,8 +528,8 @@ func loadColumnDefaultValueRule(defaultValue string, defaultValueMapSlice []mode
 	return defaultValue
 }
 
-func loadDataTypeRuleUsingTableOrSchema(originColumnType string, buildInColumnType string, tableDataTypeMapSlice []model.TableRuleMap,
-	schemaDataTypeMapSlice []model.SchemaRuleMap) string {
+func loadDataTypeRuleUsingTableOrSchema(originColumnType string, buildInColumnType string, tableDataTypeMapSlice []meta.TableRuleMap,
+	schemaDataTypeMapSlice []meta.SchemaRuleMap) string {
 	switch {
 	case len(tableDataTypeMapSlice) != 0 && len(schemaDataTypeMapSlice) == 0:
 		return loadColumnTypeRuleOnlyUsingTable(originColumnType, buildInColumnType, tableDataTypeMapSlice)
@@ -548,7 +547,7 @@ func loadDataTypeRuleUsingTableOrSchema(originColumnType string, buildInColumnTy
 	}
 }
 
-func loadDataTypeRuleUsingTableAndSchema(originColumnType string, buildInColumnType string, tableDataTypeMapSlice []model.TableRuleMap, schemaDataTypeMapSlice []model.SchemaRuleMap) string {
+func loadDataTypeRuleUsingTableAndSchema(originColumnType string, buildInColumnType string, tableDataTypeMapSlice []meta.TableRuleMap, schemaDataTypeMapSlice []meta.SchemaRuleMap) string {
 	// 规则判断
 	customTableDataType := loadColumnTypeRuleOnlyUsingTable(originColumnType, buildInColumnType, tableDataTypeMapSlice)
 
@@ -570,7 +569,7 @@ func loadDataTypeRuleUsingTableAndSchema(originColumnType string, buildInColumnT
 	库、表、字段自定义映射规则
 */
 // 表级别自定义映射规则
-func loadColumnTypeRuleOnlyUsingTable(originColumnType string, buildInColumnType string, tableDataTypeMapSlice []model.TableRuleMap) string {
+func loadColumnTypeRuleOnlyUsingTable(originColumnType string, buildInColumnType string, tableDataTypeMapSlice []meta.TableRuleMap) string {
 	if len(tableDataTypeMapSlice) == 0 {
 		return buildInColumnType
 	}
@@ -618,7 +617,7 @@ func loadColumnTypeRuleOnlyUsingTable(originColumnType string, buildInColumnType
 }
 
 // 库级别自定义映射规则
-func loadColumnTypeRuleOnlyUsingSchema(originColumnType, buildInColumnType string, schemaDataTypeMapSlice []model.SchemaRuleMap) string {
+func loadColumnTypeRuleOnlyUsingSchema(originColumnType, buildInColumnType string, schemaDataTypeMapSlice []meta.SchemaRuleMap) string {
 	if len(schemaDataTypeMapSlice) == 0 {
 		return buildInColumnType
 	}
@@ -667,7 +666,7 @@ func loadColumnTypeRuleOnlyUsingSchema(originColumnType, buildInColumnType strin
 }
 
 // 字段级别自定义映射规则
-func loadColumnTypeRuleOnlyUsingColumn(columnName string, originColumnType string, buildInColumnType string, columnDataTypeMapSlice []model.ColumnRuleMap) string {
+func loadColumnTypeRuleOnlyUsingColumn(columnName string, originColumnType string, buildInColumnType string, columnDataTypeMapSlice []meta.ColumnRuleMap) string {
 	if len(columnDataTypeMapSlice) == 0 {
 		return buildInColumnType
 	}

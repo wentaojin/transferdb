@@ -19,22 +19,29 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"gorm.io/gorm"
 	"strings"
 )
 
 type Postgres struct {
-	Ctx    context.Context
-	PGDB   *sql.DB
-	GormDB *gorm.DB
+	Ctx  context.Context
+	PGDB *sql.DB
 }
 
-func NewPostgresDB(ctx context.Context, mysqlDB *sql.DB, GormDB *gorm.DB) *Postgres {
-	return &Postgres{
-		Ctx:    ctx,
-		PGDB:   mysqlDB,
-		GormDB: GormDB,
+func NewPostgresEngine(ctx context.Context, dbUser, dbPassword, ipAddr, dbPort, dbName string) (*Postgres, error) {
+	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+		ipAddr, dbPort, dbUser, dbPassword, dbName)
+	db, err := sql.Open("ora", dsn) // this does not really open a new connection
+	if err != nil {
+		return nil, fmt.Errorf("error on initializing database connection: %s", err.Error())
 	}
+	db.SetMaxIdleConns(100)
+
+	err = db.Ping() // This DOES open a connection if necessary. This makes sure the database is accessible
+	if err != nil {
+		return nil, fmt.Errorf("error on opening database connection: %s", err.Error())
+	}
+
+	return &Postgres{Ctx: ctx, PGDB: db}, nil
 }
 
 func Query(ctx context.Context, db *sql.DB, querySQL string) ([]string, []map[string]string, error) {

@@ -20,21 +20,22 @@ import (
 	"fmt"
 	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/config"
-	"github.com/wentaojin/transferdb/model"
-	"github.com/wentaojin/transferdb/module/query/mysql"
-	"github.com/wentaojin/transferdb/module/query/oracle"
+	"github.com/wentaojin/transferdb/database/meta"
+	"github.com/wentaojin/transferdb/database/mysql"
+	"github.com/wentaojin/transferdb/database/oracle"
 	"go.uber.org/zap"
 	"strconv"
 	"strings"
 	"time"
 )
 
-func NewO2MIncr(ctx context.Context, cfg *config.Config, oracle *oracle.Oracle, mysql *mysql.MySQL) *O2M {
+func NewO2MIncr(ctx context.Context, cfg *config.Config, oracle *oracle.Oracle, mysql *mysql.MySQL, metaDB *meta.Meta) *O2M {
 	return &O2M{
 		ctx:    ctx,
 		cfg:    cfg,
 		oracle: oracle,
 		mysql:  mysql,
+		metaDB: metaDB,
 	}
 }
 
@@ -58,7 +59,7 @@ func (r *O2M) NewIncr() error {
 	}
 
 	// 判断 table_error_detail 是否存在错误记录，是否可进行 ALL
-	errTotals, err := model.NewTableErrorDetailModel(r.oracle.GormDB).CountsBySchema(r.ctx, &model.TableErrorDetail{
+	errTotals, err := meta.NewTableErrorDetailModel(r.metaDB).CountsBySchema(r.ctx, &meta.TableErrorDetail{
 		SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 		RunMode:          common.AllO2MMode,
 	})
@@ -71,7 +72,7 @@ func (r *O2M) NewIncr() error {
 		existTableList, isNotExistTableList []string
 	)
 	for _, tbl := range exporters {
-		counts, err := model.NewSyncMetaModel(r.mysql.GormDB).CountsBySchemaTable(r.ctx, &model.IncrSyncMeta{
+		counts, err := meta.NewIncrSyncMetaModel(r.metaDB).CountsBySchemaTable(r.ctx, &meta.IncrSyncMeta{
 			SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 			SourceTableName:  tbl,
 		})
@@ -94,7 +95,7 @@ func (r *O2M) NewIncr() error {
 			// 根据 wait_sync_meta 数据记录判断表全量是否完成
 			var panicTables []string
 			for _, t := range exporters {
-				waitSyncMetas, err := model.NewSyncMetaModel(r.mysql.GormDB).WaitSyncMeta.DetailBySchemaTableSCN(r.ctx, &model.WaitSyncMeta{
+				waitSyncMetas, err := meta.NewWaitSyncMetaModel(r.metaDB).DetailBySchemaTableSCN(r.ctx, &meta.WaitSyncMeta{
 					SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 					SourceTableName:  common.StringUPPER(t),
 					SyncMode:         common.AllO2MMode,
@@ -102,7 +103,7 @@ func (r *O2M) NewIncr() error {
 				if err != nil {
 					return err
 				}
-				if len(waitSyncMetas.([]model.WaitSyncMeta)) == 0 {
+				if len(waitSyncMetas.([]meta.WaitSyncMeta)) == 0 {
 					panicTables = append(panicTables, t)
 				}
 			}
@@ -133,16 +134,16 @@ func (r *O2M) NewIncr() error {
 
 		// 全量任务结束，写入增量源数据表起始 SCN 号
 		//根据配置文件生成同步表元数据 [incr_sync_meta]
-		tableMetas, err := model.NewSyncMetaModel(r.mysql.GormDB).WaitSyncMeta.DetailBySchema(r.ctx, &model.WaitSyncMeta{
+		tableMetas, err := meta.NewWaitSyncMetaModel(r.metaDB).DetailBySchema(r.ctx, &meta.WaitSyncMeta{
 			SourceSchemaName: r.cfg.OracleConfig.SchemaName,
 			SyncMode:         common.AllO2MMode})
 		if err != nil {
 			return err
 		}
-		var incrSyncMetas []model.IncrSyncMeta
-		if len(tableMetas.([]model.WaitSyncMeta)) > 0 {
-			for _, table := range tableMetas.([]model.WaitSyncMeta) {
-				incrSyncMetas = append(incrSyncMetas, model.IncrSyncMeta{
+		var incrSyncMetas []meta.IncrSyncMeta
+		if len(tableMetas.([]meta.WaitSyncMeta)) > 0 {
+			for _, table := range tableMetas.([]meta.WaitSyncMeta) {
+				incrSyncMetas = append(incrSyncMetas, meta.IncrSyncMeta{
 					GlobalSCN:        table.FullGlobalSCN,
 					SourceSchemaName: common.StringUPPER(table.SourceSchemaName),
 					SourceTableName:  common.StringUPPER(table.SourceTableName),
@@ -192,11 +193,11 @@ func (r *O2M) syncTableIncrRecord() error {
 			zap.Uint64("logfile end scn", logFileEndSCN))
 
 		// 获取增量元数据表内所需同步表信息
-		incrSyncMetas, err := model.NewSyncMetaModel(r.mysql.GormDB).IncrSyncMeta.DetailBySchema(r.ctx, r.cfg.OracleConfig.SchemaName)
+		incrSyncMetas, err := meta.NewIncrSyncMetaModel(r.metaDB).DetailBySchema(r.ctx, r.cfg.OracleConfig.SchemaName)
 		if err != nil {
 			return err
 		}
-		if len(incrSyncMetas.([]model.IncrSyncMeta)) == 0 {
+		if len(incrSyncMetas.([]meta.IncrSyncMeta)) == 0 {
 			return fmt.Errorf("mysql increment mete table [incr_sync_meta] can't null")
 		}
 
@@ -205,13 +206,13 @@ func (r *O2M) syncTableIncrRecord() error {
 			transferTableSlice   []string
 		)
 		transferTableMetaMap = make(map[string]uint64)
-		for _, tbl := range incrSyncMetas.([]model.IncrSyncMeta) {
+		for _, tbl := range incrSyncMetas.([]meta.IncrSyncMeta) {
 			transferTableMetaMap[strings.ToUpper(tbl.SourceTableName)] = tbl.SourceTableSCN
 			transferTableSlice = append(transferTableSlice, strings.ToUpper(tbl.SourceTableName))
 		}
 
 		// 获取 logminer query 起始最小 SCN
-		minSourceTableSCN, err := model.NewSyncMetaModel(r.mysql.GormDB).IncrSyncMeta.MinSourceTableSCNBySchema(r.ctx, &model.IncrSyncMeta{SourceSchemaName: r.cfg.OracleConfig.SchemaName})
+		minSourceTableSCN, err := meta.NewIncrSyncMetaModel(r.metaDB).MinSourceTableSCNBySchema(r.ctx, &meta.IncrSyncMeta{SourceSchemaName: r.cfg.OracleConfig.SchemaName})
 		if err != nil {
 			return err
 		}
@@ -293,13 +294,13 @@ func (r *O2M) syncTableIncrRecord() error {
 
 				if len(logminerContentMap) > 0 {
 					// 数据应用
-					if err := applyOracleIncrRecord(r.ctx, r.mysql, r.cfg, logminerContentMap); err != nil {
+					if err := applyOracleIncrRecord(r.metaDB, r.mysql, r.cfg, logminerContentMap); err != nil {
 						return err
 					}
 
 					if logFileStartSCN == currentRedoLogFirstChange && log["LOG_FILE"] == currentRedoLogFileName {
 						// 当前所有日志文件内容应用完毕，判断是否直接更新 GLOBAL_SCN 至当前重做日志文件起始 SCN
-						err = model.NewCommonModel(r.mysql.GormDB).UpdateIncrSyncMetaSCNByCurrentRedo(r.ctx, r.cfg.OracleConfig.SchemaName,
+						err = meta.NewCommonModel(r.metaDB).UpdateIncrSyncMetaSCNByCurrentRedo(r.ctx, r.cfg.OracleConfig.SchemaName,
 							currentRedoLogMaxSCN,
 							logFileStartSCN,
 							logFileEndSCN)
@@ -308,7 +309,7 @@ func (r *O2M) syncTableIncrRecord() error {
 						}
 					} else {
 						// 当前所有日志文件内容应用完毕，直接更新 GLOBAL_SCN 至日志文件结束 SCN
-						err = model.NewCommonModel(r.mysql.GormDB).UpdateIncrSyncMetaSCNByNonCurrentRedo(r.ctx,
+						err = meta.NewCommonModel(r.metaDB).UpdateIncrSyncMetaSCNByNonCurrentRedo(r.ctx,
 							r.cfg.OracleConfig.SchemaName,
 							currentRedoLogMaxSCN,
 							logFileStartSCN,
@@ -336,11 +337,11 @@ func (r *O2M) syncTableIncrRecord() error {
 			}
 			if len(logminerContentMap) > 0 {
 				// 数据应用
-				if err := applyOracleIncrRecord(r.ctx, r.mysql, r.cfg, logminerContentMap); err != nil {
+				if err := applyOracleIncrRecord(r.metaDB, r.mysql, r.cfg, logminerContentMap); err != nil {
 					return err
 				}
 				// 当前所有日志文件内容应用完毕，直接更新 GLOBAL_SCN 至日志文件结束 SCN
-				err = model.NewCommonModel(r.mysql.GormDB).UpdateIncrSyncMetaSCNByArchivedLog(r.ctx,
+				err = meta.NewCommonModel(r.metaDB).UpdateIncrSyncMetaSCNByArchivedLog(r.ctx,
 					r.cfg.OracleConfig.SchemaName,
 					logFileEndSCN,
 					transferTableSlice)
@@ -357,7 +358,7 @@ func (r *O2M) syncTableIncrRecord() error {
 		if common.IsContainString(redoLogList, log["LOG_FILE"]) {
 			if logFileStartSCN == currentRedoLogFirstChange && log["LOG_FILE"] == currentRedoLogFileName {
 				// 当前所有日志文件内容应用完毕，判断是否直接更新 GLOBAL_SCN 至当前重做日志文件起始 SCN
-				err = model.NewCommonModel(r.mysql.GormDB).UpdateIncrSyncMetaSCNByCurrentRedo(r.ctx,
+				err = meta.NewCommonModel(r.metaDB).UpdateIncrSyncMetaSCNByCurrentRedo(r.ctx,
 					r.cfg.OracleConfig.SchemaName,
 					currentRedoLogMaxSCN,
 					logFileStartSCN,
@@ -367,7 +368,7 @@ func (r *O2M) syncTableIncrRecord() error {
 				}
 			} else {
 				// 当前所有日志文件内容应用完毕，判断是否更新 GLOBAL_SCN 至日志文件结束 SCN
-				err = model.NewCommonModel(r.mysql.GormDB).UpdateIncrSyncMetaSCNByNonCurrentRedo(r.ctx,
+				err = meta.NewCommonModel(r.metaDB).UpdateIncrSyncMetaSCNByNonCurrentRedo(r.ctx,
 					r.cfg.OracleConfig.SchemaName,
 					currentRedoLogMaxSCN,
 					logFileStartSCN,
@@ -379,7 +380,7 @@ func (r *O2M) syncTableIncrRecord() error {
 			}
 		} else {
 			// 当前所有日志文件内容应用完毕，直接更新 GLOBAL_SCN 至日志文件结束 SCN
-			err = model.NewCommonModel(r.mysql.GormDB).UpdateIncrSyncMetaSCNByArchivedLog(r.ctx,
+			err = meta.NewCommonModel(r.metaDB).UpdateIncrSyncMetaSCNByArchivedLog(r.ctx,
 				r.cfg.OracleConfig.SchemaName,
 				logFileEndSCN,
 				transferTableSlice)
@@ -397,7 +398,7 @@ func (r *O2M) getTableIncrRecordLogfile() ([]map[string]string, error) {
 	var logFiles []map[string]string
 
 	// 获取增量表起始最小 SCN 号
-	globalSCN, err := model.NewSyncMetaModel(r.mysql.GormDB).IncrSyncMeta.MinGlobalSCNBySchema(r.ctx, &model.IncrSyncMeta{
+	globalSCN, err := meta.NewIncrSyncMetaModel(r.metaDB).MinGlobalSCNBySchema(r.ctx, &meta.IncrSyncMeta{
 		SourceSchemaName: r.cfg.OracleConfig.SchemaName,
 	})
 	if err != nil {

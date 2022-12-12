@@ -16,11 +16,11 @@ limitations under the License.
 package o2m
 
 import (
-	"context"
 	"fmt"
 	"github.com/thinkeridea/go-extend/exstrings"
 	"github.com/wentaojin/transferdb/common"
-	"github.com/wentaojin/transferdb/module/query/mysql"
+	"github.com/wentaojin/transferdb/database/meta"
+	"github.com/wentaojin/transferdb/database/mysql"
 	"go.uber.org/zap"
 	"math"
 	"strings"
@@ -146,7 +146,7 @@ func GenMySQLPrepareBindVarStmt(columns, bindVarBatch int) string {
 // Oracle SQL 转换
 // ORACLE 数据库同步需要开附加日志且表需要捕获字段列日志，Logminer 内容 UPDATE/DELETE/INSERT 语句会带所有字段信息
 func translateAndAddOracleIncrRecord(
-	ctx context.Context,
+	metaDB *meta.Meta,
 	mysql *mysql.MySQL,
 	sourceTableName string,
 	targetSchema string,
@@ -193,7 +193,8 @@ func translateAndAddOracleIncrRecord(
 
 		// 注册任务到 Job 队列
 		lp := IncrTask{
-			Ctx:            ctx,
+			Ctx:            mysql.Ctx,
+			MetaDB:         metaDB,
 			MySQL:          mysql,
 			GlobalSCN:      rows.SCN, // 更新元数据 GLOBAL_SCN 至当前消费的 SCN 号
 			SourceTableSCN: rows.SCN,
