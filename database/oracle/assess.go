@@ -134,59 +134,9 @@ func (o *Oracle) GetOracleSchemaOverview(schemaName []string) ([]map[string]stri
 		userSQL string
 		vals    []map[string]string
 	)
-	if len(schemaName) == 0 {
-		userSQL = `select username from dba_users where username NOT IN (
-			'HR',
-			'DVF',
-			'DVSYS',
-			'LBACSYS',
-			'MDDATA',
-			'OLAPSYS',
-			'ORDPLUGINS',
-			'ORDDATA',
-			'MDSYS',
-			'SI_INFORMTN_SCHEMA',
-			'ORDSYS',
-			'CTXSYS',
-			'OJVMSYS',
-			'WMSYS',
-			'ANONYMOUS',
-			'XDB',
-			'GGSYS',
-			'GSMCATUSER',
-			'APPQOSSYS',
-			'DBSNMP',
-			'SYS$UMF',
-			'ORACLE_OCM',
-			'DBSFWUSER',
-			'REMOTE_SCHEDULER_AGENT',
-			'XS$NULL',
-			'DIP',
-			'GSMROOTUSER',
-			'GSMADMIN_INTERNAL',
-			'GSMUSER',
-			'OUTLN',
-			'SYSBACKUP',
-			'SYSDG',
-			'SYSTEM',
-			'SYSRAC',
-			'AUDSYS',
-			'SYSKM',
-			'SYS',
-			'OGG',
-			'SPA',
-			'APEX_050000',
-			'SQL_MONITOR',
-			'APEX_030200',
-			'SYSMAN',
-			'EXFSYS',
-			'OWBSYS_AUDIT',
-			'FLOWS_FILES',
-			'OWBSYS'
-		)`
-	} else {
-		userSQL = fmt.Sprintf(`select username from dba_users where username IN (%s)`, strings.Join(schemaName, ","))
-	}
+
+	userSQL = fmt.Sprintf(`select username from dba_users where username IN (%s)`, strings.Join(schemaName, ","))
+
 	_, res, err := Query(o.Ctx, o.OracleDB, userSQL)
 	if err != nil {
 		return vals, err
@@ -194,7 +144,7 @@ func (o *Oracle) GetOracleSchemaOverview(schemaName []string) ([]map[string]stri
 
 	for _, val := range res {
 		owner := fmt.Sprintf("'%s'", strings.ToUpper(val["USERNAME"]))
-		_, tableRes, err := Query(o.Ctx, o.OracleDB, fmt.Sprintf(`SELECT ROUND(SUM( bytes )/ 1024 / 1024 / 1024 ,2) GB 
+		_, tableRes, err := Query(o.Ctx, o.OracleDB, fmt.Sprintf(`SELECT ROUND(NVL(SUM( bytes )/ 1024 / 1024 / 1024,0),2) GB 
 FROM
 	dba_segments 
 WHERE
@@ -204,7 +154,7 @@ WHERE
 			return vals, err
 		}
 
-		_, indexRes, err := Query(o.Ctx, o.OracleDB, fmt.Sprintf(`SELECT ROUND(SUM( bytes )/ 1024 / 1024 / 1024 ,2) GB
+		_, indexRes, err := Query(o.Ctx, o.OracleDB, fmt.Sprintf(`SELECT ROUND(NVL(SUM( bytes )/ 1024 / 1024 / 1024,0),2) GB
 FROM
 	dba_indexes i,
 	dba_segments s 
@@ -217,7 +167,7 @@ WHERE
 			return vals, err
 		}
 
-		_, lobTable, err := Query(o.Ctx, o.OracleDB, fmt.Sprintf(`SELECT ROUND(SUM( bytes )/ 1024 / 1024 / 1024 ,2) GB 
+		_, lobTable, err := Query(o.Ctx, o.OracleDB, fmt.Sprintf(`SELECT ROUND(NVL(SUM( bytes )/ 1024 / 1024 / 1024,0) ,2) GB 
 FROM
 	dba_lobs l,
 	dba_segments s 
@@ -229,7 +179,7 @@ WHERE
 		if err != nil {
 			return vals, err
 		}
-		_, lobIndex, err := Query(o.Ctx, o.OracleDB, fmt.Sprintf(`SELECT ROUND(SUM( bytes )/ 1024 / 1024 / 1024 ,2) GB
+		_, lobIndex, err := Query(o.Ctx, o.OracleDB, fmt.Sprintf(`SELECT ROUND(NVL(SUM( bytes )/ 1024 / 1024 / 1024,0),2) GB
 FROM
 	dba_lobs l,
 	dba_segments s 
@@ -243,7 +193,7 @@ WHERE
 			return vals, err
 		}
 
-		_, tableRows, err := Query(o.Ctx, o.OracleDB, fmt.Sprintf(`select SUM(num_rows) NUM_ROWS from dba_tables where OWNER IN (%s)`, owner))
+		_, tableRows, err := Query(o.Ctx, o.OracleDB, fmt.Sprintf(`select NVL(SUM(num_rows),0) NUM_ROWS from dba_tables where OWNER IN (%s)`, owner))
 		if err != nil {
 			return vals, err
 		}
@@ -278,59 +228,9 @@ func (o *Oracle) GetOracleSchemaTableRowsTOP(schemaName []string) ([]map[string]
 		userSQL string
 		vals    []map[string]string
 	)
-	if len(schemaName) == 0 {
-		userSQL = `select username from dba_users where username NOT IN (
-			'HR',
-			'DVF',
-			'DVSYS',
-			'LBACSYS',
-			'MDDATA',
-			'OLAPSYS',
-			'ORDPLUGINS',
-			'ORDDATA',
-			'MDSYS',
-			'SI_INFORMTN_SCHEMA',
-			'ORDSYS',
-			'CTXSYS',
-			'OJVMSYS',
-			'WMSYS',
-			'ANONYMOUS',
-			'XDB',
-			'GGSYS',
-			'GSMCATUSER',
-			'APPQOSSYS',
-			'DBSNMP',
-			'SYS$UMF',
-			'ORACLE_OCM',
-			'DBSFWUSER',
-			'REMOTE_SCHEDULER_AGENT',
-			'XS$NULL',
-			'DIP',
-			'GSMROOTUSER',
-			'GSMADMIN_INTERNAL',
-			'GSMUSER',
-			'OUTLN',
-			'SYSBACKUP',
-			'SYSDG',
-			'SYSTEM',
-			'SYSRAC',
-			'AUDSYS',
-			'SYSKM',
-			'SYS',
-			'OGG',
-			'SPA',
-			'APEX_050000',
-			'SQL_MONITOR',
-			'APEX_030200',
-			'SYSMAN',
-			'EXFSYS',
-			'OWBSYS_AUDIT',
-			'FLOWS_FILES',
-			'OWBSYS'
-		)`
-	} else {
-		userSQL = fmt.Sprintf(`select username from dba_users where username IN (%s)`, strings.Join(schemaName, ","))
-	}
+
+	userSQL = fmt.Sprintf(`select username from dba_users where username IN (%s)`, strings.Join(schemaName, ","))
+
 	_, res, err := Query(o.Ctx, o.OracleDB, userSQL)
 	if err != nil {
 		return vals, err
@@ -344,7 +244,7 @@ SELECT
 OWNER,
 SEGMENT_NAME,
 SEGMENT_TYPE,
-ROUND(SUM( bytes )/ 1024 / 1024 / 1024 ,2) GB
+ROUND(NVL(SUM( bytes )/ 1024 / 1024 / 1024 ,0),2) GB
 	FROM
 		dba_segments 
 	WHERE
@@ -373,138 +273,18 @@ ORDER BY GB DESC
 	return vals, err
 }
 
-func (o *Oracle) GetOracleObjectTypeOverview(schemaName []string) ([]map[string]string, error) {
-	var sql string
-	if len(schemaName) == 0 {
-		sql = `SELECT OWNER,OBJECT_TYPE,count(*) AS COUNT
-		FROM
-		dba_objects
-		WHERE
-		OWNER NOT IN (
-			'HR',
-			'DVF',
-			'DVSYS',
-			'LBACSYS',
-			'MDDATA',
-			'OLAPSYS',
-			'ORDPLUGINS',
-			'ORDDATA',
-			'MDSYS',
-			'SI_INFORMTN_SCHEMA',
-			'ORDSYS',
-			'CTXSYS',
-			'OJVMSYS',
-			'WMSYS',
-			'ANONYMOUS',
-			'XDB',
-			'GGSYS',
-			'GSMCATUSER',
-			'APPQOSSYS',
-			'DBSNMP',
-			'SYS$UMF',
-			'ORACLE_OCM',
-			'DBSFWUSER',
-			'REMOTE_SCHEDULER_AGENT',
-			'XS$NULL',
-			'DIP',
-			'GSMROOTUSER',
-			'GSMADMIN_INTERNAL',
-			'GSMUSER',
-			'OUTLN',
-			'SYSBACKUP',
-			'SYSDG',
-			'SYSTEM',
-			'SYSRAC',
-			'AUDSYS',
-			'SYSKM',
-			'SYS',
-			'OGG',
-			'SPA',
-			'APEX_050000',
-			'SQL_MONITOR',
-			'APEX_030200',
-			'SYSMAN',
-			'EXFSYS',
-			'OWBSYS_AUDIT',
-			'FLOWS_FILES',
-			'OWBSYS'
-		)
-		GROUP BY
-		OWNER,OBJECT_TYPE
-		ORDER BY COUNT DESC nulls last`
-	} else {
-		sql = fmt.Sprintf(`SELECT OWNER,OBJECT_TYPE,count(*) AS COUNT
-		FROM
-		dba_objects
-		WHERE
-		OWNER IN (%s)
-		GROUP BY
-		OWNER,OBJECT_TYPE ORDER BY COUNT DESC`, strings.Join(schemaName, ","))
-	}
+func (o *Oracle) GetOracleSchemaCodeObject(schemaName []string) ([]map[string]string, error) {
+	querySQL := fmt.Sprintf(`SELECT OWNER,NAME,TYPE,MAX(LINE) LINES from DBA_SOURCE where OWNER IN (%s) GROUP BY OWNER,NAME,TYPE ORDER BY LINES DESC`, strings.Join(schemaName, ","))
 
-	_, res, err := Query(o.Ctx, o.OracleDB, sql)
+	_, res, err := Query(o.Ctx, o.OracleDB, querySQL)
 	if err != nil {
 		return res, err
 	}
 	return res, nil
 }
 
-func (o *Oracle) GetOraclePartitionObjectType(schemaName []string) ([]map[string]string, error) {
-	var sql string
-	if len(schemaName) == 0 {
-		sql = `SELECT DISTINCT
-	OWNER,
-	TABLE_NAME,
-	PARTITIONING_TYPE,
-	SUBPARTITIONING_TYPE 
-FROM
-	DBA_PART_TABLES 
-WHERE
-	OWNER NOT IN (
-		'HR',
-		'DVF',
-		'DVSYS',
-		'LBACSYS',
-		'MDDATA',
-		'OLAPSYS',
-		'ORDPLUGINS',
-		'ORDDATA',
-		'MDSYS',
-		'SI_INFORMTN_SCHEMA',
-		'ORDSYS',
-		'CTXSYS',
-		'OJVMSYS',
-		'WMSYS',
-		'ANONYMOUS',
-		'XDB',
-		'GGSYS',
-		'GSMCATUSER',
-		'APPQOSSYS',
-		'DBSNMP',
-		'SYS$UMF',
-		'ORACLE_OCM',
-		'DBSFWUSER',
-		'REMOTE_SCHEDULER_AGENT',
-		'XS$NULL',
-		'DIP',
-		'GSMROOTUSER',
-		'GSMADMIN_INTERNAL',
-		'GSMUSER',
-		'OUTLN',
-		'SYSBACKUP',
-		'SYSDG',
-		'SYSTEM',
-		'SYSRAC',
-		'AUDSYS',
-		'SYSKM',
-		'SYS',
-		'OGG',
-		'SPA',
-		'APEX_050000',
-	'SQL_MONITOR' 
-	)`
-	} else {
-		sql = fmt.Sprintf(`SELECT DISTINCT
+func (o *Oracle) GetOracleSchemaPartitionObjectType(schemaName []string) ([]map[string]string, error) {
+	querySQL := fmt.Sprintf(`SELECT DISTINCT
 	OWNER,
 	TABLE_NAME,
 	PARTITIONING_TYPE,
@@ -513,294 +293,327 @@ FROM
 	DBA_PART_TABLES 
 WHERE
 	OWNER IN (%s)`, strings.Join(schemaName, ","))
-	}
 
-	_, res, err := Query(o.Ctx, o.OracleDB, sql)
+	_, res, err := Query(o.Ctx, o.OracleDB, querySQL)
 	if err != nil {
 		return res, err
 	}
 	return res, nil
 }
 
-func (o *Oracle) GetOracleSynonymObjectType(schemaName []string) ([]map[string]string, error) {
-	var sql string
-	if len(schemaName) == 0 {
-		sql = `select OWNER,TABLE_OWNER,count(*) COUNT from dba_synonyms where TABLE_OWNER not in  ('HR','DVF','DVSYS','LBACSYS','MDDATA','OLAPSYS','ORDPLUGINS','ORDDATA','MDSYS','SI_INFORMTN_SCHEMA','ORDSYS','CTXSYS','OJVMSYS','WMSYS','ANONYMOUS','XDB','GGSYS','GSMCATUSER','APPQOSSYS','DBSNMP','SYS$UMF','ORACLE_OCM','DBSFWUSER','REMOTE_SCHEDULER_AGENT','XS$NULL','DIP','GSMROOTUSER','GSMADMIN_INTERNAL','GSMUSER','OUTLN','SYSBACKUP','SYSDG','SYSTEM','SYSRAC','AUDSYS','SYSKM','SYS','OGG','SPA','APEX_050000','SQL_MONITOR') group by OWNER,TABLE_OWNER ORDER BY COUNT DESC`
-	} else {
-		sql = fmt.Sprintf(`select OWNER,TABLE_OWNER,count(*) COUNT from dba_synonyms where TABLE_OWNER IN (%s) group by OWNER,TABLE_OWNER ORDER BY COUNT DESC`, strings.Join(schemaName, ","))
-	}
+func (o *Oracle) GetOracleSchemaTableAvgRowLengthTOP(schemaName []string) ([]map[string]string, error) {
+	querySQL := fmt.Sprintf(`SELECT ROWNUM,A.* FROM (select OWNER,TABLE_NAME,AVG_ROW_LEN FROM DBA_TABLES WHERE OWNER IN (%s) order by AVG_ROW_LEN desc nulls last)  A WHERE ROWNUM <=10`, strings.Join(schemaName, ","))
 
-	_, res, err := Query(o.Ctx, o.OracleDB, sql)
+	_, res, err := Query(o.Ctx, o.OracleDB, querySQL)
 	if err != nil {
 		return res, err
 	}
 	return res, nil
 }
 
-func (o *Oracle) GetOracleColumnTypeAndMaxLength(schemaName []string) ([]map[string]string, error) {
-	var sql string
-	if len(schemaName) == 0 {
-		sql = `select OWNER,DATA_TYPE,count(*) COUNT,max(data_length) max_data_length from dba_tab_columns where owner not in  ('HR','DVF','DVSYS','LBACSYS','MDDATA','OLAPSYS','ORDPLUGINS','ORDDATA','MDSYS','SI_INFORMTN_SCHEMA','ORDSYS','CTXSYS','OJVMSYS','WMSYS','ANONYMOUS','XDB','GGSYS','GSMCATUSER','APPQOSSYS','DBSNMP','SYS$UMF','ORACLE_OCM','DBSFWUSER','REMOTE_SCHEDULER_AGENT','XS$NULL','DIP','GSMROOTUSER','GSMADMIN_INTERNAL','GSMUSER','OUTLN','SYSBACKUP','SYSDG','SYSTEM','SYSRAC','AUDSYS','SYSKM','SYS','OGG','SPA','APEX_050000','SQL_MONITOR')  group by owner,DATA_TYPE ORDER BY COUNT DESC`
-	} else {
-		sql = fmt.Sprintf(`select OWNER,DATA_TYPE,count(*) COUNT,max(data_length) max_data_length from dba_tab_columns where OWNER IN (%s)  group by owner,DATA_TYPE ORDER BY COUNT DESC`, strings.Join(schemaName, ","))
-	}
-
-	_, res, err := Query(o.Ctx, o.OracleDB, sql)
+func (o *Oracle) GetOracleSchemaSynonymObject(schemaName []string) ([]map[string]string, error) {
+	querySQL := fmt.Sprintf(`SELECT OWNER,SYNONYM_NAME,TABLE_OWNER,TABLE_NAME FROM dba_synonyms WHERE TABLE_OWNER IN (%s)`, strings.Join(schemaName, ","))
+	_, res, err := Query(o.Ctx, o.OracleDB, querySQL)
 	if err != nil {
 		return res, err
 	}
 	return res, nil
 }
 
-func (o *Oracle) GetOracleIndexType(schemaName []string) ([]map[string]string, error) {
-	var sql string
-	if len(schemaName) == 0 {
-		sql = `select owner,INDEX_TYPE,count(*) COUNT from dba_indexes where owner not in  ('HR','DVF','DVSYS','LBACSYS','MDDATA','OLAPSYS','ORDPLUGINS','ORDDATA','MDSYS','SI_INFORMTN_SCHEMA','ORDSYS','CTXSYS','OJVMSYS','WMSYS','ANONYMOUS','XDB','GGSYS','GSMCATUSER','APPQOSSYS','DBSNMP','SYS$UMF','ORACLE_OCM','DBSFWUSER','REMOTE_SCHEDULER_AGENT','XS$NULL','DIP','GSMROOTUSER','GSMADMIN_INTERNAL','GSMUSER','OUTLN','SYSBACKUP','SYSDG','SYSTEM','SYSRAC','AUDSYS','SYSKM','SYS','OGG','SPA','APEX_050000','SQL_MONITOR') group by owner,INDEX_TYPE ORDER BY COUNT DESC`
-	} else {
-		sql = fmt.Sprintf(`select owner,INDEX_TYPE,count(*) COUNT from dba_indexes where OWNER IN (%s) group by owner,INDEX_TYPE ORDER BY COUNT DESC`, strings.Join(schemaName, ","))
-	}
-
-	_, res, err := Query(o.Ctx, o.OracleDB, sql)
+func (o *Oracle) GetOracleSchemaMaterializedViewObject(schemaName []string) ([]map[string]string, error) {
+	querySQL := fmt.Sprintf(`SELECT OWNER,MVIEW_NAME,REWRITE_CAPABILITY,REFRESH_MODE,REFRESH_METHOD,FAST_REFRESHABLE FROM DBA_MVIEWS WHERE OWNER IN (%s)`, strings.Join(schemaName, ","))
+	_, res, err := Query(o.Ctx, o.OracleDB, querySQL)
 	if err != nil {
 		return res, err
 	}
 	return res, nil
 }
 
-func (o *Oracle) GetOracleConstraintType(schemaName []string) ([]map[string]string, error) {
-	var sql string
-	if len(schemaName) == 0 {
-		sql = `select owner,CONSTRAINT_TYPE,count(*) COUNT from dba_constraints where owner not in  ('HR','DVF','DVSYS','LBACSYS','MDDATA','OLAPSYS','ORDPLUGINS','ORDDATA','MDSYS','SI_INFORMTN_SCHEMA','ORDSYS','CTXSYS','OJVMSYS','WMSYS','ANONYMOUS','XDB','GGSYS','GSMCATUSER','APPQOSSYS','DBSNMP','SYS$UMF','ORACLE_OCM','DBSFWUSER','REMOTE_SCHEDULER_AGENT','XS$NULL','DIP','GSMROOTUSER','GSMADMIN_INTERNAL','GSMUSER','OUTLN','SYSBACKUP','SYSDG','SYSTEM','SYSRAC','AUDSYS','SYSKM','SYS','OGG','SPA','APEX_050000','SQL_MONITOR') group by owner,CONSTRAINT_TYPE ORDER BY COUNT DESC`
-	} else {
-		sql = fmt.Sprintf(`select owner,CONSTRAINT_TYPE,count(*) COUNT from dba_constraints where OWNER IN (%s) group by owner,CONSTRAINT_TYPE ORDER BY COUNT DESC`, strings.Join(schemaName, ","))
-	}
+func (o *Oracle) GetOracleSchemaPartitionTableCountsOver1024(schemaName []string) ([]map[string]string, error) {
+	querySQL := fmt.Sprintf(`select OWNER,TABLE_NAME,PARTITION_COUNT from DBA_PART_TABLES where OWNER IN (%s) and PARTITION_COUNT>1024`, strings.Join(schemaName, ","))
 
-	_, res, err := Query(o.Ctx, o.OracleDB, sql)
+	_, res, err := Query(o.Ctx, o.OracleDB, querySQL)
 	if err != nil {
 		return res, err
 	}
 	return res, nil
 }
 
-func (o *Oracle) GetOracleCodeObject(schemaName []string) ([]map[string]string, error) {
-	var sql string
-	if len(schemaName) == 0 {
-		sql = `select OWNER,NAME,TYPE,MAX(LINE) LINES from DBA_SOURCE where owner not in  ('HR','DVF','DVSYS','LBACSYS','MDDATA','OLAPSYS','ORDPLUGINS','ORDDATA','MDSYS','SI_INFORMTN_SCHEMA','ORDSYS','CTXSYS','OJVMSYS','WMSYS','ANONYMOUS','XDB','GGSYS','GSMCATUSER','APPQOSSYS','DBSNMP','SYS$UMF','ORACLE_OCM','DBSFWUSER','REMOTE_SCHEDULER_AGENT','XS$NULL','DIP','GSMROOTUSER','GSMADMIN_INTERNAL','GSMUSER','OUTLN','SYSBACKUP','SYSDG','SYSTEM','SYSRAC','AUDSYS','SYSKM','SYS','OGG','SPA','APEX_050000','SQL_MONITOR') GROUP BY OWNER,NAME,TYPE ORDER BY LINES DESC`
-	} else {
-		sql = fmt.Sprintf(`select OWNER,NAME,TYPE,MAX(LINE) LINES from DBA_SOURCE where OWNER IN (%s) GROUP BY OWNER,NAME,TYPE ORDER BY LINES DESC`, strings.Join(schemaName, ","))
-	}
+func (o *Oracle) GetOracleSchemaTableRowLengthOver6M(schemaName []string) ([]map[string]string, error) {
+	querySQL := fmt.Sprintf(`select OWNER,TABLE_NAME,ROUND(AVG_ROW_LEN/1024/1024,2) AS AVG_ROW_LEN FROM DBA_TABLES WHERE OWNER IN (%s) and ROUND(AVG_ROW_LEN/1024/1024,2) >= 6`, strings.Join(schemaName, ","))
 
-	_, res, err := Query(o.Ctx, o.OracleDB, sql)
+	_, res, err := Query(o.Ctx, o.OracleDB, querySQL)
 	if err != nil {
 		return res, err
 	}
 	return res, nil
 }
 
-func (o *Oracle) GetOracleAvgRowLength(schemaName []string) ([]map[string]string, error) {
-	var sql string
-	if len(schemaName) == 0 {
-		sql = `SELECT ROWNUM,A.* FROM (select OWNER,TABLE_NAME,AVG_ROW_LEN FROM DBA_TABLES WHERE OWNER NOT IN  ('HR','DVF','DVSYS','LBACSYS','MDDATA','OLAPSYS','ORDPLUGINS','ORDDATA','MDSYS','SI_INFORMTN_SCHEMA','ORDSYS','CTXSYS','OJVMSYS','WMSYS','ANONYMOUS','XDB','GGSYS','GSMCATUSER','APPQOSSYS','DBSNMP','SYS$UMF','ORACLE_OCM','DBSFWUSER','REMOTE_SCHEDULER_AGENT','XS$NULL','DIP','GSMROOTUSER','GSMADMIN_INTERNAL','GSMUSER','OUTLN','SYSBACKUP','SYSDG','SYSTEM','SYSRAC','AUDSYS','SYSKM','SYS','OGG','SPA','APEX_050000','SQL_MONITOR')   order by AVG_ROW_LEN desc nulls last)  A WHERE ROWNUM <=10`
-	} else {
-		sql = fmt.Sprintf(`SELECT ROWNUM,A.* FROM (select OWNER,TABLE_NAME,AVG_ROW_LEN FROM DBA_TABLES WHERE OWNER IN (%s) order by AVG_ROW_LEN desc nulls last)  A WHERE ROWNUM <=10`, strings.Join(schemaName, ","))
-	}
+func (o *Oracle) GetOracleSchemaTableIndexLengthOver3072(schemaName []string) ([]map[string]string, error) {
+	querySQL := fmt.Sprintf(`select INDEX_OWNER,INDEX_NAME,TABLE_NAME,sum(COLUMN_LENGTH)*4 LENGTH_OVER
+  from dba_ind_columns where TABLE_OWNER IN (%s) group by INDEX_OWNER,INDEX_NAME,TABLE_NAME HAVING sum(COLUMN_LENGTH)*4 > 3072`, strings.Join(schemaName, ","))
 
-	_, res, err := Query(o.Ctx, o.OracleDB, sql)
+	_, res, err := Query(o.Ctx, o.OracleDB, querySQL)
 	if err != nil {
 		return res, err
 	}
 	return res, nil
 }
 
-func (o *Oracle) GetOracleTemporaryTable(schemaName []string) ([]map[string]string, error) {
-	var sql string
-	if len(schemaName) == 0 {
-		sql = `select OWNER,COUNT(*) COUNT FROM DBA_TABLES WHERE OWNER NOT IN  ('HR','DVF','DVSYS','LBACSYS','MDDATA','OLAPSYS','ORDPLUGINS','ORDDATA','MDSYS','SI_INFORMTN_SCHEMA','ORDSYS','CTXSYS','OJVMSYS','WMSYS','ANONYMOUS','XDB','GGSYS','GSMCATUSER','APPQOSSYS','DBSNMP','SYS$UMF','ORACLE_OCM','DBSFWUSER','REMOTE_SCHEDULER_AGENT','XS$NULL','DIP','GSMROOTUSER','GSMADMIN_INTERNAL','GSMUSER','OUTLN','SYSBACKUP','SYSDG','SYSTEM','SYSRAC','AUDSYS','SYSKM','SYS','OGG','SPA','APEX_050000','SQL_MONITOR')  AND TEMPORARY='Y' GROUP BY OWNER ORDER BY COUNT DESC`
-	} else {
-		sql = fmt.Sprintf(`select OWNER,COUNT(*) COUNT FROM DBA_TABLES WHERE OWNER IN (%s) AND TEMPORARY='Y' GROUP BY OWNER ORDER BY COUNT DESC`, strings.Join(schemaName, ","))
-	}
+func (o *Oracle) GetOracleSchemaTableColumnCountsOver512(schemaName []string) ([]map[string]string, error) {
+	querySQL := fmt.Sprintf(`SELECT OWNER,TABLE_NAME,COUNT(COLUMN_NAME) COUNT_OVER FROM DBA_TAB_COLUMNS  WHERE  OWNER IN (%s) GROUP BY  OWNER,TABLE_NAME HAVING COUNT(COLUMN_NAME) > 512 ORDER BY OWNER,TABLE_NAME`, strings.Join(schemaName, ","))
 
-	_, res, err := Query(o.Ctx, o.OracleDB, sql)
+	_, res, err := Query(o.Ctx, o.OracleDB, querySQL)
 	if err != nil {
 		return res, err
 	}
 	return res, nil
 }
 
-func (o *Oracle) GetOraclePartitionTableOver1024(schemaName []string) ([]map[string]string, error) {
-	var sql string
-	if len(schemaName) == 0 {
-		sql = `select OWNER,TABLE_NAME,PARTITION_COUNT from DBA_PART_TABLES where OWNER not in  ('HR','DVF','DVSYS','LBACSYS','MDDATA','OLAPSYS','ORDPLUGINS','ORDDATA','MDSYS','SI_INFORMTN_SCHEMA','ORDSYS','CTXSYS','OJVMSYS','WMSYS','ANONYMOUS','XDB','GGSYS','GSMCATUSER','APPQOSSYS','DBSNMP','SYS$UMF','ORACLE_OCM','DBSFWUSER','REMOTE_SCHEDULER_AGENT','XS$NULL','DIP','GSMROOTUSER','GSMADMIN_INTERNAL','GSMUSER','OUTLN','SYSBACKUP','SYSDG','SYSTEM','SYSRAC','AUDSYS','SYSKM','SYS','OGG','SPA','APEX_050000','SQL_MONITOR') and PARTITION_COUNT>1024`
-	} else {
-		sql = fmt.Sprintf(`select OWNER,TABLE_NAME,PARTITION_COUNT from DBA_PART_TABLES where OWNER IN (%s) and PARTITION_COUNT>1024`, strings.Join(schemaName, ","))
-	}
+func (o *Oracle) GetOracleSchemaTableIndexCountsOver64(schemaName []string) ([]map[string]string, error) {
+	querySQL := fmt.Sprintf(`select TABLE_OWNER,TABLE_NAME,COUNT(INDEX_NAME) COUNT_OVER FROM dba_ind_columns WHERE TABLE_OWNER IN (%s) GROUP BY TABLE_OWNER,TABLE_NAME HAVING COUNT(INDEX_NAME) >64 ORDER BY TABLE_OWNER,TABLE_NAME`, strings.Join(schemaName, ","))
 
-	_, res, err := Query(o.Ctx, o.OracleDB, sql)
+	_, res, err := Query(o.Ctx, o.OracleDB, querySQL)
 	if err != nil {
 		return res, err
 	}
 	return res, nil
 }
 
-func (o *Oracle) GetOracleTableRowLengthOver6M(schemaName []string) ([]map[string]string, error) {
-	var sql string
-	if len(schemaName) == 0 {
-		sql = `select OWNER,TABLE_NAME,AVG_ROW_LEN FROM DBA_TABLES WHERE OWNER NOT IN  ('HR','DVF','DVSYS','LBACSYS','MDDATA','OLAPSYS','ORDPLUGINS','ORDDATA','MDSYS','SI_INFORMTN_SCHEMA','ORDSYS','CTXSYS','OJVMSYS','WMSYS','ANONYMOUS','XDB','GGSYS','GSMCATUSER','APPQOSSYS','DBSNMP','SYS$UMF','ORACLE_OCM','DBSFWUSER','REMOTE_SCHEDULER_AGENT','XS$NULL','DIP','GSMROOTUSER','GSMADMIN_INTERNAL','GSMUSER','OUTLN','SYSBACKUP','SYSDG','SYSTEM','SYSRAC','AUDSYS','SYSKM','SYS','OGG','SPA','APEX_050000','SQL_MONITOR')  and AVG_ROW_LEN >= 6 * 1024 * 1024`
-	} else {
-		sql = fmt.Sprintf(`select OWNER,TABLE_NAME,AVG_ROW_LEN FROM DBA_TABLES WHERE OWNER IN (%s) and AVG_ROW_LEN >= 6 * 1024 * 1024`, strings.Join(schemaName, ","))
-	}
-
-	_, res, err := Query(o.Ctx, o.OracleDB, sql)
+func (o *Oracle) GetOracleSchemaTableNumberTypeEqual0(schemaName []string) ([]map[string]string, error) {
+	querySQL := fmt.Sprintf(`select OWNER,TABLE_NAME,COLUMN_NAME,NVL(DATA_PRECISION,0) DATA_PRECISION,NVL(DATA_SCALE,0) DATA_SCALE from dba_tab_columns where DATA_PRECISION is null and OWNER IN (%s) and DATA_TYPE='NUMBER' and DATA_PRECISION is null ORDER BY OWNER,COLUMN_NAME`, strings.Join(schemaName, ","))
+	_, res, err := Query(o.Ctx, o.OracleDB, querySQL)
 	if err != nil {
 		return res, err
 	}
 	return res, nil
 }
 
-func (o *Oracle) GetOracleTableIndexLengthOver3072(schemaName []string) ([]map[string]string, error) {
-	var sql string
-	if len(schemaName) == 0 {
-		sql = `select INDEX_OWNER,INDEX_NAME,TABLE_NAME,sum(COLUMN_LENGTH)*4 COUNT  from dba_ind_columns where TABLE_OWNER not in ('HR','DVF','DVSYS','LBACSYS','MDDATA','OLAPSYS','ORDPLUGINS','ORDDATA','MDSYS','SI_INFORMTN_SCHEMA','ORDSYS','CTXSYS','OJVMSYS','WMSYS','ANONYMOUS','XDB','GGSYS','GSMCATUSER','APPQOSSYS','DBSNMP','SYS$UMF','ORACLE_OCM','DBSFWUSER','REMOTE_SCHEDULER_AGENT','XS$NULL','DIP','GSMROOTUSER','GSMADMIN_INTERNAL','GSMUSER','OUTLN','SYSBACKUP','SYSDG','SYSTEM','SYSRAC','AUDSYS','SYSKM','SYS') group by INDEX_OWNER,INDEX_NAME,TABLE_NAME  having sum(COLUMN_LENGTH)*4 > 3072`
-	} else {
-		sql = fmt.Sprintf(`select INDEX_OWNER,INDEX_NAME,TABLE_NAME,sum(COLUMN_LENGTH)*4 COUNT from dba_ind_columns where TABLE_OWNER IN (%s) group by INDEX_OWNER,INDEX_NAME,TABLE_NAME  having sum(COLUMN_LENGTH)*4 > 3072`, strings.Join(schemaName, ","))
-	}
+func (o *Oracle) GetOracleUsernameLengthOver64(schemaName []string) ([]map[string]string, error) {
 
-	_, res, err := Query(o.Ctx, o.OracleDB, sql)
+	querySQL := fmt.Sprintf(`select USERNAME,ACCOUNT_STATUS,CREATED,length(USERNAME) LENGTH_OVER from dba_users where username IN (%s) AND length(USERNAME) > 64`, strings.Join(schemaName, ","))
+	_, res, err := Query(o.Ctx, o.OracleDB, querySQL)
 	if err != nil {
 		return res, err
 	}
 	return res, nil
 }
 
-func (o *Oracle) GetOracleTableColumnCountsOver512(schemaName []string) ([]map[string]string, error) {
-	var sql string
-	if len(schemaName) == 0 {
-		sql = `SELECT OWNER,TABLE_NAME,COUNT(COLUMN_NAME) COUNT FROM DBA_TAB_COLUMNS  WHERE  OWNER NOT IN ('HR','DVF','DVSYS','LBACSYS','MDDATA','OLAPSYS','ORDPLUGINS','ORDDATA','MDSYS','SI_INFORMTN_SCHEMA','ORDSYS','CTXSYS','OJVMSYS','WMSYS','ANONYMOUS','XDB','GGSYS','GSMCATUSER','APPQOSSYS','DBSNMP','SYS$UMF','ORACLE_OCM','DBSFWUSER','REMOTE_SCHEDULER_AGENT','XS$NULL','DIP','GSMROOTUSER','GSMADMIN_INTERNAL','GSMUSER','OUTLN','SYSBACKUP','SYSDG','SYSTEM','SYSRAC','AUDSYS','SYSKM','SYS','OGG','SPA','APEX_050000','SQL_MONITOR') GROUP BY  OWNER,TABLE_NAME HAVING COUNT(COLUMN_NAME) > 512 ORDER BY OWNER,TABLE_NAME`
-	} else {
-		sql = fmt.Sprintf(`SELECT OWNER,TABLE_NAME,COUNT(COLUMN_NAME) COUNT FROM DBA_TAB_COLUMNS  WHERE  OWNER IN (%s) GROUP BY  OWNER,TABLE_NAME HAVING COUNT(COLUMN_NAME) > 512 ORDER BY OWNER,TABLE_NAME`, strings.Join(schemaName, ","))
-	}
+func (o *Oracle) GetOracleSchemaTableNameLengthOver64(schemaName []string) ([]map[string]string, error) {
+	querySQL := fmt.Sprintf(`SELECT OWNER,TABLE_NAME,length(TABLE_NAME) LENGTH_OVER FROM DBA_TABLES WHERE OWNER IN (%s) AND length(TABLE_NAME) > 64 ORDER BY OWNER,TABLE_NAME`, strings.Join(schemaName, ","))
 
-	_, res, err := Query(o.Ctx, o.OracleDB, sql)
+	_, res, err := Query(o.Ctx, o.OracleDB, querySQL)
 	if err != nil {
 		return res, err
 	}
 	return res, nil
 }
 
-func (o *Oracle) GetOracleTableIndexCountsOver64(schemaName []string) ([]map[string]string, error) {
-	var sql string
-	if len(schemaName) == 0 {
-		sql = `select TABLE_OWNER,TABLE_NAME,COUNT(INDEX_NAME) COUNT FROM dba_ind_columns WHERE TABLE_OWNER NOT IN ('HR','DVF','DVSYS','LBACSYS','MDDATA','OLAPSYS','ORDPLUGINS','ORDDATA','MDSYS','SI_INFORMTN_SCHEMA','ORDSYS','CTXSYS','OJVMSYS','WMSYS','ANONYMOUS','XDB','GGSYS','GSMCATUSER','APPQOSSYS','DBSNMP','SYS$UMF','ORACLE_OCM','DBSFWUSER','REMOTE_SCHEDULER_AGENT','XS$NULL','DIP','GSMROOTUSER','GSMADMIN_INTERNAL','GSMUSER','OUTLN','SYSBACKUP','SYSDG','SYSTEM','SYSRAC','AUDSYS','SYSKM','SYS','OGG','SPA','APEX_050000','SQL_MONITOR') GROUP BY TABLE_OWNER,TABLE_NAME HAVING COUNT(INDEX_NAME) >64 ORDER BY TABLE_OWNER,TABLE_NAME`
-	} else {
-		sql = fmt.Sprintf(`select TABLE_OWNER,TABLE_NAME,COUNT(INDEX_NAME) COUNT FROM dba_ind_columns WHERE TABLE_OWNER IN (%s) GROUP BY TABLE_OWNER,TABLE_NAME HAVING COUNT(INDEX_NAME) >64 ORDER BY TABLE_OWNER,TABLE_NAME`, strings.Join(schemaName, ","))
-	}
+func (o *Oracle) GetOracleSchemaTableColumnNameLengthOver64(schemaName []string) ([]map[string]string, error) {
+	querySQL := fmt.Sprintf(`SELECT OWNER,TABLE_NAME,COLUMN_NAME,length(COLUMN_NAME) LENGTH_OVER FROM DBA_TAB_COLUMNS WHERE OWNER IN (%s) AND length(COLUMN_NAME) >64 ORDER BY OWNER,TABLE_NAME,COLUMN_NAME`, strings.Join(schemaName, ","))
 
-	_, res, err := Query(o.Ctx, o.OracleDB, sql)
+	_, res, err := Query(o.Ctx, o.OracleDB, querySQL)
 	if err != nil {
 		return res, err
 	}
 	return res, nil
 }
 
-func (o *Oracle) GetOracleTableNumberTypeCheck(schemaName []string) ([]map[string]string, error) {
-	var sql string
-	if len(schemaName) == 0 {
-		sql = `select OWNER,TABLE_NAME,COLUMN_NAME,NVL(DATA_PRECISION,0) DATA_PRECISION,NVL(DATA_SCALE,0) DATA_SCALE from dba_tab_columns where DATA_PRECISION is null and OWNER not in ('HR','DVF','DVSYS','LBACSYS','MDDATA','OLAPSYS','ORDPLUGINS','ORDDATA','MDSYS','SI_INFORMTN_SCHEMA','ORDSYS','CTXSYS','OJVMSYS','WMSYS','ANONYMOUS','XDB','GGSYS','GSMCATUSER','APPQOSSYS','DBSNMP','SYS$UMF','ORACLE_OCM','DBSFWUSER','REMOTE_SCHEDULER_AGENT','XS$NULL','DIP','GSMROOTUSER','GSMADMIN_INTERNAL','GSMUSER','OUTLN','SYSBACKUP','SYSDG','SYSTEM','SYSRAC','AUDSYS','SYSKM','SYS','OGG','SPA','APEX_050000','SQL_MONITOR')  and DATA_TYPE='NUMBER' and DATA_PRECISION is null ORDER BY OWNER,COLUMN_NAME`
-	} else {
-		sql = fmt.Sprintf(`select OWNER,TABLE_NAME,COLUMN_NAME,NVL(DATA_PRECISION,0) DATA_PRECISION,NVL(DATA_SCALE,0) DATA_SCALE from dba_tab_columns where DATA_PRECISION is null and OWNER IN (%s) and DATA_TYPE='NUMBER' and DATA_PRECISION is null ORDER BY OWNER,COLUMN_NAME`, strings.Join(schemaName, ","))
-	}
+func (o *Oracle) GetOracleSchemaTableIndexNameLengthOver64(schemaName []string) ([]map[string]string, error) {
+	querySQL := fmt.Sprintf(`SELECT INDEX_OWNER,TABLE_NAME,INDEX_NAME,LENGTH(COLUMN_NAME) LENGTH_OVER
+ FROM DBA_IND_COLUMNS WHERE TABLE_OWNER IN (%s) AND LENGTH(COLUMN_NAME) > 64 ORDER BY INDEX_OWNER,TABLE_NAME,INDEX_NAME`, strings.Join(schemaName, ","))
 
-	_, res, err := Query(o.Ctx, o.OracleDB, sql)
+	_, res, err := Query(o.Ctx, o.OracleDB, querySQL)
 	if err != nil {
 		return res, err
 	}
 	return res, nil
 }
 
-func (o *Oracle) GetOracleUsernameLength(schemaName []string) ([]map[string]string, error) {
-	var sql string
-	if len(schemaName) == 0 {
-		sql = `select USERNAME,ACCOUNT_STATUS,CREATED from dba_users where username not in ('HR','DVF','DVSYS','LBACSYS','MDDATA','OLAPSYS','ORDPLUGINS','ORDDATA','MDSYS','SI_INFORMTN_SCHEMA','ORDSYS','CTXSYS','OJVMSYS','WMSYS','ANONYMOUS','XDB','GGSYS','GSMCATUSER','APPQOSSYS','DBSNMP','SYS$UMF','ORACLE_OCM','DBSFWUSER','REMOTE_SCHEDULER_AGENT','XS$NULL','DIP','GSMROOTUSER','GSMADMIN_INTERNAL','GSMUSER','OUTLN','SYSBACKUP','SYSDG','SYSTEM','SYSRAC','AUDSYS','SYSKM','SYS','OGG','SPA','APEX_050000','SQL_MONITOR') AND length(USERNAME)>64`
-	} else {
-		sql = fmt.Sprintf(`select USERNAME,ACCOUNT_STATUS,CREATED from dba_users where username IN (%s) AND length(USERNAME)>64`, strings.Join(schemaName, ","))
-	}
+func (o *Oracle) GetOracleSchemaTableViewNameLengthOver64(schemaName []string) ([]map[string]string, error) {
+	querySQL := fmt.Sprintf(`SELECT OWNER,VIEW_NAME,READ_ONLY,LENGTH(VIEW_NAME) LENGTH_OVER FROM DBA_VIEWS WHERE OWNER IN (%s) AND LENGTH(VIEW_NAME) > 64 ORDER BY OWNER,VIEW_NAME`, strings.Join(schemaName, ","))
 
-	_, res, err := Query(o.Ctx, o.OracleDB, sql)
+	_, res, err := Query(o.Ctx, o.OracleDB, querySQL)
 	if err != nil {
 		return res, err
 	}
 	return res, nil
 }
 
-func (o *Oracle) GetOracleTableNameLength(schemaName []string) ([]map[string]string, error) {
-	var sql string
-	if len(schemaName) == 0 {
-		sql = `SELECT OWNER,TABLE_NAME FROM DBA_TABLES WHERE OWNER NOT IN ('HR','DVF','DVSYS','LBACSYS','MDDATA','OLAPSYS','ORDPLUGINS','ORDDATA','MDSYS','SI_INFORMTN_SCHEMA','ORDSYS','CTXSYS','OJVMSYS','WMSYS','ANONYMOUS','XDB','GGSYS','GSMCATUSER','APPQOSSYS','DBSNMP','SYS$UMF','ORACLE_OCM','DBSFWUSER','REMOTE_SCHEDULER_AGENT','XS$NULL','DIP','GSMROOTUSER','GSMADMIN_INTERNAL','GSMUSER','OUTLN','SYSBACKUP','SYSDG','SYSTEM','SYSRAC','AUDSYS','SYSKM','SYS','OGG','SPA','APEX_050000','SQL_MONITOR') AND length(TABLE_NAME)>64 ORDER BY OWNER,TABLE_NAME`
-	} else {
-		sql = fmt.Sprintf(`SELECT OWNER,TABLE_NAME FROM DBA_TABLES WHERE OWNER IN (%s) AND length(TABLE_NAME)>64 ORDER BY OWNER,TABLE_NAME`, strings.Join(schemaName, ","))
-	}
+func (o *Oracle) GetOracleSchemaTableSequenceNameLengthOver64(schemaName []string) ([]map[string]string, error) {
+	querySQL := fmt.Sprintf(`SELECT SEQUENCE_OWNER,SEQUENCE_NAME,ORDER_FLAG,LENGTH(SEQUENCE_NAME) LENGTH_OVER FROM DBA_SEQUENCES WHERE SEQUENCE_OWNER IN (%s) AND LENGTH(SEQUENCE_NAME) > 64 ORDER BY SEQUENCE_OWNER,SEQUENCE_NAME,ORDER_FLAG`, strings.Join(schemaName, ","))
 
-	_, res, err := Query(o.Ctx, o.OracleDB, sql)
+	_, res, err := Query(o.Ctx, o.OracleDB, querySQL)
 	if err != nil {
 		return res, err
 	}
 	return res, nil
 }
 
-func (o *Oracle) GetOracleTableColumnNameLength(schemaName []string) ([]map[string]string, error) {
-	var sql string
-	if len(schemaName) == 0 {
-		sql = `SELECT OWNER,TABLE_NAME,COLUMN_NAME FROM DBA_TAB_COLUMNS WHERE OWNER NOT IN ('HR','DVF','DVSYS','LBACSYS','MDDATA','OLAPSYS','ORDPLUGINS','ORDDATA','MDSYS','SI_INFORMTN_SCHEMA','ORDSYS','CTXSYS','OJVMSYS','WMSYS','ANONYMOUS','XDB','GGSYS','GSMCATUSER','APPQOSSYS','DBSNMP','SYS$UMF','ORACLE_OCM','DBSFWUSER','REMOTE_SCHEDULER_AGENT','XS$NULL','DIP','GSMROOTUSER','GSMADMIN_INTERNAL','GSMUSER','OUTLN','SYSBACKUP','SYSDG','SYSTEM','SYSRAC','AUDSYS','SYSKM','SYS','OGG','SPA','APEX_050000','SQL_MONITOR') AND length(COLUMN_NAME)>64 ORDER BY OWNER,TABLE_NAME,COLUMN_NAME`
-	} else {
-		sql = fmt.Sprintf(`SELECT OWNER,TABLE_NAME,COLUMN_NAME FROM DBA_TAB_COLUMNS WHERE OWNER IN (%s) AND length(COLUMN_NAME)>64 ORDER BY OWNER,TABLE_NAME,COLUMN_NAME`, strings.Join(schemaName, ","))
-	}
+func (o *Oracle) GetOracleSchemaTableTypeCounts(schemaName []string) ([]map[string]string, error) {
+	querySQL := fmt.Sprintf(`SELECT 
+temp.SCHEMA_NAME,
+temp.TABLE_TYPE,
+SUM(temp.OBJECT_SIZE) AS OBJECT_SIZE,
+COUNT(1) AS COUNTS
+FROM
+(SELECT 
+f.OWNER AS SCHEMA_NAME,
+	(
+	CASE WHEN f.CLUSTER_NAME IS NOT NULL THEN 'CLUSTERED' ELSE
+		CASE	WHEN f.IOT_TYPE = 'IOT' THEN
+			CASE WHEN t.IOT_TYPE != 'IOT' THEN t.IOT_TYPE ELSE 'IOT' 
+				END 
+		ELSE
+				CASE	
+						WHEN f.PARTITIONED = 'YES' THEN 'PARTITIONED' ELSE
+					CASE
+							WHEN f.TEMPORARY = 'Y' THEN 
+							DECODE(f.DURATION,'SYS$SESSION','SESSION TEMPORARY','SYS$TRANSACTION','TRANSACTION TEMPORARY')
+							ELSE 'HEAP' 
+					END 
+				END 
+		END 
+	END ) TABLE_TYPE,
+    ROUND(NVL(f.NUM_ROWS * f.AVG_ROW_LEN / 1024 / 1024 / 1024,0),2) AS OBJECT_SIZE
+FROM
+(SELECT tmp.owner,tmp.NUM_ROWS,tmp.AVG_ROW_LEN,tmp.TABLE_NAME，tmp.CLUSTER_NAME,tmp.PARTITIONED,tmp.TEMPORARY,tmp.DURATION,tmp.IOT_TYPE
+FROM
+	DBA_TABLES tmp, DBA_TABLES w
+WHERE tmp.owner=w.owner AND tmp.table_name = w.table_name AND tmp.owner in (%s) AND (w.IOT_TYPE IS NUll OR w.IOT_TYPE='IOT')) f left join (
+select owner,iot_name,iot_type from DBA_TABLES WHERE owner in (%s)) t 
+ON f.owner = t.owner AND f.table_name = t.iot_name) temp
+GROUP BY temp.SCHEMA_NAME,temp.TABLE_TYPE`, strings.Join(schemaName, ","), strings.Join(schemaName, ","))
 
-	_, res, err := Query(o.Ctx, o.OracleDB, sql)
+	_, res, err := Query(o.Ctx, o.OracleDB, querySQL)
 	if err != nil {
 		return res, err
 	}
 	return res, nil
 }
 
-func (o *Oracle) GetOracleTableIndexNameLength(schemaName []string) ([]map[string]string, error) {
-	var sql string
-	if len(schemaName) == 0 {
-		sql = `SELECT INDEX_OWNER,TABLE_NAME,INDEX_NAME FROM DBA_IND_COLUMNS WHERE TABLE_OWNER NOT IN ('HR','DVF','DVSYS','LBACSYS','MDDATA','OLAPSYS','ORDPLUGINS','ORDDATA','MDSYS','SI_INFORMTN_SCHEMA','ORDSYS','CTXSYS','OJVMSYS','WMSYS','ANONYMOUS','XDB','GGSYS','GSMCATUSER','APPQOSSYS','DBSNMP','SYS$UMF','ORACLE_OCM','DBSFWUSER','REMOTE_SCHEDULER_AGENT','XS$NULL','DIP','GSMROOTUSER','GSMADMIN_INTERNAL','GSMUSER','OUTLN','SYSBACKUP','SYSDG','SYSTEM','SYSRAC','AUDSYS','SYSKM','SYS','OGG','SPA','APEX_050000','SQL_MONITOR') AND LENGTH(COLUMN_NAME) > 64 ORDER BY INDEX_OWNER,TABLE_NAME,INDEX_NAME`
-	} else {
-		sql = fmt.Sprintf(`SELECT INDEX_OWNER,TABLE_NAME,INDEX_NAME FROM DBA_IND_COLUMNS WHERE TABLE_OWNER IN (%s) AND LENGTH(COLUMN_NAME) > 64 ORDER BY INDEX_OWNER,TABLE_NAME,INDEX_NAME`, strings.Join(schemaName, ","))
-	}
-
-	_, res, err := Query(o.Ctx, o.OracleDB, sql)
+func (o *Oracle) GetOracleSchemaColumnDataDefaultCounts(schemaName []string) ([]map[string]string, error) {
+	querySQL := fmt.Sprintf(`SELECT 
+	xs.OWNER,
+	xs.DATA_DEFAULT,
+	COUNT(1) COUNTS
+	FROM
+	XMLTABLE (
+		'/ROWSET/ROW' PASSING ( SELECT DBMS_XMLGEN.GETXMLTYPE (
+				q'[select t.OWNER,
+	    t.DATA_DEFAULT
+	from dba_tab_columns t, dba_col_comments c
+	where t.table_name = c.table_name
+	and t.column_name = c.column_name
+	and t.owner = c.owner
+	and upper(t.owner) IN (%s)]' ) FROM DUAL ) COLUMNS OWNER VARCHAR2 (300) PATH 'OWNER',
+		DATA_DEFAULT VARCHAR2 ( 4000 )
+	) xs
+	GROUP BY xs.OWNER,xs.DATA_DEFAULT`, strings.Join(schemaName, ","))
+	_, res, err := Query(o.Ctx, o.OracleDB, querySQL)
 	if err != nil {
 		return res, err
 	}
 	return res, nil
 }
 
-func (o *Oracle) GetOracleTableViewNameLength(schemaName []string) ([]map[string]string, error) {
-	var sql string
-	if len(schemaName) == 0 {
-		sql = `SELECT OWNER,VIEW_NAME,READ_ONLY FROM DBA_VIEWS WHERE OWNER NOT IN ('HR','DVF','DVSYS','LBACSYS','MDDATA','OLAPSYS','ORDPLUGINS','ORDDATA','MDSYS','SI_INFORMTN_SCHEMA','ORDSYS','CTXSYS','OJVMSYS','WMSYS','ANONYMOUS','XDB','GGSYS','GSMCATUSER','APPQOSSYS','DBSNMP','SYS$UMF','ORACLE_OCM','DBSFWUSER','REMOTE_SCHEDULER_AGENT','XS$NULL','DIP','GSMROOTUSER','GSMADMIN_INTERNAL','GSMUSER','OUTLN','SYSBACKUP','SYSDG','SYSTEM','SYSRAC','AUDSYS','SYSKM','SYS','OGG','SPA','APEX_050000','SQL_MONITOR') AND LENGTH(VIEW_NAME) > 64 ORDER BY OWNER,VIEW_NAME`
-	} else {
-		sql = fmt.Sprintf(`SELECT OWNER,VIEW_NAME,READ_ONLY FROM DBA_VIEWS WHERE OWNER IN (%s) AND LENGTH(VIEW_NAME) > 64 ORDER BY OWNER,VIEW_NAME`, strings.Join(schemaName, ","))
-	}
-
-	_, res, err := Query(o.Ctx, o.OracleDB, sql)
+func (o *Oracle) GetOracleSchemaViewTypeCounts(schemaName []string) ([]map[string]string, error) {
+	// Type of the view if the view is a typed view -> view_type
+	querySQL := fmt.Sprintf(`SELECT OWNER,NVL(VIEW_TYPE,'VIEW') VIEW_TYPE,VIEW_TYPE_OWNER,COUNT(1) AS COUNTS FROM DBA_VIEWS WHERE OWNER IN (%s) GROUP BY OWNER,VIEW_TYPE,VIEW_TYPE_OWNER`, strings.Join(schemaName, ","))
+	_, res, err := Query(o.Ctx, o.OracleDB, querySQL)
 	if err != nil {
 		return res, err
 	}
 	return res, nil
 }
 
-func (o *Oracle) GetOracleTableSequenceNameLength(schemaName []string) ([]map[string]string, error) {
-	var sql string
-	if len(schemaName) == 0 {
-		sql = `SELECT SEQUENCE_OWNER,SEQUENCE_NAME,ORDER_FLAG FROM DBA_SEQUENCES WHERE SEQUENCE_OWNER NOT IN ('HR','DVF','DVSYS','LBACSYS','MDDATA','OLAPSYS','ORDPLUGINS','ORDDATA','MDSYS','SI_INFORMTN_SCHEMA','ORDSYS','CTXSYS','OJVMSYS','WMSYS','ANONYMOUS','XDB','GGSYS','GSMCATUSER','APPQOSSYS','DBSNMP','SYS$UMF','ORACLE_OCM','DBSFWUSER','REMOTE_SCHEDULER_AGENT','XS$NULL','DIP','GSMROOTUSER','GSMADMIN_INTERNAL','GSMUSER','OUTLN','SYSBACKUP','SYSDG','SYSTEM','SYSRAC','AUDSYS','SYSKM','SYS','OGG','SPA','APEX_050000','SQL_MONITOR') AND LENGTH(SEQUENCE_NAME)>64 ORDER BY SEQUENCE_OWNER,SEQUENCE_NAME,ORDER_FLAG`
-	} else {
-		sql = fmt.Sprintf(`SELECT SEQUENCE_OWNER,SEQUENCE_NAME,ORDER_FLAG FROM DBA_SEQUENCES WHERE SEQUENCE_OWNER IN (%s) AND LENGTH(SEQUENCE_NAME)>64 ORDER BY SEQUENCE_OWNER,SEQUENCE_NAME,ORDER_FLAG`, strings.Join(schemaName, ","))
-	}
+func (o *Oracle) GetOracleSchemaObjectTypeCounts(schemaName []string) ([]map[string]string, error) {
+	querySQL := fmt.Sprintf(`SELECT OWNER,OBJECT_TYPE,COUNT(1) COUNTS FROM DBA_OBJECTS WHERE OWNER IN (%s) AND OBJECT_TYPE NOT IN ('TABLE','TABLE PARTITION','TABLE SUBPARTITION','INDEX','VIEW') GROUP BY OWNER,OBJECT_TYPE`, strings.Join(schemaName, ","))
 
-	_, res, err := Query(o.Ctx, o.OracleDB, sql)
+	_, res, err := Query(o.Ctx, o.OracleDB, querySQL)
+	if err != nil {
+		return res, err
+	}
+	return res, nil
+}
+
+func (o *Oracle) GetOracleSchemaPartitionTypeCounts(schemaName []string) ([]map[string]string, error) {
+	// SUBPARTITIONING_TYPE = 'NONE' -> remove subpartition
+	querySQL := fmt.Sprintf(`SELECT
+	OWNER,
+	PARTITIONING_TYPE,
+	COUNT(1) COUNTS
+FROM
+	DBA_PART_TABLES 
+WHERE
+	OWNER IN (%s)
+AND SUBPARTITIONING_TYPE = 'NONE'
+GROUP BY OWNER,PARTITIONING_TYPE`, strings.Join(schemaName, ","))
+
+	_, res, err := Query(o.Ctx, o.OracleDB, querySQL)
+	if err != nil {
+		return res, err
+	}
+	return res, nil
+}
+
+func (o *Oracle) GetOracleSchemaSubPartitionTypeCounts(schemaName []string) ([]map[string]string, error) {
+	// SUBPARTITIONING_TYPE <> 'NONE'  -> remove normal partition
+	querySQL := fmt.Sprintf(`SELECT 
+	OWNER,
+	SUBPARTITIONING_TYPE,
+	COUNT(1) COUNTS
+FROM
+(SELECT
+	OWNER,
+	PARTITIONING_TYPE || '-' || SUBPARTITIONING_TYPE AS SUBPARTITIONING_TYPE
+FROM
+	DBA_PART_TABLES 
+WHERE
+	OWNER IN (%s)
+AND SUBPARTITIONING_TYPE <> 'NONE'
+)
+GROUP BY OWNER,SUBPARTITIONING_TYPE`, strings.Join(schemaName, ","))
+
+	_, res, err := Query(o.Ctx, o.OracleDB, querySQL)
+	if err != nil {
+		return res, err
+	}
+	return res, nil
+}
+
+func (o *Oracle) GetOracleSchemaTemporaryTableTypeCounts(schemaName []string) ([]map[string]string, error) {
+	querySQL := fmt.Sprintf(`select OWNER,DURATION AS TEMP_TYPE,COUNT(*) COUNT FROM DBA_TABLES WHERE OWNER IN (%s) AND TEMPORARY='Y' AND DURATION IS NOT NULL GROUP BY OWNER,DURATION`, strings.Join(schemaName, ","))
+
+	_, res, err := Query(o.Ctx, o.OracleDB, querySQL)
+	if err != nil {
+		return res, err
+	}
+	return res, nil
+}
+
+func (o *Oracle) GetOracleSchemaConstraintTypeCounts(schemaName []string) ([]map[string]string, error) {
+	querySQL := fmt.Sprintf(`select owner,CONSTRAINT_TYPE,count(*) COUNT from dba_constraints where OWNER IN (%s) group by owner,CONSTRAINT_TYPE ORDER BY COUNT DESC`, strings.Join(schemaName, ","))
+	_, res, err := Query(o.Ctx, o.OracleDB, querySQL)
+	if err != nil {
+		return res, err
+	}
+	return res, nil
+}
+
+func (o *Oracle) GetOracleSchemaIndexTypeCounts(schemaName []string) ([]map[string]string, error) {
+	querySQL := fmt.Sprintf(`select owner,INDEX_TYPE,count(*) COUNT from dba_indexes where OWNER IN (%s) group by owner,INDEX_TYPE ORDER BY COUNT DESC`, strings.Join(schemaName, ","))
+
+	_, res, err := Query(o.Ctx, o.OracleDB, querySQL)
+	if err != nil {
+		return res, err
+	}
+	return res, nil
+}
+
+func (o *Oracle) GetOracleSchemaColumnTypeCounts(schemaName []string) ([]map[string]string, error) {
+	querySQL := fmt.Sprintf(`select OWNER,DATA_TYPE,count(*) COUNT,max(data_length) max_data_length from dba_tab_columns where OWNER IN (%s)  group by owner,DATA_TYPE ORDER BY COUNT DESC`, strings.Join(schemaName, ","))
+	_, res, err := Query(o.Ctx, o.OracleDB, querySQL)
 	if err != nil {
 		return res, err
 	}

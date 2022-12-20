@@ -15,24 +15,9 @@ limitations under the License.
 */
 package common
 
-import "time"
-
-// 同步操作类型
-const (
-	UpdateOperation        = "UPDATE"
-	InsertOperation        = "INSERT"
-	DeleteOperation        = "DELETE"
-	TruncateOperation      = "TRUNCATE"
-	DropOperation          = "DROP"
-	DDLOperation           = "DDL"
-	TruncateTableOperation = "TRUNCATE TABLE"
-	DropTableOperation     = "DROP TABLE"
-)
-
-// 用于控制当程序消费追平到当前 CURRENT 重做日志，
-// 当值 == 0 启用 filterOracleRedoGreaterOrEqualRecordByTable 大于或者等于
-// 当值 == 1 启用 filterOracleRedoGreaterOrEqualRecordByTable 大于，避免已被消费得日志一直被重复消费
-var CurrentResetFlag = 0
+/*
+	Common Constant
+*/
 
 const (
 	// MySQL 支持 check 约束版本 > 8.0.15
@@ -50,10 +35,6 @@ const (
 	CKConstraintJSON = "CK"
 	PartitionJSON    = "PARTITION"
 
-	// 目标数据库类型
-	TiDBTargetDBType  = "TIDB"
-	MySQLTargetDBType = "MYSQL"
-
 	// 数据全量/实时同步 Oracle 版本要求
 	// 要求 oracle 11g 及以上
 	OracleSYNCRequireDBVersion = "11"
@@ -68,19 +49,12 @@ const (
 	// CSV 字符集判断
 	UTF8CharacterSetCSV = "UTF8"
 	GBKCharacterSetCSV  = "GBK"
+)
 
-	// 模式
-	ReverseO2MMode = "ReverseO2M"
-	ReverseM2OMode = "ReverseM2O"
-	CheckO2MMode   = "CheckO2M"
-	CompareO2MMode = "CompareO2M"
-	CSVO2MMode     = "CsvO2M"
-	FullO2MMode    = "FullO2M"
-	AllO2MMode     = "AllO2M"
-
-	// Channel
-	BufferSize = 1024
-
+/*
+O2M/T Oracle Reverse MySQL/TiDB
+*/
+const (
 	// TiDB 数据库
 	TiDBClusteredIndexIntOnlyValue = "INT_ONLY"
 	TiDBClusteredIndexONValue      = "ON"
@@ -123,16 +97,9 @@ var OracleDBCSVCharacterSetMap = map[string]string{
 	"ZHS16GBK": "GBK",
 }
 
-// ORACLE 默认值规则映射规则
-const (
-	OracleSysdateDefaultValueMap = "SYSDATE"
-	OracleSYSGUIDDefaultValueMap = "SYS_GUID()"
-)
-
-var OracleDefaultValueMap = map[string]string{
-	OracleSysdateDefaultValueMap: "NOW()",
-	OracleSYSGUIDDefaultValueMap: "UUID()",
-}
+/*
+	M2O MySQL Reverse Oracle
+*/
 
 // MySQL 字符集映射规则
 var MySQLDBCharacterSetMap = map[string]string{
@@ -162,23 +129,6 @@ var MySQLDBCollationMap = map[string]string{
 
 // Oracle 不支持数据类型 -> M2O
 var OracleIsNotSupportDataType = []string{"ENUM", "SET"}
-
-// MySQL 默认值规则映射规则
-const (
-	MySQLCurrentTimestampDefaultValueMAP = "CURRENT_TIMESTAMP"
-)
-
-var MySQLDefaultValueMap = map[string]string{
-	MySQLCurrentTimestampDefaultValueMAP: "SYSDATE",
-}
-
-// MySQL 连接配置
-const (
-	MysqlMaxIdleConn     = 512
-	MysqlMaxConn         = 1024
-	MysqlConnMaxLifeTime = 300 * time.Second
-	MysqlConnMaxIdleTime = 200 * time.Second
-)
 
 // MySQL Reverse M2O
 // mysql 默认值未区分，字符数据、数值数据，用于匹配 mysql 字符串默认值，判断是否需单引号

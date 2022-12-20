@@ -1,0 +1,36 @@
+{{ define "report_summary" }}
+<a name="report_summary"></a>
+<center>
+    <font size="+2" face="Arial,Helvetica,Geneva,sans-serif" color="#336699" >
+        <b>REPORT SUMMARY</b></font>
+    <hr align="center" width="460">
+</center>
+<a name="table_type_compatible"></a>
+<font size="+2" face="Arial,Helvetica,Geneva,sans-serif" color="#336699">
+    <b>oracle_report_summary</b>
+</font><hr align="left" width="260">
+
+<li class="comment">
+    The oracle database migrate cost assess summary.
+</li>
+<table width="90%" border="1">
+    <tr>
+        <th class="noLink">ASSESS_TOTALS</th>
+        <th class="noLink">COMPATIBLES</th>
+        <th class="noLink">InCOMPATIBLES</th>
+        <th class="noLink">CONVERTIBLES</th>
+        <th class="noLink">InCONVERTIBLES</th>
+    </tr>
+    <tr>
+        <td class="noLink" align="center" >{{ .AssessTotal }}</td>
+        <td class="noLink" align="center">{{ .Compatible }}</td>
+        <td class="noLink" align="center">{{ .Incompatible }}</td>
+        <td class="noLink" align="center" >{{ .Convertible }}</td>
+        <td class="noLink" align="center">{{ .InConvertible }}</td>
+    </tr>
+</table>
+&nbsp;&nbsp;
+<center>[<a class="noLink" href="#top">Top</a>]</center>
+&nbsp;&nbsp;
+{{ end }}
+

@@ -363,7 +363,7 @@ func (c *Check) CheckPrimaryAndUniqueKey() (string, error) {
 
 func (c *Check) CheckForeignKey() (string, error) {
 	isTiDB := false
-	if strings.ToUpper(c.MySQLDBType) == common.TiDBTargetDBType {
+	if strings.ToUpper(c.MySQLDBType) == common.TaskDBTiDB {
 		isTiDB = true
 	}
 	var builder strings.Builder
@@ -405,7 +405,7 @@ func (c *Check) CheckForeignKey() (string, error) {
 
 func (c *Check) CheckCheckKey() (string, error) {
 	isTiDB := false
-	if strings.ToUpper(c.MySQLDBType) == common.TiDBTargetDBType {
+	if strings.ToUpper(c.MySQLDBType) == common.TaskDBTiDB {
 		isTiDB = true
 	}
 	var builder strings.Builder

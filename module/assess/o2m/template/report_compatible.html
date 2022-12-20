@@ -1,0 +1,307 @@
+{{ define "report_compatible" }}
+<a name="report_compatible"></a>
+<center>
+    <font size="+2" face="Arial,Helvetica,Geneva,sans-serif" color="#336699" >
+        <b>REPORT COMPATIBLE</b></font>
+    <hr align="center" width="460">
+</center>
+<a name="table_type_compatible"></a>
+<font size="+2" face="Arial,Helvetica,Geneva,sans-serif" color="#336699">
+    <b>table_type_compatible</b>
+</font><hr align="left" width="260">
+
+<li class="comment">
+    The database schema table type compatible overview.
+</li>
+<table width="90%" border="1">
+    <tr>
+        <th class="noLink">SCHEMA</th>
+        <th class="noLink">TABLE TYPE</th>
+        <th class="noLink">OBJECT COUNTS</th>
+        <th class="noLink">OBJECT SIZE/GB</th>
+        <th class="noLink">IS COMPATIBLE</th>
+        <th class="noLink">IS CONVERTIBLE</th>
+    </tr>
+    {{ range .ListSchemaTableTypeCompatibles }}
+    <tr>
+        <td class="noLink" align="center" >{{ .Schema }}</td>
+        <td class="noLink" align="center">{{ .TableType }}</td>
+        <td class="noLink" align="center">{{ .ObjectCounts }}</td>
+        <td class="noLink" align="center" >{{ .ObjectSize }}</td>
+        <td class="noLink" align="center">{{ .IsCompatible }}</td>
+        <td class="noLink" align="center">{{ .IsConvertible }}</td>
+    </tr>
+    {{ end }}
+</table>
+&nbsp;&nbsp;
+<center>[<a class="noLink" href="#top">Top</a>]</center>
+
+<a name="column_type_compatible"></a>
+<font size="+2" face="Arial,Helvetica,Geneva,sans-serif" color="#336699">
+    <b>column_type_compatible</b>
+</font><hr align="left" width="260">
+
+<li class="comment">
+    The database schema column type compatible overview.
+</li>
+<table width="90%" border="1">
+    <tr>
+        <th class="noLink">SCHEMA</th>
+        <th class="noLink">COLUMN TYPE</th>
+        <th class="noLink">OBJECT COUNTS</th>
+        <th class="noLink">MAX DATA LENGTH</th>
+        <th class="noLink">COLUMN TYPE MAP</th>
+        <th class="noLink">IS EQUIVALENT</th>
+    </tr>
+    {{ range .ListSchemaColumnTypeCompatibles }}
+    <tr>
+        <td class="noLink" align="center" >{{ .Schema }}</td>
+        <td class="noLink" align="center">{{ .ColumnType }}</td>
+        <td class="noLink" align="center">{{ .ObjectCounts }}</td>
+        <td class="noLink" align="center" >{{ .MaxDataLength }}</td>
+        <td class="noLink" align="center" >{{ .ColumnTypeMap }}</td>
+        <td class="noLink" align="center">{{ .IsEquivalent }}</td>
+    </tr>
+    {{ end }}
+</table>
+&nbsp;&nbsp;
+<center>[<a class="noLink" href="#top">Top</a>]</center>
+
+<a name="constraint_type_compatible"></a>
+<font size="+2" face="Arial,Helvetica,Geneva,sans-serif" color="#336699">
+    <b>constraint_type_compatible</b>
+</font><hr align="left" width="260">
+
+<li class="comment">
+    The database schema constraint type compatible overview.
+</li>
+<table width="90%" border="1">
+    <tr>
+        <th class="noLink">SCHEMA</th>
+        <th class="noLink">CONSTRAINT TYPE</th>
+        <th class="noLink">OBJECT COUNTS</th>
+        <th class="noLink">IS COMPATIBLE</th>
+        <th class="noLink">IS CONVERTIBLE</th>
+    </tr>
+    {{ range .ListSchemaConstraintTypeCompatibles }}
+    <tr>
+        <td class="noLink" align="center" >{{ .Schema }}</td>
+        <td class="noLink" align="center">{{ .ConstraintType }}</td>
+        <td class="noLink" align="center">{{ .ObjectCounts }}</td>
+        <td class="noLink" align="center">{{ .IsCompatible }}</td>
+        <td class="noLink" align="center">{{ .IsConvertible }}</td>
+    </tr>
+    {{ end }}
+</table>
+&nbsp;&nbsp;
+<center>[<a class="noLink" href="#top">Top</a>]</center>
+
+<a name="index_type_compatible"></a>
+<font size="+2" face="Arial,Helvetica,Geneva,sans-serif" color="#336699">
+    <b>index_type_compatible</b>
+</font><hr align="left" width="260">
+
+<li class="comment">
+    The database schema index type compatible overview.
+</li>
+<table width="90%" border="1">
+    <tr>
+        <th class="noLink">SCHEMA</th>
+        <th class="noLink">INDEX TYPE</th>
+        <th class="noLink">OBJECT COUNTS</th>
+        <th class="noLink">IS COMPATIBLE</th>
+        <th class="noLink">IS CONVERTIBLE</th>
+    </tr>
+    {{ range .ListSchemaIndexTypeCompatibles }}
+    <tr>
+        <td class="noLink" align="center" >{{ .Schema }}</td>
+        <td class="noLink" align="center">{{ .IndexType }}</td>
+        <td class="noLink" align="center">{{ .ObjectCounts }}</td>
+        <td class="noLink" align="center">{{ .IsCompatible }}</td>
+        <td class="noLink" align="center">{{ .IsConvertible }}</td>
+    </tr>
+    {{ end }}
+</table>
+&nbsp;&nbsp;
+<center>[<a class="noLink" href="#top">Top</a>]</center>
+
+<a name="default_value_compatible"></a>
+<font size="+2" face="Arial,Helvetica,Geneva,sans-serif" color="#336699">
+    <b>default_value_compatible</b>
+</font><hr align="left" width="260">
+
+<li class="comment">
+    The database schema default value compatible overview.
+</li>
+<table width="90%" border="1">
+    <tr>
+        <th class="noLink">SCHEMA</th>
+        <th class="noLink">COLUMN DEFAULT VALUE</th>
+        <th class="noLink">OBJECT COUNTS</th>
+        <th class="noLink">DEFAULT VALUE MAP</th>
+        <th class="noLink">IS COMPATIBLE</th>
+        <th class="noLink">IS CONVERTIBLE</th>
+    </tr>
+    {{ range .ListSchemaDefaultValueCompatibles }}
+    <tr>
+        <td class="noLink" align="center" >{{ .Schema }}</td>
+        <td class="noLink" align="center">{{ .ColumnDefaultValue }}</td>
+        <td class="noLink" align="center">{{ .ObjectCounts }}</td>
+        <td class="noLink" align="center">{{ .DefaultValueMap }}</td>
+        <td class="noLink" align="center">{{ .IsCompatible }}</td>
+        <td class="noLink" align="center">{{ .IsConvertible }}</td>
+    </tr>
+    {{ end }}
+</table>
+&nbsp;&nbsp;
+<center>[<a class="noLink" href="#top">Top</a>]</center>
+
+<a name="view_type_compatible"></a>
+<font size="+2" face="Arial,Helvetica,Geneva,sans-serif" color="#336699">
+    <b>view_type_compatible</b>
+</font><hr align="left" width="260">
+
+<li class="comment">
+    The database schema view type compatible overview.
+</li>
+<table width="90%" border="1">
+    <tr>
+        <th class="noLink">SCHEMA</th>
+        <th class="noLink">VIEW TYPE</th>
+        <th class="noLink">VIEW TYPE OWNER</th>
+        <th class="noLink">OBJECT COUNTS</th>
+        <th class="noLink">IS COMPATIBLE</th>
+        <th class="noLink">IS CONVERTIBLE</th>
+    </tr>
+    {{ range .ListSchemaViewTypeCompatibles }}
+    <tr>
+        <td class="noLink" align="center" >{{ .Schema }}</td>
+        <td class="noLink" align="center">{{ .ViewType }}</td>
+        <td class="noLink" align="center">{{ .ViewTypeOwner }}</td>
+        <td class="noLink" align="center">{{ .ObjectCounts }}</td>
+        <td class="noLink" align="center">{{ .IsCompatible }}</td>
+        <td class="noLink" align="center">{{ .IsConvertible }}</td>
+    </tr>
+    {{ end }}
+</table>
+&nbsp;&nbsp;
+<center>[<a class="noLink" href="#top">Top</a>]</center>
+
+<a name="object_type_compatible"></a>
+<font size="+2" face="Arial,Helvetica,Geneva,sans-serif" color="#336699">
+    <b>object_type_compatible</b>
+</font><hr align="left" width="260">
+
+<li class="comment">
+    The database schema object type compatible overview.
+</li>
+<table width="90%" border="1">
+    <tr>
+        <th class="noLink">SCHEMA</th>
+        <th class="noLink">OBJECT TYPE</th>
+        <th class="noLink">OBJECT COUNTS</th>
+        <th class="noLink">IS COMPATIBLE</th>
+        <th class="noLink">IS CONVERTIBLE</th>
+    </tr>
+    {{ range .ListSchemaObjectTypeCompatibles }}
+    <tr>
+        <td class="noLink" align="center" >{{ .Schema }}</td>
+        <td class="noLink" align="center">{{ .ObjectType }}</td>
+        <td class="noLink" align="center">{{ .ObjectCounts }}</td>
+        <td class="noLink" align="center">{{ .IsCompatible }}</td>
+        <td class="noLink" align="center">{{ .IsConvertible }}</td>
+    </tr>
+    {{ end }}
+</table>
+&nbsp;&nbsp;
+<center>[<a class="noLink" href="#top">Top</a>]</center>
+
+<a name="partition_type_compatible"></a>
+<font size="+2" face="Arial,Helvetica,Geneva,sans-serif" color="#336699">
+    <b>partition_type_compatible</b>
+</font><hr align="left" width="260">
+
+<li class="comment">
+    The database schema partition type compatible overview.
+</li>
+<table width="90%" border="1">
+    <tr>
+        <th class="noLink">SCHEMA</th>
+        <th class="noLink">PARTITION TYPE</th>
+        <th class="noLink">OBJECT COUNTS</th>
+        <th class="noLink">IS COMPATIBLE</th>
+        <th class="noLink">IS CONVERTIBLE</th>
+    </tr>
+    {{ range .ListSchemaPartitionTypeCompatibles }}
+    <tr>
+        <td class="noLink" align="center" >{{ .Schema }}</td>
+        <td class="noLink" align="center">{{ .PartitionType }}</td>
+        <td class="noLink" align="center">{{ .ObjectCounts }}</td>
+        <td class="noLink" align="center">{{ .IsCompatible }}</td>
+        <td class="noLink" align="center">{{ .IsConvertible }}</td>
+    </tr>
+    {{ end }}
+</table>
+&nbsp;&nbsp;
+<center>[<a class="noLink" href="#top">Top</a>]</center>
+
+
+<a name="subpartition_type_compatible"></a>
+<font size="+2" face="Arial,Helvetica,Geneva,sans-serif" color="#336699">
+    <b>subpartition_type_compatible</b>
+</font><hr align="left" width="260">
+
+<li class="comment">
+    The database schema subpartition type compatible overview.
+</li>
+<table width="90%" border="1">
+    <tr>
+        <th class="noLink">SCHEMA</th>
+        <th class="noLink">SUBPARTITION TYPE</th>
+        <th class="noLink">OBJECT COUNTS</th>
+        <th class="noLink">IS COMPATIBLE</th>
+        <th class="noLink">IS CONVERTIBLE</th>
+    </tr>
+    {{ range .ListSchemaSubPartitionTypeCompatibles }}
+    <tr>
+        <td class="noLink" align="center" >{{ .Schema }}</td>
+        <td class="noLink" align="center">{{ .SubPartitionType }}</td>
+        <td class="noLink" align="center">{{ .ObjectCounts }}</td>
+        <td class="noLink" align="center">{{ .IsCompatible }}</td>
+        <td class="noLink" align="center">{{ .IsConvertible }}</td>
+    </tr>
+    {{ end }}
+</table>
+&nbsp;&nbsp;
+<center>[<a class="noLink" href="#top">Top</a>]</center>
+
+<a name="temporary_table_type"></a>
+<font size="+2" face="Arial,Helvetica,Geneva,sans-serif" color="#336699">
+    <b>temporary_table_type</b>
+</font><hr align="left" width="260">
+
+<li class="comment">
+    The database schema temporary table type compatible overview.
+</li>
+<table width="90%" border="1">
+    <tr>
+        <th class="noLink">SCHEMA</th>
+        <th class="noLink">TEMPORARY TABLE TYPE</th>
+        <th class="noLink">OBJECT COUNTS</th>
+        <th class="noLink">IS COMPATIBLE</th>
+        <th class="noLink">IS CONVERTIBLE</th>
+    </tr>
+    {{ range .ListSchemaTemporaryTableTypeCompatibles }}
+    <tr>
+        <td class="noLink" align="center" >{{ .Schema }}</td>
+        <td class="noLink" align="center">{{ .TemporaryTableType }}</td>
+        <td class="noLink" align="center">{{ .ObjectCounts }}</td>
+        <td class="noLink" align="center">{{ .IsCompatible }}</td>
+        <td class="noLink" align="center">{{ .IsConvertible }}</td>
+    </tr>
+    {{ end }}
+</table>
+&nbsp;&nbsp;
+<center>[<a class="noLink" href="#top">Top</a>]</center>
+&nbsp;
+{{ end }}

@@ -222,13 +222,13 @@ func ChangeTableColumnDefaultValue(ctx context.Context, metaDB *meta.Meta, dataD
 		dataDefault = strings.TrimRight(dataDefault, ")")
 	}
 
-	defaultValueMapSlice, err := meta.NewDefaultValueMapModel(metaDB).Detail(ctx, &meta.DefaultValueMap{
+	defaultValueMapSlice, err := meta.NewBuildinColumnDefaultvalModel(metaDB).Detail(ctx, &meta.BuildinColumnDefaultval{
 		ReverseMode: common.ReverseO2MMode,
 	})
 	if err != nil {
 		return dataDefault, err
 	}
-	return loadColumnDefaultValueRule(dataDefault, defaultValueMapSlice.([]meta.DefaultValueMap)), nil
+	return loadColumnDefaultValueRule(dataDefault, defaultValueMapSlice.([]meta.BuildinColumnDefaultval)), nil
 }
 
 func oracleTableColumnMapRuleReverse(columnINFO Column) (string, string, error) {
@@ -515,7 +515,7 @@ func oracleTableColumnMapRuleReverse(columnINFO Column) (string, string, error) 
 	return originColumnType, buildInColumnType, nil
 }
 
-func loadColumnDefaultValueRule(defaultValue string, defaultValueMapSlice []meta.DefaultValueMap) string {
+func loadColumnDefaultValueRule(defaultValue string, defaultValueMapSlice []meta.BuildinColumnDefaultval) string {
 	if len(defaultValueMapSlice) == 0 {
 		return defaultValue
 	}

@@ -2,7 +2,7 @@
 
 CMDPATH="./cmd"
 BINARYPATH="bin/transferdb"
-CONFIGPATH="./sample/config.toml"
+CONFIGPATH="./example/config.toml"
 
 REPO    := github.com/wentaojin/transferdb
 

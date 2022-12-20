@@ -45,15 +45,15 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	switch strings.ToLower(strings.TrimSpace(cfg.Mode)) {
 	case "assess":
 		// 收集评估改造成本
-		//metaDB, err := engine.NewMetaDBEngine(ctx, cfg.MySQLConfig, cfg.AppConfig.SlowlogThreshold)
-		//if err != nil {
-		//	return err
-		//}
+		metaDB, err := meta.NewMetaDBEngine(ctx, cfg.MySQLConfig, cfg.AppConfig.SlowlogThreshold)
+		if err != nil {
+			return err
+		}
 		oracleDB, err := oracle.NewOracleDBEngine(ctx, cfg.OracleConfig)
 		if err != nil {
 			return err
 		}
-		err = assess.TAssess(assessO2M.NewReport(ctx, cfg, oracleDB))
+		err = assess.TAssess(assessO2M.NewAssess(ctx, cfg, metaDB, oracleDB))
 		if err != nil {
 			return err
 		}

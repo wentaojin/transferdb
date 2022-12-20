@@ -143,7 +143,7 @@ func GenReverseTableTask(ctx context.Context, cfg *config.Config, mysql *mysql.M
 
 	var dbVersion string
 
-	if common.StringUPPER(common.StringUPPER(cfg.MySQLConfig.DBType)) == common.TiDBTargetDBType {
+	if common.StringUPPER(common.StringUPPER(cfg.MySQLConfig.DBType)) == common.TaskDBTiDB {
 		dbVersion = mysqlVersion
 	} else {
 		if strings.Contains(mysqlVersion, common.MySQLVersionDelimiter) {
@@ -253,7 +253,7 @@ func (t *Table) GenTableSuffix(primaryColumns []string, singleIntegerPK bool) (t
 		}
 	}
 	// table-option 表后缀可选项
-	if t.TargetDBType == common.MySQLTargetDBType || t.TargetTableOption == "" {
+	if strings.EqualFold(t.TargetDBType, common.TaskDBMySQL) || t.TargetTableOption == "" {
 		zap.L().Warn("reverse oracle table suffix",
 			zap.String("table", t.String()),
 			zap.String("table-option", "table-option is null, would be disabled"))

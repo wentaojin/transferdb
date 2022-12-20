@@ -5,8 +5,8 @@
 # reverse:
 #   1、prepare 前提必须阶段
 #   2、根据内置表结构转换规则或者手工配置表结构转换规则进行 schema 迁移
-# gather:
-#   1、用于收集评估 oracle -> mysql/tidb 迁移成本信息，只适用于 schema 级别
+# assess:
+#   1、用于收集评估 oracle -> mysql/tidb 迁移成本信息，适用于 schema 级别
 # check:
 #   1、表结构检查(独立于表结构转换，可单独运行，校验规则使用内置规则)
 # all:（全量 + 增量模式）
@@ -119,7 +119,7 @@ worker-threads = 64
 
 [oracle]
 # Oracle 架构 -> only cdb/noncdb
-ora-arch = "cdb"
+ora-arch = "noncdb"
 # All 模式特别说明：
 # 1、CDB 架构需要 c## 开头的用户且具备 logminer 权限
 # 2、Non-CDB 架构需要具备 logminer 权限用户
@@ -141,15 +141,15 @@ connect-params = "poolMinSessions=50&poolMaxSessions=1000&poolWaitTimeout=360s&p
 # Timestamp 'yyyy-mm-dd hh24:mi:ss.ffx', x 根据 timestamp 精度格式化, 如果超过 6, 按精度 6 格式化字符
 # Interval Year/Day 数据字符 TO_CHAR 格式化
 session-params = []
-# 配置 oracle 迁移 schema（gather 阶段可设置可不设置，不设置则表示 gather 库内所有 schema，其他阶段必须设置）
-schema-name = "marvin"
-# 源端迁移任务表（只用于 prepare/reverse/check/all/full 阶段，gather 阶段不适用，gather 只适用于 schema 级别）
+# 配置 oracle 迁移 schema（assess 阶段可设置可不设置，不设置则表示 assess 库内所有 schema，其他阶段必须设置）
+schema-name = ""
+# 源端迁移任务表（只用于 prepare/reverse/check/all/full 阶段，assess 阶段不适用，assess 只适用于 schema 级别）
 # include-table 和 exclude-table 不能同时配置，两者只能配置一个,如果两个都没配置则 Schema 内表全迁移
 # include-table 和 exclude-table 支持正则表达式以及通配符（tab_*/tab*）
 include-table = ["xiamen9"]
 exclude-table = []
 
-# 只用于 prepare/reverse/check/all/full 阶段，gather 阶段不适用
+# 只用于 prepare/reverse/check/all/full 阶段，assess 阶段不适用
 [mysql]
 # 数据库类型，only mysql/tidb
 db-type = "tidb"

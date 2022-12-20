@@ -1,0 +1,72 @@
+{{ define "report_detail" }}
+<a name="report_detail"></a>
+<center>
+    <font size="+2" face="Arial,Helvetica,Geneva,sans-serif" color="#336699" >
+        <b>REPORT DETAIL</b></font>
+    <hr align="center" width="460">
+</center>
+<table width="90%" border="1">
+    <tbody>
+    <tr><th colspan="4">ORACLE OBJECT TYPE COMPATIBLE</th></tr>
+    <tr>
+        <td nowrap="" align="center" width="25%"><a class="link" href="#table_type_compatible">table type</a></td>
+        <td nowrap="" align="center" width="25%"><a class="link" href="#column_type_compatible">column type</a></td>
+        <td nowrap="" align="center" width="25%"><a class="link" href="#constraint_type_compatible">constraint type</a></td>
+        <td nowrap="" align="center" width="25%"><a class="link" href="#index_type_compatible">index type</a></td>
+    </tr>
+    <tr>
+        <td nowrap="" align="center" width="25%"><a class="link" href="#default_value_compatible">default value</a></td>
+        <td nowrap="" align="center" width="25%"><a class="link" href="#view_type_compatible">view type</a></td>
+        <td nowrap="" align="center" width="25%"><a class="link" href="#object_type_compatible">object type</a></td>
+        <td nowrap="" align="center" width="25%"><a class="link" href="#partition_type_compatible">partition type</a></td>
+    </tr>
+    <tr>
+        <td nowrap="" align="center" width="25%"><a class="link" href="#subpartition_type_compatible">partition type</a></td>
+        <td nowrap="" align="center" width="25%"><a class="link" href="#temporary_table_type">temporary table type</a></td>
+    </tr>
+    </tbody>
+</table>
+<table width="90%" border="1">
+    <tbody>
+    <tr><th colspan="4">ORACLE OBJECT TYPE CHECK</th></tr>
+    <tr>
+        <td nowrap="" align="center" width="25%"><a class="link" href="#schema_table_partition_counts_over1024">partition number over 1024</a></td>
+        <td nowrap="" align="center" width="25%"><a class="link" href="#schema_table_avg_row_length_over6M">average row length over 6MB</a></td>
+        <td nowrap="" align="center" width="25%"><a class="link" href="#schema_table_index_column_over3072">index row length over 3072</a></td>
+        <td nowrap="" align="center" width="25%"><a class="link" href="#schema_table_column_counts_over512">table columns over 512</a></td>
+    </tr>
+    <tr>
+        <td nowrap="" align="center" width="25%"><a class="link" href="#schema_username_length_over64">username length over 64</a></td>
+        <td nowrap="" align="center" width="25%"><a class="link" href="#schema_tablename_length_over64">tablename length over 64</a></td>
+        <td nowrap="" align="center" width="25%"><a class="link" href="#schema_columnname_length_over64">columnname length over 64</a></td>
+        <td nowrap="" align="center" width="25%"><a class="link" href="#schema_indexname_length_over64">indexname length over 64</a></td>
+    </tr>
+    <tr>
+        <td nowrap="" align="center" width="25%"><a class="link" href="#schema_table_index_counts_over64">table index count over 64</a></td>
+        <td nowrap="" align="center" width="25%"><a class="link" href="#schema_viewname_length_over64">viewname length over 64</a></td>
+        <td nowrap="" align="center" width="25%"><a class="link" href="#schema_sequencename_length_over64">sequencename length over 64</a></td>
+    </tr>
+    </tbody>
+</table>
+
+<table width="90%" border="1">
+    <tbody>
+    <tr><th colspan="4">ORACLE OBJECT TYPE RELATED</th></tr>
+    <tr>
+        <td nowrap="" align="center" width="25%"><a class="link" href="#max_active_session_counts">max active ssession counts</a></td>
+        <td nowrap="" align="center" width="25%"><a class="link" href="#schema_table_size">table size</a></td>
+        <td nowrap="" align="center" width="25%"><a class="link" href="#schema_table_rows_top10">table rows top10</a></td>
+        <td nowrap="" align="center" width="25%"><a class="link" href="#avg_row_length_top10_by_statistics">avg rowlength top10 bystatistics</a></td>
+    </tr>
+    <tr>
+        <td nowrap="" align="center" width="25%"><a class="link" href="#schema_code_object">code object</a></td>
+        <td nowrap="" align="center" width="25%"><a class="link" href="#schema_synonym_object">synonym object</a></td>
+        <td nowrap="" align="center" width="25%"><a class="link" href="#schema_materialized_view_object">materialized view object</a></td>
+        <td nowrap="" align="center" width="25%"><a class="link" href="#schema_table_number_column">schema table number type</a></td>
+    </tr>
+    </tbody>
+</table>
+&nbsp;
+<center>[<a class="noLink" href="#top">Top</a>]</center>
+&nbsp;
+{{ end }}

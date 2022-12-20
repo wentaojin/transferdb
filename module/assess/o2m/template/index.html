@@ -32,15 +32,16 @@
 {{ define "report_body" }}
 <body>
 <a name=top></a>
-<font size=+3 color=darkgreen><b>Migration Cost Evaluate For ORACLE</b></font><hr><p>&nbsp;
+<font size=+3 color=darkgreen><b>ORACLE MIGRATE COST ASSESS</b></font><hr><p>&nbsp;
 {{ end }}
 
     <!-- content --->
     {{ template "report_overview" }}
-    {{ template "report_index" }}
-    {{ template "report_schema" }}
-    {{ template "report_type" }}
+    {{ template "report_summary" }}
+    {{ template "report_detail" }}
+    {{ template "report_compatible" }}
     {{ template "report_check" }}
+    {{ template "report_related" }}
 
 <!-- template footer -->
 {{ define "report_footer" }}

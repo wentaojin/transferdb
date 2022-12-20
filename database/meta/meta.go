@@ -19,7 +19,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/config"
 	"github.com/wentaojin/transferdb/errors"
 	"github.com/wentaojin/transferdb/logger"
@@ -109,64 +108,33 @@ func (m *Meta) MigrateTables() (err error) {
 		new(ColumnRuleMap),
 		new(TableRuleMap),
 		new(SchemaRuleMap),
-		new(DefaultValueMap),
 		new(DataCompareMeta),
 		new(WaitSyncMeta),
 		new(FullSyncMeta),
 		new(IncrSyncMeta),
 		new(TableErrorDetail),
+		new(BuildinColumnDefaultval),
+		new(BuildinObjectCompatible),
+		new(BuildinDatatypeRule),
 	)
 }
 
 func (m *Meta) InitDefaultValue(ctx context.Context) error {
-	defaultValEngine := NewDefaultValueMapModel(m)
-
-	if defaultValEngine.RowsAffected(ctx, &DefaultValueMap{
-		SourceDefaultValue: common.OracleSysdateDefaultValueMap,
-		TargetDefaultValue: common.OracleDefaultValueMap[common.OracleSysdateDefaultValueMap],
-		ReverseMode:        common.ReverseO2MMode,
-	}) == 0 {
-		if err := defaultValEngine.Create(
-			ctx,
-			&DefaultValueMap{
-				SourceDefaultValue: common.OracleSysdateDefaultValueMap,
-				TargetDefaultValue: common.OracleDefaultValueMap[common.OracleSysdateDefaultValueMap],
-				ReverseMode:        common.ReverseO2MMode,
-			}); err != nil {
-			return errors.NewMSError(errors.TRANSFERDB, errors.DOMAIN_DB, fmt.Errorf("error on init oracle default sysdate value: %v", err))
-		}
+	err := NewBuildinColumnDefaultvalModel(m).InitO2MBuildinColumnDefaultValue(ctx)
+	if err != nil {
+		return err
 	}
-
-	if defaultValEngine.RowsAffected(ctx, &DefaultValueMap{
-		SourceDefaultValue: common.OracleSYSGUIDDefaultValueMap,
-		TargetDefaultValue: common.OracleDefaultValueMap[common.OracleSYSGUIDDefaultValueMap],
-		ReverseMode:        common.ReverseO2MMode,
-	}) == 0 {
-		if err := defaultValEngine.Create(
-			ctx,
-			&DefaultValueMap{
-				SourceDefaultValue: common.OracleSYSGUIDDefaultValueMap,
-				TargetDefaultValue: common.OracleDefaultValueMap[common.OracleSYSGUIDDefaultValueMap],
-				ReverseMode:        common.ReverseO2MMode,
-			}); err != nil {
-			return errors.NewMSError(errors.TRANSFERDB, errors.DOMAIN_DB, fmt.Errorf("error on init oracle default sysdate value: %v", err))
-		}
+	err = NewBuildinColumnDefaultvalModel(m).InitM2OBuildinColumnDefaultValue(ctx)
+	if err != nil {
+		return err
 	}
-
-	if defaultValEngine.RowsAffected(ctx, &DefaultValueMap{
-		SourceDefaultValue: common.MySQLCurrentTimestampDefaultValueMAP,
-		TargetDefaultValue: common.MySQLDefaultValueMap[common.MySQLCurrentTimestampDefaultValueMAP],
-		ReverseMode:        common.ReverseM2OMode,
-	}) == 0 {
-		if err := defaultValEngine.Create(
-			ctx,
-			&DefaultValueMap{
-				SourceDefaultValue: common.MySQLCurrentTimestampDefaultValueMAP,
-				TargetDefaultValue: common.MySQLDefaultValueMap[common.MySQLCurrentTimestampDefaultValueMAP],
-				ReverseMode:        common.ReverseM2OMode,
-			}); err != nil {
-			return errors.NewMSError(errors.TRANSFERDB, errors.DOMAIN_DB, fmt.Errorf("error on init mysql default current_timestamp value: %v", err))
-		}
+	err = NewBuildinObjectCompatibleModel(m).InitO2MBuildinObjectCompatible(ctx)
+	if err != nil {
+		return err
+	}
+	err = NewBuildinDatatypeRuleModel(m).InitO2MBuildinDatatypeRule(ctx)
+	if err != nil {
+		return err
 	}
 	return nil
 }

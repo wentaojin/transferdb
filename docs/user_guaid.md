@@ -115,7 +115,7 @@ $ ./transferdb --config config.toml --mode reverseM2O
 表 [schema_rule_map] 用于库级别自定义转换规则，库级别优先级高于内置规则
 表 [table_rule_map]  用于表级别自定义转换规则，表级别优先级高于库级别、高于内置规则
 表 [column_rule_map] 用于字段级别自定义转换规则，字段级别优先级高于表级别、高于库级别、高于内置规则
-表 [default_value_map] 用于字段默认值自定义转换规则，优先级适用于全局
+表 [buildin_column_defaultval] 用于字段默认值自定义转换规则，优先级适用于全局
 
 6、表结构检查(独立于表结构转换，可单独运行，校验规则使用内置规则，[输出示例](example/check_${sourcedb}.sql)
 $ ./transferdb --config config.toml --mode prepare

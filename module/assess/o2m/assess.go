@@ -18,7 +18,9 @@ package o2m
 import (
 	"context"
 	"fmt"
+	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/config"
+	"github.com/wentaojin/transferdb/database/meta"
 	"github.com/wentaojin/transferdb/database/oracle"
 	"go.uber.org/zap"
 	"os"
@@ -27,21 +29,23 @@ import (
 	"time"
 )
 
-type Report struct {
+type Assess struct {
 	ctx    context.Context
 	cfg    *config.Config
+	metaDB *meta.Meta
 	oracle *oracle.Oracle
 }
 
-func NewReport(ctx context.Context, cfg *config.Config, oracle *oracle.Oracle) *Report {
-	return &Report{
+func NewAssess(ctx context.Context, cfg *config.Config, metaDB *meta.Meta, oracle *oracle.Oracle) *Assess {
+	return &Assess{
 		ctx:    ctx,
 		cfg:    cfg,
+		metaDB: metaDB,
 		oracle: oracle,
 	}
 }
 
-func (r *Report) Assess() error {
+func (r *Assess) Assess() error {
 	startTime := time.Now()
 	zap.L().Info("assess oracle migrate myoracle cost start",
 		zap.String("oracleSchema", r.cfg.OracleConfig.SchemaName),
@@ -134,210 +138,29 @@ func (r *Report) Assess() error {
 	}
 	defer file.Close()
 
+	// 评估
 	beginTime := time.Now()
-	reportOverview, reportSchema, err := GatherOracleOverview(usernameArray, r.oracle, r.cfg.OracleConfig.Username, fileName)
+	report, err := GetAssessDatabaseReport(r.ctx, r.metaDB, r.oracle, usernameArray, fileName, common.StringUPPER(r.cfg.OracleConfig.Username))
 	if err != nil {
 		return err
 	}
 	finishedTime := time.Now()
-	zap.L().Info("gather database overview",
+	zap.L().Info("assess database result finish",
 		zap.Strings("schema", usernameArray),
 		zap.String("cost", finishedTime.Sub(beginTime).String()))
 
-	beginTime = time.Now()
-	reportType, err := GatherOracleType(usernameArray, r.oracle)
-	if err != nil {
+	startHTMLTime := time.Now()
+	if err = GenNewHTMLReport(report, file); err != nil {
 		return err
 	}
-	finishedTime = time.Now()
-	zap.L().Info("gather database type",
+	finishHTMLTime := time.Now()
+	zap.L().Info("get database result from db finish",
 		zap.Strings("schema", usernameArray),
-		zap.String("cost", finishedTime.Sub(beginTime).String()))
-
-	beginTime = time.Now()
-	reportCheck, err := GatherOracleCheck(usernameArray, r.oracle)
-	if err != nil {
-		return err
-	}
-	finishedTime = time.Now()
-	zap.L().Info("gather database check",
-		zap.Strings("schema", usernameArray),
-		zap.String("cost", finishedTime.Sub(beginTime).String()))
-
-	if err = GenNewHTMLReport(reportOverview, reportSchema, reportType, reportCheck, file); err != nil {
-		return err
-	}
+		zap.String("cost", finishHTMLTime.Sub(startHTMLTime).String()))
 
 	endTime := time.Now()
 	zap.L().Info("assess oracle migrate myoracle cost finished",
 		zap.String("cost", endTime.Sub(startTime).String()),
 		zap.String("output", filepath.Join(pwdDir, fileName)))
 	return nil
-}
-
-func GatherOracleOverview(schemaName []string, oracle *oracle.Oracle, reportUser, reportName string) (*ReportOverview, *ReportSchema, error) {
-
-	reportOverview, err := GatherOracleDBOverview(oracle, reportName, reportUser)
-	if err != nil {
-		return &ReportOverview{}, &ReportSchema{}, err
-	}
-
-	listActiveSessionCount, err := GatherOracleMaxActiveSessionCount(oracle)
-	if err != nil {
-		return &ReportOverview{}, &ReportSchema{}, err
-	}
-
-	listSchemaTableSizeData, err := GatherOracleSchemaOverview(schemaName, oracle)
-	if err != nil {
-		return &ReportOverview{}, &ReportSchema{}, err
-	}
-
-	listSchemaTableRowsTOP, err := GatherOracleSchemaTableRowsTOP(schemaName, oracle)
-	if err != nil {
-		return &ReportOverview{}, &ReportSchema{}, err
-	}
-
-	listSchemaObject, err := GatherOracleSchemaObjectOverview(schemaName, oracle)
-	if err != nil {
-		return &ReportOverview{}, &ReportSchema{}, err
-	}
-
-	listPartitionType, err := GatherOracleSchemaPartitionType(schemaName, oracle)
-	if err != nil {
-		return &ReportOverview{}, &ReportSchema{}, err
-	}
-
-	listColumnType, err := GatherOracleSchemaColumnTypeAndMaxLength(schemaName, oracle)
-	if err != nil {
-		return &ReportOverview{}, &ReportSchema{}, err
-	}
-
-	listTableRow, err := GatherOracleSchemaTableAvgRowLength(schemaName, oracle)
-	if err != nil {
-		return &ReportOverview{}, &ReportSchema{}, err
-	}
-
-	listTemporary, err := GatherOracleSchemaTemporaryTable(schemaName, oracle)
-	if err != nil {
-		return &ReportOverview{}, &ReportSchema{}, err
-	}
-
-	return reportOverview, &ReportSchema{
-		ListSchemaActiveSession:               listActiveSessionCount,
-		ListSchemaTableSizeData:               listSchemaTableSizeData,
-		ListSchemaTableRowsTOP:                listSchemaTableRowsTOP,
-		ListSchemaTableObjectCounts:           listSchemaObject,
-		ListSchemaTablePartitionType:          listPartitionType,
-		ListSchemaTableColumnTypeAndMaxLength: listColumnType,
-		ListSchemaTableAvgRowLength:           listTableRow,
-		ListSchemaTemporaryTableCounts:        listTemporary,
-	}, nil
-}
-
-func GatherOracleType(schemaName []string, oracle *oracle.Oracle) (*ReportType, error) {
-
-	listIndexType, err := GatherOracleSchemaIndexType(schemaName, oracle)
-	if err != nil {
-		return &ReportType{}, err
-	}
-
-	listConstraintType, err := GatherOracleConstraintType(schemaName, oracle)
-	if err != nil {
-		return &ReportType{}, err
-	}
-
-	listCodeType, err := GatherOracleSchemeCodeType(schemaName, oracle)
-	if err != nil {
-		return &ReportType{}, err
-	}
-
-	listSynonymType, err := GatherOracleSchemaSynonymType(schemaName, oracle)
-	if err != nil {
-		return &ReportType{}, err
-	}
-
-	return &ReportType{
-		ListSchemaIndexType:      listIndexType,
-		ListSchemaConstraintType: listConstraintType,
-		ListSchemaCodeType:       listCodeType,
-		ListSchemaSynonymType:    listSynonymType,
-	}, nil
-}
-
-func GatherOracleCheck(schemaName []string, oracle *oracle.Oracle) (*ReportCheck, error) {
-
-	listPartitionTableCountsCK, err := GatherOraclePartitionTableCountsCheck(schemaName, oracle)
-	if err != nil {
-		return &ReportCheck{}, err
-	}
-
-	listTableRowLengthCK, err := GatherOracleTableRowLengthCheck(schemaName, oracle)
-	if err != nil {
-		return &ReportCheck{}, err
-	}
-
-	ListIndexRowLengthCK, err := GatherOracleTableIndexRowLengthCheck(schemaName, oracle)
-	if err != nil {
-		return &ReportCheck{}, err
-	}
-
-	listTableColumnCountsCK, err := GatherOracleTableColumnCountsCheck(schemaName, oracle)
-	if err != nil {
-		return &ReportCheck{}, err
-	}
-
-	listTableIndexCountsCK, err := GatherOracleTableIndexCountsCheck(schemaName, oracle)
-	if err != nil {
-		return &ReportCheck{}, err
-	}
-
-	listTableNumberCK, err := GatherOracleTableNumberTypeCheck(schemaName, oracle)
-	if err != nil {
-		return &ReportCheck{}, err
-	}
-
-	listUsernameCK, err := GatherOracleUsernameLengthCheck(schemaName, oracle)
-	if err != nil {
-		return &ReportCheck{}, err
-	}
-
-	listTableNameLengthCK, err := GatherOracleTableNameLengthCheck(schemaName, oracle)
-	if err != nil {
-		return &ReportCheck{}, err
-	}
-
-	listColumnLengthCK, err := GatherOracleColumnNameLengthCheck(schemaName, oracle)
-	if err != nil {
-		return &ReportCheck{}, err
-	}
-
-	listIndexLengthCK, err := GatherOracleIndexNameLengthCheck(schemaName, oracle)
-	if err != nil {
-		return &ReportCheck{}, err
-	}
-
-	listViewLengthCK, err := GatherOracleViewNameLengthCheck(schemaName, oracle)
-	if err != nil {
-		return &ReportCheck{}, err
-	}
-
-	listSeqLength, err := GatherOracleSequenceNameLengthCheck(schemaName, oracle)
-	if err != nil {
-		return &ReportCheck{}, err
-	}
-
-	return &ReportCheck{
-		ListSchemaPartitionTableCountsCheck:  listPartitionTableCountsCK,
-		ListSchemaTableRowLengthCheck:        listTableRowLengthCK,
-		ListSchemaTableIndexRowLengthCheck:   ListIndexRowLengthCK,
-		ListSchemaTableColumnCountsCheck:     listTableColumnCountsCK,
-		ListSchemaIndexCountsCheck:           listTableIndexCountsCK,
-		ListSchemaTableNumberTypeCheck:       listTableNumberCK,
-		ListUsernameLengthCheck:              listUsernameCK,
-		ListSchemaTableNameLengthCheck:       listTableNameLengthCK,
-		ListSchemaTableColumnNameLengthCheck: listColumnLengthCK,
-		ListSchemaTableIndexNameLengthCheck:  listIndexLengthCK,
-		ListSchemaViewNameLengthCheck:        listViewLengthCK,
-		ListSchemaSequenceNameLengthCheck:    listSeqLength,
-	}, err
 }

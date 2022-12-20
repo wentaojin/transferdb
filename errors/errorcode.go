@@ -15,6 +15,8 @@ limitations under the License.
 */
 package errors
 
+import "github.com/wentaojin/transferdb/common"
+
 type (
 	MSErrorType   string
 	MSErrorDomain string
@@ -27,17 +29,17 @@ const (
 
 // program error domain
 const (
-	DOMAIN_DB      MSErrorDomain = "DB"
-	DOMAIN_CONFIG  MSErrorDomain = "CONFIG"
-	DOMAIN_ASSESS  MSErrorDomain = "ASSESS"
-	DOMAIN_REVERSE MSErrorDomain = "REVERSE"
-	DOMAIN_CHECK   MSErrorDomain = "CHECK"
+	DOMAIN_CONFIG  MSErrorDomain = common.TaskTypeConfig
+	DOMAIN_DB      MSErrorDomain = common.TaskTypeDatabase
+	DOMAIN_ASSESS  MSErrorDomain = common.TaskTypeObjectAssess
+	DOMAIN_REVERSE MSErrorDomain = common.TaskTypeObjectReverse
+	DOMAIN_CHECK   MSErrorDomain = common.TaskTypeObjectCheck
 
-	DOMAIN_SQL_MIGRATION  MSErrorDomain = "SQL_MIGRATION"
-	DOMAIN_CSV_MIGRATION  MSErrorDomain = "CSV_MIGRATION"
-	DOMAIN_INCR_MIGRATION MSErrorDomain = "INCR_MIGRATION"
+	DOMAIN_SQL_MIGRATION  MSErrorDomain = common.TaskTypeDataSQLMigrate
+	DOMAIN_CSV_MIGRATION  MSErrorDomain = common.TaskTypeDataCSVMigrate
+	DOMAIN_INCR_MIGRATION MSErrorDomain = common.TaskTypeDataIncrMigrate
 
-	DOMAIN_DATA_COMPARE MSErrorDomain = "DATA_COMPARE"
+	DOMAIN_DATA_COMPARE MSErrorDomain = common.TaskTypeDataCompare
 )
 
 func (t MSErrorType) Explain() string {
@@ -49,17 +51,17 @@ func (d MSErrorDomain) Explain() string {
 }
 
 var explainMSErrorType = map[MSErrorType]string{
-	TRANSFERDB: "transferdb",
+	TRANSFERDB: "TRANSFERDB",
 }
 
 var explainMSErrorDomain = map[MSErrorDomain]string{
-	DOMAIN_DB:             "db",
-	DOMAIN_CONFIG:         "config",
-	DOMAIN_ASSESS:         "assess",
-	DOMAIN_REVERSE:        "reverse",
-	DOMAIN_CHECK:          "check",
-	DOMAIN_SQL_MIGRATION:  "sql_migration",
-	DOMAIN_CSV_MIGRATION:  "csv_migration",
-	DOMAIN_INCR_MIGRATION: "incr_migration",
-	DOMAIN_DATA_COMPARE:   "data_compare",
+	DOMAIN_CONFIG:         common.TaskTypeConfig,
+	DOMAIN_DB:             common.TaskTypeDatabase,
+	DOMAIN_ASSESS:         common.TaskTypeObjectAssess,
+	DOMAIN_REVERSE:        common.TaskTypeObjectReverse,
+	DOMAIN_CHECK:          common.TaskTypeObjectCheck,
+	DOMAIN_SQL_MIGRATION:  common.TaskTypeDataSQLMigrate,
+	DOMAIN_CSV_MIGRATION:  common.TaskTypeDataCSVMigrate,
+	DOMAIN_INCR_MIGRATION: common.TaskTypeDataIncrMigrate,
+	DOMAIN_DATA_COMPARE:   common.TaskTypeDataCompare,
 }

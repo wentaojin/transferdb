@@ -563,13 +563,13 @@ func (r *Rule) ChangeTableColumnType(sourceSchema, sourceTable, sourceColumn str
 
 func (r *Rule) ChangeTableColumnDefaultValue(dataDefault string) (string, error) {
 	var defaultVal string
-	defaultValueMapSlice, err := meta.NewDefaultValueMapModel(r.MetaDB).Detail(r.Ctx, &meta.DefaultValueMap{
+	defaultValueMapSlice, err := meta.NewBuildinColumnDefaultvalModel(r.MetaDB).Detail(r.Ctx, &meta.BuildinColumnDefaultval{
 		ReverseMode: common.ReverseM2OMode,
 	})
 	if err != nil {
 		return defaultVal, err
 	}
-	return loadColumnDefaultValueRule(dataDefault, defaultValueMapSlice.([]meta.DefaultValueMap)), nil
+	return loadColumnDefaultValueRule(dataDefault, defaultValueMapSlice.([]meta.BuildinColumnDefaultval)), nil
 }
 
 func (r *Rule) String() string {
@@ -577,7 +577,7 @@ func (r *Rule) String() string {
 	return string(jsonStr)
 }
 
-func loadColumnDefaultValueRule(defaultValue string, defaultValueMapSlice []meta.DefaultValueMap) string {
+func loadColumnDefaultValueRule(defaultValue string, defaultValueMapSlice []meta.BuildinColumnDefaultval) string {
 	if len(defaultValueMapSlice) == 0 {
 		return defaultValue
 	}

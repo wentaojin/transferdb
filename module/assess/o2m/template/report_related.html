@@ -1,0 +1,235 @@
+{{ define "report_related" }}
+<a name="report_related"></a>
+<center><font size="+2" face="Arial,Helvetica,Geneva,sans-serif" color="#336699">
+    <b>REPORT RELATED</b></font><hr align="center" width="460">
+</center>
+<a name="max_active_session_counts"></a>
+<font size="+2" face="Arial,Helvetica,Geneva,sans-serif" color="#336699">
+    <b>max_active_session_counts</b>
+</font><hr align="left" width="260">
+
+<li class="comment">
+    The database schema active session counts overview.
+</li>
+<table width="90%" border="1">
+    <tr>
+        <th class="noLink">ROWNUM</th>
+        <th class="noLink">DBID</th>
+        <th class="noLink">INSTANCE NUMBER</th>
+        <th class="noLink">SAMPLE ID</th>
+        <th class="noLink">SAMPLE Time</th>
+        <th class="noLink">SESSION COUNTS</th>
+    </tr>
+    {{ range .ListSchemaActiveSession }}
+        <tr>
+            <td class="noLink" align="center" >{{ .Rownum }}</td>
+            <td class="noLink" align="center">{{ .DBID }}</td>
+            <td class="noLink" align="center">{{ .InstanceNumber }}</td>
+            <td class="noLink" align="center" >{{ .SampleID }}</td>
+            <td class="noLink" align="center">{{ .SampleTime }}</td>
+            <td class="noLink" align="center">{{ .SessionCounts }}</td>
+        </tr>
+    {{ end }}
+</table>
+&nbsp;&nbsp;
+<center>[<a class="noLink" href="#top">Top</a>]</center>
+
+<a name="schema_table_size"></a>
+<font size="+2" face="Arial,Helvetica,Geneva,sans-serif" color="#336699">
+    <b>schema_table_size</b>
+</font><hr align="left" width="260">
+
+<li class="comment">
+    The database schema table size overview.
+</li>
+<table width="90%" border="1">
+    <tr>
+        <th class="noLink">SCHEMA</th>
+        <th class="noLink">TABLE SIZE/GB</th>
+        <th class="noLink">INDEX SIZE/GB</th>
+        <th class="noLink">LOB TABLE SIZE/GB</th>
+        <th class="noLink">LOB INDEX SIZE/GB</th>
+        <th class="noLink">ALL TABLE ROWS</th>
+    </tr>
+    {{ range .ListSchemaTableSizeData }}
+        <tr>
+            <td class="noLink" align="center" >{{ .Schema }}</td>
+            <td class="noLink" align="center">{{ .TableSize }}</td>
+            <td class="noLink" align="center">{{ .IndexSize }}</td>
+            <td class="noLink" align="center" >{{ .LobTableSize }}</td>
+            <td class="noLink" align="center">{{ .LobIndexSize }}</td>
+            <td class="noLink" align="center">{{ .AllTablesRows }}</td>
+        </tr>
+    {{ end }}
+</table>
+&nbsp;&nbsp;
+<center>[<a class="noLink" href="#top">Top</a>]</center>
+
+
+<a name="schema_table_rows_top10"></a>
+<font size="+2" face="Arial,Helvetica,Geneva,sans-serif" color="#336699">
+    <b>schema_table_rows_top10</b>
+</font><hr align="left" width="260">
+
+<li class="comment">
+    The schema table data size top 10 overview.
+</li>
+<table width="90%" border="1">
+    <tr>
+        <th class="noLink">SCHEMA</th>
+        <th class="noLink">TABLE NAME</th>
+        <th class="noLink">INDEX TYPE</th>
+        <th class="noLink">TABLE SIZE/GB</th>
+    </tr>
+    {{ range .ListSchemaTableRowsTOP }}
+        <tr>
+            <td class="noLink" align="center" >{{ .Schema }}</td>
+            <td class="noLink" align="center">{{ .TableName }}</td>
+            <td class="noLink" align="center">{{ .TableType }}</td>
+            <td class="noLink" align="center" >{{ .TableSize }}</td>
+        </tr>
+    {{ end }}
+</table>
+&nbsp;&nbsp;
+<center>[<a class="noLink" href="#top">Top</a>]</center>
+
+<a name="avg_row_length_top10_by_statistics"></a>
+<font size="+2" face="Arial,Helvetica,Geneva,sans-serif" color="#336699">
+    <b>avg_row_length_top10_by_statistics</b>
+</font><hr align="left" width="260">
+
+<li class="comment">
+    The database schema table avg row length top 10 overview.
+</li>
+<table width="90%" border="1">
+    <tr>
+        <th class="noLink">SCHEMA</th>
+        <th class="noLink">TABLE NAME</th>
+        <th class="noLink">AVG ROW LENGTH/Bytes</th>
+    </tr>
+    {{ range .ListSchemaTableAvgRowLengthTOP }}
+    <tr>
+        <td class="noLink" align="center" >{{ .Schema }}</td>
+        <td class="noLink" align="center">{{ .TableName }}</td>
+        <td class="noLink" align="center">{{ .AvgRowLength }}</td>
+    </tr>
+    {{ end }}
+</table>
+&nbsp;&nbsp;
+<center>[<a class="noLink" href="#top">Top</a>]</center>
+
+<a name="schema_code_object"></a>
+<font size="+2" face="Arial,Helvetica,Geneva,sans-serif" color="#336699">
+    <b>schema_code_object</b>
+</font><hr align="left" width="260">
+
+<li class="comment">
+    The database schema code object overview.
+</li>
+<table width="90%" border="1">
+    <tr>
+        <th class="noLink">SCHEMA</th>
+        <th class="noLink">OBJECT NAME</th>
+        <th class="noLink">OBJECT TYPE</th>
+        <th class="noLink">LINES</th>
+    </tr>
+    {{ range .ListSchemaCodeObject }}
+        <tr>
+            <td class="noLink" align="center" >{{ .Schema }}</td>
+            <td class="noLink" align="center">{{ .ObjectName }}</td>
+            <td class="noLink" align="center">{{ .ObjectType }}</td>
+            <td class="noLink" align="center">{{ .Lines }}</td>
+        </tr>
+    {{ end }}
+</table>
+&nbsp;&nbsp;
+<center>[<a class="noLink" href="#top">Top</a>]</center>
+
+<a name="schema_synonym_object"></a>
+<font size="+2" face="Arial,Helvetica,Geneva,sans-serif" color="#336699">
+    <b>schema_synonym_object</b>
+</font><hr align="left" width="260">
+
+<li class="comment">
+    The database schema synonym object overview.
+</li>
+<table width="90%" border="1">
+    <tr>
+        <th class="noLink">SCHEMA</th>
+        <th class="noLink">SYNONYM NAME</th>
+        <th class="noLink">TABLE OWNER</th>
+        <th class="noLink">TABLE NAME</th>
+    </tr>
+    {{ range .ListSchemaSynonymObject }}
+    <tr>
+        <td class="noLink" align="center" >{{ .Schema }}</td>
+        <td class="noLink" align="center">{{ .SynonymName }}</td>
+        <td class="noLink" align="center">{{ .TableOwner }}</td>
+        <td class="noLink" align="center">{{ .TableName }}</td>
+    </tr>
+    {{ end }}
+</table>
+&nbsp;&nbsp;
+<center>[<a class="noLink" href="#top">Top</a>]</center>
+
+<a name="schema_materialized_view_object"></a>
+<font size="+2" face="Arial,Helvetica,Geneva,sans-serif" color="#336699">
+    <b>schema_materialized_view_object</b>
+</font><hr align="left" width="260">
+
+<li class="comment">
+    The database schema materialize view object overview.
+</li>
+<table width="90%" border="1">
+    <tr>
+        <th class="noLink">SCHEMA</th>
+        <th class="noLink">MVIEW NAME</th>
+        <th class="noLink">REWRITE CAPABILITY</th>
+        <th class="noLink">REFRESH MODE</th>
+        <th class="noLink">REFRESH METHOD</th>
+        <th class="noLink">FAST REFRESHABLE</th>
+    </tr>
+    {{ range .ListSchemaMaterializedViewObject }}
+    <tr>
+        <td class="noLink" align="center" >{{ .Schema }}</td>
+        <td class="noLink" align="center">{{ .MviewName }}</td>
+        <td class="noLink" align="center">{{ .RewriteCapability }}</td>
+        <td class="noLink" align="center">{{ .RefreshMode }}</td>
+        <td class="noLink" align="center">{{ .RefreshMethod }}</td>
+        <td class="noLink" align="center">{{ .FastRefreshable }}</td>
+    </tr>
+    {{ end }}
+</table>
+&nbsp;&nbsp;
+<center>[<a class="noLink" href="#top">Top</a>]</center>
+
+<a name="schema_table_number_column"></a>
+<font size="+2" face="Arial,Helvetica,Geneva,sans-serif" color="#336699">
+    <b>schema_table_number_column</b>
+</font><hr align="left" width="260">
+
+<li class="comment">
+    The database number type has no scale check, and the Oracle non-scale number type can store integer and floating-point numbers at the same time. The specific type of storage needs to be confirmed with the development. Stored integers can be converted to bigint, and stored floating-point numbers can be converted to the corresponding decimal type.
+</li>
+<table width="90%" border="1">
+    <tr>
+        <th class="noLink">SCHEMA</th>
+        <th class="noLink">TABLE NAME</th>
+        <th class="noLink">COLUMN NAME</th>
+        <th class="noLink">DATA PRECISION</th>
+        <th class="noLink">DATA SCALE</th>
+    </tr>
+    {{ range .ListSchemaTableNumberTypeEqual0 }}
+    <tr>
+        <td class="noLink" align="center" >{{ .Schema }}</td>
+        <td class="noLink" align="center">{{ .TableName }}</td>
+        <td class="noLink" align="center">{{ .ColumnName }}</td>
+        <td class="noLink" align="center">{{ .DataPrecision }}</td>
+        <td class="noLink" align="center">{{ .DataScale }}</td>
+    </tr>
+    {{ end }}
+</table>
+&nbsp;
+<center>[<a class="noLink" href="#top">Top</a>]</center>
+&nbsp;&nbsp;
+{{ end }}

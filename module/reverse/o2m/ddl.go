@@ -81,7 +81,7 @@ func (d *DDL) Writer(f *reverse.File) error {
 	}
 
 	// 外键约束、检查约束
-	if d.TargetDBType != common.TiDBTargetDBType {
+	if d.TargetDBType != common.TaskDBTiDB {
 		if len(d.ForeignKeyDDL) > 0 {
 			for _, sql := range d.ForeignKeyDDL {
 				sqlRev.WriteString(sql + "\n")

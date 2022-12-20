@@ -735,14 +735,14 @@ func (r *Rule) ChangeTableColumnType(sourceSchema, sourceTable, sourceColumn str
 
 func (r *Rule) ChangeTableColumnDefaultValue(dataDefault string) (string, error) {
 	var defaultVal string
-	defaultValueMapSlice, err := meta.NewDefaultValueMapModel(r.MetaDB).Detail(r.Ctx, &meta.DefaultValueMap{
+	defaultValueMapSlice, err := meta.NewBuildinColumnDefaultvalModel(r.MetaDB).Detail(r.Ctx, &meta.BuildinColumnDefaultval{
 		ReverseMode: common.ReverseO2MMode,
 	})
 	if err != nil {
 		return defaultVal, err
 	}
 
-	return loadColumnDefaultValueRule(dataDefault, defaultValueMapSlice.([]meta.DefaultValueMap))
+	return loadColumnDefaultValueRule(dataDefault, defaultValueMapSlice.([]meta.BuildinColumnDefaultval))
 }
 
 func (r *Rule) String() string {
@@ -750,7 +750,7 @@ func (r *Rule) String() string {
 	return string(jsonStr)
 }
 
-func loadColumnDefaultValueRule(defaultValue string, defaultValueMapSlice []meta.DefaultValueMap) (string, error) {
+func loadColumnDefaultValueRule(defaultValue string, defaultValueMapSlice []meta.BuildinColumnDefaultval) (string, error) {
 	// 额外处理 Oracle 默认值 ('6') 或者 (5) 或者 ('xsddd') 等包含小括号的默认值，而非 '(xxxx)' 之类的默认值
 	// Oracle 对于同类型 ('xxx') 或者 (xxx) 内部会自动处理，所以 O2M/O2T 需要处理成 'xxx' 或者 xxx
 	if strings.HasPrefix(defaultValue, "(") && strings.HasSuffix(defaultValue, ")") {

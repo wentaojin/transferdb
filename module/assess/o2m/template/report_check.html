@@ -12,9 +12,9 @@
 </li>
 <table width="90%" border="1">
     <tr>
-        <th class="noLink">Schema</th>
-        <th class="noLink">Table Name</th>
-        <th class="noLink">Partition Counts</th>
+        <th class="noLink">SCHEMA</th>
+        <th class="noLink">TABLE NAME</th>
+        <th class="noLink">PARTITION COUNTS</th>
     </tr>
     {{ range .ListSchemaPartitionTableCountsCheck }}
     <tr>
@@ -37,9 +37,9 @@
 </li>
 <table width="90%" border="1">
     <tr>
-        <th class="noLink">Schema</th>
-        <th class="noLink">Table Name</th>
-        <th class="noLink">Avg Row Length/Bytes</th>
+        <th class="noLink">SCHEMA</th>
+        <th class="noLink">TABLE NAME</th>
+        <th class="noLink">AVG ROW LENGTH/MB</th>
     </tr>
     {{ range .ListSchemaTableRowLengthCheck }}
     <tr>
@@ -58,14 +58,14 @@
 </font><hr align="left" width="260">
 
 <li class="comment">
-    The database schema table index column length over 3072 overview.
+    The database schema table index column length over 3072 bytes overview.
 </li>
 <table width="90%" border="1">
     <tr>
-        <th class="noLink">Schema</th>
-        <th class="noLink">Table Name</th>
-        <th class="noLink">Index Name</th>
-        <th class="noLink">Column Length</th>
+        <th class="noLink">SCHEMA</th>
+        <th class="noLink">TABLE NAME</th>
+        <th class="noLink">INDEX NAME</th>
+        <th class="noLink">COLUMN LENGTH/bytes</th>
     </tr>
     {{ range .ListSchemaTableIndexRowLengthCheck }}
     <tr>
@@ -89,15 +89,15 @@
 </li>
 <table width="90%" border="1">
     <tr>
-        <th class="noLink">Schema</th>
-        <th class="noLink">Table Name</th>
-        <th class="noLink">Counts</th>
+        <th class="noLink">SCHEMA</th>
+        <th class="noLink">TABLE NAME</th>
+        <th class="noLink">COLUMN COUNTS</th>
     </tr>
     {{ range .ListSchemaTableColumnCountsCheck }}
     <tr>
         <td class="noLink" align="center" >{{ .Schema }}</td>
         <td class="noLink" align="center">{{ .TableName }}</td>
-        <td class="noLink" align="center">{{ .Counts }}</td>
+        <td class="noLink" align="center">{{ .ColumnCounts }}</td>
     </tr>
     {{ end }}
 </table>
@@ -114,44 +114,15 @@
 </li>
 <table width="90%" border="1">
     <tr>
-        <th class="noLink">Schema</th>
-        <th class="noLink">Table Name</th>
-        <th class="noLink">Counts</th>
+        <th class="noLink">SCHEMA</th>
+        <th class="noLink">TABLE NAME</th>
+        <th class="noLink">INDEX COUNTS</th>
     </tr>
     {{ range .ListSchemaIndexCountsCheck }}
     <tr>
         <td class="noLink" align="center" >{{ .Schema }}</td>
         <td class="noLink" align="center">{{ .TableName }}</td>
-        <td class="noLink" align="center">{{ .Counts }}</td>
-    </tr>
-    {{ end }}
-</table>
-&nbsp;
-<center>[<a class="noLink" href="#top">Top</a>]</center>
-
-<a name="schema_table_number_column"></a>
-<font size="+2" face="Arial,Helvetica,Geneva,sans-serif" color="#336699">
-    <b>schema_table_number_column</b>
-</font><hr align="left" width="260">
-
-<li class="comment">
-    The database number type has no scale check, and the Oracle non-scale number type can store integer and floating-point numbers at the same time. The specific type of storage needs to be confirmed with the development. Stored integers can be converted to bigint, and stored floating-point numbers can be converted to the corresponding decimal type.
-</li>
-<table width="90%" border="1">
-    <tr>
-        <th class="noLink">Schema</th>
-        <th class="noLink">Table Name</th>
-        <th class="noLink">Column Name</th>
-        <th class="noLink">Data Precision</th>
-        <th class="noLink">Data Scale</th>
-    </tr>
-    {{ range .ListSchemaTableNumberTypeCheck }}
-    <tr>
-        <td class="noLink" align="center" >{{ .Schema }}</td>
-        <td class="noLink" align="center">{{ .TableName }}</td>
-        <td class="noLink" align="center">{{ .ColumnName }}</td>
-        <td class="noLink" align="center">{{ .DataPrecision }}</td>
-        <td class="noLink" align="center">{{ .DataScale }}</td>
+        <td class="noLink" align="center">{{ .IndexCounts }}</td>
     </tr>
     {{ end }}
 </table>
@@ -164,19 +135,21 @@
 </font><hr align="left" width="260">
 
 <li class="comment">
-    The length of the database username is greater than 64.
+    The length of the database username length is greater than 64.
 </li>
 <table width="90%" border="1">
     <tr>
-        <th class="noLink">Schema</th>
-        <th class="noLink">Account Status</th>
-        <th class="noLink">Created</th>
+        <th class="noLink">SCHEMA</th>
+        <th class="noLink">ACCOUNT STATUS</th>
+        <th class="noLink">CREATED</th>
+        <th class="noLink">LENGTH</th>
     </tr>
     {{ range .ListUsernameLengthCheck }}
     <tr>
         <td class="noLink" align="center" >{{ .Schema }}</td>
         <td class="noLink" align="center">{{ .AccountStatus }}</td>
         <td class="noLink" align="center">{{ .Created }}</td>
+        <td class="noLink" align="center">{{ .Length }}</td>
     </tr>
     {{ end }}
 </table>
@@ -189,17 +162,19 @@
 </font><hr align="left" width="260">
 
 <li class="comment">
-    The length of the database table name is greater than 64.
+    The length of the database tablename length is greater than 64.
 </li>
 <table width="90%" border="1">
     <tr>
-        <th class="noLink">Schema</th>
-        <th class="noLink">Table Name</th>
+        <th class="noLink">SCHEMA</th>
+        <th class="noLink">TABLE NAME</th>
+        <th class="noLink">LENGTH</th>
     </tr>
     {{ range .ListSchemaTableNameLengthCheck }}
     <tr>
         <td class="noLink" align="center" >{{ .Schema }}</td>
         <td class="noLink" align="center">{{ .TableName }}</td>
+        <td class="noLink" align="center">{{ .Length }}</td>
     </tr>
     {{ end }}
 </table>
@@ -212,19 +187,21 @@
 </font><hr align="left" width="260">
 
 <li class="comment">
-    The length of the database table column name is greater than 64.
+    The length of the database table column name length is greater than 64.
 </li>
 <table width="90%" border="1">
     <tr>
-        <th class="noLink">Schema</th>
-        <th class="noLink">Table Name</th>
-        <th class="noLink">Column Name</th>
+        <th class="noLink">SCHEMA</th>
+        <th class="noLink">TABLE NAME</th>
+        <th class="noLink">COLUMN NAME</th>
+        <th class="noLink">LENGTH</th>
     </tr>
     {{ range .ListSchemaTableColumnNameLengthCheck }}
     <tr>
         <td class="noLink" align="center" >{{ .Schema }}</td>
         <td class="noLink" align="center">{{ .TableName }}</td>
         <td class="noLink" align="center">{{ .ColumnName }}</td>
+        <td class="noLink" align="center">{{ .Length }}</td>
     </tr>
     {{ end }}
 </table>
@@ -237,19 +214,21 @@
 </font><hr align="left" width="260">
 
 <li class="comment">
-    The length of the database table index name is greater than 64.
+    The length of the database table index name length is greater than 64.
 </li>
 <table width="90%" border="1">
     <tr>
-        <th class="noLink">Schema</th>
-        <th class="noLink">Table Name</th>
-        <th class="noLink">Index Name</th>
+        <th class="noLink">SCHEMA</th>
+        <th class="noLink">TABLE NAME</th>
+        <th class="noLink">INDEX NAME</th>
+        <th class="noLink">LENGTH</th>
     </tr>
     {{ range .ListSchemaTableIndexNameLengthCheck }}
     <tr>
         <td class="noLink" align="center" >{{ .Schema }}</td>
         <td class="noLink" align="center">{{ .TableName }}</td>
         <td class="noLink" align="center">{{ .IndexName }}</td>
+        <td class="noLink" align="center">{{ .Length }}</td>
     </tr>
     {{ end }}
 </table>
@@ -262,19 +241,21 @@
 </font><hr align="left" width="260">
 
 <li class="comment">
-    The length of the database table view name is greater than 64.
+    The length of the database table view name length is greater than 64.
 </li>
 <table width="90%" border="1">
     <tr>
-        <th class="noLink">Schema</th>
-        <th class="noLink">View Name</th>
-        <th class="noLink">Read Only</th>
+        <th class="noLink">SCHEMA</th>
+        <th class="noLink">VIEW NAME</th>
+        <th class="noLink">READ ONLY</th>
+        <th class="noLink">LENGTH</th>
     </tr>
     {{ range .ListSchemaViewNameLengthCheck }}
     <tr>
         <td class="noLink" align="center" >{{ .Schema }}</td>
         <td class="noLink" align="center">{{ .ViewName }}</td>
         <td class="noLink" align="center">{{ .ReadOnly }}</td>
+        <td class="noLink" align="center">{{ .Length }}</td>
     </tr>
     {{ end }}
 </table>
@@ -287,22 +268,26 @@
 </font><hr align="left" width="260">
 
 <li class="comment">
-    The length of the database table sequence name is greater than 64.
+    The length of the database table sequence name length is greater than 64.
 </li>
 <table width="90%" border="1">
     <tr>
-        <th class="noLink">Schema</th>
-        <th class="noLink">Sequence Name</th>
-        <th class="noLink">Order Flag</th>
+        <th class="noLink">SCHEMA</th>
+        <th class="noLink">SEQUENCE NAME</th>
+        <th class="noLink">ORDER FLAG</th>
+        <th class="noLink">LENGTH</th>
     </tr>
     {{ range .ListSchemaSequenceNameLengthCheck }}
     <tr>
         <td class="noLink" align="center" >{{ .Schema }}</td>
         <td class="noLink" align="center">{{ .SequenceName }}</td>
         <td class="noLink" align="center">{{ .OrderFlag }}</td>
+        <td class="noLink" align="center">{{ .Length }}</td>
     </tr>
     {{ end }}
 </table>
 &nbsp;
 <center>[<a class="noLink" href="#top">Top</a>]</center>
+&nbsp;
+&nbsp;
 {{ end }}
