@@ -122,3 +122,11 @@ func filterOracleClusteredTable(cfg *config.Config, oracle *oracle.Oracle, expor
 	}
 	return common.FilterIntersectionStringItems(exporters, tables), nil
 }
+
+func filterOracleMaterializedView(cfg *config.Config, oracle *oracle.Oracle, exporters []string) ([]string, error) {
+	tables, err := oracle.GetOracleSchemaMaterializedView(common.StringUPPER(cfg.OracleConfig.SchemaName))
+	if err != nil {
+		return nil, err
+	}
+	return common.FilterIntersectionStringItems(exporters, tables), nil
+}

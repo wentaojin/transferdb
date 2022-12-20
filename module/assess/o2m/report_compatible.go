@@ -206,7 +206,7 @@ func GetAssessDatabaseCompatibleResult(ctx context.Context, metaDB *meta.Meta, o
 	}
 
 	// 获取自定义数据类型
-	buildDatatypeRules, err := meta.NewBuildinDatatypeRuleModel(metaDB).BatchQueryBuildDatatype(ctx, &meta.BuildinDatatypeRule{
+	buildDatatypeRules, err := meta.NewBuildinDatatypeRuleModel(metaDB).BatchQueryBuildinDatatype(ctx, &meta.BuildinDatatypeRule{
 		DBTypeS: common.TaskDBOracle,
 		DBTypeT: common.TaskDBMySQL,
 	})
@@ -219,14 +219,15 @@ func GetAssessDatabaseCompatibleResult(ctx context.Context, metaDB *meta.Meta, o
 	}
 
 	// 获取自定义默认值内容
-	defaultValues, err := meta.NewBuildinColumnDefaultvalModel(metaDB).Detail(ctx, &meta.BuildinColumnDefaultval{
-		ReverseMode: common.ReverseO2MMode})
+	defaultValues, err := meta.NewBuildinColumnDefaultvalModel(metaDB).DetailColumnDefaultVal(ctx, &meta.BuildinColumnDefaultval{
+		DBTypeS: common.TaskDBOracle,
+		DBTypeT: common.TaskDBMySQL})
 	if err != nil {
 		return nil, nil, err
 	}
 	defaultValuesMap := make(map[string]meta.BuildinColumnDefaultval)
 	for _, d := range defaultValues.([]meta.BuildinColumnDefaultval) {
-		defaultValuesMap[common.StringUPPER(d.SourceDefaultValue)] = d
+		defaultValuesMap[common.StringUPPER(d.DefaultValueS)] = d
 	}
 
 	assessTotal := 0

@@ -70,6 +70,20 @@ func (o *Oracle) GetOracleSchemaClusteredTable(schemaName string) ([]string, err
 	return tables, nil
 }
 
+func (o *Oracle) GetOracleSchemaMaterializedView(schemaName string) ([]string, error) {
+	// 过滤物化视图
+	_, res, err := Query(o.Ctx, o.OracleDB, fmt.Sprintf(`SELECT OWNER,MVIEW_NAME FROM DBA_MVIEWS WHERE UPPER(OWNER) = UPPER('%s')`, schemaName))
+	if err != nil {
+		return []string{}, err
+	}
+
+	var tables []string
+	for _, r := range res {
+		tables = append(tables, r["MVIEW_NAME"])
+	}
+	return tables, nil
+}
+
 // ORACLE XML 限制
 // func (e *Engine) GetOracleTableColumn(schemaName string, tableName string, oraCollation bool) ([]map[string]string, error) {
 //	var querySQL string
@@ -491,9 +505,6 @@ and upper(table_name)=upper('%s')`, strings.ToUpper(schemaName), strings.ToUpper
 	_, res, err := Query(o.Ctx, o.OracleDB, querySQL)
 	if err != nil {
 		return comments, err
-	}
-	if len(res) == 0 {
-		return res, fmt.Errorf("oracle table [%s.%s] comment can't be null，result: [%v]", schemaName, tableName, res)
 	}
 	if len(res) > 1 {
 		return res, fmt.Errorf("oracle schema [%s] table [%s] comments exist multiple values: [%v]", schemaName, tableName, res)

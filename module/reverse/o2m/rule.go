@@ -529,7 +529,7 @@ func (r *Rule) GenTableNormalIndex() (normalIndexMetas []string, compatibilityIn
 }
 
 func (r *Rule) GenTableComment() (tableComment string, err error) {
-	if r.TableCommentINFO[0]["COMMENTS"] != "" {
+	if len(r.TableColumnINFO) > 0 && r.TableCommentINFO[0]["COMMENTS"] != "" {
 		tableComment = fmt.Sprintf("COMMENT='%s'", r.TableCommentINFO[0]["COMMENTS"])
 	}
 	return tableComment, err
@@ -680,28 +680,31 @@ func (r *Rule) ChangeTableColumnType(sourceSchema, sourceTable, sourceColumn str
 		return columnType, err
 	}
 	// 获取自定义映射规则
-	columnDataTypeMapSlice, err := meta.NewColumnRuleMapModel(r.MetaDB).Detail(r.Ctx, &meta.ColumnRuleMap{
-		SourceSchemaName: r.SourceSchema,
-		SourceTableName:  r.SourceTableName,
-		SourceColumnName: sourceColumn,
-		ReverseMode:      common.ReverseO2MMode,
+	columnDataTypeMapSlice, err := meta.NewColumnRuleMapModel(r.MetaDB).DetailColumnRule(r.Ctx, &meta.ColumnRuleMap{
+		DBTypeS:     common.TaskDBOracle,
+		DBTypeT:     common.TaskDBMySQL,
+		SchemaNameS: r.SourceSchema,
+		TableNameS:  r.SourceTableName,
+		ColumnNameS: sourceColumn,
 	})
 	if err != nil {
 		return columnType, err
 	}
 
-	tableDataTypeMapSlice, err := meta.NewTableRuleMapModel(r.MetaDB).Detail(r.Ctx, &meta.TableRuleMap{
-		SourceSchemaName: r.SourceSchema,
-		SourceTableName:  r.SourceTableName,
-		ReverseMode:      common.ReverseO2MMode,
+	tableDataTypeMapSlice, err := meta.NewTableRuleMapModel(r.MetaDB).DetailTableRule(r.Ctx, &meta.TableRuleMap{
+		DBTypeS:     common.TaskDBOracle,
+		DBTypeT:     common.TaskDBMySQL,
+		SchemaNameS: r.SourceSchema,
+		TableNameS:  r.SourceTableName,
 	})
 	if err != nil {
 		return columnType, err
 	}
 
-	schemaDataTypeMapSlice, err := meta.NewSchemaRuleMapModel(r.MetaDB).Detail(r.Ctx, &meta.SchemaRuleMap{
-		SourceSchemaName: r.SourceSchema,
-		ReverseMode:      common.ReverseO2MMode,
+	schemaDataTypeMapSlice, err := meta.NewSchemaRuleMapModel(r.MetaDB).DetailSchemaRule(r.Ctx, &meta.SchemaRuleMap{
+		DBTypeS:     common.TaskDBOracle,
+		DBTypeT:     common.TaskDBMySQL,
+		SchemaNameS: r.SourceSchema,
 	})
 	if err != nil {
 		return columnType, err
@@ -735,8 +738,9 @@ func (r *Rule) ChangeTableColumnType(sourceSchema, sourceTable, sourceColumn str
 
 func (r *Rule) ChangeTableColumnDefaultValue(dataDefault string) (string, error) {
 	var defaultVal string
-	defaultValueMapSlice, err := meta.NewBuildinColumnDefaultvalModel(r.MetaDB).Detail(r.Ctx, &meta.BuildinColumnDefaultval{
-		ReverseMode: common.ReverseO2MMode,
+	defaultValueMapSlice, err := meta.NewBuildinColumnDefaultvalModel(r.MetaDB).DetailColumnDefaultVal(r.Ctx, &meta.BuildinColumnDefaultval{
+		DBTypeS: common.TaskDBOracle,
+		DBTypeT: common.TaskDBMySQL,
 	})
 	if err != nil {
 		return defaultVal, err
@@ -763,8 +767,8 @@ func loadColumnDefaultValueRule(defaultValue string, defaultValueMapSlice []meta
 	}
 
 	for _, dv := range defaultValueMapSlice {
-		if strings.EqualFold(strings.TrimSpace(dv.SourceDefaultValue), strings.TrimSpace(defaultValue)) && dv.TargetDefaultValue != "" {
-			return dv.TargetDefaultValue, nil
+		if strings.EqualFold(strings.TrimSpace(dv.DefaultValueS), strings.TrimSpace(defaultValue)) && dv.DefaultValueT != "" {
+			return dv.DefaultValueT, nil
 		}
 	}
 	return defaultValue, nil
@@ -825,33 +829,31 @@ func loadColumnTypeRuleOnlyUsingTable(originColumnType string, buildInColumnType
 			- number(5) -> number(5)
 			- number(8,9) -> number(8,9)
 		*/
-		if strings.EqualFold(tbl.ReverseMode, common.ReverseO2MMode) {
-			if strings.Contains(strings.ToUpper(tbl.SourceColumnType), "NUMBER") {
-				switch {
-				case strings.Contains(strings.ToUpper(tbl.SourceColumnType), "*") && strings.Contains(strings.ToUpper(tbl.SourceColumnType), ","):
-					if strings.EqualFold(strings.Replace(tbl.SourceColumnType, "*", "38", -1), originColumnType) &&
-						tbl.TargetColumnType != "" {
-						return strings.ToUpper(tbl.TargetColumnType)
-					}
-				case strings.Contains(strings.ToUpper(tbl.SourceColumnType), "*") && !strings.Contains(strings.ToUpper(tbl.SourceColumnType), ","):
-					if strings.EqualFold("NUMBER(38,127)", originColumnType) &&
-						tbl.TargetColumnType != "" {
-						return strings.ToUpper(tbl.TargetColumnType)
-					}
-				case !strings.Contains(strings.ToUpper(tbl.SourceColumnType), "(") && !strings.Contains(strings.ToUpper(tbl.SourceColumnType), ")"):
-					if strings.EqualFold("NUMBER(38,127)", originColumnType) &&
-						tbl.TargetColumnType != "" {
-						return strings.ToUpper(tbl.TargetColumnType)
-					}
-				default:
-					if strings.EqualFold(tbl.SourceColumnType, originColumnType) && tbl.TargetColumnType != "" {
-						return strings.ToUpper(tbl.TargetColumnType)
-					}
+		if strings.Contains(strings.ToUpper(tbl.ColumnTypeS), "NUMBER") {
+			switch {
+			case strings.Contains(strings.ToUpper(tbl.ColumnTypeS), "*") && strings.Contains(strings.ToUpper(tbl.ColumnTypeS), ","):
+				if strings.EqualFold(strings.Replace(tbl.ColumnTypeS, "*", "38", -1), originColumnType) &&
+					tbl.ColumnTypeT != "" {
+					return strings.ToUpper(tbl.ColumnTypeT)
 				}
-			} else {
-				if strings.EqualFold(tbl.SourceColumnType, originColumnType) && tbl.TargetColumnType != "" {
-					return strings.ToUpper(tbl.TargetColumnType)
+			case strings.Contains(strings.ToUpper(tbl.ColumnTypeS), "*") && !strings.Contains(strings.ToUpper(tbl.ColumnTypeS), ","):
+				if strings.EqualFold("NUMBER(38,127)", originColumnType) &&
+					tbl.ColumnTypeT != "" {
+					return strings.ToUpper(tbl.ColumnTypeT)
 				}
+			case !strings.Contains(strings.ToUpper(tbl.ColumnTypeS), "(") && !strings.Contains(strings.ToUpper(tbl.ColumnTypeS), ")"):
+				if strings.EqualFold("NUMBER(38,127)", originColumnType) &&
+					tbl.ColumnTypeT != "" {
+					return strings.ToUpper(tbl.ColumnTypeT)
+				}
+			default:
+				if strings.EqualFold(tbl.ColumnTypeS, originColumnType) && tbl.ColumnTypeT != "" {
+					return strings.ToUpper(tbl.ColumnTypeT)
+				}
+			}
+		} else {
+			if strings.EqualFold(tbl.ColumnTypeS, originColumnType) && tbl.ColumnTypeT != "" {
+				return strings.ToUpper(tbl.ColumnTypeT)
 			}
 		}
 	}
@@ -874,33 +876,31 @@ func loadColumnTypeRuleOnlyUsingSchema(originColumnType, buildInColumnType strin
 			- number(5) -> number(5)
 			- number(8,9) -> number(8,9)
 		*/
-		if strings.EqualFold(tbl.ReverseMode, common.ReverseO2MMode) {
-			if strings.Contains(strings.ToUpper(tbl.SourceColumnType), "NUMBER") {
-				switch {
-				case strings.Contains(strings.ToUpper(tbl.SourceColumnType), "*") && strings.Contains(strings.ToUpper(tbl.SourceColumnType), ","):
-					if strings.EqualFold(strings.Replace(tbl.SourceColumnType, "*", "38", -1), originColumnType) &&
-						tbl.TargetColumnType != "" {
-						return strings.ToUpper(tbl.TargetColumnType)
-					}
-				case strings.Contains(strings.ToUpper(tbl.SourceColumnType), "*") && !strings.Contains(strings.ToUpper(tbl.SourceColumnType), ","):
-					if strings.EqualFold("NUMBER(38,127)", originColumnType) &&
-						tbl.TargetColumnType != "" {
-						return strings.ToUpper(tbl.TargetColumnType)
-					}
-				case !strings.Contains(strings.ToUpper(tbl.SourceColumnType), "(") && !strings.Contains(strings.ToUpper(tbl.SourceColumnType), ")"):
-					if strings.EqualFold("NUMBER(38,127)", originColumnType) &&
-						tbl.TargetColumnType != "" {
-						return strings.ToUpper(tbl.TargetColumnType)
-					}
-				default:
-					if strings.EqualFold(tbl.SourceColumnType, originColumnType) && tbl.TargetColumnType != "" {
-						return strings.ToUpper(tbl.TargetColumnType)
-					}
+		if strings.Contains(strings.ToUpper(tbl.ColumnTypeS), "NUMBER") {
+			switch {
+			case strings.Contains(strings.ToUpper(tbl.ColumnTypeS), "*") && strings.Contains(strings.ToUpper(tbl.ColumnTypeS), ","):
+				if strings.EqualFold(strings.Replace(tbl.ColumnTypeS, "*", "38", -1), originColumnType) &&
+					tbl.ColumnTypeT != "" {
+					return strings.ToUpper(tbl.ColumnTypeT)
 				}
-			} else {
-				if strings.EqualFold(tbl.SourceColumnType, originColumnType) && tbl.TargetColumnType != "" {
-					return strings.ToUpper(tbl.TargetColumnType)
+			case strings.Contains(strings.ToUpper(tbl.ColumnTypeS), "*") && !strings.Contains(strings.ToUpper(tbl.ColumnTypeS), ","):
+				if strings.EqualFold("NUMBER(38,127)", originColumnType) &&
+					tbl.ColumnTypeT != "" {
+					return strings.ToUpper(tbl.ColumnTypeT)
 				}
+			case !strings.Contains(strings.ToUpper(tbl.ColumnTypeS), "(") && !strings.Contains(strings.ToUpper(tbl.ColumnTypeS), ")"):
+				if strings.EqualFold("NUMBER(38,127)", originColumnType) &&
+					tbl.ColumnTypeT != "" {
+					return strings.ToUpper(tbl.ColumnTypeT)
+				}
+			default:
+				if strings.EqualFold(tbl.ColumnTypeS, originColumnType) && tbl.ColumnTypeT != "" {
+					return strings.ToUpper(tbl.ColumnTypeT)
+				}
+			}
+		} else {
+			if strings.EqualFold(tbl.ColumnTypeS, originColumnType) && tbl.ColumnTypeT != "" {
+				return strings.ToUpper(tbl.ColumnTypeT)
 			}
 		}
 	}
@@ -913,7 +913,7 @@ func loadColumnTypeRuleOnlyUsingColumn(columnName string, originColumnType strin
 		return buildInColumnType
 	}
 	for _, tbl := range columnDataTypeMapSlice {
-		if strings.EqualFold(tbl.SourceColumnName, columnName) {
+		if strings.EqualFold(tbl.ColumnNameS, columnName) {
 			/*
 				number 类型处理：函数匹配 ->  GetOracleTableColumn
 				- number(*,10) -> number(38,10)
@@ -923,33 +923,31 @@ func loadColumnTypeRuleOnlyUsingColumn(columnName string, originColumnType strin
 				- number(5) -> number(5)
 				- number(8,9) -> number(8,9)
 			*/
-			if strings.EqualFold(tbl.ReverseMode, common.ReverseO2MMode) {
-				if strings.Contains(strings.ToUpper(tbl.SourceColumnType), "NUMBER") {
-					switch {
-					case strings.Contains(strings.ToUpper(tbl.SourceColumnType), "*") && strings.Contains(strings.ToUpper(tbl.SourceColumnType), ","):
-						if strings.EqualFold(strings.Replace(tbl.SourceColumnType, "*", "38", -1), originColumnType) &&
-							tbl.TargetColumnType != "" {
-							return strings.ToUpper(tbl.TargetColumnType)
-						}
-					case strings.Contains(strings.ToUpper(tbl.SourceColumnType), "*") && !strings.Contains(strings.ToUpper(tbl.SourceColumnType), ","):
-						if strings.EqualFold("NUMBER(38,127)", originColumnType) &&
-							tbl.TargetColumnType != "" {
-							return strings.ToUpper(tbl.TargetColumnType)
-						}
-					case !strings.Contains(strings.ToUpper(tbl.SourceColumnType), "(") && !strings.Contains(strings.ToUpper(tbl.SourceColumnType), ")"):
-						if strings.EqualFold("NUMBER(38,127)", originColumnType) &&
-							tbl.TargetColumnType != "" {
-							return strings.ToUpper(tbl.TargetColumnType)
-						}
-					default:
-						if strings.EqualFold(tbl.SourceColumnType, originColumnType) && tbl.TargetColumnType != "" {
-							return strings.ToUpper(tbl.TargetColumnType)
-						}
+			if strings.Contains(strings.ToUpper(tbl.ColumnTypeS), "NUMBER") {
+				switch {
+				case strings.Contains(strings.ToUpper(tbl.ColumnTypeS), "*") && strings.Contains(strings.ToUpper(tbl.ColumnTypeS), ","):
+					if strings.EqualFold(strings.Replace(tbl.ColumnTypeS, "*", "38", -1), originColumnType) &&
+						tbl.ColumnTypeT != "" {
+						return strings.ToUpper(tbl.ColumnTypeT)
 					}
-				} else {
-					if strings.EqualFold(tbl.SourceColumnType, originColumnType) && tbl.TargetColumnType != "" {
-						return strings.ToUpper(tbl.TargetColumnType)
+				case strings.Contains(strings.ToUpper(tbl.ColumnTypeS), "*") && !strings.Contains(strings.ToUpper(tbl.ColumnTypeS), ","):
+					if strings.EqualFold("NUMBER(38,127)", originColumnType) &&
+						tbl.ColumnTypeT != "" {
+						return strings.ToUpper(tbl.ColumnTypeT)
 					}
+				case !strings.Contains(strings.ToUpper(tbl.ColumnTypeS), "(") && !strings.Contains(strings.ToUpper(tbl.ColumnTypeS), ")"):
+					if strings.EqualFold("NUMBER(38,127)", originColumnType) &&
+						tbl.ColumnTypeT != "" {
+						return strings.ToUpper(tbl.ColumnTypeT)
+					}
+				default:
+					if strings.EqualFold(tbl.ColumnTypeS, originColumnType) && tbl.ColumnTypeT != "" {
+						return strings.ToUpper(tbl.ColumnTypeT)
+					}
+				}
+			} else {
+				if strings.EqualFold(tbl.ColumnTypeS, originColumnType) && tbl.ColumnTypeT != "" {
+					return strings.ToUpper(tbl.ColumnTypeT)
 				}
 			}
 		}

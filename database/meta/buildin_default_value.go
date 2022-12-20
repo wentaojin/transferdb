@@ -17,17 +17,19 @@ package meta
 
 import (
 	"context"
+	"fmt"
 	"github.com/wentaojin/transferdb/common"
-	"github.com/wentaojin/transferdb/errors"
+	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
 // 自定义字段默认值转换规则 - global 级别
 type BuildinColumnDefaultval struct {
-	ID                 uint   `gorm:"primary_key;autoIncrement;comment:'自增编号'" json:"id"`
-	SourceDefaultValue string `gorm:"not null;index:unique_source_default_mode,unique;comment:'源端默认值'" json:"source_default_value"`
-	TargetDefaultValue string `gorm:"not null;index:idx_target_default;comment:'目标默认值'" json:"target_default_value"`
-	ReverseMode        string `gorm:"not null;index:idx_reverse_mode;index:unique_source_default_mode,unique;comment:'表结构转换模式 ReverseO2M/ReverseM2O'" json:"reverse_mode"`
+	ID            uint   `gorm:"primary_key;autoIncrement;comment:'自增编号'" json:"id"`
+	DBTypeS       string `gorm:"type:varchar(15);index:idx_dbtype_st_map,unique;comment:'源数据库类型'" json:"db_type_s"`
+	DBTypeT       string `gorm:"type:varchar(15);index:idx_dbtype_st_map,unique;comment:'目标数据库类型'" json:"db_type_t"`
+	DefaultValueS string `gorm:"not null;index:idx_dbtype_st_map,unique;comment:'源端默认值'" json:"default_value_s"`
+	DefaultValueT string `gorm:"not null;comment:'目标默认值'" json:"default_value_t"`
 	*BaseModel
 }
 
@@ -37,18 +39,38 @@ func NewBuildinColumnDefaultvalModel(m *Meta) *BuildinColumnDefaultval {
 	}}
 }
 
-func (rw *BuildinColumnDefaultval) Create(ctx context.Context, createS interface{}) error {
-	if err := rw.DB(ctx).Create(createS.(*BuildinColumnDefaultval)).Error; err != nil {
-		return errors.NewMSError(errors.TRANSFERDB, errors.DOMAIN_DB, err)
+func (rw *BuildinColumnDefaultval) ParseSchemaTable() (string, error) {
+	stmt := &gorm.Statement{DB: rw.GormDB}
+	err := stmt.Parse(rw)
+	if err != nil {
+		return "", fmt.Errorf("parse struct [BuildinColumnDefaultval] get table_name failed: %v", err)
+	}
+	return stmt.Schema.Table, nil
+}
+
+func (rw *BuildinColumnDefaultval) CreateColumnDefaultVal(ctx context.Context, createS interface{}) error {
+	table, err := rw.ParseSchemaTable()
+	if err != nil {
+		return err
+	}
+	if err = rw.DB(ctx).Create(createS.(*BuildinColumnDefaultval)).Error; err != nil {
+		return fmt.Errorf("create table [%s] record failed: %v", table, err)
 	}
 	return nil
 }
 
-func (rw *BuildinColumnDefaultval) Detail(ctx context.Context, detailS interface{}) (interface{}, error) {
+func (rw *BuildinColumnDefaultval) DetailColumnDefaultVal(ctx context.Context, detailS interface{}) (interface{}, error) {
 	ds := detailS.(*BuildinColumnDefaultval)
 	var defaultRuleMap []BuildinColumnDefaultval
-	if err := rw.DB(ctx).Where("UPPER(reverse_mode) = ?", common.StringUPPER(ds.ReverseMode)).Find(&defaultRuleMap).Error; err != nil {
-		return defaultRuleMap, errors.NewMSError(errors.TRANSFERDB, errors.DOMAIN_DB, err)
+
+	table, err := rw.ParseSchemaTable()
+	if err != nil {
+		return defaultRuleMap, err
+	}
+	if err := rw.DB(ctx).Where("UPPER(db_type_s) = ? AND UPPER(db_type_t) = ?",
+		common.StringUPPER(ds.DBTypeS),
+		common.StringUPPER(ds.DBTypeT)).Find(&defaultRuleMap).Error; err != nil {
+		return defaultRuleMap, fmt.Errorf("detail table [%s] record failed: %v", table, err)
 	}
 
 	return defaultRuleMap, nil
@@ -63,15 +85,17 @@ func (rw *BuildinColumnDefaultval) InitO2MBuildinColumnDefaultValue(ctx context.
 	var buildinColumDefaultvals []*BuildinColumnDefaultval
 
 	buildinColumDefaultvals = append(buildinColumDefaultvals, &BuildinColumnDefaultval{
-		SourceDefaultValue: common.BuildInOracleColumnDefaultValueSysdate,
-		TargetDefaultValue: common.BuildInOracleO2MColumnDefaultValueMap[common.BuildInOracleColumnDefaultValueSysdate],
-		ReverseMode:        common.ReverseO2MMode,
+		DBTypeS:       common.TaskDBOracle,
+		DBTypeT:       common.TaskDBMySQL,
+		DefaultValueS: common.BuildInOracleColumnDefaultValueSysdate,
+		DefaultValueT: common.BuildInOracleO2MColumnDefaultValueMap[common.BuildInOracleColumnDefaultValueSysdate],
 	})
 
 	buildinColumDefaultvals = append(buildinColumDefaultvals, &BuildinColumnDefaultval{
-		SourceDefaultValue: common.BuildInOracleColumnDefaultValueSYSGUID,
-		TargetDefaultValue: common.BuildInOracleO2MColumnDefaultValueMap[common.BuildInOracleColumnDefaultValueSYSGUID],
-		ReverseMode:        common.ReverseO2MMode,
+		DBTypeS:       common.TaskDBOracle,
+		DBTypeT:       common.TaskDBMySQL,
+		DefaultValueS: common.BuildInOracleColumnDefaultValueSYSGUID,
+		DefaultValueT: common.BuildInOracleO2MColumnDefaultValueMap[common.BuildInOracleColumnDefaultValueSYSGUID],
 	})
 
 	return rw.DB(ctx).Clauses(clause.OnConflict{
@@ -87,9 +111,10 @@ func (rw *BuildinColumnDefaultval) InitM2OBuildinColumnDefaultValue(ctx context.
 	var buildinColumDefaultvals []*BuildinColumnDefaultval
 
 	buildinColumDefaultvals = append(buildinColumDefaultvals, &BuildinColumnDefaultval{
-		SourceDefaultValue: common.BuildInMySQLColumnDefaultValueCurrentTimestamp,
-		TargetDefaultValue: common.BuildInMySQLM2OColumnDefaultValueMap[common.BuildInMySQLColumnDefaultValueCurrentTimestamp],
-		ReverseMode:        common.ReverseM2OMode,
+		DBTypeS:       common.TaskDBMySQL,
+		DBTypeT:       common.TaskDBOracle,
+		DefaultValueS: common.BuildInMySQLColumnDefaultValueCurrentTimestamp,
+		DefaultValueT: common.BuildInMySQLM2OColumnDefaultValueMap[common.BuildInMySQLColumnDefaultValueCurrentTimestamp],
 	})
 	return rw.DB(ctx).Clauses(clause.OnConflict{
 		Columns: []clause.Column{

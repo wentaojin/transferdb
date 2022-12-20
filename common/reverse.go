@@ -85,16 +85,18 @@ var OracleCollationMap = map[string]string{
 
 // ORACLE 字符集映射规则
 var OracleDBCharacterSetMap = map[string]string{
-	"AL32UTF8": "UTF8MB4",
-	"UTF8":     "UTF8MB4",
-	"ZHS16GBK": "GBK",
+	"AL32UTF8":  "UTF8MB4",
+	"UTF8":      "UTF8MB4",
+	"ZHT16BIG5": "UTF8MB4",
+	"ZHS16GBK":  "GBK",
 }
 
 // ORACLE 字符集映射规则
 var OracleDBCSVCharacterSetMap = map[string]string{
-	"AL32UTF8": "UTF8",
-	"UTF8":     "UTF8",
-	"ZHS16GBK": "GBK",
+	"AL32UTF8":  "UTF8",
+	"UTF8":      "UTF8",
+	"ZHT16BIG5": "UTF8MB4",
+	"ZHS16GBK":  "GBK",
 }
 
 /*

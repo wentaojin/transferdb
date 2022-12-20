@@ -111,6 +111,11 @@ func (o2m *O2M) NewReverse() error {
 		return fmt.Errorf("error on filter o2m.oracle clustered table: %v", err)
 
 	}
+	materializedView, err := filterOracleMaterializedView(o2m.cfg, o2m.oracle, exporters)
+	if err != nil {
+		return fmt.Errorf("error on filter o2m.oracle materialized view: %v", err)
+
+	}
 
 	if len(partitionTables) != 0 {
 		zap.L().Warn("partition tables",
@@ -131,8 +136,21 @@ func (o2m *O2M) NewReverse() error {
 			zap.String("suggest", "if necessary, please manually process the tables in the above list"))
 	}
 
+	var exporterTables []string
+	if len(materializedView) != 0 {
+		zap.L().Warn("materialized views",
+			zap.String("schema", o2m.cfg.OracleConfig.SchemaName),
+			zap.String("materialized view list", fmt.Sprintf("%v", materializedView)),
+			zap.String("suggest", "if necessary, please manually process the tables in the above list"))
+
+		// 排除物化视图
+		exporterTables = common.FilterDifferenceStringItems(exporters, materializedView)
+	} else {
+		exporterTables = exporters
+	}
+
 	// 获取 reverse 表任务列表
-	tables, err := GenReverseTableTask(o2m.ctx, o2m.cfg, o2m.mysql, o2m.oracle, exporters, nlsSort, nlsComp)
+	tables, err := GenReverseTableTask(o2m.ctx, o2m.cfg, o2m.mysql, o2m.oracle, exporterTables, nlsSort, nlsComp)
 	if err != nil {
 		return err
 	}
@@ -159,7 +177,7 @@ func (o2m *O2M) NewReverse() error {
 	}
 
 	// 表类型不兼容项输出
-	err = GenCompatibilityTable(f, common.StringUPPER(o2m.cfg.OracleConfig.SchemaName), partitionTables, temporaryTables, clusteredTables)
+	err = GenCompatibilityTable(f, common.StringUPPER(o2m.cfg.OracleConfig.SchemaName), partitionTables, temporaryTables, clusteredTables, materializedView)
 	if err != nil {
 		return err
 	}
@@ -264,15 +282,17 @@ func (o2m *O2M) NewReverse() error {
 		fmt.Sprintf("compatibility_%s.sql", o2m.cfg.OracleConfig.SchemaName))))
 	if errTotals == 0 {
 		zap.L().Info("reverse table oracle to mysql finished",
-			zap.Int("table totals", len(tables)),
-			zap.Int("table success", len(tables)),
-			zap.Int64("table failed", errTotals),
+			zap.Int("table totals", len(exporters)),
+			zap.Int("reverse totals", len(tables)),
+			zap.Int("reverse success", len(tables)),
+			zap.Int64("reverse failed", errTotals),
 			zap.String("cost", endTime.Sub(startTime).String()))
 	} else {
 		zap.L().Warn("reverse table oracle to mysql finished",
-			zap.Int("table totals", len(tables)),
-			zap.Int("table success", len(tables)-int(errTotals)),
-			zap.Int64("table failed", errTotals),
+			zap.Int("table totals", len(exporters)),
+			zap.Int("reverse totals", len(tables)),
+			zap.Int("reverse success", len(tables)-int(errTotals)),
+			zap.Int64("reverse failed", errTotals),
 			zap.String("failed tips", "failed detail, please see table [table_error_detail]"),
 			zap.String("cost", endTime.Sub(startTime).String()))
 	}

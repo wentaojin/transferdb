@@ -17,8 +17,9 @@ package meta
 
 import (
 	"context"
+	"fmt"
 	"github.com/wentaojin/transferdb/common"
-	"github.com/wentaojin/transferdb/errors"
+	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
@@ -37,12 +38,26 @@ func NewBuildinDatatypeRuleModel(m *Meta) *BuildinDatatypeRule {
 	}}
 }
 
-func (rw *BuildinDatatypeRule) BatchQueryBuildDatatype(ctx context.Context, detailS *BuildinDatatypeRule) ([]BuildinDatatypeRule, error) {
+func (rw *BuildinDatatypeRule) ParseSchemaTable() (string, error) {
+	stmt := &gorm.Statement{DB: rw.GormDB}
+	err := stmt.Parse(rw)
+	if err != nil {
+		return "", fmt.Errorf("parse struct [BuildinDatatypeRule] get table_name failed: %v", err)
+	}
+	return stmt.Schema.Table, nil
+}
+
+func (rw *BuildinDatatypeRule) BatchQueryBuildinDatatype(ctx context.Context, detailS *BuildinDatatypeRule) ([]BuildinDatatypeRule, error) {
 	var objAssessComp []BuildinDatatypeRule
+
+	tableName, err := rw.ParseSchemaTable()
+	if err != nil {
+		return nil, err
+	}
 	if err := rw.DB(ctx).Where("UPPER(db_type_s) = ? AND UPPER(db_type_t) = ?",
 		common.StringUPPER(detailS.DBTypeS),
 		common.StringUPPER(detailS.DBTypeT)).Find(&objAssessComp).Error; err != nil {
-		return objAssessComp, errors.NewMSError(errors.TRANSFERDB, errors.DOMAIN_DB, err)
+		return objAssessComp, fmt.Errorf("batch query table [%s] record failed: %v", tableName, err)
 	}
 	return objAssessComp, nil
 }

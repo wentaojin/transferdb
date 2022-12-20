@@ -495,10 +495,10 @@ func GenCreateSchema(f *reverse.File, sourceSchema, targetSchema, nlsComp string
 	return nil
 }
 
-func GenCompatibilityTable(f *reverse.File, sourceSchema string, partitionTables, temporaryTables, clusteredTables []string) error {
+func GenCompatibilityTable(f *reverse.File, sourceSchema string, partitionTables, temporaryTables, clusteredTables []string, materializedViews []string) error {
 	startTime := time.Now()
 	// 兼容提示
-	if len(partitionTables) > 0 || len(temporaryTables) > 0 || len(clusteredTables) > 0 {
+	if len(partitionTables) > 0 || len(temporaryTables) > 0 || len(clusteredTables) > 0 || len(materializedViews) > 0 {
 		var sqlComp strings.Builder
 
 		sqlComp.WriteString("/*\n")
@@ -532,6 +532,28 @@ func GenCompatibilityTable(f *reverse.File, sourceSchema string, partitionTables
 		sqlComp.WriteString("*/\n")
 
 		if _, err := f.CWriteString(sqlComp.String()); err != nil {
+			return err
+		}
+
+		var mviewComp strings.Builder
+
+		mviewComp.WriteString("/*\n")
+		mviewComp.WriteString(" oracle materialized view maybe mysql has compatibility, will skip convert to reverse, please manual process\n")
+		t = table.NewWriter()
+		t.SetStyle(table.StyleLight)
+		t.AppendHeader(table.Row{"SCHEMA", "MVIEW NAME", "ORACLE TABLE TYPE", "SUGGEST"})
+
+		if len(materializedViews) > 0 {
+			for _, cd := range materializedViews {
+				t.AppendRows([]table.Row{
+					{sourceSchema, cd, "Materialized View", "Manual Process Table"},
+				})
+			}
+		}
+		mviewComp.WriteString(t.Render() + "\n")
+		mviewComp.WriteString("*/\n")
+
+		if _, err := f.CWriteString(mviewComp.String()); err != nil {
 			return err
 		}
 	}
