@@ -612,7 +612,15 @@ func (o *Oracle) GetOracleSchemaIndexTypeCounts(schemaName []string) ([]map[stri
 }
 
 func (o *Oracle) GetOracleSchemaColumnTypeCounts(schemaName []string) ([]map[string]string, error) {
-	querySQL := fmt.Sprintf(`select OWNER,DATA_TYPE,count(*) COUNT,max(data_length) max_data_length from dba_tab_columns where OWNER IN (%s)  group by owner,DATA_TYPE ORDER BY COUNT DESC`, strings.Join(schemaName, ","))
+	querySQL := fmt.Sprintf(`select OWNER,DATA_TYPE,count(*) COUNT,
+	CASE 
+	WHEN DATA_TYPE = 'NUMBER' THEN MAX(TO_NUMBER(DECODE(NVL(TO_CHAR(DATA_PRECISION),'*'),'*','38',TO_CHAR(DATA_PRECISION))))
+	WHEN regexp_like(DATA_TYPE,'INTERVAL YEAR.*') THEN MAX(TO_NUMBER(DECODE(NVL(TO_CHAR(DATA_PRECISION),'*'),'*','38',TO_CHAR(DATA_PRECISION))))
+	WHEN regexp_like(DATA_TYPE,'INTERVAL DAY.*') THEN MAX(TO_NUMBER(DECODE(NVL(TO_CHAR(DATA_SCALE),'*'),'*','127',TO_CHAR(DATA_SCALE))))
+	WHEN regexp_like(DATA_TYPE,'TIMESTAMP.*') THEN MAX(TO_NUMBER(DECODE(NVL(TO_CHAR(DATA_SCALE),'*'),'*','127',TO_CHAR(DATA_SCALE))))
+	ELSE
+	 MAX(DATA_LENGTH)
+	END AS MAX_DATA_LENGTH from dba_tab_columns where OWNER IN (%s)  group by OWNER,DATA_TYPE ORDER BY COUNT DESC`, strings.Join(schemaName, ","))
 	_, res, err := Query(o.Ctx, o.OracleDB, querySQL)
 	if err != nil {
 		return res, err

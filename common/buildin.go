@@ -210,7 +210,7 @@ const (
 	BuildInOracleTableTypeHeap      = "HEAP"
 	BuildInOracleTableTypeClustered = "CLUSTERED"
 	BuildInOracleTableTypeTemporary = "TEMPORARY"
-	BuildInOracleTableTypePartition = "PARTITION"
+	BuildInOracleTableTypePartition = "PARTITIONED"
 
 	BuildInOracleConstraintTypePrimary = "P"
 	BuildInOracleConstraintTypeCheck   = "C"
