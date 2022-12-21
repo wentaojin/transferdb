@@ -71,14 +71,16 @@ func (r *O2M) NewCheck() error {
 		return fmt.Errorf("oracle tables %v isn't exist in the mysqldb schema [%v], please create", noExistTables, r.cfg.MySQLConfig.SchemaName)
 	}
 
-	// 判断 table_error_detail 是否存在错误记录，是否可进行 check
-	errTotals, err := meta.NewTableErrorDetailModel(r.metaDB).CountsBySchema(r.ctx, &meta.TableErrorDetail{
-		SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
-		RunMode:          common.CheckO2MMode,
+	// 判断 error_log_detail 是否存在错误记录，是否可进行 check
+	errTotals, err := meta.NewErrorLogDetailModel(r.metaDB).CountsErrorLogBySchema(r.ctx, &meta.ErrorLogDetail{
+		DBTypeS:     common.TaskDBOracle,
+		DBTypeT:     common.TaskDBMySQL,
+		SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+		RunMode:     common.CheckO2MMode,
 	})
 
 	if errTotals > 0 || err != nil {
-		return fmt.Errorf("check schema [%s] mode [%s] table task failed: %v, table [table_error_detail] exist failed error, please clear and rerunning", strings.ToUpper(r.cfg.OracleConfig.SchemaName), common.CheckO2MMode, err)
+		return fmt.Errorf("check schema [%s] mode [%s] table task failed: %v, table [error_log_detail] exist failed error, please clear and rerunning", strings.ToUpper(r.cfg.OracleConfig.SchemaName), common.CheckO2MMode, err)
 	}
 
 	// oracle 环境信息
@@ -203,9 +205,11 @@ func (r *O2M) NewCheck() error {
 		return err
 	}
 
-	checkError, err := meta.NewTableErrorDetailModel(r.metaDB).CountsBySchema(r.ctx, &meta.TableErrorDetail{
-		SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
-		RunMode:          common.CheckO2MMode,
+	checkError, err := meta.NewErrorLogDetailModel(r.metaDB).CountsErrorLogBySchema(r.ctx, &meta.ErrorLogDetail{
+		DBTypeS:     common.TaskDBOracle,
+		DBTypeT:     common.TaskDBMySQL,
+		SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+		RunMode:     common.CheckO2MMode,
 	})
 	if err != nil {
 		return err
@@ -224,7 +228,7 @@ func (r *O2M) NewCheck() error {
 			zap.Int("table totals", len(exporters)),
 			zap.Int("table success", len(exporters)-int(checkError)),
 			zap.Int("check failed", int(checkError)),
-			zap.String("failed tips", "failed detail, please see table [table_error_detail]"),
+			zap.String("failed tips", "failed detail, please see table [error_log_detail]"),
 			zap.String("cost", endTime.Sub(startTime).String()))
 	}
 	return nil

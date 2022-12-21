@@ -48,8 +48,7 @@ func (rw *SchemaRuleMap) ParseSchemaTable() (string, error) {
 	return stmt.Schema.Table, nil
 }
 
-func (rw *SchemaRuleMap) DetailSchemaRule(ctx context.Context, detailS interface{}) (interface{}, error) {
-	ds := detailS.(*SchemaRuleMap)
+func (rw *SchemaRuleMap) DetailSchemaRule(ctx context.Context, detailS *SchemaRuleMap) ([]SchemaRuleMap, error) {
 	var schemaRuleMap []SchemaRuleMap
 
 	table, err := rw.ParseSchemaTable()
@@ -57,7 +56,9 @@ func (rw *SchemaRuleMap) DetailSchemaRule(ctx context.Context, detailS interface
 		return nil, err
 	}
 	if err = rw.DB(ctx).Where("UPPER(db_type_s) = ? AND UPPER(db_type_t) = ? AND UPPER(schema_name_s) = ?",
-		common.StringUPPER(ds.DBTypeS), common.StringUPPER(ds.DBTypeT), common.StringUPPER(ds.SchemaNameS)).Find(&schemaRuleMap).Error; err != nil {
+		common.StringUPPER(detailS.DBTypeS),
+		common.StringUPPER(detailS.DBTypeT),
+		common.StringUPPER(detailS.SchemaNameS)).Find(&schemaRuleMap).Error; err != nil {
 		return schemaRuleMap, fmt.Errorf("detail table [%s] record failed: %v", table, err)
 	}
 	return schemaRuleMap, nil

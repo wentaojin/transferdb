@@ -19,7 +19,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/wentaojin/transferdb/common"
-	"github.com/wentaojin/transferdb/errors"
 	"gorm.io/gorm"
 )
 
@@ -35,20 +34,22 @@ func (rw *Transaction) CreateDataCompareMetaAndUpdateWaitSyncMeta(ctx context.Co
 	txn := rw.DB(ctx).Begin()
 	err := txn.Create(dataDiffMeta).Error
 	if err != nil {
-		return errors.NewMSError(errors.TRANSFERDB, errors.DOMAIN_DB, fmt.Errorf("create mysql schema table [data_diff_meta] reocrd failed: %v", err.Error()))
+		return fmt.Errorf("create table [data_diff_meta] reocrd by transaction failed: %v", err)
 	}
 	err = txn.Model(&WaitSyncMeta{}).
-		Where("source_schema_name = ? AND source_table_name = ? AND sync_mode = ?",
-			common.StringUPPER(waitSyncMeta.SourceSchemaName),
-			common.StringUPPER(waitSyncMeta.SourceTableName),
-			waitSyncMeta.SyncMode).
+		Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND table_name_s = ? AND mode = ?",
+			common.StringUPPER(waitSyncMeta.DBTypeS),
+			common.StringUPPER(waitSyncMeta.DBTypeT),
+			common.StringUPPER(waitSyncMeta.SchemaNameS),
+			common.StringUPPER(waitSyncMeta.TableNameS),
+			waitSyncMeta.Mode).
 		Updates(map[string]interface{}{
 			"FullGlobalSCN":  waitSyncMeta.FullGlobalSCN,
 			"FullSplitTimes": waitSyncMeta.FullSplitTimes,
 			"IsPartition":    waitSyncMeta.IsPartition,
 		}).Error
 	if err != nil {
-		return errors.NewMSError(errors.TRANSFERDB, errors.DOMAIN_DB, fmt.Errorf("update mysql schema table [wait_sync_meta] reocrd failed: %v", err.Error()))
+		return fmt.Errorf("update table [wait_sync_meta] reocrd by transaction failed: %v", err)
 	}
 	txn.Commit()
 	return nil
@@ -58,20 +59,22 @@ func (rw *Transaction) CreateFullSyncMetaAndUpdateWaitSyncMeta(ctx context.Conte
 	txn := rw.DB(ctx).Begin()
 	err := txn.Create(fullSyncMeta).Error
 	if err != nil {
-		return errors.NewMSError(errors.TRANSFERDB, errors.DOMAIN_DB, fmt.Errorf("create mysql schema table [full_sync_meta] reocrd failed: %v", err.Error()))
+		return fmt.Errorf("create table [full_sync_meta] reocrd by transaction failed: %v", err)
 	}
 	err = txn.Model(&WaitSyncMeta{}).
-		Where("source_schema_name = ? AND source_table_name = ? AND sync_mode = ?",
-			common.StringUPPER(waitSyncMeta.SourceSchemaName),
-			common.StringUPPER(waitSyncMeta.SourceTableName),
-			waitSyncMeta.SyncMode).
+		Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND table_name_s = ? AND mode = ?",
+			common.StringUPPER(waitSyncMeta.DBTypeS),
+			common.StringUPPER(waitSyncMeta.DBTypeT),
+			common.StringUPPER(waitSyncMeta.SchemaNameS),
+			common.StringUPPER(waitSyncMeta.TableNameS),
+			waitSyncMeta.Mode).
 		Updates(map[string]interface{}{
 			"FullGlobalSCN":  waitSyncMeta.FullGlobalSCN,
 			"FullSplitTimes": waitSyncMeta.FullSplitTimes,
 			"IsPartition":    waitSyncMeta.IsPartition,
 		}).Error
 	if err != nil {
-		return errors.NewMSError(errors.TRANSFERDB, errors.DOMAIN_DB, fmt.Errorf("update mysql schema table [wait_sync_meta] reocrd failed: %v", err.Error()))
+		return fmt.Errorf("update table [wait_sync_meta] reocrd by transaction failed: %v", err)
 	}
 	txn.Commit()
 	return nil
@@ -79,19 +82,24 @@ func (rw *Transaction) CreateFullSyncMetaAndUpdateWaitSyncMeta(ctx context.Conte
 
 func (rw *Transaction) DeleteIncrSyncMetaAndWaitSyncMeta(ctx context.Context, incrSyncMeta *IncrSyncMeta, waitSyncMeta *WaitSyncMeta) error {
 	if err := rw.DB(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("source_schema_name = ? and source_table_name = ?",
-			common.StringUPPER(incrSyncMeta.SourceSchemaName),
-			common.StringUPPER(incrSyncMeta.SourceTableName)).
+		if err := tx.Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND table_name_s = ?",
+			common.StringUPPER(incrSyncMeta.DBTypeS),
+			common.StringUPPER(incrSyncMeta.DBTypeT),
+			common.StringUPPER(incrSyncMeta.SchemaNameS),
+			common.StringUPPER(incrSyncMeta.TableNameS),
+		).
 			Delete(&IncrSyncMeta{}).Error; err != nil {
-			return err
+			return fmt.Errorf("delete table [incr_sync_meta] record by transaction failed: %v", err)
 		}
 
-		if err := tx.Where("source_schema_name = ? and source_table_name = ? and sync_mode = ?",
-			common.StringUPPER(waitSyncMeta.SourceSchemaName),
-			common.StringUPPER(waitSyncMeta.SourceTableName),
-			waitSyncMeta.SyncMode).
+		if err := tx.Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND table_name_s = ? and mode = ?",
+			common.StringUPPER(waitSyncMeta.DBTypeS),
+			common.StringUPPER(waitSyncMeta.DBTypeT),
+			common.StringUPPER(waitSyncMeta.SchemaNameS),
+			common.StringUPPER(waitSyncMeta.TableNameS),
+			waitSyncMeta.Mode).
 			Delete(&WaitSyncMeta{}).Error; err != nil {
-			return err
+			return fmt.Errorf("delete table [wait_sync_meta] record by transaction failed: %v", err)
 		}
 		return nil
 	}); err != nil {
@@ -101,7 +109,7 @@ func (rw *Transaction) DeleteIncrSyncMetaAndWaitSyncMeta(ctx context.Context, in
 }
 
 func (rw *Transaction) UpdateIncrSyncMetaSCNByCurrentRedo(ctx context.Context,
-	sourceSchemaName string, lastRedoLogMaxSCN, logFileStartSCN, logFileEndSCN uint64) error {
+	dbTypeS, dbTypeT, sourceSchemaName string, lastRedoLogMaxSCN, logFileStartSCN, logFileEndSCN uint64) error {
 	var logFileSCN uint64
 	if logFileEndSCN >= lastRedoLogMaxSCN {
 		logFileSCN = logFileStartSCN
@@ -111,21 +119,26 @@ func (rw *Transaction) UpdateIncrSyncMetaSCNByCurrentRedo(ctx context.Context,
 
 	var tableIncrMeta []IncrSyncMeta
 	if err := rw.DB(ctx).Model(IncrSyncMeta{}).Where(
-		"source_schema_name = ?",
-		common.StringUPPER(sourceSchemaName)).Find(&tableIncrMeta).Error; err != nil {
-		return err
+		"db_type_s = ? AND db_type_t = ? AND schema_name_s = ?",
+		common.StringUPPER(dbTypeS),
+		common.StringUPPER(dbTypeT),
+		common.StringUPPER(sourceSchemaName),
+	).Find(&tableIncrMeta).Error; err != nil {
+		return fmt.Errorf("find table [incr_sync_meta] record by current_redo failed: %v", err)
 	}
 
 	for _, table := range tableIncrMeta {
-		if table.GlobalSCN < logFileSCN {
+		if table.GlobalScnS < logFileSCN {
 			if err := rw.DB(ctx).Model(&IncrSyncMeta{}).Where(
-				"source_schema_name = ? and source_table_name = ?",
+				"db_type_s = ? AND db_type_t = ? AND schema_name_s = ? and table_name_s = ?",
+				common.StringUPPER(dbTypeS),
+				common.StringUPPER(dbTypeT),
 				common.StringUPPER(sourceSchemaName),
-				common.StringUPPER(table.SourceTableName)).
+				common.StringUPPER(table.TableNameS)).
 				Updates(IncrSyncMeta{
-					GlobalSCN: logFileSCN,
+					GlobalScnS: logFileSCN,
 				}).Error; err != nil {
-				return err
+				return fmt.Errorf("update table [incr_sync_meta] record by current_redo failed: %v", err)
 			}
 		}
 	}
@@ -133,7 +146,7 @@ func (rw *Transaction) UpdateIncrSyncMetaSCNByCurrentRedo(ctx context.Context,
 }
 
 func (rw *Transaction) UpdateIncrSyncMetaSCNByNonCurrentRedo(ctx context.Context,
-	sourceSchemaName string, lastRedoLogMaxSCN, logFileStartSCN, logFileEndSCN uint64, transferTableSlice []string) error {
+	dbTypeS, dbTypeT, sourceSchemaName string, lastRedoLogMaxSCN, logFileStartSCN, logFileEndSCN uint64, transferTableSlice []string) error {
 	var logFileSCN uint64
 	if logFileEndSCN >= lastRedoLogMaxSCN {
 		logFileSCN = logFileStartSCN
@@ -143,30 +156,34 @@ func (rw *Transaction) UpdateIncrSyncMetaSCNByNonCurrentRedo(ctx context.Context
 
 	for _, table := range transferTableSlice {
 		if err := rw.DB(ctx).Model(&IncrSyncMeta{}).Where(
-			"source_schema_name = ? and source_table_name = ?",
+			"db_type_s = ? AND db_type_t = ? AND schema_name_s = ? and table_name_s = ?",
+			common.StringUPPER(dbTypeS),
+			common.StringUPPER(dbTypeT),
 			common.StringUPPER(sourceSchemaName),
 			common.StringUPPER(table)).
 			Updates(IncrSyncMeta{
-				GlobalSCN: logFileSCN,
+				GlobalScnS: logFileSCN,
 			}).Error; err != nil {
-			return err
+			return fmt.Errorf("update table [incr_sync_meta] record by noncurrent_redo failed: %v", err)
 		}
 	}
 	return nil
 }
 
 func (rw *Transaction) UpdateIncrSyncMetaSCNByArchivedLog(ctx context.Context,
-	sourceSchemaName string, logFileEndSCN uint64, transferTableSlice []string) error {
+	dbTypeS, dbTypeT, sourceSchemaName string, logFileEndSCN uint64, transferTableSlice []string) error {
 	for _, table := range transferTableSlice {
 		if err := rw.DB(ctx).Model(&IncrSyncMeta{}).Where(
-			"source_schema_name = ? and source_table_name = ?",
+			"db_type_s = ? AND db_type_t = ? AND schema_name_s = ? and table_name_s = ?",
+			common.StringUPPER(dbTypeS),
+			common.StringUPPER(dbTypeT),
 			common.StringUPPER(sourceSchemaName),
 			common.StringUPPER(table)).
 			Updates(IncrSyncMeta{
-				GlobalSCN:      logFileEndSCN,
-				SourceTableSCN: logFileEndSCN,
+				GlobalScnS: logFileEndSCN,
+				TableScnS:  logFileEndSCN,
 			}).Error; err != nil {
-			return err
+			return fmt.Errorf("update table [incr_sync_meta] record by archivelog failed: %v", err)
 		}
 	}
 	return nil

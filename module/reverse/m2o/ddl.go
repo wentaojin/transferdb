@@ -91,12 +91,12 @@ func (d *DDL) Writer(f *reverse.File) error {
 
 	// 文件写入
 	if sqlRev.String() != "" {
-		if _, err := f.CWriteString(sqlRev.String()); err != nil {
+		if _, err := f.RWriteString(sqlRev.String()); err != nil {
 			return err
 		}
 	}
 	if sqlComp.String() != "" {
-		if _, err := f.RWriteString(sqlComp.String()); err != nil {
+		if _, err := f.CWriteString(sqlComp.String()); err != nil {
 			return err
 		}
 	}

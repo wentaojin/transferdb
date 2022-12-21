@@ -112,7 +112,7 @@ func (m *Meta) MigrateTables() (err error) {
 		new(WaitSyncMeta),
 		new(FullSyncMeta),
 		new(IncrSyncMeta),
-		new(TableErrorDetail),
+		new(ErrorLogDetail),
 		new(BuildinColumnDefaultval),
 		new(BuildinObjectCompatible),
 		new(BuildinDatatypeRule),
@@ -133,6 +133,10 @@ func (m *Meta) InitDefaultValue(ctx context.Context) error {
 		return err
 	}
 	err = NewBuildinDatatypeRuleModel(m).InitO2MBuildinDatatypeRule(ctx)
+	if err != nil {
+		return err
+	}
+	err = NewBuildinDatatypeRuleModel(m).InitM2OBuildinDatatypeRule(ctx)
 	if err != nil {
 		return err
 	}

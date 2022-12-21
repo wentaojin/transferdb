@@ -94,9 +94,11 @@ func PreTableStructCheck(ctx context.Context, cfg *config.Config, oracledb *orac
 		if err != nil {
 			return err
 		}
-		errTotals, err := meta.NewTableErrorDetailModel(metaDB).CountsBySchema(ctx, &meta.TableErrorDetail{
-			SourceSchemaName: common.StringUPPER(cfg.OracleConfig.SchemaName),
-			RunMode:          common.CheckO2MMode,
+		errTotals, err := meta.NewErrorLogDetailModel(metaDB).CountsErrorLogBySchema(ctx, &meta.ErrorLogDetail{
+			DBTypeS:     common.TaskDBOracle,
+			DBTypeT:     common.TaskDBMySQL,
+			SchemaNameS: common.StringUPPER(cfg.OracleConfig.SchemaName),
+			RunMode:     common.CheckO2MMode,
 		})
 
 		if errTotals != 0 || err != nil {

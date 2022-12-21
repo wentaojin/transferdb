@@ -113,7 +113,7 @@ func applyOracleIncrRecord(metaDB *meta.Meta, mysqlDB *mysql.MySQL, cfg *config.
 func (p *IncrTask) IncrApply() error {
 	// 数据写入并更新元数据表
 	//zap.L().Info("increment applier sql", zap.String("sql", sql))
-	if p.OperationType == common.UpdateOperation {
+	if p.OperationType == common.MigrateOperationUpdate {
 		// update 语句拆分 delete/replace 放一个事务内
 		txn, err := p.MySQL.MySQLDB.BeginTx(p.Ctx, &sql.TxOptions{})
 		if err != nil {
@@ -136,15 +136,17 @@ func (p *IncrTask) IncrApply() error {
 		}
 	}
 	// 数据写入完毕，更新元数据 checkpoint 表
-	// 如果同步中断，数据同步使用会以 global_scn 为准，也就是会进行重复消费
-	if p.Operation == common.DropTableOperation {
+	// 如果同步中断，数据同步使用会以 global_scn_s 为准，也就是会进行重复消费
+	if p.Operation == common.MigrateOperationDropTable {
 		err := meta.NewCommonModel(p.MetaDB).DeleteIncrSyncMetaAndWaitSyncMeta(p.Ctx, &meta.IncrSyncMeta{
-			SourceSchemaName: p.SourceSchema,
-			SourceTableName:  p.SourceTable,
+			DBTypeS:     common.TaskDBOracle,
+			DBTypeT:     common.TaskDBMySQL,
+			SchemaNameS: p.SourceSchema,
+			TableNameS:  p.SourceTable,
 		}, &meta.WaitSyncMeta{
-			SourceSchemaName: p.SourceSchema,
-			SourceTableName:  p.SourceTable,
-			SyncMode:         common.AllO2MMode,
+			SchemaNameS: p.SourceSchema,
+			TableNameS:  p.SourceTable,
+			Mode:        common.AllO2MMode,
 		})
 		if err != nil {
 			zap.L().Error("update table increment scn record failed",
@@ -153,11 +155,13 @@ func (p *IncrTask) IncrApply() error {
 			return err
 		}
 	} else {
-		err := meta.NewIncrSyncMetaModel(p.MetaDB).Update(p.Ctx, &meta.IncrSyncMeta{
-			SourceSchemaName: p.SourceSchema,
-			SourceTableName:  p.SourceTable,
-			GlobalSCN:        p.GlobalSCN,
-			SourceTableSCN:   p.SourceTableSCN,
+		err := meta.NewIncrSyncMetaModel(p.MetaDB).UpdateIncrSyncMeta(p.Ctx, &meta.IncrSyncMeta{
+			DBTypeS:     common.TaskDBOracle,
+			DBTypeT:     common.TaskDBMySQL,
+			SchemaNameS: p.SourceSchema,
+			TableNameS:  p.SourceTable,
+			GlobalScnS:  p.GlobalSCN,
+			TableScnS:   p.SourceTableSCN,
 		})
 		if err != nil {
 			zap.L().Error("update table increment scn record failed",

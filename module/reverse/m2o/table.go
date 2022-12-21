@@ -34,7 +34,7 @@ import (
 
 type Table struct {
 	Ctx                     context.Context `json:"-"`
-	MySQLDBType             string          `json:"my_sqldb_type"`
+	MySQLDBType             string          `json:"mysqldb_type"`
 	OracleDBVersion         string          `json:"oracle_db_version"`
 	OracleExtendedMode      bool            `json:"oracle_extended_mode"`
 	SourceSchemaName        string          `json:"source_schema_name"`
@@ -243,6 +243,9 @@ func (t *Table) GetTableForeignKey() ([]map[string]string, error) {
 }
 
 func (t *Table) GetTableCheckKey() ([]map[string]string, error) {
+	if strings.EqualFold(t.MySQLDBType, common.TaskDBTiDB) {
+		return nil, nil
+	}
 	return t.MySQL.GetMySQLTableCheckKey(t.SourceSchemaName, t.SourceTableName)
 }
 

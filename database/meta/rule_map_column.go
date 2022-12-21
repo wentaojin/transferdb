@@ -54,19 +54,18 @@ func (rw *ColumnRuleMap) ParseSchemaTable() (string, error) {
 	return stmt.Schema.Table, nil
 }
 
-func (rw *ColumnRuleMap) CreateColumnRule(ctx context.Context, createS interface{}) error {
+func (rw *ColumnRuleMap) CreateColumnRule(ctx context.Context, createS *ColumnRuleMap) error {
 	table, err := rw.ParseSchemaTable()
 	if err != nil {
 		return err
 	}
-	if err := rw.DB(ctx).Create(createS.(*ColumnRuleMap)).Error; err != nil {
+	if err := rw.DB(ctx).Create(createS).Error; err != nil {
 		return fmt.Errorf("create table [%s] record failed: %v", table, err)
 	}
 	return nil
 }
 
-func (rw *ColumnRuleMap) DetailColumnRule(ctx context.Context, detailS interface{}) (interface{}, error) {
-	ds := detailS.(*ColumnRuleMap)
+func (rw *ColumnRuleMap) DetailColumnRule(ctx context.Context, detailS *ColumnRuleMap) ([]ColumnRuleMap, error) {
 	var columnRuleMap []ColumnRuleMap
 
 	table, err := rw.ParseSchemaTable()
@@ -75,11 +74,11 @@ func (rw *ColumnRuleMap) DetailColumnRule(ctx context.Context, detailS interface
 	}
 
 	if err = rw.DB(ctx).Where("UPPER(db_type_s) = ? AND UPPER(db_type_t) = ? AND UPPER(schema_name_s) = ? AND UPPER(table_name_s) = ? AND UPPER(column_name_s) = ?",
-		common.StringUPPER(ds.DBTypeS),
-		common.StringUPPER(ds.DBTypeT),
-		common.StringUPPER(ds.SchemaNameS),
-		common.StringUPPER(ds.TableNameS),
-		common.StringUPPER(ds.ColumnNameS)).Find(&columnRuleMap).Error; err != nil {
+		common.StringUPPER(detailS.DBTypeS),
+		common.StringUPPER(detailS.DBTypeT),
+		common.StringUPPER(detailS.SchemaNameS),
+		common.StringUPPER(detailS.TableNameS),
+		common.StringUPPER(detailS.ColumnNameS)).Find(&columnRuleMap).Error; err != nil {
 		return columnRuleMap, fmt.Errorf("detail table [%s] record failed: %v", table, err)
 	}
 

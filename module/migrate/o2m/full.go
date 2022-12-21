@@ -30,7 +30,7 @@ import (
 	"time"
 )
 
-type O2M struct {
+type Migrate struct {
 	ctx    context.Context
 	cfg    *config.Config
 	oracle *oracle.Oracle
@@ -38,8 +38,8 @@ type O2M struct {
 	metaDB *meta.Meta
 }
 
-func NewO2MFuller(ctx context.Context, cfg *config.Config, oracle *oracle.Oracle, mysql *mysql.MySQL, metaDB *meta.Meta) *O2M {
-	return &O2M{
+func NewO2MFuller(ctx context.Context, cfg *config.Config, oracle *oracle.Oracle, mysql *mysql.MySQL, metaDB *meta.Meta) *Migrate {
+	return &Migrate{
 		ctx:    ctx,
 		cfg:    cfg,
 		oracle: oracle,
@@ -48,7 +48,7 @@ func NewO2MFuller(ctx context.Context, cfg *config.Config, oracle *oracle.Oracle
 	}
 }
 
-func (r *O2M) NewFuller() error {
+func (r *Migrate) NewFuller() error {
 	startTime := time.Now()
 	zap.L().Info("source schema full table data sync start",
 		zap.String("schema", r.cfg.OracleConfig.SchemaName))
@@ -59,7 +59,7 @@ func (r *O2M) NewFuller() error {
 	if err != nil {
 		return err
 	}
-	if common.VersionOrdinal(oracleDBVersion) < common.VersionOrdinal(common.OracleSYNCRequireDBVersion) {
+	if common.VersionOrdinal(oracleDBVersion) < common.VersionOrdinal(common.RequireOracleDBVersion) {
 		return fmt.Errorf("oracle db version [%v] is less than 11g, can't be using transferdb tools", oracleDBVersion)
 	}
 	oracleCollation := false
@@ -73,36 +73,42 @@ func (r *O2M) NewFuller() error {
 		return err
 	}
 
-	// 判断 table_error_detail 是否存在错误记录，是否可进行 CSV
-	errTotals, err := meta.NewTableErrorDetailModel(r.metaDB).CountsBySchema(r.ctx, &meta.TableErrorDetail{
-		SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
-		RunMode:          common.FullO2MMode,
+	// 判断 error_log_detail 是否存在错误记录，是否可进行 CSV
+	errTotals, err := meta.NewErrorLogDetailModel(r.metaDB).CountsErrorLogBySchema(r.ctx, &meta.ErrorLogDetail{
+		DBTypeS:     common.TaskDBOracle,
+		DBTypeT:     common.TaskDBMySQL,
+		SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+		RunMode:     common.FullO2MMode,
 	})
 	if errTotals > 0 || err != nil {
-		return fmt.Errorf("full schema [%s] table mode [%s] task failed: %v, table [table_error_detail] exist failed error, please clear and rerunning", strings.ToUpper(r.cfg.OracleConfig.SchemaName), common.CompareO2MMode, err)
+		return fmt.Errorf("full schema [%s] table mode [%s] task failed: %v, table [error_log_detail] exist failed error, please clear and rerunning", strings.ToUpper(r.cfg.OracleConfig.SchemaName), common.CompareO2MMode, err)
 	}
 
 	// 判断并记录待同步表列表
 	for _, tableName := range exporters {
-		waitSyncMetas, err := meta.NewWaitSyncMetaModel(r.metaDB).Detail(r.ctx, &meta.WaitSyncMeta{
-			SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
-			SourceTableName:  tableName,
-			SyncMode:         common.FullO2MMode,
+		waitSyncMetas, err := meta.NewWaitSyncMetaModel(r.metaDB).DetailWaitSyncMeta(r.ctx, &meta.WaitSyncMeta{
+			DBTypeS:     common.TaskDBOracle,
+			DBTypeT:     common.TaskDBMySQL,
+			SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+			TableNameS:  tableName,
+			Mode:        common.FullO2MMode,
 		})
 		if err != nil {
 			return err
 		}
 		// 初始同步表全量任务为 -1 表示未进行全量初始化，初始化完成会变更
 		// 全量同步完成，增量阶段，值预期都是 0
-		if len(waitSyncMetas.([]meta.WaitSyncMeta)) == 0 {
+		if len(waitSyncMetas) == 0 {
 			// 初始同步表全量任务为 -1 表示未进行全量初始化，初始化完成会变更
 			// 全量同步完成，增量阶段，值预期都是 0
-			err = meta.NewWaitSyncMetaModel(r.metaDB).Create(r.ctx, &meta.WaitSyncMeta{
-				SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
-				SourceTableName:  common.StringUPPER(tableName),
-				SyncMode:         common.FullO2MMode,
-				FullGlobalSCN:    0,
-				FullSplitTimes:   -1,
+			err = meta.NewWaitSyncMetaModel(r.metaDB).CreateWaitSyncMeta(r.ctx, &meta.WaitSyncMeta{
+				DBTypeS:        common.TaskDBOracle,
+				DBTypeT:        common.TaskDBMySQL,
+				SchemaNameS:    common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+				TableNameS:     common.StringUPPER(tableName),
+				Mode:           common.FullO2MMode,
+				FullGlobalSCN:  0,
+				FullSplitTimes: -1,
 			})
 			if err != nil {
 				return err
@@ -114,18 +120,23 @@ func (r *O2M) NewFuller() error {
 	//  - 若想断点恢复，设置 enable-checkpoint true,首次一旦运行则 batch 数不能调整，
 	//  - 若不想断点恢复或者重新调整 batch 数，设置 enable-checkpoint false,清理元数据表 [wait_sync_meta],重新运行全量任务
 	if !r.cfg.FullConfig.EnableCheckpoint {
-		err = meta.NewFullSyncMetaModel(r.metaDB).DeleteBySchemaSyncMode(r.ctx, &meta.FullSyncMeta{
-			SourceSchemaName: r.cfg.OracleConfig.SchemaName,
-			SyncMode:         common.FullO2MMode,
-		})
+		err = meta.NewFullSyncMetaModel(r.metaDB).DeleteFullSyncMetaBySchemaSyncMode(
+			r.ctx, &meta.FullSyncMeta{
+				DBTypeS:     common.TaskDBOracle,
+				DBTypeT:     common.TaskDBMySQL,
+				SchemaNameS: r.cfg.OracleConfig.SchemaName,
+				Mode:        common.FullO2MMode,
+			})
 		if err != nil {
 			return err
 		}
 		for _, tableName := range exporters {
-			err = meta.NewWaitSyncMetaModel(r.metaDB).Delete(r.ctx, &meta.WaitSyncMeta{
-				SourceSchemaName: r.cfg.OracleConfig.SchemaName,
-				SourceTableName:  tableName,
-				SyncMode:         common.FullO2MMode,
+			err = meta.NewWaitSyncMetaModel(r.metaDB).DeleteWaitSyncMeta(r.ctx, &meta.WaitSyncMeta{
+				DBTypeS:     common.TaskDBOracle,
+				DBTypeT:     common.TaskDBMySQL,
+				SchemaNameS: r.cfg.OracleConfig.SchemaName,
+				TableNameS:  tableName,
+				Mode:        common.FullO2MMode,
 			})
 			if err != nil {
 				return err
@@ -135,23 +146,27 @@ func (r *O2M) NewFuller() error {
 				return err
 			}
 			// 判断并记录待同步表列表
-			waitSyncMetas, err := meta.NewWaitSyncMetaModel(r.metaDB).Detail(r.ctx, &meta.WaitSyncMeta{
-				SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
-				SourceTableName:  tableName,
-				SyncMode:         common.FullO2MMode,
+			waitSyncMetas, err := meta.NewWaitSyncMetaModel(r.metaDB).DetailWaitSyncMeta(r.ctx, &meta.WaitSyncMeta{
+				DBTypeS:     common.TaskDBOracle,
+				DBTypeT:     common.TaskDBMySQL,
+				SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+				TableNameS:  tableName,
+				Mode:        common.FullO2MMode,
 			})
 			if err != nil {
 				return err
 			}
-			if len(waitSyncMetas.([]meta.WaitSyncMeta)) == 0 {
+			if len(waitSyncMetas) == 0 {
 				// 初始同步表全量任务为 -1 表示未进行全量初始化，初始化完成会变更
 				// 全量同步完成，增量阶段，值预期都是 0
-				err = meta.NewWaitSyncMetaModel(r.metaDB).Create(r.ctx, &meta.WaitSyncMeta{
-					SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
-					SourceTableName:  common.StringUPPER(tableName),
-					SyncMode:         common.FullO2MMode,
-					FullGlobalSCN:    0,
-					FullSplitTimes:   -1,
+				err = meta.NewWaitSyncMetaModel(r.metaDB).CreateWaitSyncMeta(r.ctx, &meta.WaitSyncMeta{
+					DBTypeS:        common.TaskDBOracle,
+					DBTypeT:        common.TaskDBMySQL,
+					SchemaNameS:    common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+					TableNameS:     common.StringUPPER(tableName),
+					Mode:           common.FullO2MMode,
+					FullGlobalSCN:  0,
+					FullSplitTimes: -1,
 				})
 				if err != nil {
 					return err
@@ -166,19 +181,21 @@ func (r *O2M) NewFuller() error {
 		waitSyncTables     []string
 	)
 
-	waitSyncDetails, err := meta.NewWaitSyncMetaModel(r.metaDB).Detail(r.ctx, &meta.WaitSyncMeta{
-		SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
-		SyncMode:         common.FullO2MMode,
-		FullGlobalSCN:    0,
-		FullSplitTimes:   -1,
+	waitSyncDetails, err := meta.NewWaitSyncMetaModel(r.metaDB).DetailWaitSyncMeta(r.ctx, &meta.WaitSyncMeta{
+		DBTypeS:        common.TaskDBOracle,
+		DBTypeT:        common.TaskDBMySQL,
+		SchemaNameS:    common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+		Mode:           common.FullO2MMode,
+		FullGlobalSCN:  0,
+		FullSplitTimes: -1,
 	})
 	if err != nil {
 		return err
 	}
-	waitSyncTableMetas = waitSyncDetails.([]meta.WaitSyncMeta)
+	waitSyncTableMetas = waitSyncDetails
 	if len(waitSyncTableMetas) > 0 {
 		for _, table := range waitSyncTableMetas {
-			waitSyncTables = append(waitSyncTables, common.StringUPPER(table.SourceTableName))
+			waitSyncTables = append(waitSyncTables, common.StringUPPER(table.TableNameS))
 		}
 	}
 
@@ -186,17 +203,19 @@ func (r *O2M) NewFuller() error {
 		partSyncTableMetas []meta.WaitSyncMeta
 		partSyncTables     []string
 	)
-	partSyncDetails, err := meta.NewWaitSyncMetaModel(r.metaDB).Query(r.ctx, &meta.WaitSyncMeta{
-		SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
-		SyncMode:         common.FullO2MMode,
+	partSyncDetails, err := meta.NewWaitSyncMetaModel(r.metaDB).BatchQueryWaitSyncMeta(r.ctx, &meta.WaitSyncMeta{
+		DBTypeS:     common.TaskDBOracle,
+		DBTypeT:     common.TaskDBMySQL,
+		SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+		Mode:        common.FullO2MMode,
 	})
 	if err != nil {
 		return err
 	}
-	partSyncTableMetas = partSyncDetails.([]meta.WaitSyncMeta)
+	partSyncTableMetas = partSyncDetails
 	if len(partSyncTableMetas) > 0 {
 		for _, table := range partSyncTableMetas {
-			partSyncTables = append(partSyncTables, common.StringUPPER(table.SourceTableName))
+			partSyncTables = append(partSyncTables, common.StringUPPER(table.TableNameS))
 		}
 	}
 
@@ -212,14 +231,16 @@ func (r *O2M) NewFuller() error {
 	var panicTblFullSlice []string
 
 	for _, partSyncMeta := range partSyncTableMetas {
-		tableNameArray, err2 := meta.NewFullSyncMetaModel(r.metaDB).DistinctTableName(r.ctx, &meta.FullSyncMeta{
-			SourceSchemaName: r.cfg.OracleConfig.SchemaName})
+		tableNameArray, err2 := meta.NewFullSyncMetaModel(r.metaDB).DistinctFullSyncMetaByTableNameS(r.ctx, &meta.FullSyncMeta{
+			DBTypeS:     common.TaskDBOracle,
+			DBTypeT:     common.TaskDBMySQL,
+			SchemaNameS: r.cfg.OracleConfig.SchemaName})
 		if err2 != nil {
 			return err2
 		}
 
-		if !common.IsContainString(tableNameArray.([]string), partSyncMeta.SourceTableName) {
-			panicTblFullSlice = append(panicTblFullSlice, partSyncMeta.SourceTableName)
+		if !common.IsContainString(tableNameArray, partSyncMeta.TableNameS) {
+			panicTblFullSlice = append(panicTblFullSlice, partSyncMeta.TableNameS)
 		}
 	}
 
@@ -255,7 +276,7 @@ func (r *O2M) NewFuller() error {
 	return nil
 }
 
-func (r *O2M) fullPartSyncTable(fullPartTables []string) error {
+func (r *Migrate) fullPartSyncTable(fullPartTables []string) error {
 	taskTime := time.Now()
 
 	g := &errgroup.Group{}
@@ -265,10 +286,12 @@ func (r *O2M) fullPartSyncTable(fullPartTables []string) error {
 		t := table
 		g.Go(func() error {
 			startTime := time.Now()
-			fullMetas, err := meta.NewFullSyncMetaModel(r.metaDB).Detail(r.ctx, &meta.FullSyncMeta{
-				SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
-				SourceTableName:  common.StringUPPER(t),
-				SyncMode:         common.FullO2MMode,
+			fullMetas, err := meta.NewFullSyncMetaModel(r.metaDB).DetailFullSyncMeta(r.ctx, &meta.FullSyncMeta{
+				DBTypeS:     common.TaskDBOracle,
+				DBTypeT:     common.TaskDBMySQL,
+				SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+				TableNameS:  common.StringUPPER(t),
+				Mode:        common.FullO2MMode,
 			})
 			if err != nil {
 				return err
@@ -276,8 +299,8 @@ func (r *O2M) fullPartSyncTable(fullPartTables []string) error {
 
 			g1 := &errgroup.Group{}
 			g1.SetLimit(r.cfg.FullConfig.SQLThreads)
-			for _, meta := range fullMetas.([]meta.FullSyncMeta) {
-				m := meta
+			for _, fullMeta := range fullMetas {
+				m := fullMeta
 				g1.Go(func() error {
 					// 数据写入
 					columnFields, batchResults, err := IExtractor(
@@ -285,11 +308,11 @@ func (r *O2M) fullPartSyncTable(fullPartTables []string) error {
 					if err != nil {
 						return err
 					}
-					err = ITranslator(NewChunk(r.ctx, m, r.oracle, r.mysql, columnFields, batchResults, r.cfg.FullConfig.ApplyThreads, r.cfg.AppConfig.InsertBatchSize, true))
+					err = ITranslator(NewChunk(r.ctx, m, r.oracle, r.mysql, r.metaDB, columnFields, batchResults, r.cfg.FullConfig.ApplyThreads, r.cfg.AppConfig.InsertBatchSize, true))
 					if err != nil {
 						return err
 					}
-					err = IApplier(NewChunk(r.ctx, m, r.oracle, r.mysql, columnFields, batchResults, r.cfg.FullConfig.ApplyThreads, r.cfg.AppConfig.InsertBatchSize, true))
+					err = IApplier(NewChunk(r.ctx, m, r.oracle, r.mysql, r.metaDB, columnFields, batchResults, r.cfg.FullConfig.ApplyThreads, r.cfg.AppConfig.InsertBatchSize, true))
 					if err != nil {
 						return err
 					}
@@ -302,11 +325,13 @@ func (r *O2M) fullPartSyncTable(fullPartTables []string) error {
 			}
 
 			// 更新表级别记录
-			err = meta.NewWaitSyncMetaModel(r.metaDB).ModifyFullSplitTimesZero(r.ctx, &meta.WaitSyncMeta{
-				SourceSchemaName: r.cfg.OracleConfig.SchemaName,
-				SourceTableName:  t,
-				SyncMode:         common.FullO2MMode,
-				FullSplitTimes:   0,
+			err = meta.NewWaitSyncMetaModel(r.metaDB).ModifyWaitSyncMetaColumnFullSplitTimesZero(r.ctx, &meta.WaitSyncMeta{
+				DBTypeS:        common.TaskDBOracle,
+				DBTypeT:        common.TaskDBMySQL,
+				SchemaNameS:    r.cfg.OracleConfig.SchemaName,
+				TableNameS:     t,
+				Mode:           common.FullO2MMode,
+				FullSplitTimes: 0,
 			})
 			if err != nil {
 				return err
@@ -331,7 +356,7 @@ func (r *O2M) fullPartSyncTable(fullPartTables []string) error {
 	return nil
 }
 
-func (r *O2M) fullWaitSyncTable(fullWaitTables []string, oracleCollation bool) error {
+func (r *Migrate) fullWaitSyncTable(fullWaitTables []string, oracleCollation bool) error {
 	err := r.initWaitSyncTableRowID(fullWaitTables, oracleCollation)
 	if err != nil {
 		return err
@@ -344,7 +369,7 @@ func (r *O2M) fullWaitSyncTable(fullWaitTables []string, oracleCollation bool) e
 	return nil
 }
 
-func (r *O2M) initWaitSyncTableRowID(csvWaitTables []string, oracleCollation bool) error {
+func (r *Migrate) initWaitSyncTableRowID(csvWaitTables []string, oracleCollation bool) error {
 	startTask := time.Now()
 	// 全量同步前，获取 SCN 以及初始化元数据表
 	globalSCN, err := r.oracle.GetOracleCurrentSnapshotSCN()
@@ -393,22 +418,26 @@ func (r *O2M) initWaitSyncTableRowID(csvWaitTables []string, oracleCollation boo
 					zap.Int("statistics rows", tableRowsByStatistics))
 
 				err = meta.NewCommonModel(r.metaDB).CreateFullSyncMetaAndUpdateWaitSyncMeta(r.ctx, &meta.FullSyncMeta{
-					SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
-					SourceTableName:  common.StringUPPER(t),
-					TargetSchemaName: common.StringUPPER(r.cfg.MySQLConfig.SchemaName),
-					TargetTableName:  common.StringUPPER(t),
-					GlobalSCN:        globalSCN,
-					SourceColumnInfo: sourceColumnInfo,
-					SourceRowidInfo:  "1 = 1",
-					SyncMode:         common.FullO2MMode,
-					IsPartition:      isPartition,
+					DBTypeS:     common.TaskDBOracle,
+					DBTypeT:     common.TaskDBMySQL,
+					SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+					TableNameS:  common.StringUPPER(t),
+					SchemaNameT: common.StringUPPER(r.cfg.MySQLConfig.SchemaName),
+					TableNameT:  common.StringUPPER(t),
+					GlobalScnS:  globalSCN,
+					ColumnInfoS: sourceColumnInfo,
+					RowidInfoS:  "1 = 1",
+					Mode:        common.FullO2MMode,
+					IsPartition: isPartition,
 				}, &meta.WaitSyncMeta{
-					SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
-					SourceTableName:  common.StringUPPER(t),
-					SyncMode:         common.FullO2MMode,
-					FullGlobalSCN:    globalSCN,
-					FullSplitTimes:   1,
-					IsPartition:      isPartition,
+					DBTypeS:        common.TaskDBOracle,
+					DBTypeT:        common.TaskDBMySQL,
+					SchemaNameS:    common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+					TableNameS:     common.StringUPPER(t),
+					Mode:           common.FullO2MMode,
+					FullGlobalSCN:  globalSCN,
+					FullSplitTimes: 1,
+					IsPartition:    isPartition,
 				})
 				if err != nil {
 					return err
@@ -446,22 +475,26 @@ func (r *O2M) initWaitSyncTableRowID(csvWaitTables []string, oracleCollation boo
 					zap.Int("rowids rows", len(chunkRes)))
 
 				err = meta.NewCommonModel(r.metaDB).CreateFullSyncMetaAndUpdateWaitSyncMeta(r.ctx, &meta.FullSyncMeta{
-					SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
-					SourceTableName:  common.StringUPPER(t),
-					TargetSchemaName: common.StringUPPER(r.cfg.MySQLConfig.SchemaName),
-					TargetTableName:  common.StringUPPER(t),
-					GlobalSCN:        globalSCN,
-					SourceColumnInfo: sourceColumnInfo,
-					SourceRowidInfo:  "1 = 1",
-					SyncMode:         common.FullO2MMode,
-					IsPartition:      isPartition,
+					DBTypeS:     common.TaskDBOracle,
+					DBTypeT:     common.TaskDBMySQL,
+					SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+					TableNameS:  common.StringUPPER(t),
+					SchemaNameT: common.StringUPPER(r.cfg.MySQLConfig.SchemaName),
+					TableNameT:  common.StringUPPER(t),
+					GlobalScnS:  globalSCN,
+					ColumnInfoS: sourceColumnInfo,
+					RowidInfoS:  "1 = 1",
+					Mode:        common.FullO2MMode,
+					IsPartition: isPartition,
 				}, &meta.WaitSyncMeta{
-					SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
-					SourceTableName:  common.StringUPPER(t),
-					SyncMode:         common.FullO2MMode,
-					FullGlobalSCN:    globalSCN,
-					FullSplitTimes:   1,
-					IsPartition:      isPartition,
+					DBTypeS:        common.TaskDBOracle,
+					DBTypeT:        common.TaskDBMySQL,
+					SchemaNameS:    common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+					TableNameS:     common.StringUPPER(t),
+					Mode:           common.FullO2MMode,
+					FullGlobalSCN:  globalSCN,
+					FullSplitTimes: 1,
+					IsPartition:    isPartition,
 				})
 				if err != nil {
 					return err
@@ -473,32 +506,36 @@ func (r *O2M) initWaitSyncTableRowID(csvWaitTables []string, oracleCollation boo
 			var fullMetas []meta.FullSyncMeta
 			for _, res := range chunkRes {
 				fullMetas = append(fullMetas, meta.FullSyncMeta{
-					SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
-					SourceTableName:  common.StringUPPER(t),
-					TargetSchemaName: common.StringUPPER(r.cfg.MySQLConfig.SchemaName),
-					TargetTableName:  common.StringUPPER(t),
-					GlobalSCN:        globalSCN,
-					SourceColumnInfo: sourceColumnInfo,
-					SourceRowidInfo:  res["CMD"],
-					SyncMode:         common.FullO2MMode,
-					IsPartition:      isPartition,
+					DBTypeS:     common.TaskDBOracle,
+					DBTypeT:     common.TaskDBMySQL,
+					SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+					TableNameS:  common.StringUPPER(t),
+					SchemaNameT: common.StringUPPER(r.cfg.MySQLConfig.SchemaName),
+					TableNameT:  common.StringUPPER(t),
+					GlobalScnS:  globalSCN,
+					ColumnInfoS: sourceColumnInfo,
+					RowidInfoS:  res["CMD"],
+					Mode:        common.FullO2MMode,
+					IsPartition: isPartition,
 				})
 			}
 
 			// 元数据库信息 batch 写入
-			err = meta.NewFullSyncMetaModel(r.metaDB).BatchCreate(r.ctx, fullMetas, r.cfg.AppConfig.InsertBatchSize)
+			err = meta.NewFullSyncMetaModel(r.metaDB).BatchCreateFullSyncMeta(r.ctx, fullMetas, r.cfg.AppConfig.InsertBatchSize)
 			if err != nil {
 				return err
 			}
 
 			// 更新 wait_sync_meta
-			err = meta.NewWaitSyncMetaModel(r.metaDB).Update(r.ctx, &meta.WaitSyncMeta{
-				SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
-				SourceTableName:  common.StringUPPER(t),
-				SyncMode:         common.FullO2MMode,
-				FullGlobalSCN:    globalSCN,
-				FullSplitTimes:   len(chunkRes),
-				IsPartition:      isPartition,
+			err = meta.NewWaitSyncMetaModel(r.metaDB).UpdateWaitSyncMeta(r.ctx, &meta.WaitSyncMeta{
+				DBTypeS:        common.TaskDBOracle,
+				DBTypeT:        common.TaskDBMySQL,
+				SchemaNameS:    common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+				TableNameS:     common.StringUPPER(t),
+				Mode:           common.FullO2MMode,
+				FullGlobalSCN:  globalSCN,
+				FullSplitTimes: len(chunkRes),
+				IsPartition:    isPartition,
 			})
 			if err != nil {
 				return err
@@ -527,7 +564,7 @@ func (r *O2M) initWaitSyncTableRowID(csvWaitTables []string, oracleCollation boo
 	return nil
 }
 
-func (r *O2M) adjustTableSelectColumn(sourceTable string, oracleCollation bool) (string, error) {
+func (r *Migrate) adjustTableSelectColumn(sourceTable string, oracleCollation bool) (string, error) {
 	// Date/Timestamp 字段类型格式化
 	// Interval Year/Day 数据字符 TO_CHAR 格式化
 	columnsINFO, err := r.oracle.GetOracleSchemaTableColumn(r.cfg.OracleConfig.SchemaName, sourceTable, oracleCollation)

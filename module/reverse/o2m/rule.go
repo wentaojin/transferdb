@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/wentaojin/transferdb/database/meta"
-	"github.com/wentaojin/transferdb/module/check/o2m"
 	"go.uber.org/zap"
 	"regexp"
 	"strings"
@@ -559,9 +558,9 @@ func (r *Rule) GenTableColumn() (columnMetas []string, err error) {
 			columnCollation = ""
 		}
 
-		columnType, err := r.ChangeTableColumnType(r.SourceSchema, r.SourceTableName, rowCol["COLUMN_NAME"], o2m.Column{
+		columnType, err := r.ChangeTableColumnType(r.SourceSchema, r.SourceTableName, rowCol["COLUMN_NAME"], Column{
 			DataType: rowCol["DATA_TYPE"],
-			ColumnInfo: o2m.ColumnInfo{
+			ColumnInfo: ColumnInfo{
 				DataLength:    rowCol["DATA_LENGTH"],
 				DataPrecision: rowCol["DATA_PRECISION"],
 				DataScale:     rowCol["DATA_SCALE"],
@@ -682,7 +681,7 @@ func (r *Rule) ChangeTableColumnType(sourceSchema, sourceTable, sourceColumn str
 	if err != nil {
 		return columnType, err
 	}
-	originColumnType, buildInColumnType, err := OracleTableColumnMapRule(sourceSchema, sourceTable, column.(o2m.Column), buildinDatatypeNames)
+	originColumnType, buildInColumnType, err := OracleTableColumnMapRule(sourceSchema, sourceTable, column.(Column), buildinDatatypeNames)
 	if err != nil {
 		return columnType, err
 	}
@@ -719,16 +718,16 @@ func (r *Rule) ChangeTableColumnType(sourceSchema, sourceTable, sourceColumn str
 
 	// 优先级
 	// column > table > schema > buildin
-	if len(columnDataTypeMapSlice.([]meta.ColumnRuleMap)) == 0 {
+	if len(columnDataTypeMapSlice) == 0 {
 		return loadDataTypeRuleUsingTableOrSchema(originColumnType, buildInColumnType,
-			tableDataTypeMapSlice.([]meta.TableRuleMap), schemaDataTypeMapSlice.([]meta.SchemaRuleMap)), nil
+			tableDataTypeMapSlice, schemaDataTypeMapSlice), nil
 	}
 
 	// only column rule
-	columnTypeFromColumn := loadColumnTypeRuleOnlyUsingColumn(sourceColumn, originColumnType, buildInColumnType, columnDataTypeMapSlice.([]meta.ColumnRuleMap))
+	columnTypeFromColumn := loadColumnTypeRuleOnlyUsingColumn(sourceColumn, originColumnType, buildInColumnType, columnDataTypeMapSlice)
 
 	// table or schema rule check, return column type
-	columnTypeFromOther := loadDataTypeRuleUsingTableOrSchema(originColumnType, buildInColumnType, tableDataTypeMapSlice.([]meta.TableRuleMap), schemaDataTypeMapSlice.([]meta.SchemaRuleMap))
+	columnTypeFromOther := loadDataTypeRuleUsingTableOrSchema(originColumnType, buildInColumnType, tableDataTypeMapSlice, schemaDataTypeMapSlice)
 
 	// column or other rule check, return column type
 	switch {
@@ -753,7 +752,7 @@ func (r *Rule) ChangeTableColumnDefaultValue(dataDefault string) (string, error)
 		return defaultVal, err
 	}
 
-	return loadColumnDefaultValueRule(dataDefault, defaultValueMapSlice.([]meta.BuildinColumnDefaultval))
+	return loadColumnDefaultValueRule(dataDefault, defaultValueMapSlice)
 }
 
 func (r *Rule) String() string {

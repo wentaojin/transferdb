@@ -226,7 +226,7 @@ func GetAssessDatabaseCompatibleResult(ctx context.Context, metaDB *meta.Meta, o
 		return nil, nil, err
 	}
 	defaultValuesMap := make(map[string]meta.BuildinColumnDefaultval)
-	for _, d := range defaultValues.([]meta.BuildinColumnDefaultval) {
+	for _, d := range defaultValues {
 		defaultValuesMap[common.StringUPPER(d.DefaultValueS)] = d
 	}
 

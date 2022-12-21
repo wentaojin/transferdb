@@ -43,6 +43,12 @@ import (
 // 程序运行
 func Run(ctx context.Context, cfg *config.Config) error {
 	switch strings.ToLower(strings.TrimSpace(cfg.Mode)) {
+	case "prepare":
+		// 表结构转换 - only prepare 阶段
+		err := prepare.TPrepare(ctx, cfg)
+		if err != nil {
+			return err
+		}
 	case "assess":
 		// 收集评估改造成本
 		metaDB, err := meta.NewMetaDBEngine(ctx, cfg.MySQLConfig, cfg.AppConfig.SlowlogThreshold)
@@ -54,12 +60,6 @@ func Run(ctx context.Context, cfg *config.Config) error {
 			return err
 		}
 		err = assess.TAssess(assessO2M.NewAssess(ctx, cfg, metaDB, oracleDB))
-		if err != nil {
-			return err
-		}
-	case "prepare":
-		// 表结构转换 - only prepare 阶段
-		err := prepare.TPrepare(ctx, cfg)
 		if err != nil {
 			return err
 		}

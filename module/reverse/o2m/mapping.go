@@ -19,12 +19,32 @@ import (
 	"fmt"
 	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/database/meta"
-	"github.com/wentaojin/transferdb/module/check/o2m"
 	"strconv"
 	"strings"
 )
 
-func OracleTableColumnMapRule(sourceSchema, sourceTable string, column o2m.Column, buildinDatatypes []meta.BuildinDatatypeRule) (string, string, error) {
+type Column struct {
+	DataType                string
+	CharLength              string
+	CharUsed                string
+	CharacterSet            string
+	Collation               string
+	OracleOriginDataDefault string
+	MySQLOriginDataDefault  string
+	ColumnInfo
+}
+
+type ColumnInfo struct {
+	DataLength        string
+	DataPrecision     string
+	DataScale         string
+	DatetimePrecision string
+	NULLABLE          string
+	DataDefault       string
+	Comment           string
+}
+
+func OracleTableColumnMapRule(sourceSchema, sourceTable string, column Column, buildinDatatypes []meta.BuildinDatatypeRule) (string, string, error) {
 	var (
 		// oracle 表原始字段类型
 		originColumnType string

@@ -48,19 +48,18 @@ func (rw *BuildinColumnDefaultval) ParseSchemaTable() (string, error) {
 	return stmt.Schema.Table, nil
 }
 
-func (rw *BuildinColumnDefaultval) CreateColumnDefaultVal(ctx context.Context, createS interface{}) error {
+func (rw *BuildinColumnDefaultval) CreateColumnDefaultVal(ctx context.Context, createS *BuildinColumnDefaultval) error {
 	table, err := rw.ParseSchemaTable()
 	if err != nil {
 		return err
 	}
-	if err = rw.DB(ctx).Create(createS.(*BuildinColumnDefaultval)).Error; err != nil {
+	if err = rw.DB(ctx).Create(createS).Error; err != nil {
 		return fmt.Errorf("create table [%s] record failed: %v", table, err)
 	}
 	return nil
 }
 
-func (rw *BuildinColumnDefaultval) DetailColumnDefaultVal(ctx context.Context, detailS interface{}) (interface{}, error) {
-	ds := detailS.(*BuildinColumnDefaultval)
+func (rw *BuildinColumnDefaultval) DetailColumnDefaultVal(ctx context.Context, detailS *BuildinColumnDefaultval) ([]BuildinColumnDefaultval, error) {
 	var defaultRuleMap []BuildinColumnDefaultval
 
 	table, err := rw.ParseSchemaTable()
@@ -68,8 +67,8 @@ func (rw *BuildinColumnDefaultval) DetailColumnDefaultVal(ctx context.Context, d
 		return defaultRuleMap, err
 	}
 	if err := rw.DB(ctx).Where("UPPER(db_type_s) = ? AND UPPER(db_type_t) = ?",
-		common.StringUPPER(ds.DBTypeS),
-		common.StringUPPER(ds.DBTypeT)).Find(&defaultRuleMap).Error; err != nil {
+		common.StringUPPER(detailS.DBTypeS),
+		common.StringUPPER(detailS.DBTypeT)).Find(&defaultRuleMap).Error; err != nil {
 		return defaultRuleMap, fmt.Errorf("detail table [%s] record failed: %v", table, err)
 	}
 

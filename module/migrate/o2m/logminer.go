@@ -127,15 +127,15 @@ func filterOracleIncrRecord(
 			// 2、根据元数据表 incr_synce_meta 对应表已经同步写入得 SCN SQL 记录,过滤 Oracle 提交记录 SCN 号，过滤,防止重复写入
 			if currentResetFlag == 0 {
 				if rows.SCN >= sourceTableSCNMAP[strings.ToUpper(rows.TableName)] {
-					if rows.Operation == common.DDLOperation {
+					if rows.Operation == common.MigrateOperationDDL {
 						splitDDL := strings.Split(rows.SQLRedo, ` `)
 						ddl := common.StringsBuilder(splitDDL[0], ` `, splitDDL[1])
-						if strings.ToUpper(ddl) == common.DropTableOperation {
+						if strings.ToUpper(ddl) == common.MigrateOperationDropTable {
 							// 处理 drop table marvin8 AS "BIN$vVWfliIh6WfgU0EEEKzOvg==$0"
 							rows.SQLRedo = strings.Split(strings.ToUpper(rows.SQLRedo), "AS")[0]
 							s.AddData(rows)
 						}
-						if strings.ToUpper(ddl) == common.TruncateTableOperation {
+						if strings.ToUpper(ddl) == common.MigrateOperationTruncateTable {
 							// 处理 truncate table marvin8
 							s.AddData(rows)
 						}
@@ -147,15 +147,15 @@ func filterOracleIncrRecord(
 
 			} else if currentResetFlag == 1 {
 				if rows.SCN > sourceTableSCNMAP[strings.ToUpper(rows.TableName)] {
-					if rows.Operation == common.DDLOperation {
+					if rows.Operation == common.MigrateOperationDDL {
 						splitDDL := strings.Split(rows.SQLRedo, ` `)
 						ddl := common.StringsBuilder(splitDDL[0], ` `, splitDDL[1])
-						if strings.ToUpper(ddl) == common.DropTableOperation {
+						if strings.ToUpper(ddl) == common.MigrateOperationDropTable {
 							// 处理 drop table marvin8 AS "BIN$vVWfliIh6WfgU0EEEKzOvg==$0"
 							rows.SQLRedo = strings.Split(strings.ToUpper(rows.SQLRedo), "AS")[0]
 							s.AddData(rows)
 						}
-						if strings.ToUpper(ddl) == common.TruncateTableOperation {
+						if strings.ToUpper(ddl) == common.MigrateOperationTruncateTable {
 							// 处理 truncate table marvin8
 							s.AddData(rows)
 						}
@@ -165,7 +165,7 @@ func filterOracleIncrRecord(
 				}
 				return nil
 			} else {
-				return fmt.Errorf("filterOracleRedoGreaterOrEqualRecordByTable meet error, isFirstRun value error")
+				return fmt.Errorf("filterOracleIncrRecord meet error, isFirstRun value error")
 			}
 		})
 	}

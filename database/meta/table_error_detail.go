@@ -17,71 +17,104 @@ package meta
 
 import (
 	"context"
+	"fmt"
 	"github.com/wentaojin/transferdb/common"
-	"github.com/wentaojin/transferdb/errors"
+	"gorm.io/gorm"
 )
 
 // 表错误详情
 // 用于 reverse 和 check 模式
-type TableErrorDetail struct {
-	ID               uint   `gorm:"primary_key;autoIncrement;comment:'自增编号'" json:"id"`
-	SourceSchemaName string `gorm:"not null;index:idx_schema_table_mode;comment:'源端 schema'" json:"source_schema_name"`
-	SourceTableName  string `gorm:"not null;index:idx_schema_table_mode;comment:'源端表名'" json:"source_table_name"`
-	RunMode          string `gorm:"not null;index:idx_schema_table_mode;comment:'运行模式'" json:"run_mode"`
-	InfoSources      string `gorm:"not null;comment:'信息来源'" json:"info_sources"`
-	RunStatus        string `gorm:"not null;comment:'运行状态'" json:"run_status"`
-	InfoDetail       string `gorm:"not null;comment:'信息详情'" json:"info_detail"`
-	ErrorDetail      string `gorm:"not null;comment:'错误详情'" json:"error_detail"`
+type ErrorLogDetail struct {
+	ID          uint   `gorm:"primary_key;autoIncrement;comment:'自增编号'" json:"id"`
+	DBTypeS     string `gorm:"type:varchar(15);index:idx_dbtype_st_map;comment:'源数据库类型'" json:"db_type_s"`
+	DBTypeT     string `gorm:"type:varchar(15);index:idx_dbtype_st_map;comment:'目标数据库类型'" json:"db_type_t"`
+	SchemaNameS string `gorm:"not null;index:idx_dbtype_st_map;comment:'源端 schema'" json:"schema_name_s"`
+	TableNameS  string `gorm:"not null;index:idx_dbtype_st_map;comment:'源端表名'" json:"table_name_s"`
+	RunMode     string `gorm:"not null;index:idx_dbtype_st_map;comment:'运行模式'" json:"run_mode"`
+	RunStatus   string `gorm:"not null;comment:'运行状态'" json:"run_status"`
+	InfoDetail  string `gorm:"not null;comment:'信息详情'" json:"info_detail"`
+	ErrorDetail string `gorm:"not null;comment:'错误详情'" json:"error_detail"`
 	*BaseModel
 }
 
-func NewTableErrorDetailModel(m *Meta) *TableErrorDetail {
-	return &TableErrorDetail{
+func NewErrorLogDetailModel(m *Meta) *ErrorLogDetail {
+	return &ErrorLogDetail{
 		BaseModel: &BaseModel{
 			Meta: m,
 		},
 	}
 }
 
-func (rw *TableErrorDetail) Create(ctx context.Context, createS interface{}) error {
-	if err := rw.DB(ctx).Create(createS.(*TableErrorDetail)).Error; err != nil {
-		return errors.NewMSError(errors.TRANSFERDB, errors.DOMAIN_DB, err)
+func (rw *ErrorLogDetail) ParseSchemaTable() (string, error) {
+	stmt := &gorm.Statement{DB: rw.GormDB}
+	err := stmt.Parse(rw)
+	if err != nil {
+		return "", fmt.Errorf("parse struct [ErrorLogDetail] get table_name failed: %v", err)
+	}
+	return stmt.Schema.Table, nil
+}
+
+func (rw *ErrorLogDetail) CreateErrorLog(ctx context.Context, createS *ErrorLogDetail) error {
+	table, err := rw.ParseSchemaTable()
+	if err != nil {
+		return err
+	}
+	if err = rw.DB(ctx).Create(createS).Error; err != nil {
+		return fmt.Errorf("create table [%s] record failed: %v", table, err)
 	}
 	return nil
 }
 
-func (rw *TableErrorDetail) Detail(ctx context.Context, detailS interface{}) (interface{}, error) {
-	ds := detailS.(*TableErrorDetail)
-	var tableErrDetails []TableErrorDetail
-	if err := rw.DB(ctx).Where("UPPER(source_schema_name) = ? AND run_mode = ?",
-		common.StringUPPER(ds.SourceSchemaName), ds.RunMode).Find(&tableErrDetails).Error; err != nil {
-		return tableErrDetails, errors.NewMSError(errors.TRANSFERDB, errors.DOMAIN_DB, err)
+func (rw *ErrorLogDetail) DetailErrorLog(ctx context.Context, detailS *ErrorLogDetail) ([]ErrorLogDetail, error) {
+	var tableErrDetails []ErrorLogDetail
+	table, err := rw.ParseSchemaTable()
+	if err != nil {
+		return tableErrDetails, err
+	}
+	if err = rw.DB(ctx).Where("db_type_s = ? AND db_type_t = ? AND UPPER(schema_name_s) = ? AND run_mode = ?",
+		common.StringUPPER(detailS.DBTypeS),
+		common.StringUPPER(detailS.DBTypeT),
+		common.StringUPPER(detailS.SchemaNameS),
+		detailS.RunMode).Find(&tableErrDetails).Error; err != nil {
+		return tableErrDetails, fmt.Errorf("detail table [%s] record failed: %v", table, err)
 	}
 
 	return tableErrDetails, nil
 }
 
-func (rw *TableErrorDetail) CountsBySchema(ctx context.Context, tableErrDetail interface{}) (int64, error) {
-	ds := tableErrDetail.(*TableErrorDetail)
+func (rw *ErrorLogDetail) CountsErrorLogBySchema(ctx context.Context, detailS *ErrorLogDetail) (int64, error) {
 	var totals int64
-	if err := rw.DB(ctx).Model(&TableErrorDetail{}).
-		Where(`source_schema_name = ? AND run_mode = ?`, common.StringUPPER(ds.SourceSchemaName),
-			ds.RunMode).
-		Count(&totals).Error; err != nil {
+	table, err := rw.ParseSchemaTable()
+	if err != nil {
 		return totals, err
+	}
+	if err = rw.DB(ctx).Model(&ErrorLogDetail{}).
+		Where(`db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND run_mode = ?`,
+			common.StringUPPER(detailS.DBTypeS),
+			common.StringUPPER(detailS.DBTypeT),
+			common.StringUPPER(detailS.SchemaNameS),
+			detailS.RunMode).
+		Count(&totals).Error; err != nil {
+		return totals, fmt.Errorf("get table [%s] counts failed: %v", table, err)
 	}
 	return totals, nil
 }
 
-func (rw *TableErrorDetail) Counts(ctx context.Context, tableErrDetail interface{}) (int64, error) {
-	ds := tableErrDetail.(*TableErrorDetail)
+func (rw *ErrorLogDetail) CountsErrorLogBySchemaTable(ctx context.Context, detailS *ErrorLogDetail) (int64, error) {
 	var totals int64
-	if err := rw.DB(ctx).Model(&TableErrorDetail{}).
-		Where(`source_schema_name = ? AND source_table_name = ? AND run_mode = ?`, common.StringUPPER(ds.SourceSchemaName),
-			common.StringUPPER(ds.SourceTableName),
-			ds.RunMode).
-		Count(&totals).Error; err != nil {
+	table, err := rw.ParseSchemaTable()
+	if err != nil {
 		return totals, err
+	}
+	if err = rw.DB(ctx).Model(&ErrorLogDetail{}).
+		Where(`db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND table_name_s = ? AND run_mode = ?`,
+			common.StringUPPER(detailS.DBTypeS),
+			common.StringUPPER(detailS.DBTypeT),
+			common.StringUPPER(detailS.SchemaNameS),
+			common.StringUPPER(detailS.TableNameS),
+			detailS.RunMode).
+		Count(&totals).Error; err != nil {
+		return totals, fmt.Errorf("get table [%s] counts failed: %v", table, err)
 	}
 	return totals, nil
 }

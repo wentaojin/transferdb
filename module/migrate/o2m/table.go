@@ -45,7 +45,7 @@ func NewTable(ctx context.Context, syncMeta meta.FullSyncMeta,
 
 func (t *Table) GetTableRows() ([]string, []string, error) {
 	startTime := time.Now()
-	querySQL := common.StringsBuilder(`SELECT `, t.SyncMeta.SourceColumnInfo, ` FROM `, t.SyncMeta.SourceSchemaName, `.`, t.SyncMeta.SourceTableName, ` WHERE `, t.SyncMeta.SourceRowidInfo)
+	querySQL := common.StringsBuilder(`SELECT `, t.SyncMeta.ColumnInfoS, ` FROM `, t.SyncMeta.SchemaNameS, `.`, t.SyncMeta.TableNameS, ` WHERE `, t.SyncMeta.RowidInfoS)
 
 	columnFields, rowResults, err := t.Oracle.GetOracleTableRowsData(querySQL, t.BatchSize)
 	if err != nil {
@@ -54,9 +54,9 @@ func (t *Table) GetTableRows() ([]string, []string, error) {
 
 	endTime := time.Now()
 	zap.L().Info("source schema table rowid data extractor finished",
-		zap.String("schema", t.SyncMeta.SourceSchemaName),
-		zap.String("table", t.SyncMeta.SourceTableName),
-		zap.String("rowid", t.SyncMeta.SourceRowidInfo),
+		zap.String("schema", t.SyncMeta.SchemaNameS),
+		zap.String("table", t.SyncMeta.TableNameS),
+		zap.String("rowid", t.SyncMeta.RowidInfoS),
 		zap.String("sql", querySQL),
 		zap.String("cost", endTime.Sub(startTime).String()))
 	return columnFields, rowResults, nil
@@ -76,7 +76,7 @@ type Chunk struct {
 }
 
 func NewChunk(ctx context.Context, syncMeta meta.FullSyncMeta,
-	oracle *oracle.Oracle, mysql *mysql.MySQL,
+	oracle *oracle.Oracle, mysql *mysql.MySQL, metaDB *meta.Meta,
 	sourceColumns, batchResults []string, applyThreads, batchSize int, safeMode bool) *Chunk {
 	return &Chunk{
 		Ctx:           ctx,
@@ -86,6 +86,7 @@ func NewChunk(ctx context.Context, syncMeta meta.FullSyncMeta,
 		SafeMode:      safeMode,
 		MySQL:         mysql,
 		Oracle:        oracle,
+		MetaDB:        metaDB,
 		SourceColumns: sourceColumns,
 		BatchResults:  batchResults,
 	}
@@ -101,22 +102,24 @@ func (t *Chunk) TranslateTableRows() error {
 func (t *Chunk) ApplyTableRows() error {
 	startTime := time.Now()
 	zap.L().Info("target schema table rowid data applier start",
-		zap.String("schema", t.SyncMeta.TargetSchemaName),
-		zap.String("table", t.SyncMeta.TargetTableName),
-		zap.String("rowid", t.SyncMeta.SourceRowidInfo))
+		zap.String("schema", t.SyncMeta.SchemaNameT),
+		zap.String("table", t.SyncMeta.TableNameT),
+		zap.String("rowid", t.SyncMeta.RowidInfoS))
 
 	if len(t.BatchResults) == 0 {
 		zap.L().Warn("oracle schema table rowid data return null rows, skip",
-			zap.String("schema", t.SyncMeta.SourceSchemaName),
-			zap.String("table", t.SyncMeta.SourceTableName),
-			zap.String("info", common.StringsBuilder(`SELECT `, t.SyncMeta.SourceColumnInfo, ` FROM `, t.SyncMeta.SourceSchemaName, `.`, t.SyncMeta.SourceTableName, ` WHERE `, t.SyncMeta.SourceRowidInfo)))
+			zap.String("schema", t.SyncMeta.SchemaNameS),
+			zap.String("table", t.SyncMeta.TableNameS),
+			zap.String("info", common.StringsBuilder(`SELECT `, t.SyncMeta.ColumnInfoS, ` FROM `, t.SyncMeta.SchemaNameS, `.`, t.SyncMeta.TableNameS, ` WHERE `, t.SyncMeta.RowidInfoS)))
 
 		// 清理 full_sync_meta 记录
-		err := meta.NewFullSyncMetaModel(t.MetaDB).DeleteBySchemaTableRowid(t.Ctx, &meta.FullSyncMeta{
-			SourceSchemaName: t.SyncMeta.SourceSchemaName,
-			SourceTableName:  t.SyncMeta.SourceTableName,
-			SourceRowidInfo:  t.SyncMeta.SourceRowidInfo,
-			SyncMode:         common.FullO2MMode,
+		err := meta.NewFullSyncMetaModel(t.MetaDB).DeleteFullSyncMetaBySchemaTableRowid(t.Ctx, &meta.FullSyncMeta{
+			DBTypeS:     common.TaskDBOracle,
+			DBTypeT:     common.TaskDBMySQL,
+			SchemaNameS: t.SyncMeta.SchemaNameS,
+			TableNameS:  t.SyncMeta.TableNameS,
+			RowidInfoS:  t.SyncMeta.RowidInfoS,
+			Mode:        common.FullO2MMode,
 		})
 		if err != nil {
 			return err
@@ -130,8 +133,8 @@ func (t *Chunk) ApplyTableRows() error {
 		valArgs := result
 		g.Go(func() error {
 			err := t.MySQL.WriteMySQLTable(common.StringsBuilder(GenMySQLInsertSQLStmtPrefix(
-				t.SyncMeta.TargetSchemaName,
-				t.SyncMeta.SourceTableName,
+				t.SyncMeta.SchemaNameT,
+				t.SyncMeta.TableNameT,
 				t.SourceColumns,
 				t.SafeMode), valArgs))
 			if err != nil {
@@ -145,11 +148,13 @@ func (t *Chunk) ApplyTableRows() error {
 	}
 
 	// 清理 full_sync_meta 记录
-	err := meta.NewFullSyncMetaModel(t.MetaDB).DeleteBySchemaTableRowid(t.Ctx, &meta.FullSyncMeta{
-		SourceSchemaName: t.SyncMeta.SourceSchemaName,
-		SourceTableName:  t.SyncMeta.SourceTableName,
-		SourceRowidInfo:  t.SyncMeta.SourceRowidInfo,
-		SyncMode:         common.FullO2MMode,
+	err := meta.NewFullSyncMetaModel(t.MetaDB).DeleteFullSyncMetaBySchemaTableRowid(t.Ctx, &meta.FullSyncMeta{
+		DBTypeS:     common.TaskDBOracle,
+		DBTypeT:     common.TaskDBMySQL,
+		SchemaNameS: t.SyncMeta.SchemaNameS,
+		TableNameS:  t.SyncMeta.TableNameS,
+		RowidInfoS:  t.SyncMeta.RowidInfoS,
+		Mode:        common.FullO2MMode,
 	})
 	if err != nil {
 		return err
@@ -157,9 +162,9 @@ func (t *Chunk) ApplyTableRows() error {
 
 	endTime := time.Now()
 	zap.L().Info("target schema table rowid data applier finished",
-		zap.String("schema", t.SyncMeta.TargetSchemaName),
-		zap.String("table", t.SyncMeta.TargetTableName),
-		zap.String("rowid", t.SyncMeta.SourceRowidInfo),
+		zap.String("schema", t.SyncMeta.SchemaNameT),
+		zap.String("table", t.SyncMeta.TableNameT),
+		zap.String("rowid", t.SyncMeta.RowidInfoS),
 		zap.String("cost", endTime.Sub(startTime).String()))
 
 	return nil

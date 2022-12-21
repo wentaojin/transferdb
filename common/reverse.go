@@ -27,18 +27,6 @@ const (
 	// MySQL 字符集
 	MySQLCharacterSet = "UTF8MB4"
 
-	// JSON 格式化某字段
-	ColumnsJSON      = "COLUMN"
-	IndexJSON        = "INDEX"
-	PUConstraintJSON = "PUK"
-	FKConstraintJSON = "FK"
-	CKConstraintJSON = "CK"
-	PartitionJSON    = "PARTITION"
-
-	// 数据全量/实时同步 Oracle 版本要求
-	// 要求 oracle 11g 及以上
-	OracleSYNCRequireDBVersion = "11"
-
 	// 允许 Oracle 表、字段 Collation
 	// 需要 oracle 12.2g 及以上
 	OracleTableColumnCollationDBVersion = "12.2"
@@ -49,6 +37,14 @@ const (
 	// CSV 字符集判断
 	UTF8CharacterSetCSV = "UTF8"
 	GBKCharacterSetCSV  = "GBK"
+
+	// Struct JSON 格式化 -> Check 阶段
+	JSONColumns      = "COLUMN"
+	JSONIndex        = "INDEX"
+	JSONPUConstraint = "PUK"
+	JSONFKConstraint = "FK"
+	JSONCKConstraint = "CK"
+	JSONPartition    = "PARTITION"
 )
 
 /*

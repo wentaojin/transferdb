@@ -164,7 +164,7 @@ func translateAndAddOracleIncrRecord(
 			return fmt.Errorf("does not meet expectations [oracle sql redo is be null], please check")
 		}
 
-		if rows.Operation == common.DDLOperation {
+		if rows.Operation == common.MigrateOperationDDL {
 			zap.L().Info("translator oracle payload", zap.String("ORACLE DDL", rows.SQLRedo))
 		}
 
@@ -242,8 +242,8 @@ func translateOracleToMySQLSQL(oracleSQLRedo, oracleSQLUndo, targetSchema string
 
 	stmt := extractStmt(astNode)
 	switch {
-	case stmt.Operation == common.UpdateOperation:
-		operationType = common.UpdateOperation
+	case stmt.Operation == common.MigrateOperationUpdate:
+		operationType = common.MigrateOperationUpdate
 		astUndoNode, err := parseSQL(oracleSQLUndo)
 		if err != nil {
 			return []string{}, operationType, fmt.Errorf("parse error: %v\n", err.Error())
@@ -282,8 +282,8 @@ func translateOracleToMySQLSQL(oracleSQLRedo, oracleSQLUndo, targetSchema string
 		sqls = append(sqls, deleteSQL)
 		sqls = append(sqls, insertSQL)
 
-	case stmt.Operation == common.InsertOperation:
-		operationType = common.InsertOperation
+	case stmt.Operation == common.MigrateOperationInsert:
+		operationType = common.MigrateOperationInsert
 		stmt.Schema = targetSchema
 
 		var values []string
@@ -302,8 +302,8 @@ func translateOracleToMySQLSQL(oracleSQLRedo, oracleSQLUndo, targetSchema string
 
 		sqls = append(sqls, replaceSQL)
 
-	case stmt.Operation == common.DeleteOperation:
-		operationType = common.DeleteOperation
+	case stmt.Operation == common.MigrateOperationDelete:
+		operationType = common.MigrateOperationDelete
 		stmt.Schema = targetSchema
 		var deleteSQL string
 
@@ -315,15 +315,15 @@ func translateOracleToMySQLSQL(oracleSQLRedo, oracleSQLUndo, targetSchema string
 
 		sqls = append(sqls, deleteSQL)
 
-	case stmt.Operation == common.TruncateOperation:
-		operationType = common.TruncateTableOperation
+	case stmt.Operation == common.MigrateOperationTruncate:
+		operationType = common.MigrateOperationTruncateTable
 		stmt.Schema = targetSchema
 
 		truncateSQL := common.StringsBuilder(`TRUNCATE TABLE `, stmt.Schema, ".", stmt.Table)
 		sqls = append(sqls, truncateSQL)
 
-	case stmt.Operation == common.DropOperation:
-		operationType = common.DropTableOperation
+	case stmt.Operation == common.MigrateOperationDrop:
+		operationType = common.MigrateOperationDropTable
 		stmt.Schema = targetSchema
 
 		dropSQL := common.StringsBuilder(`DROP TABLE `, stmt.Schema, ".", stmt.Table)

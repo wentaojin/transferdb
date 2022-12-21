@@ -23,7 +23,6 @@ import (
 	"github.com/wentaojin/transferdb/database/meta"
 	"github.com/wentaojin/transferdb/database/mysql"
 	"github.com/wentaojin/transferdb/database/oracle"
-	"github.com/wentaojin/transferdb/module/check/o2m"
 	"go.uber.org/zap"
 	"regexp"
 	"strings"
@@ -131,6 +130,9 @@ func (r *Rule) GenCreateTableDDL() (reverseDDL string, checkKeyDDL []string, for
 			foreignKeyDDL = append(foreignKeyDDL, addFkSQL)
 		}
 	}
+
+	zap.L().Info("reverse oracle table struct", zap.String("table", r.String()))
+
 	return reverseDDL, checkKeyDDL, foreignKeyDDL, compatibleDDL, nil
 }
 
@@ -339,12 +341,12 @@ func (r *Rule) GenTableColumn() (columnMetas []string, err error) {
 			columnName      string
 		)
 		// 字段排序规则检查
-		if columnCollationMapVal, ok := common.MySQLDBCollationMap[strings.ToLower(rowCol["columnCollation_NAME"])]; ok {
+		if columnCollationMapVal, ok := common.MySQLDBCollationMap[strings.ToLower(rowCol["COLLATION_NAME"])]; ok {
 			if common.VersionOrdinal(oracleDBVersion) >= common.VersionOrdinal(common.OracleTableColumnCollationDBVersion) {
 				// oracle 12.2 版本及以上，字符集 columnCollation 开启需激活 extended 特性
 				// columnCollation BINARY_CS : Both case and accent sensitive. This is default if no extension is used.
 				switch {
-				case strings.EqualFold(rowCol["columnCollation_NAME"], "utf8mb4_bin") || strings.EqualFold(rowCol["columnCollation_NAME"], "utf8_bin"):
+				case strings.EqualFold(rowCol["COLLATION_NAME"], "utf8mb4_bin") || strings.EqualFold(rowCol["COLLATION_NAME"], "utf8_bin"):
 					columnCollationArr := strings.Split(columnCollationMapVal, "/")
 					if oracleExtendedMode {
 						columnCollation = columnCollationArr[0]
@@ -363,14 +365,14 @@ func (r *Rule) GenTableColumn() (columnMetas []string, err error) {
 			}
 		} else {
 			switch {
-			case !strings.EqualFold(rowCol["columnCollation_NAME"], "UNKNOWN"):
-				return columnMetas, fmt.Errorf(`table json [%v], error on generate mysql table column columnCollation [%v]`, r.String(), rowCol["columnCollation_NAME"])
-			case strings.EqualFold(rowCol["columnCollation_NAME"], "UNKNOWN"):
+			case !strings.EqualFold(rowCol["COLLATION_NAME"], "UNKNOWN"):
+				return columnMetas, fmt.Errorf(`table json [%v], error on generate mysql table column column collation [%v]`, r.String(), rowCol["COLLATION_NAME"])
+			case strings.EqualFold(rowCol["COLLATION_NAME"], "UNKNOWN"):
 				// column columnCollation value UNKNOWN, 代表是非字符串数据类型
 				// skip ignore
 				columnCollation = ""
 			default:
-				return columnMetas, fmt.Errorf("mysql table column meta generate failed, column [%s] not support columnCollation [%s]", rowCol["COLUMN_NAME"], rowCol["columnCollation_NAME"])
+				return columnMetas, fmt.Errorf("mysql table column meta generate failed, column [%s] not support column collation [%s]", rowCol["COLUMN_NAME"], rowCol["COLLATION_NAME"])
 			}
 		}
 
@@ -409,9 +411,9 @@ func (r *Rule) GenTableColumn() (columnMetas []string, err error) {
 		}
 
 		columnName = rowCol["COLUMN_NAME"]
-		columnType, err = r.ChangeTableColumnType(r.SourceSchema, r.SourceTableName, columnName, o2m.Column{
+		columnType, err = r.ChangeTableColumnType(r.SourceSchema, r.SourceTableName, columnName, Column{
 			DataType: rowCol["DATA_TYPE"],
-			ColumnInfo: o2m.ColumnInfo{
+			ColumnInfo: ColumnInfo{
 				DataLength:        rowCol["DATA_LENGTH"],
 				DataPrecision:     rowCol["DATA_PRECISION"],
 				DataScale:         rowCol["DATA_SCALE"],
@@ -503,7 +505,14 @@ func (r *Rule) ChangeTableName() string {
 func (r *Rule) ChangeTableColumnType(sourceSchema, sourceTable, sourceColumn string, column interface{}) (string, error) {
 	var columnType string
 	// 获取内置映射规则
-	originColumnType, buildInColumnType, err := MySQLTableColumnMapRule(sourceSchema, sourceTable, column.(o2m.Column))
+	buildinDatatypeNames, err := meta.NewBuildinDatatypeRuleModel(r.MetaDB).BatchQueryBuildinDatatype(r.Ctx, &meta.BuildinDatatypeRule{
+		DBTypeS: common.TaskDBMySQL,
+		DBTypeT: common.TaskDBOracle,
+	})
+	if err != nil {
+		return columnType, err
+	}
+	originColumnType, buildInColumnType, err := MySQLTableColumnMapRule(sourceSchema, sourceTable, column.(Column), buildinDatatypeNames)
 	if err != nil {
 		return columnType, err
 	}
@@ -540,16 +549,16 @@ func (r *Rule) ChangeTableColumnType(sourceSchema, sourceTable, sourceColumn str
 
 	// 优先级
 	// column > table > schema > buildin
-	if len(columnDataTypeMapSlice.([]meta.ColumnRuleMap)) == 0 {
+	if len(columnDataTypeMapSlice) == 0 {
 		return loadDataTypeRuleUsingTableOrSchema(originColumnType, buildInColumnType,
-			tableDataTypeMapSlice.([]meta.TableRuleMap), schemaDataTypeMapSlice.([]meta.SchemaRuleMap)), nil
+			tableDataTypeMapSlice, schemaDataTypeMapSlice), nil
 	}
 
 	// only column rule
-	columnTypeFromColumn := loadColumnTypeRuleOnlyUsingColumn(sourceColumn, originColumnType, buildInColumnType, columnDataTypeMapSlice.([]meta.ColumnRuleMap))
+	columnTypeFromColumn := loadColumnTypeRuleOnlyUsingColumn(sourceColumn, originColumnType, buildInColumnType, columnDataTypeMapSlice)
 
 	// table or schema rule check, return column type
-	columnTypeFromOther := loadDataTypeRuleUsingTableOrSchema(originColumnType, buildInColumnType, tableDataTypeMapSlice.([]meta.TableRuleMap), schemaDataTypeMapSlice.([]meta.SchemaRuleMap))
+	columnTypeFromOther := loadDataTypeRuleUsingTableOrSchema(originColumnType, buildInColumnType, tableDataTypeMapSlice, schemaDataTypeMapSlice)
 
 	// column or other rule check, return column type
 	switch {
@@ -573,7 +582,7 @@ func (r *Rule) ChangeTableColumnDefaultValue(dataDefault string) (string, error)
 	if err != nil {
 		return defaultVal, err
 	}
-	return loadColumnDefaultValueRule(dataDefault, defaultValueMapSlice.([]meta.BuildinColumnDefaultval)), nil
+	return loadColumnDefaultValueRule(dataDefault, defaultValueMapSlice), nil
 }
 
 func (r *Rule) String() string {

@@ -29,8 +29,8 @@ import (
 	"time"
 )
 
-func NewO2MIncr(ctx context.Context, cfg *config.Config, oracle *oracle.Oracle, mysql *mysql.MySQL, metaDB *meta.Meta) *O2M {
-	return &O2M{
+func NewO2MIncr(ctx context.Context, cfg *config.Config, oracle *oracle.Oracle, mysql *mysql.MySQL, metaDB *meta.Meta) *Migrate {
+	return &Migrate{
 		ctx:    ctx,
 		cfg:    cfg,
 		oracle: oracle,
@@ -39,7 +39,7 @@ func NewO2MIncr(ctx context.Context, cfg *config.Config, oracle *oracle.Oracle, 
 	}
 }
 
-func (r *O2M) NewIncr() error {
+func (r *Migrate) NewIncr() error {
 	zap.L().Info("oracle to mysql increment sync table data start", zap.String("schema", r.cfg.OracleConfig.SchemaName))
 
 	// 判断上游 Oracle 数据库版本
@@ -48,7 +48,7 @@ func (r *O2M) NewIncr() error {
 	if err != nil {
 		return err
 	}
-	if common.VersionOrdinal(oraDBVersion) < common.VersionOrdinal(common.OracleSYNCRequireDBVersion) {
+	if common.VersionOrdinal(oraDBVersion) < common.VersionOrdinal(common.RequireOracleDBVersion) {
 		return fmt.Errorf("oracle db version [%v] is less than 11g, can't be using transferdb tools", oraDBVersion)
 	}
 
@@ -58,13 +58,15 @@ func (r *O2M) NewIncr() error {
 		return err
 	}
 
-	// 判断 table_error_detail 是否存在错误记录，是否可进行 ALL
-	errTotals, err := meta.NewTableErrorDetailModel(r.metaDB).CountsBySchema(r.ctx, &meta.TableErrorDetail{
-		SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
-		RunMode:          common.AllO2MMode,
+	// 判断 error_log_detail 是否存在错误记录，是否可进行 ALL
+	errTotals, err := meta.NewErrorLogDetailModel(r.metaDB).CountsErrorLogBySchema(r.ctx, &meta.ErrorLogDetail{
+		DBTypeS:     common.TaskDBOracle,
+		DBTypeT:     common.TaskDBMySQL,
+		SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+		RunMode:     common.AllO2MMode,
 	})
 	if errTotals > 0 || err != nil {
-		return fmt.Errorf("incr schema [%s] table mode [%s] task failed: %v, table [table_error_detail] exist failed error, please clear and rerunning", strings.ToUpper(r.cfg.OracleConfig.SchemaName), common.CompareO2MMode, err)
+		return fmt.Errorf("incr schema [%s] table mode [%s] task failed: %v, table [error_log_detail] exist failed error, please clear and rerunning", strings.ToUpper(r.cfg.OracleConfig.SchemaName), common.CompareO2MMode, err)
 	}
 
 	// 全量数据导出导入，初始化全量元数据表以及导入完成初始化增量元数据表
@@ -72,9 +74,11 @@ func (r *O2M) NewIncr() error {
 		existTableList, isNotExistTableList []string
 	)
 	for _, tbl := range exporters {
-		counts, err := meta.NewIncrSyncMetaModel(r.metaDB).CountsBySchemaTable(r.ctx, &meta.IncrSyncMeta{
-			SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
-			SourceTableName:  tbl,
+		counts, err := meta.NewIncrSyncMetaModel(r.metaDB).CountsIncrSyncMetaBySchemaTable(r.ctx, &meta.IncrSyncMeta{
+			DBTypeS:     common.TaskDBOracle,
+			DBTypeT:     common.TaskDBMySQL,
+			SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+			TableNameS:  tbl,
 		})
 		if err != nil {
 			return err
@@ -95,15 +99,17 @@ func (r *O2M) NewIncr() error {
 			// 根据 wait_sync_meta 数据记录判断表全量是否完成
 			var panicTables []string
 			for _, t := range exporters {
-				waitSyncMetas, err := meta.NewWaitSyncMetaModel(r.metaDB).DetailBySchemaTableSCN(r.ctx, &meta.WaitSyncMeta{
-					SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
-					SourceTableName:  common.StringUPPER(t),
-					SyncMode:         common.AllO2MMode,
+				waitSyncMetas, err := meta.NewWaitSyncMetaModel(r.metaDB).DetailWaitSyncMetaBySchemaTableSCN(r.ctx, &meta.WaitSyncMeta{
+					DBTypeS:     common.TaskDBOracle,
+					DBTypeT:     common.TaskDBMySQL,
+					SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+					TableNameS:  common.StringUPPER(t),
+					Mode:        common.AllO2MMode,
 				})
 				if err != nil {
 					return err
 				}
-				if len(waitSyncMetas.([]meta.WaitSyncMeta)) == 0 {
+				if len(waitSyncMetas) == 0 {
 					panicTables = append(panicTables, t)
 				}
 			}
@@ -134,21 +140,25 @@ func (r *O2M) NewIncr() error {
 
 		// 全量任务结束，写入增量源数据表起始 SCN 号
 		//根据配置文件生成同步表元数据 [incr_sync_meta]
-		tableMetas, err := meta.NewWaitSyncMetaModel(r.metaDB).DetailBySchema(r.ctx, &meta.WaitSyncMeta{
-			SourceSchemaName: r.cfg.OracleConfig.SchemaName,
-			SyncMode:         common.AllO2MMode})
+		tableMetas, err := meta.NewWaitSyncMetaModel(r.metaDB).DetailWaitSyncMetaBySchema(r.ctx, &meta.WaitSyncMeta{
+			DBTypeS:     common.TaskDBOracle,
+			DBTypeT:     common.TaskDBMySQL,
+			SchemaNameS: r.cfg.OracleConfig.SchemaName,
+			Mode:        common.AllO2MMode})
 		if err != nil {
 			return err
 		}
 		var incrSyncMetas []meta.IncrSyncMeta
-		if len(tableMetas.([]meta.WaitSyncMeta)) > 0 {
-			for _, table := range tableMetas.([]meta.WaitSyncMeta) {
+		if len(tableMetas) > 0 {
+			for _, table := range tableMetas {
 				incrSyncMetas = append(incrSyncMetas, meta.IncrSyncMeta{
-					GlobalSCN:        table.FullGlobalSCN,
-					SourceSchemaName: common.StringUPPER(table.SourceSchemaName),
-					SourceTableName:  common.StringUPPER(table.SourceTableName),
-					SourceTableSCN:   table.FullGlobalSCN,
-					IsPartition:      table.IsPartition,
+					DBTypeS:     common.TaskDBOracle,
+					DBTypeT:     common.TaskDBMySQL,
+					GlobalScnS:  table.FullGlobalSCN,
+					SchemaNameS: common.StringUPPER(table.SchemaNameS),
+					TableNameS:  common.StringUPPER(table.TableNameS),
+					TableScnS:   table.FullGlobalSCN,
+					IsPartition: table.IsPartition,
 				})
 			}
 		}
@@ -164,7 +174,7 @@ func (r *O2M) NewIncr() error {
 	return fmt.Errorf("increment sync taskflow condition isn't match, can't sync")
 }
 
-func (r *O2M) syncTableIncrRecord() error {
+func (r *Migrate) syncTableIncrRecord() error {
 	// 获取增量所需得日志文件
 	logFiles, err := r.getTableIncrRecordLogfile()
 	if err != nil {
@@ -193,11 +203,15 @@ func (r *O2M) syncTableIncrRecord() error {
 			zap.Uint64("logfile end scn", logFileEndSCN))
 
 		// 获取增量元数据表内所需同步表信息
-		incrSyncMetas, err := meta.NewIncrSyncMetaModel(r.metaDB).DetailBySchema(r.ctx, r.cfg.OracleConfig.SchemaName)
+		incrSyncMetas, err := meta.NewIncrSyncMetaModel(r.metaDB).DetailIncrSyncMetaBySchema(r.ctx, &meta.IncrSyncMeta{
+			DBTypeS:     common.TaskDBOracle,
+			DBTypeT:     common.TaskDBMySQL,
+			SchemaNameS: r.cfg.OracleConfig.SchemaName,
+		})
 		if err != nil {
 			return err
 		}
-		if len(incrSyncMetas.([]meta.IncrSyncMeta)) == 0 {
+		if len(incrSyncMetas) == 0 {
 			return fmt.Errorf("mysql increment mete table [incr_sync_meta] can't null")
 		}
 
@@ -206,13 +220,16 @@ func (r *O2M) syncTableIncrRecord() error {
 			transferTableSlice   []string
 		)
 		transferTableMetaMap = make(map[string]uint64)
-		for _, tbl := range incrSyncMetas.([]meta.IncrSyncMeta) {
-			transferTableMetaMap[strings.ToUpper(tbl.SourceTableName)] = tbl.SourceTableSCN
-			transferTableSlice = append(transferTableSlice, strings.ToUpper(tbl.SourceTableName))
+		for _, tbl := range incrSyncMetas {
+			transferTableMetaMap[strings.ToUpper(tbl.TableNameS)] = tbl.TableScnS
+			transferTableSlice = append(transferTableSlice, strings.ToUpper(tbl.TableNameS))
 		}
 
 		// 获取 logminer query 起始最小 SCN
-		minSourceTableSCN, err := meta.NewIncrSyncMetaModel(r.metaDB).MinSourceTableSCNBySchema(r.ctx, &meta.IncrSyncMeta{SourceSchemaName: r.cfg.OracleConfig.SchemaName})
+		minSourceTableSCN, err := meta.NewIncrSyncMetaModel(r.metaDB).GetIncrSyncMetaMinTableScnSBySchema(r.ctx, &meta.IncrSyncMeta{
+			DBTypeS:     common.TaskDBOracle,
+			DBTypeT:     common.TaskDBMySQL,
+			SchemaNameS: r.cfg.OracleConfig.SchemaName})
 		if err != nil {
 			return err
 		}
@@ -272,13 +289,13 @@ func (r *O2M) syncTableIncrRecord() error {
 						transferTableSlice,
 						transferTableMetaMap,
 						r.cfg.AllConfig.FilterThreads,
-						common.CurrentResetFlag,
+						common.MigrateCurrentResetFlag,
 					)
 					if err != nil {
 						return err
 					}
-					zap.L().Warn("oracle current redo log reset flag", zap.Int("CurrentResetFlag", common.CurrentResetFlag))
-					common.CurrentResetFlag = 1
+					zap.L().Warn("oracle current redo log reset flag", zap.Int("MigrateCurrentResetFlag", common.MigrateCurrentResetFlag))
+					common.MigrateCurrentResetFlag = 1
 				} else {
 					logminerContentMap, err = filterOracleIncrRecord(
 						rowsResult,
@@ -300,7 +317,10 @@ func (r *O2M) syncTableIncrRecord() error {
 
 					if logFileStartSCN == currentRedoLogFirstChange && log["LOG_FILE"] == currentRedoLogFileName {
 						// 当前所有日志文件内容应用完毕，判断是否直接更新 GLOBAL_SCN 至当前重做日志文件起始 SCN
-						err = meta.NewCommonModel(r.metaDB).UpdateIncrSyncMetaSCNByCurrentRedo(r.ctx, r.cfg.OracleConfig.SchemaName,
+						err = meta.NewCommonModel(r.metaDB).UpdateIncrSyncMetaSCNByCurrentRedo(r.ctx,
+							common.TaskDBOracle,
+							common.TaskDBMySQL,
+							r.cfg.OracleConfig.SchemaName,
 							currentRedoLogMaxSCN,
 							logFileStartSCN,
 							logFileEndSCN)
@@ -310,6 +330,8 @@ func (r *O2M) syncTableIncrRecord() error {
 					} else {
 						// 当前所有日志文件内容应用完毕，直接更新 GLOBAL_SCN 至日志文件结束 SCN
 						err = meta.NewCommonModel(r.metaDB).UpdateIncrSyncMetaSCNByNonCurrentRedo(r.ctx,
+							common.TaskDBOracle,
+							common.TaskDBMySQL,
 							r.cfg.OracleConfig.SchemaName,
 							currentRedoLogMaxSCN,
 							logFileStartSCN,
@@ -342,6 +364,8 @@ func (r *O2M) syncTableIncrRecord() error {
 				}
 				// 当前所有日志文件内容应用完毕，直接更新 GLOBAL_SCN 至日志文件结束 SCN
 				err = meta.NewCommonModel(r.metaDB).UpdateIncrSyncMetaSCNByArchivedLog(r.ctx,
+					common.TaskDBOracle,
+					common.TaskDBMySQL,
 					r.cfg.OracleConfig.SchemaName,
 					logFileEndSCN,
 					transferTableSlice)
@@ -359,6 +383,8 @@ func (r *O2M) syncTableIncrRecord() error {
 			if logFileStartSCN == currentRedoLogFirstChange && log["LOG_FILE"] == currentRedoLogFileName {
 				// 当前所有日志文件内容应用完毕，判断是否直接更新 GLOBAL_SCN 至当前重做日志文件起始 SCN
 				err = meta.NewCommonModel(r.metaDB).UpdateIncrSyncMetaSCNByCurrentRedo(r.ctx,
+					common.TaskDBOracle,
+					common.TaskDBMySQL,
 					r.cfg.OracleConfig.SchemaName,
 					currentRedoLogMaxSCN,
 					logFileStartSCN,
@@ -369,6 +395,8 @@ func (r *O2M) syncTableIncrRecord() error {
 			} else {
 				// 当前所有日志文件内容应用完毕，判断是否更新 GLOBAL_SCN 至日志文件结束 SCN
 				err = meta.NewCommonModel(r.metaDB).UpdateIncrSyncMetaSCNByNonCurrentRedo(r.ctx,
+					common.TaskDBOracle,
+					common.TaskDBMySQL,
 					r.cfg.OracleConfig.SchemaName,
 					currentRedoLogMaxSCN,
 					logFileStartSCN,
@@ -381,6 +409,8 @@ func (r *O2M) syncTableIncrRecord() error {
 		} else {
 			// 当前所有日志文件内容应用完毕，直接更新 GLOBAL_SCN 至日志文件结束 SCN
 			err = meta.NewCommonModel(r.metaDB).UpdateIncrSyncMetaSCNByArchivedLog(r.ctx,
+				common.TaskDBOracle,
+				common.TaskDBMySQL,
 				r.cfg.OracleConfig.SchemaName,
 				logFileEndSCN,
 				transferTableSlice)
@@ -394,12 +424,14 @@ func (r *O2M) syncTableIncrRecord() error {
 	return nil
 }
 
-func (r *O2M) getTableIncrRecordLogfile() ([]map[string]string, error) {
+func (r *Migrate) getTableIncrRecordLogfile() ([]map[string]string, error) {
 	var logFiles []map[string]string
 
 	// 获取增量表起始最小 SCN 号
-	globalSCN, err := meta.NewIncrSyncMetaModel(r.metaDB).MinGlobalSCNBySchema(r.ctx, &meta.IncrSyncMeta{
-		SourceSchemaName: r.cfg.OracleConfig.SchemaName,
+	globalSCN, err := meta.NewIncrSyncMetaModel(r.metaDB).GetIncrSyncMetaMinGlobalScnSBySchema(r.ctx, &meta.IncrSyncMeta{
+		DBTypeS:     common.TaskDBOracle,
+		DBTypeT:     common.TaskDBMySQL,
+		SchemaNameS: r.cfg.OracleConfig.SchemaName,
 	})
 	if err != nil {
 		return logFiles, err

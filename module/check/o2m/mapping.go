@@ -164,7 +164,24 @@ func ChangeTableColumnType(ctx context.Context, metaDB *meta.Meta, sourceSchema,
 	if err != nil {
 		return columnType, err
 	}
-	originColumnType, buildInColumnType, err := reverseO2M.OracleTableColumnMapRule(sourceSchema, sourceTableName, columnINFO, buildinDatatypeNames)
+	originColumnType, buildInColumnType, err := reverseO2M.OracleTableColumnMapRule(sourceSchema, sourceTableName, reverseO2M.Column{
+		DataType:                columnINFO.DataType,
+		CharLength:              columnINFO.CharLength,
+		CharUsed:                columnINFO.CharUsed,
+		CharacterSet:            columnINFO.CharacterSet,
+		Collation:               columnINFO.Collation,
+		OracleOriginDataDefault: columnINFO.OracleOriginDataDefault,
+		MySQLOriginDataDefault:  columnINFO.MySQLOriginDataDefault,
+		ColumnInfo: reverseO2M.ColumnInfo{
+			DataLength:        columnINFO.DataLength,
+			DataPrecision:     columnINFO.DataPrecision,
+			DataScale:         columnINFO.DataScale,
+			DatetimePrecision: columnINFO.DatetimePrecision,
+			NULLABLE:          columnINFO.NULLABLE,
+			DataDefault:       columnINFO.DataDefault,
+			Comment:           columnINFO.Comment,
+		},
+	}, buildinDatatypeNames)
 	if err != nil {
 		return columnType, err
 	}
@@ -201,16 +218,16 @@ func ChangeTableColumnType(ctx context.Context, metaDB *meta.Meta, sourceSchema,
 
 	// 优先级
 	// column > table > schema > buildin
-	if len(columnDataTypeMapSlice.([]meta.ColumnRuleMap)) == 0 {
+	if len(columnDataTypeMapSlice) == 0 {
 		return loadDataTypeRuleUsingTableOrSchema(originColumnType, buildInColumnType,
-			tableDataTypeMapSlice.([]meta.TableRuleMap), schemaDataTypeMapSlice.([]meta.SchemaRuleMap)), nil
+			tableDataTypeMapSlice, schemaDataTypeMapSlice), nil
 	}
 
 	// only column rule
-	columnTypeFromColumn := loadColumnTypeRuleOnlyUsingColumn(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice.([]meta.ColumnRuleMap))
+	columnTypeFromColumn := loadColumnTypeRuleOnlyUsingColumn(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice)
 
 	// table or schema rule check, return column type
-	columnTypeFromOther := loadDataTypeRuleUsingTableOrSchema(originColumnType, buildInColumnType, tableDataTypeMapSlice.([]meta.TableRuleMap), schemaDataTypeMapSlice.([]meta.SchemaRuleMap))
+	columnTypeFromOther := loadDataTypeRuleUsingTableOrSchema(originColumnType, buildInColumnType, tableDataTypeMapSlice, schemaDataTypeMapSlice)
 
 	// column or other rule check, return column type
 	switch {
@@ -239,7 +256,7 @@ func ChangeTableColumnDefaultValue(ctx context.Context, metaDB *meta.Meta, dataD
 	if err != nil {
 		return dataDefault, err
 	}
-	return loadColumnDefaultValueRule(dataDefault, defaultValueMapSlice.([]meta.BuildinColumnDefaultval)), nil
+	return loadColumnDefaultValueRule(dataDefault, defaultValueMapSlice), nil
 }
 
 func loadColumnDefaultValueRule(defaultValue string, defaultValueMapSlice []meta.BuildinColumnDefaultval) string {

@@ -321,8 +321,8 @@ func (c *Check) CheckPrimaryAndUniqueKey() (string, error) {
 	// 表主键/唯一约束检查
 	zap.L().Info("check table",
 		zap.String("table pk and uk constraint check", fmt.Sprintf("%s.%s", c.OracleTableINFO.SchemaName, c.OracleTableINFO.TableName)),
-		zap.String("oracle struct", c.OracleTableINFO.String(common.PUConstraintJSON)),
-		zap.String("mysql struct", c.MySQLTableINFO.String(common.PUConstraintJSON)))
+		zap.String("oracle struct", c.OracleTableINFO.String(common.JSONPUConstraint)),
+		zap.String("mysql struct", c.MySQLTableINFO.String(common.JSONPUConstraint)))
 	// 函数 utils.DiffStructArray 都忽略 structA 空，但 structB 存在情况
 	addDiffPU, _, isOK := common.DiffStructArray(c.OracleTableINFO.PUConstraints, c.MySQLTableINFO.PUConstraints)
 
@@ -371,8 +371,8 @@ func (c *Check) CheckForeignKey() (string, error) {
 	if !isTiDB {
 		zap.L().Info("check table",
 			zap.String("table fk constraint check", fmt.Sprintf("%s.%s", c.OracleTableINFO.SchemaName, c.OracleTableINFO.TableName)),
-			zap.String("oracle struct", c.OracleTableINFO.String(common.FKConstraintJSON)),
-			zap.String("mysql struct", c.MySQLTableINFO.String(common.FKConstraintJSON)))
+			zap.String("oracle struct", c.OracleTableINFO.String(common.JSONFKConstraint)),
+			zap.String("mysql struct", c.MySQLTableINFO.String(common.JSONFKConstraint)))
 
 		// 外键约束检查
 		addDiffFK, _, isOK := common.DiffStructArray(c.OracleTableINFO.ForeignConstraints, c.MySQLTableINFO.ForeignConstraints)
@@ -421,8 +421,8 @@ func (c *Check) CheckCheckKey() (string, error) {
 		if common.VersionOrdinal(dbVersion) > common.VersionOrdinal(common.MySQLCheckConsVersion) {
 			zap.L().Info("check table",
 				zap.String("table ck constraint check", fmt.Sprintf("%s.%s", c.OracleTableINFO.SchemaName, c.OracleTableINFO.TableName)),
-				zap.String("oracle struct", c.OracleTableINFO.String(common.CKConstraintJSON)),
-				zap.String("mysql struct", c.MySQLTableINFO.String(common.CKConstraintJSON)))
+				zap.String("oracle struct", c.OracleTableINFO.String(common.JSONCKConstraint)),
+				zap.String("mysql struct", c.MySQLTableINFO.String(common.JSONCKConstraint)))
 			// 检查约束检查
 			addDiffCK, _, isOK := common.DiffStructArray(c.OracleTableINFO.CheckConstraints, c.MySQLTableINFO.CheckConstraints)
 			if len(addDiffCK) != 0 && !isOK {
@@ -456,8 +456,8 @@ func (c *Check) CheckIndex() (string, error) {
 	// 索引检查
 	zap.L().Info("check table",
 		zap.String("table indexes check", fmt.Sprintf("%s.%s", c.OracleTableINFO.SchemaName, c.OracleTableINFO.TableName)),
-		zap.String("oracle struct", c.OracleTableINFO.String(common.IndexJSON)),
-		zap.String("mysql struct", c.MySQLTableINFO.String(common.IndexJSON)))
+		zap.String("oracle struct", c.OracleTableINFO.String(common.JSONIndex)),
+		zap.String("mysql struct", c.MySQLTableINFO.String(common.JSONIndex)))
 
 	var builder strings.Builder
 	var createIndexSQL []string
@@ -563,8 +563,8 @@ func (c *Check) CheckPartitionTable() (string, error) {
 	if c.MySQLTableINFO.IsPartition && c.OracleTableINFO.IsPartition {
 		zap.L().Info("check table",
 			zap.String("table partition check", fmt.Sprintf("%s.%s", c.OracleTableINFO.SchemaName, c.OracleTableINFO.TableName)),
-			zap.String("oracle struct", c.OracleTableINFO.String(common.PartitionJSON)),
-			zap.String("mysql struct", c.MySQLTableINFO.String(common.PartitionJSON)))
+			zap.String("oracle struct", c.OracleTableINFO.String(common.JSONPartition)),
+			zap.String("mysql struct", c.MySQLTableINFO.String(common.JSONPartition)))
 
 		addDiffParts, _, isOK := common.DiffStructArray(c.OracleTableINFO.Partitions, c.MySQLTableINFO.Partitions)
 		if len(addDiffParts) != 0 && !isOK {
@@ -636,8 +636,8 @@ func (c *Check) CheckColumn() (string, error) {
 	if len(tableRowArray) != 0 && len(diffColumnMsgs) != 0 {
 		zap.L().Info("check table",
 			zap.String("table column info check, generate fixed sql", fmt.Sprintf("%s.%s", c.OracleTableINFO.SchemaName, c.OracleTableINFO.TableName)),
-			zap.String("oracle struct", c.OracleTableINFO.String(common.ColumnsJSON)),
-			zap.String("mysql struct", c.MySQLTableINFO.String(common.ColumnsJSON)))
+			zap.String("oracle struct", c.OracleTableINFO.String(common.JSONColumns)),
+			zap.String("mysql struct", c.MySQLTableINFO.String(common.JSONColumns)))
 
 		textTable := table.NewWriter()
 		textTable.SetStyle(table.StyleLight)

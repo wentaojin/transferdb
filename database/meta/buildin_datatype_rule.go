@@ -515,3 +515,199 @@ func (rw *BuildinDatatypeRule) InitO2MBuildinDatatypeRule(ctx context.Context) e
 		DoNothing: true,
 	}).CreateInBatches(buildinDataTypeR, 20).Error
 }
+
+func (rw *BuildinDatatypeRule) InitM2OBuildinDatatypeRule(ctx context.Context) error {
+	var buildinDataTypeR []*BuildinDatatypeRule
+	/*
+		M2O Build-IN Compatible Rule
+	*/
+	// mysql column datatype name
+	buildinDataTypeR = append(buildinDataTypeR, &BuildinDatatypeRule{
+		DBTypeS:       common.TaskDBMySQL,
+		DBTypeT:       common.TaskDBOracle,
+		DatatypeNameS: common.BuildInMySQLDatatypeBigint,
+		DatatypeNameT: common.BuildInMySQLM2ODatatypeNameMap[common.BuildInMySQLDatatypeBigint],
+	})
+	buildinDataTypeR = append(buildinDataTypeR, &BuildinDatatypeRule{
+		DBTypeS:       common.TaskDBMySQL,
+		DBTypeT:       common.TaskDBOracle,
+		DatatypeNameS: common.BuildInMySQLDatatypeDecimal,
+		DatatypeNameT: common.BuildInMySQLM2ODatatypeNameMap[common.BuildInMySQLDatatypeDecimal],
+	})
+	buildinDataTypeR = append(buildinDataTypeR, &BuildinDatatypeRule{
+		DBTypeS:       common.TaskDBMySQL,
+		DBTypeT:       common.TaskDBOracle,
+		DatatypeNameS: common.BuildInMySQLDatatypeDouble,
+		DatatypeNameT: common.BuildInMySQLM2ODatatypeNameMap[common.BuildInMySQLDatatypeDouble],
+	})
+	buildinDataTypeR = append(buildinDataTypeR, &BuildinDatatypeRule{
+		DBTypeS:       common.TaskDBMySQL,
+		DBTypeT:       common.TaskDBOracle,
+		DatatypeNameS: common.BuildInMySQLDatatypeDoublePrecision,
+		DatatypeNameT: common.BuildInMySQLM2ODatatypeNameMap[common.BuildInMySQLDatatypeDoublePrecision],
+	})
+	buildinDataTypeR = append(buildinDataTypeR, &BuildinDatatypeRule{
+		DBTypeS:       common.TaskDBMySQL,
+		DBTypeT:       common.TaskDBOracle,
+		DatatypeNameS: common.BuildInMySQLDatatypeFloat,
+		DatatypeNameT: common.BuildInMySQLM2ODatatypeNameMap[common.BuildInMySQLDatatypeFloat],
+	})
+	buildinDataTypeR = append(buildinDataTypeR, &BuildinDatatypeRule{
+		DBTypeS:       common.TaskDBMySQL,
+		DBTypeT:       common.TaskDBOracle,
+		DatatypeNameS: common.BuildInMySQLDatatypeInt,
+		DatatypeNameT: common.BuildInMySQLM2ODatatypeNameMap[common.BuildInMySQLDatatypeInt],
+	})
+	buildinDataTypeR = append(buildinDataTypeR, &BuildinDatatypeRule{
+		DBTypeS:       common.TaskDBMySQL,
+		DBTypeT:       common.TaskDBOracle,
+		DatatypeNameS: common.BuildInMySQLDatatypeInteger,
+		DatatypeNameT: common.BuildInMySQLM2ODatatypeNameMap[common.BuildInMySQLDatatypeInteger],
+	})
+	buildinDataTypeR = append(buildinDataTypeR, &BuildinDatatypeRule{
+		DBTypeS:       common.TaskDBMySQL,
+		DBTypeT:       common.TaskDBOracle,
+		DatatypeNameS: common.BuildInMySQLDatatypeMediumint,
+		DatatypeNameT: common.BuildInMySQLM2ODatatypeNameMap[common.BuildInMySQLDatatypeMediumint],
+	})
+	buildinDataTypeR = append(buildinDataTypeR, &BuildinDatatypeRule{
+		DBTypeS:       common.TaskDBMySQL,
+		DBTypeT:       common.TaskDBOracle,
+		DatatypeNameS: common.BuildInMySQLDatatypeNumeric,
+		DatatypeNameT: common.BuildInMySQLM2ODatatypeNameMap[common.BuildInMySQLDatatypeNumeric],
+	})
+	buildinDataTypeR = append(buildinDataTypeR, &BuildinDatatypeRule{
+		DBTypeS:       common.TaskDBMySQL,
+		DBTypeT:       common.TaskDBOracle,
+		DatatypeNameS: common.BuildInMySQLDatatypeReal,
+		DatatypeNameT: common.BuildInMySQLM2ODatatypeNameMap[common.BuildInMySQLDatatypeReal],
+	})
+	buildinDataTypeR = append(buildinDataTypeR, &BuildinDatatypeRule{
+		DBTypeS:       common.TaskDBMySQL,
+		DBTypeT:       common.TaskDBOracle,
+		DatatypeNameS: common.BuildInMySQLDatatypeSmallint,
+		DatatypeNameT: common.BuildInMySQLM2ODatatypeNameMap[common.BuildInMySQLDatatypeSmallint],
+	})
+	buildinDataTypeR = append(buildinDataTypeR, &BuildinDatatypeRule{
+		DBTypeS:       common.TaskDBMySQL,
+		DBTypeT:       common.TaskDBOracle,
+		DatatypeNameS: common.BuildInMySQLDatatypeTinyint,
+		DatatypeNameT: common.BuildInMySQLM2ODatatypeNameMap[common.BuildInMySQLDatatypeTinyint],
+	})
+	buildinDataTypeR = append(buildinDataTypeR, &BuildinDatatypeRule{
+		DBTypeS:       common.TaskDBMySQL,
+		DBTypeT:       common.TaskDBOracle,
+		DatatypeNameS: common.BuildInMySQLDatatypeBit,
+		DatatypeNameT: common.BuildInMySQLM2ODatatypeNameMap[common.BuildInMySQLDatatypeBit],
+	})
+	buildinDataTypeR = append(buildinDataTypeR, &BuildinDatatypeRule{
+		DBTypeS:       common.TaskDBMySQL,
+		DBTypeT:       common.TaskDBOracle,
+		DatatypeNameS: common.BuildInMySQLDatatypeDate,
+		DatatypeNameT: common.BuildInMySQLM2ODatatypeNameMap[common.BuildInMySQLDatatypeDate],
+	})
+	buildinDataTypeR = append(buildinDataTypeR, &BuildinDatatypeRule{
+		DBTypeS:       common.TaskDBMySQL,
+		DBTypeT:       common.TaskDBOracle,
+		DatatypeNameS: common.BuildInMySQLDatatypeDatetime,
+		DatatypeNameT: common.BuildInMySQLM2ODatatypeNameMap[common.BuildInMySQLDatatypeDatetime],
+	})
+	buildinDataTypeR = append(buildinDataTypeR, &BuildinDatatypeRule{
+		DBTypeS:       common.TaskDBMySQL,
+		DBTypeT:       common.TaskDBOracle,
+		DatatypeNameS: common.BuildInMySQLDatatypeTimestamp,
+		DatatypeNameT: common.BuildInMySQLM2ODatatypeNameMap[common.BuildInMySQLDatatypeTimestamp],
+	})
+	buildinDataTypeR = append(buildinDataTypeR, &BuildinDatatypeRule{
+		DBTypeS:       common.TaskDBMySQL,
+		DBTypeT:       common.TaskDBOracle,
+		DatatypeNameS: common.BuildInMySQLDatatypeTime,
+		DatatypeNameT: common.BuildInMySQLM2ODatatypeNameMap[common.BuildInMySQLDatatypeTime],
+	})
+	buildinDataTypeR = append(buildinDataTypeR, &BuildinDatatypeRule{
+		DBTypeS:       common.TaskDBMySQL,
+		DBTypeT:       common.TaskDBOracle,
+		DatatypeNameS: common.BuildInMySQLDatatypeYear,
+		DatatypeNameT: common.BuildInMySQLM2ODatatypeNameMap[common.BuildInMySQLDatatypeYear],
+	})
+	buildinDataTypeR = append(buildinDataTypeR, &BuildinDatatypeRule{
+		DBTypeS:       common.TaskDBMySQL,
+		DBTypeT:       common.TaskDBOracle,
+		DatatypeNameS: common.BuildInMySQLDatatypeBlob,
+		DatatypeNameT: common.BuildInMySQLM2ODatatypeNameMap[common.BuildInMySQLDatatypeBlob],
+	})
+	buildinDataTypeR = append(buildinDataTypeR, &BuildinDatatypeRule{
+		DBTypeS:       common.TaskDBMySQL,
+		DBTypeT:       common.TaskDBOracle,
+		DatatypeNameS: common.BuildInMySQLDatatypeChar,
+		DatatypeNameT: common.BuildInMySQLM2ODatatypeNameMap[common.BuildInMySQLDatatypeChar],
+	})
+	buildinDataTypeR = append(buildinDataTypeR, &BuildinDatatypeRule{
+		DBTypeS:       common.TaskDBMySQL,
+		DBTypeT:       common.TaskDBOracle,
+		DatatypeNameS: common.BuildInMySQLDatatypeLongBlob,
+		DatatypeNameT: common.BuildInMySQLM2ODatatypeNameMap[common.BuildInMySQLDatatypeLongBlob],
+	})
+	buildinDataTypeR = append(buildinDataTypeR, &BuildinDatatypeRule{
+		DBTypeS:       common.TaskDBMySQL,
+		DBTypeT:       common.TaskDBOracle,
+		DatatypeNameS: common.BuildInMySQLDatatypeLongText,
+		DatatypeNameT: common.BuildInMySQLM2ODatatypeNameMap[common.BuildInMySQLDatatypeLongText],
+	})
+	buildinDataTypeR = append(buildinDataTypeR, &BuildinDatatypeRule{
+		DBTypeS:       common.TaskDBMySQL,
+		DBTypeT:       common.TaskDBOracle,
+		DatatypeNameS: common.BuildInMySQLDatatypeMediumBlob,
+		DatatypeNameT: common.BuildInMySQLM2ODatatypeNameMap[common.BuildInMySQLDatatypeMediumBlob],
+	})
+	buildinDataTypeR = append(buildinDataTypeR, &BuildinDatatypeRule{
+		DBTypeS:       common.TaskDBMySQL,
+		DBTypeT:       common.TaskDBOracle,
+		DatatypeNameS: common.BuildInMySQLDatatypeMediumText,
+		DatatypeNameT: common.BuildInMySQLM2ODatatypeNameMap[common.BuildInMySQLDatatypeMediumText],
+	})
+	buildinDataTypeR = append(buildinDataTypeR, &BuildinDatatypeRule{
+		DBTypeS:       common.TaskDBMySQL,
+		DBTypeT:       common.TaskDBOracle,
+		DatatypeNameS: common.BuildInMySQLDatatypeText,
+		DatatypeNameT: common.BuildInMySQLM2ODatatypeNameMap[common.BuildInMySQLDatatypeText],
+	})
+	buildinDataTypeR = append(buildinDataTypeR, &BuildinDatatypeRule{
+		DBTypeS:       common.TaskDBMySQL,
+		DBTypeT:       common.TaskDBOracle,
+		DatatypeNameS: common.BuildInMySQLDatatypeTinyBlob,
+		DatatypeNameT: common.BuildInMySQLM2ODatatypeNameMap[common.BuildInMySQLDatatypeTinyBlob],
+	})
+	buildinDataTypeR = append(buildinDataTypeR, &BuildinDatatypeRule{
+		DBTypeS:       common.TaskDBMySQL,
+		DBTypeT:       common.TaskDBOracle,
+		DatatypeNameS: common.BuildInMySQLDatatypeTinyText,
+		DatatypeNameT: common.BuildInMySQLM2ODatatypeNameMap[common.BuildInMySQLDatatypeTinyText],
+	})
+	buildinDataTypeR = append(buildinDataTypeR, &BuildinDatatypeRule{
+		DBTypeS:       common.TaskDBMySQL,
+		DBTypeT:       common.TaskDBOracle,
+		DatatypeNameS: common.BuildInMySQLDatatypeVarchar,
+		DatatypeNameT: common.BuildInMySQLM2ODatatypeNameMap[common.BuildInMySQLDatatypeVarchar],
+	})
+	buildinDataTypeR = append(buildinDataTypeR, &BuildinDatatypeRule{
+		DBTypeS:       common.TaskDBMySQL,
+		DBTypeT:       common.TaskDBOracle,
+		DatatypeNameS: common.BuildInMySQLDatatypeBinary,
+		DatatypeNameT: common.BuildInMySQLM2ODatatypeNameMap[common.BuildInMySQLDatatypeBinary],
+	})
+	buildinDataTypeR = append(buildinDataTypeR, &BuildinDatatypeRule{
+		DBTypeS:       common.TaskDBMySQL,
+		DBTypeT:       common.TaskDBOracle,
+		DatatypeNameS: common.BuildInMySQLDatatypeVarbinary,
+		DatatypeNameT: common.BuildInMySQLM2ODatatypeNameMap[common.BuildInMySQLDatatypeVarbinary],
+	})
+	return rw.DB(ctx).Clauses(clause.OnConflict{
+		Columns: []clause.Column{
+			{Name: "db_type_s"},
+			{Name: "db_type_t"},
+			{Name: "datatype_name_s"},
+		},
+		DoNothing: true,
+	}).CreateInBatches(buildinDataTypeR, 20).Error
+}

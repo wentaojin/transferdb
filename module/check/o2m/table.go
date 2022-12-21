@@ -102,17 +102,17 @@ type Partition struct {
 func (t *Table) String(jsonType string) string {
 	var jsonStr []byte
 	switch jsonType {
-	case common.ColumnsJSON:
+	case common.JSONColumns:
 		jsonStr, _ = json.Marshal(t.Columns)
-	case common.PUConstraintJSON:
+	case common.JSONPUConstraint:
 		jsonStr, _ = json.Marshal(t.PUConstraints)
-	case common.FKConstraintJSON:
+	case common.JSONFKConstraint:
 		jsonStr, _ = json.Marshal(t.ForeignConstraints)
-	case common.CKConstraintJSON:
+	case common.JSONCKConstraint:
 		jsonStr, _ = json.Marshal(t.CheckConstraints)
-	case common.IndexJSON:
+	case common.JSONIndex:
 		jsonStr, _ = json.Marshal(t.Indexes)
-	case common.PartitionJSON:
+	case common.JSONPartition:
 		jsonStr, _ = json.Marshal(t.Partitions)
 	}
 	return string(jsonStr)

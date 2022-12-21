@@ -67,13 +67,15 @@ func (o2m *O2M) NewReverse() error {
 		return nil
 	}
 
-	// 判断 table_error_detail 是否存在错误记录，是否可进行 reverse
-	errTotals, err := meta.NewTableErrorDetailModel(o2m.metaDB).CountsBySchema(o2m.ctx, &meta.TableErrorDetail{
-		SourceSchemaName: common.StringUPPER(o2m.cfg.OracleConfig.SchemaName),
-		RunMode:          common.ReverseO2MMode,
+	// 判断 error_log_detail 是否存在错误记录，是否可进行 reverse
+	errTotals, err := meta.NewErrorLogDetailModel(o2m.metaDB).CountsErrorLogBySchema(o2m.ctx, &meta.ErrorLogDetail{
+		DBTypeS:     common.TaskDBOracle,
+		DBTypeT:     common.TaskDBMySQL,
+		SchemaNameS: common.StringUPPER(o2m.cfg.OracleConfig.SchemaName),
+		RunMode:     common.ReverseO2MMode,
 	})
 	if errTotals > 0 || err != nil {
-		return fmt.Errorf("reverse schema [%s] table mode [%s] task failed: %v, table [table_error_detail] exist failed error, please clear and rerunning", o2m.cfg.OracleConfig.SchemaName, common.ReverseO2MMode, err)
+		return fmt.Errorf("reverse schema [%s] table mode [%s] task failed: %v, table [error_log_detail] exist failed error, please clear and rerunning", o2m.cfg.OracleConfig.SchemaName, common.ReverseO2MMode, err)
 	}
 
 	// 获取 o2m.oracle 数据库字符排序规则
@@ -191,65 +193,68 @@ func (o2m *O2M) NewReverse() error {
 		g.Go(func() error {
 			rule, err := IReader(o2m.ctx, o2m.metaDB, t, t)
 			if err != nil {
-				if err = meta.NewTableErrorDetailModel(o2m.metaDB).Create(o2m.ctx, &meta.TableErrorDetail{
-					SourceSchemaName: t.SourceSchemaName,
-					SourceTableName:  t.SourceTableName,
-					RunMode:          common.ReverseO2MMode,
-					InfoSources:      common.ReverseO2MMode,
-					RunStatus:        "Failed",
-					InfoDetail:       t.String(),
-					ErrorDetail:      err.Error(),
+				if err = meta.NewErrorLogDetailModel(o2m.metaDB).CreateErrorLog(o2m.ctx, &meta.ErrorLogDetail{
+					DBTypeS:     common.TaskDBOracle,
+					DBTypeT:     common.TaskDBMySQL,
+					SchemaNameS: t.SourceSchemaName,
+					TableNameS:  t.SourceTableName,
+					RunMode:     common.ReverseO2MMode,
+					RunStatus:   "Failed",
+					InfoDetail:  t.String(),
+					ErrorDetail: err.Error(),
 				}); err != nil {
 					zap.L().Error("reverse table o2m.oracle to mysql failed",
 						zap.String("schema", t.SourceSchemaName),
 						zap.String("table", t.SourceTableName),
 						zap.Error(
-							fmt.Errorf("reader table task failed, detail see [table_error_detail], please rerunning")))
+							fmt.Errorf("reader table task failed, detail see [error_log_detail], please rerunning")))
 
-					return fmt.Errorf("reader table task failed, detail see [table_error_detail], please rerunning, error: %v", err)
+					return fmt.Errorf("reader table task failed, detail see [error_log_detail], please rerunning, error: %v", err)
 				}
 				return nil
 			}
 			ddl, err := IReverse(t, rule)
 			if err != nil {
-				if err = meta.NewTableErrorDetailModel(o2m.metaDB).Create(o2m.ctx, &meta.TableErrorDetail{
-					SourceSchemaName: t.SourceSchemaName,
-					SourceTableName:  t.SourceTableName,
-					RunMode:          common.ReverseO2MMode,
-					InfoSources:      common.ReverseO2MMode,
-					RunStatus:        "Failed",
-					InfoDetail:       t.String(),
-					ErrorDetail:      err.Error(),
+				if err = meta.NewErrorLogDetailModel(o2m.metaDB).CreateErrorLog(o2m.ctx, &meta.ErrorLogDetail{
+					DBTypeS:     common.TaskDBOracle,
+					DBTypeT:     common.TaskDBMySQL,
+					SchemaNameS: t.SourceSchemaName,
+					TableNameS:  t.SourceTableName,
+					RunMode:     common.ReverseO2MMode,
+					RunStatus:   "Failed",
+					InfoDetail:  t.String(),
+					ErrorDetail: err.Error(),
 				}); err != nil {
 					zap.L().Error("reverse table o2m.oracle to mysql failed",
 						zap.String("schema", t.SourceSchemaName),
 						zap.String("table", t.SourceTableName),
 						zap.Error(
-							fmt.Errorf("reverse table task failed, detail see [table_error_detail], please rerunning")))
+							fmt.Errorf("reverse table task failed, detail see [error_log_detail], please rerunning")))
 
-					return fmt.Errorf("reverse table task failed, detail see [table_error_detail], please rerunning, error: %v", err)
+					return fmt.Errorf("reverse table task failed, detail see [error_log_detail], please rerunning, error: %v", err)
 				}
 				return nil
 			}
 
 			err = IWriter(f, ddl)
 			if err != nil {
-				if err = meta.NewTableErrorDetailModel(o2m.metaDB).Create(o2m.ctx, &meta.TableErrorDetail{
-					SourceSchemaName: t.SourceSchemaName,
-					SourceTableName:  t.SourceTableName,
-					RunMode:          common.ReverseO2MMode,
-					InfoSources:      common.ReverseO2MMode,
-					RunStatus:        "Failed",
-					InfoDetail:       t.String(),
-					ErrorDetail:      err.Error(),
+				if err = meta.NewErrorLogDetailModel(o2m.metaDB).CreateErrorLog(o2m.ctx, &meta.ErrorLogDetail{
+					DBTypeS:     common.TaskDBOracle,
+					DBTypeT:     common.TaskDBMySQL,
+					SchemaNameS: t.SourceSchemaName,
+					TableNameS:  t.SourceTableName,
+					RunMode:     common.ReverseO2MMode,
+					RunStatus:   "Failed",
+					InfoDetail:  t.String(),
+					ErrorDetail: err.Error(),
 				}); err != nil {
 					zap.L().Error("reverse table o2m.oracle to mysql failed",
 						zap.String("schema", t.SourceSchemaName),
 						zap.String("table", t.SourceTableName),
 						zap.Error(
-							fmt.Errorf("writer table task failed, detail see [table_error_detail], please rerunning")))
+							fmt.Errorf("writer table task failed, detail see [error_log_detail], please rerunning")))
 
-					return fmt.Errorf("writer table task failed, detail see [table_error_detail], please rerunning, error: %v", err)
+					return fmt.Errorf("writer table task failed, detail see [error_log_detail], please rerunning, error: %v", err)
 				}
 				return nil
 			}
@@ -267,9 +272,11 @@ func (o2m *O2M) NewReverse() error {
 		return err
 	}
 
-	errTotals, err = meta.NewTableErrorDetailModel(o2m.metaDB).CountsBySchema(o2m.ctx, &meta.TableErrorDetail{
-		SourceSchemaName: common.StringUPPER(o2m.cfg.OracleConfig.SchemaName),
-		RunMode:          common.ReverseO2MMode,
+	errTotals, err = meta.NewErrorLogDetailModel(o2m.metaDB).CountsErrorLogBySchema(o2m.ctx, &meta.ErrorLogDetail{
+		DBTypeS:     common.TaskDBOracle,
+		DBTypeT:     common.TaskDBMySQL,
+		SchemaNameS: common.StringUPPER(o2m.cfg.OracleConfig.SchemaName),
+		RunMode:     common.ReverseO2MMode,
 	})
 	if err != nil {
 		return err
@@ -293,7 +300,7 @@ func (o2m *O2M) NewReverse() error {
 			zap.Int("reverse totals", len(tables)),
 			zap.Int("reverse success", len(tables)-int(errTotals)),
 			zap.Int64("reverse failed", errTotals),
-			zap.String("failed tips", "failed detail, please see table [table_error_detail]"),
+			zap.String("failed tips", "failed detail, please see table [error_log_detail]"),
 			zap.String("cost", endTime.Sub(startTime).String()))
 	}
 	return nil

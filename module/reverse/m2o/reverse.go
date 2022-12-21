@@ -66,13 +66,15 @@ func (m2o *M2O) NewReverse() error {
 		return nil
 	}
 
-	// 判断 table_error_detail 是否存在错误记录，是否可进行 reverse
-	errTotals, err := meta.NewTableErrorDetailModel(m2o.metaDB).CountsBySchema(m2o.ctx, &meta.TableErrorDetail{
-		SourceSchemaName: common.StringUPPER(m2o.cfg.MySQLConfig.SchemaName),
-		RunMode:          common.ReverseM2OMode,
+	// 判断 error_log_detail 是否存在错误记录，是否可进行 reverse
+	errTotals, err := meta.NewErrorLogDetailModel(m2o.metaDB).CountsErrorLogBySchema(m2o.ctx, &meta.ErrorLogDetail{
+		DBTypeS:     common.TaskDBMySQL,
+		DBTypeT:     common.TaskDBOracle,
+		SchemaNameS: common.StringUPPER(m2o.cfg.MySQLConfig.SchemaName),
+		RunMode:     common.ReverseM2OMode,
 	})
 	if errTotals > 0 || err != nil {
-		return fmt.Errorf("reverse schema [%s] table mode [%s] task failed: %v, table [table_error_detail] exist failed error, please clear and rerunning", m2o.cfg.MySQLConfig.SchemaName, common.ReverseM2OMode, err)
+		return fmt.Errorf("reverse schema [%s] table mode [%s] task failed: %v, table [error_log_detail] exist failed error, please clear and rerunning", m2o.cfg.MySQLConfig.SchemaName, common.ReverseM2OMode, err)
 	}
 
 	// 目标段版本判断
@@ -137,64 +139,67 @@ func (m2o *M2O) NewReverse() error {
 		g.Go(func() error {
 			rule, err := IReader(m2o.ctx, m2o.mysql, m2o.oracle, m2o.metaDB, t, t)
 			if err != nil {
-				if err = meta.NewTableErrorDetailModel(m2o.metaDB).Create(m2o.ctx, &meta.TableErrorDetail{
-					SourceSchemaName: t.SourceSchemaName,
-					SourceTableName:  t.SourceTableName,
-					RunMode:          common.ReverseM2OMode,
-					InfoSources:      common.ReverseM2OMode,
-					RunStatus:        "Failed",
-					InfoDetail:       t.String(),
-					ErrorDetail:      err.Error(),
+				if err = meta.NewErrorLogDetailModel(m2o.metaDB).CreateErrorLog(m2o.ctx, &meta.ErrorLogDetail{
+					DBTypeS:     common.TaskDBMySQL,
+					DBTypeT:     common.TaskDBOracle,
+					SchemaNameS: t.SourceSchemaName,
+					TableNameS:  t.SourceTableName,
+					RunMode:     common.ReverseM2OMode,
+					RunStatus:   "Failed",
+					InfoDetail:  t.String(),
+					ErrorDetail: err.Error(),
 				}); err != nil {
 					zap.L().Error("reverse table mysql to oracle failed",
 						zap.String("schema", t.SourceSchemaName),
 						zap.String("table", t.SourceTableName),
 						zap.Error(
-							fmt.Errorf("reader table task failed, detail see [table_error_detail], please rerunning")))
+							fmt.Errorf("reader table task failed, detail see [error_log_detail], please rerunning")))
 
-					return fmt.Errorf("reader table task failed, detail see [table_error_detail], please rerunning, error: %v", err)
+					return fmt.Errorf("reader table task failed, detail see [error_log_detail], please rerunning, error: %v", err)
 				}
 				return nil
 			}
 			ddl, err := IReverse(t, rule)
 			if err != nil {
-				if err = meta.NewTableErrorDetailModel(m2o.metaDB).Create(m2o.ctx, &meta.TableErrorDetail{
-					SourceSchemaName: t.SourceSchemaName,
-					SourceTableName:  t.SourceTableName,
-					RunMode:          common.ReverseM2OMode,
-					InfoSources:      common.ReverseM2OMode,
-					RunStatus:        "Failed",
-					InfoDetail:       t.String(),
-					ErrorDetail:      err.Error(),
+				if err = meta.NewErrorLogDetailModel(m2o.metaDB).CreateErrorLog(m2o.ctx, &meta.ErrorLogDetail{
+					DBTypeS:     common.TaskDBMySQL,
+					DBTypeT:     common.TaskDBOracle,
+					SchemaNameS: t.SourceSchemaName,
+					TableNameS:  t.SourceTableName,
+					RunMode:     common.ReverseM2OMode,
+					RunStatus:   "Failed",
+					InfoDetail:  t.String(),
+					ErrorDetail: err.Error(),
 				}); err != nil {
 					zap.L().Error("reverse table mysql to oracle failed",
 						zap.String("schema", t.SourceSchemaName),
 						zap.String("table", t.SourceTableName),
 						zap.Error(
-							fmt.Errorf("reverse table task failed, detail see [table_error_detail], please rerunning")))
+							fmt.Errorf("reverse table task failed, detail see [error_log_detail], please rerunning")))
 
-					return fmt.Errorf("reverse table task failed, detail see [table_error_detail], please rerunning, error: %v", err)
+					return fmt.Errorf("reverse table task failed, detail see [error_log_detail], please rerunning, error: %v", err)
 				}
 				return nil
 			}
 			err = IWriter(f, ddl)
 			if err != nil {
-				if err = meta.NewTableErrorDetailModel(m2o.metaDB).Create(m2o.ctx, &meta.TableErrorDetail{
-					SourceSchemaName: t.SourceSchemaName,
-					SourceTableName:  t.SourceTableName,
-					RunMode:          common.ReverseM2OMode,
-					InfoSources:      common.ReverseM2OMode,
-					RunStatus:        "Failed",
-					InfoDetail:       t.String(),
-					ErrorDetail:      err.Error(),
+				if err = meta.NewErrorLogDetailModel(m2o.metaDB).CreateErrorLog(m2o.ctx, &meta.ErrorLogDetail{
+					DBTypeS:     common.TaskDBMySQL,
+					DBTypeT:     common.TaskDBOracle,
+					SchemaNameS: t.SourceSchemaName,
+					TableNameS:  t.SourceTableName,
+					RunMode:     common.ReverseM2OMode,
+					RunStatus:   "Failed",
+					InfoDetail:  t.String(),
+					ErrorDetail: err.Error(),
 				}); err != nil {
 					zap.L().Error("reverse table mysql to oracle failed",
 						zap.String("schema", t.SourceSchemaName),
 						zap.String("table", t.SourceTableName),
 						zap.Error(
-							fmt.Errorf("writer table task failed, detail see [table_error_detail], please rerunning")))
+							fmt.Errorf("writer table task failed, detail see [error_log_detail], please rerunning")))
 
-					return fmt.Errorf("writer table task failed, detail see [table_error_detail], please rerunning, error: %v", err)
+					return fmt.Errorf("writer table task failed, detail see [error_log_detail], please rerunning, error: %v", err)
 				}
 				return nil
 			}
@@ -211,9 +216,11 @@ func (m2o *M2O) NewReverse() error {
 		return err
 	}
 
-	errTotals, err = meta.NewTableErrorDetailModel(m2o.metaDB).CountsBySchema(m2o.ctx, &meta.TableErrorDetail{
-		SourceSchemaName: common.StringUPPER(m2o.cfg.MySQLConfig.SchemaName),
-		RunMode:          common.ReverseM2OMode,
+	errTotals, err = meta.NewErrorLogDetailModel(m2o.metaDB).CountsErrorLogBySchema(m2o.ctx, &meta.ErrorLogDetail{
+		DBTypeS:     common.TaskDBMySQL,
+		DBTypeT:     common.TaskDBOracle,
+		SchemaNameS: common.StringUPPER(m2o.cfg.MySQLConfig.SchemaName),
+		RunMode:     common.ReverseM2OMode,
 	})
 	if err != nil {
 		return err
@@ -235,7 +242,7 @@ func (m2o *M2O) NewReverse() error {
 			zap.Int("table totals", len(tables)),
 			zap.Int("table success", len(tables)-int(errTotals)),
 			zap.Int64("table failed", errTotals),
-			zap.String("failed tips", "failed detail, please see table [table_error_detail]"),
+			zap.String("failed tips", "failed detail, please see table [error_log_detail]"),
 			zap.String("cost", endTime.Sub(startTime).String()))
 	}
 	return nil

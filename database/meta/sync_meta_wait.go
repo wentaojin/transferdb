@@ -19,18 +19,20 @@ import (
 	"context"
 	"fmt"
 	"github.com/wentaojin/transferdb/common"
-	"github.com/wentaojin/transferdb/errors"
+	"gorm.io/gorm"
 )
 
 // 同步元数据表
 type WaitSyncMeta struct {
-	ID               uint   `gorm:"primary_key;autoIncrement;comment:'自增编号'" json:"id"`
-	SourceSchemaName string `gorm:"not null;index:idx_schema_table_mode,unique;comment:'源端 schema'" json:"source_schema_name"`
-	SourceTableName  string `gorm:"not null;index:idx_schema_table_mode,unique;comment:'源端表名'" json:"source_table_name"`
-	SyncMode         string `gorm:"not null;index:idx_schema_table_mode,unique;comment:'同步模式'" json:"sync_mode"`
-	FullGlobalSCN    uint64 `gorm:"comment:'全量全局 SCN'" json:"full_global_scn"`
-	FullSplitTimes   int    `gorm:"comment:'全量任务切分 SQL 次数'" json:"full_split_times"`
-	IsPartition      string `gorm:"comment:'是否是分区表'" json:"is_partition"` // 同步转换统一转换成非分区表，此处只做标志
+	ID             uint   `gorm:"primary_key;autoIncrement;comment:'自增编号'" json:"id"`
+	DBTypeS        string `gorm:"type:varchar(15);index:idx_dbtype_st_map,unique;comment:'源数据库类型'" json:"db_type_s"`
+	DBTypeT        string `gorm:"type:varchar(15);index:idx_dbtype_st_map,unique;comment:'目标数据库类型'" json:"db_type_t"`
+	SchemaNameS    string `gorm:"not null;index:idx_dbtype_st_map,unique;comment:'源端 schema'" json:"schema_name_s"`
+	TableNameS     string `gorm:"not null;index:idx_dbtype_st_map,unique;comment:'源端表名'" json:"table_name_s"`
+	Mode           string `gorm:"not null;index:idx_dbtype_st_map,unique;comment:'同步模式'" json:"mode"`
+	FullGlobalSCN  uint64 `gorm:"comment:'全量任务 full_sync_meta 全局 SCN'" json:"full_global_scn"`
+	FullSplitTimes int    `gorm:"comment:'全量任务 full_sync_meta 切分 SQL 次数'" json:"full_split_times"`
+	IsPartition    string `gorm:"comment:'是否是分区表'" json:"is_partition"` // 同步转换统一转换成非分区表，此处只做标志
 	*BaseModel
 }
 
@@ -39,99 +41,146 @@ func NewWaitSyncMetaModel(m *Meta) *WaitSyncMeta {
 		Meta: m}}
 }
 
-func (rw *WaitSyncMeta) Create(ctx context.Context, createS interface{}) error {
-	if err := rw.DB(ctx).Create(createS.(*WaitSyncMeta)).Error; err != nil {
-		return errors.NewMSError(errors.TRANSFERDB, errors.DOMAIN_DB, err)
+func (rw *WaitSyncMeta) ParseSchemaTable() (string, error) {
+	stmt := &gorm.Statement{DB: rw.GormDB}
+	err := stmt.Parse(rw)
+	if err != nil {
+		return "", fmt.Errorf("parse struct [WaitSyncMeta] get table_name failed: %v", err)
+	}
+	return stmt.Schema.Table, nil
+}
+
+func (rw *WaitSyncMeta) CreateWaitSyncMeta(ctx context.Context, createS *WaitSyncMeta) error {
+	table, err := rw.ParseSchemaTable()
+	if err != nil {
+		return err
+	}
+	if err = rw.DB(ctx).Create(createS).Error; err != nil {
+		return fmt.Errorf("create table [%s] record failed: %v", table, err)
 	}
 	return nil
 }
 
 // Detail returns wait sync meta records
-func (rw *WaitSyncMeta) Detail(ctx context.Context, detailS interface{}) (interface{}, error) {
-	ds := detailS.(*WaitSyncMeta)
+func (rw *WaitSyncMeta) DetailWaitSyncMeta(ctx context.Context, detailS *WaitSyncMeta) ([]WaitSyncMeta, error) {
 	var dsMetas []WaitSyncMeta
-	if err := rw.DB(ctx).Where(ds).Find(&dsMetas).Error; err != nil {
-		return dsMetas, errors.NewMSError(errors.TRANSFERDB, errors.DOMAIN_DB, err)
+	table, err := rw.ParseSchemaTable()
+	if err != nil {
+		return dsMetas, err
 	}
-
+	if err = rw.DB(ctx).Where(detailS).Find(&dsMetas).Error; err != nil {
+		return dsMetas, fmt.Errorf("detail table [%s] record failed: %v", table, err)
+	}
 	return dsMetas, nil
 }
 
 // Query returns part sync meta records
-func (rw *WaitSyncMeta) Query(ctx context.Context, queryS interface{}) (interface{}, error) {
-	ds := queryS.(*WaitSyncMeta)
+func (rw *WaitSyncMeta) BatchQueryWaitSyncMeta(ctx context.Context, queryS *WaitSyncMeta) ([]WaitSyncMeta, error) {
 	var dsMetas []WaitSyncMeta
-	if err := rw.DB(ctx).Where("source_schema_name = ? AND full_global_scn > 0 AND full_split_times > 0 and sync_mode = ?", common.StringUPPER(ds.SourceSchemaName), ds.SyncMode).Find(&dsMetas).Error; err != nil {
-		return dsMetas, errors.NewMSError(errors.TRANSFERDB, errors.DOMAIN_DB, err)
+	table, err := rw.ParseSchemaTable()
+	if err != nil {
+		return dsMetas, err
+	}
+	if err := rw.DB(ctx).Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND full_global_scn > 0 AND full_split_times > 0 AND mode = ?",
+		common.StringUPPER(queryS.DBTypeS),
+		common.StringUPPER(queryS.DBTypeT),
+		common.StringUPPER(queryS.SchemaNameS),
+		queryS.Mode).Find(&dsMetas).Error; err != nil {
+		return dsMetas, fmt.Errorf("batch query table [%s] record failed: %v", table, err)
 	}
 	return dsMetas, nil
 }
 
-func (rw *WaitSyncMeta) Delete(ctx context.Context, deleteS interface{}) error {
-	ds := deleteS.(*WaitSyncMeta)
-	err := rw.DB(ctx).Where("source_schema_name = ? AND source_table_name = ? AND sync_mode = ?",
-		common.StringUPPER(ds.SourceSchemaName),
-		common.StringUPPER(ds.SourceTableName),
-		ds.SyncMode).Delete(&WaitSyncMeta{}).Error
+func (rw *WaitSyncMeta) DeleteWaitSyncMeta(ctx context.Context, deleteS *WaitSyncMeta) error {
+	table, err := rw.ParseSchemaTable()
 	if err != nil {
-		return errors.NewMSError(errors.TRANSFERDB, errors.DOMAIN_DB, fmt.Errorf("delete meta schema table [wait_sync_meta] reocrd failed: %v", err))
+		return err
+	}
+	err = rw.DB(ctx).Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND table_name_s = ? AND mode = ?",
+		common.StringUPPER(deleteS.DBTypeS),
+		common.StringUPPER(deleteS.DBTypeT),
+		common.StringUPPER(deleteS.SchemaNameS),
+		common.StringUPPER(deleteS.TableNameS),
+		deleteS.Mode).Delete(&WaitSyncMeta{}).Error
+	if err != nil {
+		return fmt.Errorf("delete table [%s] reocrd failed: %v", table, err)
 	}
 	return nil
 }
 
-func (rw *WaitSyncMeta) Update(ctx context.Context, detailS interface{}) error {
-	waitSyncMeta := detailS.(*WaitSyncMeta)
-	err := rw.DB(ctx).Model(&WaitSyncMeta{}).
-		Where("source_schema_name = ? AND source_table_name = ? AND sync_mode = ?",
-			common.StringUPPER(waitSyncMeta.SourceSchemaName),
-			common.StringUPPER(waitSyncMeta.SourceTableName),
-			waitSyncMeta.SyncMode).
+func (rw *WaitSyncMeta) UpdateWaitSyncMeta(ctx context.Context, detailS *WaitSyncMeta) error {
+	table, err := rw.ParseSchemaTable()
+	if err != nil {
+		return err
+	}
+	err = rw.DB(ctx).Model(&WaitSyncMeta{}).
+		Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND table_name_s = ? AND mode = ?",
+			common.StringUPPER(detailS.DBTypeS),
+			common.StringUPPER(detailS.DBTypeT),
+			common.StringUPPER(detailS.SchemaNameS),
+			common.StringUPPER(detailS.TableNameS),
+			detailS.Mode).
 		Updates(map[string]interface{}{
-			"FullGlobalSCN":  waitSyncMeta.FullGlobalSCN,
-			"FullSplitTimes": waitSyncMeta.FullSplitTimes,
-			"IsPartition":    waitSyncMeta.IsPartition,
+			"FullGlobalSCN":  detailS.FullGlobalSCN,
+			"FullSplitTimes": detailS.FullSplitTimes,
+			"IsPartition":    detailS.IsPartition,
 		}).Error
 	if err != nil {
-		return errors.NewMSError(errors.TRANSFERDB, errors.DOMAIN_DB, fmt.Errorf("update mysql schema table [wait_sync_meta] reocrd failed: %v", err.Error()))
+		return fmt.Errorf("update table [%s] record failed: %v", table, err)
 	}
 	return nil
 }
 
-func (rw *WaitSyncMeta) ModifyFullSplitTimesZero(ctx context.Context, detailS interface{}) error {
-	waitSyncMeta := detailS.(*WaitSyncMeta)
-	err := rw.DB(ctx).Model(&WaitSyncMeta{}).
-		Where("source_schema_name = ? AND source_table_name = ? AND sync_mode = ?",
-			common.StringUPPER(waitSyncMeta.SourceSchemaName),
-			common.StringUPPER(waitSyncMeta.SourceTableName),
-			waitSyncMeta.SyncMode).
+func (rw *WaitSyncMeta) ModifyWaitSyncMetaColumnFullSplitTimesZero(ctx context.Context, detailS *WaitSyncMeta) error {
+	table, err := rw.ParseSchemaTable()
+	if err != nil {
+		return err
+	}
+	err = rw.DB(ctx).Model(&WaitSyncMeta{}).
+		Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND table_name_s = ? AND mode = ?",
+			common.StringUPPER(detailS.DBTypeS),
+			common.StringUPPER(detailS.DBTypeT),
+			common.StringUPPER(detailS.SchemaNameS),
+			common.StringUPPER(detailS.TableNameS),
+			detailS.Mode).
 		Updates(map[string]interface{}{
-			"FullSplitTimes": waitSyncMeta.FullSplitTimes,
+			"FullSplitTimes": detailS.FullSplitTimes,
 		}).Error
 	if err != nil {
-		return errors.NewMSError(errors.TRANSFERDB, errors.DOMAIN_DB, fmt.Errorf("modify mysql schema table [wait_sync_meta] reocrd failed: %v", err.Error()))
+		return fmt.Errorf("modify table [%s] column [full_split_times] failed: %v", table, err)
 	}
 	return nil
 }
 
-func (rw *WaitSyncMeta) DetailBySchemaTableSCN(ctx context.Context, detailS interface{}) (interface{}, error) {
-	ds := detailS.(*WaitSyncMeta)
+func (rw *WaitSyncMeta) DetailWaitSyncMetaBySchemaTableSCN(ctx context.Context, detailS *WaitSyncMeta) ([]WaitSyncMeta, error) {
 	var dsMetas []WaitSyncMeta
-	if err := rw.DB(ctx).Where(`source_schema_name = ? AND source_table_name = ? AND full_global_scn > 0 AND full_split_times = 0 and sync_mode = ?`,
-		common.StringUPPER(ds.SourceSchemaName),
-		common.StringUPPER(ds.SourceTableName),
-		ds.SyncMode).Find(&dsMetas).Error; err != nil {
-		return dsMetas, errors.NewMSError(errors.TRANSFERDB, errors.DOMAIN_DB, err)
+	table, err := rw.ParseSchemaTable()
+	if err != nil {
+		return dsMetas, err
+	}
+	if err = rw.DB(ctx).Where(`db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND table_name_s = ? AND full_global_scn > 0 AND full_split_times = 0 and mode = ?`,
+		common.StringUPPER(detailS.DBTypeS),
+		common.StringUPPER(detailS.DBTypeT),
+		common.StringUPPER(detailS.SchemaNameS),
+		common.StringUPPER(detailS.TableNameS),
+		detailS.Mode).Find(&dsMetas).Error; err != nil {
+		return dsMetas, fmt.Errorf("detail table [%s] record by schema_table_scn failed: %v", table, err)
 	}
 
 	return dsMetas, nil
 }
 
-func (rw *WaitSyncMeta) DetailBySchema(ctx context.Context, detailS interface{}) (interface{}, error) {
-	ds := detailS.(*WaitSyncMeta)
+func (rw *WaitSyncMeta) DetailWaitSyncMetaBySchema(ctx context.Context, detailS *WaitSyncMeta) ([]WaitSyncMeta, error) {
 	var tableMetas []WaitSyncMeta
-	if err := rw.DB(ctx).Where("source_schema_name = ? AND full_global_scn > 0 AND full_split_times = 0 AND sync_mode = ?",
-		common.StringUPPER(ds.SourceSchemaName), ds.SyncMode).Find(&tableMetas).Error; err != nil {
+	table, err := rw.ParseSchemaTable()
+	if err != nil {
 		return tableMetas, err
+	}
+	if err = rw.DB(ctx).Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND full_global_scn > 0 AND full_split_times = 0 AND mode = ?",
+		common.StringUPPER(detailS.DBTypeS),
+		common.StringUPPER(detailS.DBTypeT),
+		common.StringUPPER(detailS.SchemaNameS), detailS.Mode).Find(&tableMetas).Error; err != nil {
+		return tableMetas, fmt.Errorf("detail table [%s] record by schema_scn failed: %v", table, err)
 	}
 	return tableMetas, nil
 }

@@ -121,22 +121,26 @@ func (c *Chunk) Split() error {
 		c.WhereRange = "1 = 1"
 
 		err := meta.NewCommonModel(c.MetaDB).CreateDataCompareMetaAndUpdateWaitSyncMeta(c.Ctx, &meta.DataCompareMeta{
-			SourceSchemaName: common.StringUPPER(c.SourceSchema),
-			SourceTableName:  common.StringUPPER(c.SourceTable),
-			SourceColumnInfo: c.SourceColumnInfo,
-			TargetSchemaName: common.StringUPPER(c.Cfg.MySQLConfig.SchemaName),
-			TargetTableName:  common.StringUPPER(c.SourceTable),
-			TargetColumnInfo: c.TargetColumnInfo,
-			WhereColumn:      c.WhereColumn,
-			WhereRange:       c.WhereRange,
-			IsPartition:      c.IsPartition,
+			DBTypeS:     common.TaskDBOracle,
+			DBTypeT:     common.TaskDBMySQL,
+			SchemaNameS: common.StringUPPER(c.SourceSchema),
+			TableNameS:  common.StringUPPER(c.SourceTable),
+			ColumnInfoS: c.SourceColumnInfo,
+			SchemaNameT: common.StringUPPER(c.Cfg.MySQLConfig.SchemaName),
+			TableNameT:  common.StringUPPER(c.SourceTable),
+			ColumnInfoT: c.TargetColumnInfo,
+			WhereColumn: c.WhereColumn,
+			WhereRange:  c.WhereRange,
+			IsPartition: c.IsPartition,
 		}, &meta.WaitSyncMeta{
-			SourceSchemaName: common.StringUPPER(c.SourceSchema),
-			SourceTableName:  common.StringUPPER(c.SourceTable),
-			SyncMode:         c.SyncMode,
-			FullGlobalSCN:    c.SourceGlobalSCN,
-			FullSplitTimes:   1,
-			IsPartition:      c.IsPartition,
+			DBTypeS:        common.TaskDBOracle,
+			DBTypeT:        common.TaskDBMySQL,
+			SchemaNameS:    common.StringUPPER(c.SourceSchema),
+			TableNameS:     common.StringUPPER(c.SourceTable),
+			Mode:           c.SyncMode,
+			FullGlobalSCN:  c.SourceGlobalSCN,
+			FullSplitTimes: 1,
+			IsPartition:    c.IsPartition,
 		})
 		if err != nil {
 			return err
@@ -158,22 +162,26 @@ func (c *Chunk) Split() error {
 		c.WhereRange = customRange
 		c.WhereColumn = ""
 		err = meta.NewCommonModel(c.MetaDB).CreateDataCompareMetaAndUpdateWaitSyncMeta(c.Ctx, &meta.DataCompareMeta{
-			SourceSchemaName: common.StringUPPER(c.SourceSchema),
-			SourceTableName:  common.StringUPPER(c.SourceTable),
-			SourceColumnInfo: c.SourceColumnInfo,
-			TargetSchemaName: common.StringUPPER(c.Cfg.MySQLConfig.SchemaName),
-			TargetTableName:  common.StringUPPER(c.SourceTable),
-			TargetColumnInfo: c.TargetColumnInfo,
-			WhereColumn:      c.WhereColumn,
-			WhereRange:       c.WhereRange,
-			IsPartition:      c.IsPartition,
+			DBTypeS:     common.TaskDBOracle,
+			DBTypeT:     common.TaskDBMySQL,
+			SchemaNameS: common.StringUPPER(c.SourceSchema),
+			TableNameS:  common.StringUPPER(c.SourceTable),
+			ColumnInfoS: c.SourceColumnInfo,
+			SchemaNameT: common.StringUPPER(c.Cfg.MySQLConfig.SchemaName),
+			TableNameT:  common.StringUPPER(c.SourceTable),
+			ColumnInfoT: c.TargetColumnInfo,
+			WhereColumn: c.WhereColumn,
+			WhereRange:  c.WhereRange,
+			IsPartition: c.IsPartition,
 		}, &meta.WaitSyncMeta{
-			SourceSchemaName: common.StringUPPER(c.SourceSchema),
-			SourceTableName:  common.StringUPPER(c.SourceTable),
-			SyncMode:         c.SyncMode,
-			FullGlobalSCN:    c.SourceGlobalSCN,
-			FullSplitTimes:   1,
-			IsPartition:      c.IsPartition,
+			DBTypeS:        common.TaskDBOracle,
+			DBTypeT:        common.TaskDBMySQL,
+			SchemaNameS:    common.StringUPPER(c.SourceSchema),
+			TableNameS:     common.StringUPPER(c.SourceTable),
+			Mode:           c.SyncMode,
+			FullGlobalSCN:  c.SourceGlobalSCN,
+			FullSplitTimes: 1,
+			IsPartition:    c.IsPartition,
 		})
 		if err != nil {
 			return err
@@ -196,22 +204,26 @@ func (c *Chunk) Split() error {
 		c.WhereRange = "1 = 1"
 		c.WhereColumn = ""
 		err = meta.NewCommonModel(c.MetaDB).CreateDataCompareMetaAndUpdateWaitSyncMeta(c.Ctx, &meta.DataCompareMeta{
-			SourceSchemaName: common.StringUPPER(c.SourceSchema),
-			SourceTableName:  common.StringUPPER(c.SourceTable),
-			SourceColumnInfo: c.SourceColumnInfo,
-			TargetSchemaName: common.StringUPPER(c.Cfg.MySQLConfig.SchemaName),
-			TargetTableName:  common.StringUPPER(c.SourceTable),
-			TargetColumnInfo: c.TargetColumnInfo,
-			WhereColumn:      c.WhereColumn,
-			WhereRange:       c.WhereRange,
-			IsPartition:      c.IsPartition,
+			DBTypeS:     common.TaskDBOracle,
+			DBTypeT:     common.TaskDBMySQL,
+			SchemaNameS: common.StringUPPER(c.SourceSchema),
+			TableNameS:  common.StringUPPER(c.SourceTable),
+			ColumnInfoS: c.SourceColumnInfo,
+			SchemaNameT: common.StringUPPER(c.Cfg.MySQLConfig.SchemaName),
+			TableNameT:  common.StringUPPER(c.SourceTable),
+			ColumnInfoT: c.TargetColumnInfo,
+			WhereColumn: c.WhereColumn,
+			WhereRange:  c.WhereRange,
+			IsPartition: c.IsPartition,
 		}, &meta.WaitSyncMeta{
-			SourceSchemaName: common.StringUPPER(c.SourceSchema),
-			SourceTableName:  common.StringUPPER(c.SourceTable),
-			SyncMode:         c.SyncMode,
-			FullGlobalSCN:    c.SourceGlobalSCN,
-			FullSplitTimes:   1,
-			IsPartition:      c.IsPartition,
+			DBTypeS:        common.TaskDBOracle,
+			DBTypeT:        common.TaskDBMySQL,
+			SchemaNameS:    common.StringUPPER(c.SourceSchema),
+			TableNameS:     common.StringUPPER(c.SourceTable),
+			Mode:           c.SyncMode,
+			FullGlobalSCN:  c.SourceGlobalSCN,
+			FullSplitTimes: 1,
+			IsPartition:    c.IsPartition,
 		})
 		if err != nil {
 			return err
@@ -257,22 +269,26 @@ func (c *Chunk) Split() error {
 		c.WhereRange = "1 = 1"
 		c.WhereColumn = ""
 		err = meta.NewCommonModel(c.MetaDB).CreateDataCompareMetaAndUpdateWaitSyncMeta(c.Ctx, &meta.DataCompareMeta{
-			SourceSchemaName: common.StringUPPER(c.SourceSchema),
-			SourceTableName:  common.StringUPPER(c.SourceTable),
-			SourceColumnInfo: c.SourceColumnInfo,
-			TargetSchemaName: common.StringUPPER(c.Cfg.MySQLConfig.SchemaName),
-			TargetTableName:  common.StringUPPER(c.SourceTable),
-			TargetColumnInfo: c.TargetColumnInfo,
-			WhereColumn:      c.WhereColumn,
-			WhereRange:       c.WhereRange,
-			IsPartition:      c.IsPartition,
+			DBTypeS:     common.TaskDBOracle,
+			DBTypeT:     common.TaskDBMySQL,
+			SchemaNameS: common.StringUPPER(c.SourceSchema),
+			TableNameS:  common.StringUPPER(c.SourceTable),
+			ColumnInfoS: c.SourceColumnInfo,
+			SchemaNameT: common.StringUPPER(c.Cfg.MySQLConfig.SchemaName),
+			TableNameT:  common.StringUPPER(c.SourceTable),
+			ColumnInfoT: c.TargetColumnInfo,
+			WhereColumn: c.WhereColumn,
+			WhereRange:  c.WhereRange,
+			IsPartition: c.IsPartition,
 		}, &meta.WaitSyncMeta{
-			SourceSchemaName: common.StringUPPER(c.SourceSchema),
-			SourceTableName:  common.StringUPPER(c.SourceTable),
-			SyncMode:         c.SyncMode,
-			FullGlobalSCN:    c.SourceGlobalSCN,
-			FullSplitTimes:   1,
-			IsPartition:      c.IsPartition,
+			DBTypeS:        common.TaskDBOracle,
+			DBTypeT:        common.TaskDBMySQL,
+			SchemaNameS:    common.StringUPPER(c.SourceSchema),
+			TableNameS:     common.StringUPPER(c.SourceTable),
+			Mode:           c.SyncMode,
+			FullGlobalSCN:  c.SourceGlobalSCN,
+			FullSplitTimes: 1,
+			IsPartition:    c.IsPartition,
 		})
 		if err != nil {
 			return err
@@ -283,15 +299,17 @@ func (c *Chunk) Split() error {
 	var fullMetas []meta.DataCompareMeta
 	for _, r := range chunkRes {
 		fullMetas = append(fullMetas, meta.DataCompareMeta{
-			SourceSchemaName: common.StringUPPER(c.SourceSchema),
-			SourceTableName:  common.StringUPPER(c.SourceTable),
-			TargetSchemaName: common.StringUPPER(c.Cfg.MySQLConfig.SchemaName),
-			TargetTableName:  common.StringUPPER(c.SourceTable),
-			SourceColumnInfo: c.SourceColumnInfo,
-			TargetColumnInfo: c.TargetColumnInfo,
-			WhereRange:       r["CMD"],
-			WhereColumn:      c.WhereColumn,
-			IsPartition:      c.IsPartition,
+			DBTypeS:     common.TaskDBOracle,
+			DBTypeT:     common.TaskDBMySQL,
+			SchemaNameS: common.StringUPPER(c.SourceSchema),
+			TableNameS:  common.StringUPPER(c.SourceTable),
+			SchemaNameT: common.StringUPPER(c.Cfg.MySQLConfig.SchemaName),
+			TableNameT:  common.StringUPPER(c.SourceTable),
+			ColumnInfoS: c.SourceColumnInfo,
+			ColumnInfoT: c.TargetColumnInfo,
+			WhereRange:  r["CMD"],
+			WhereColumn: c.WhereColumn,
+			IsPartition: c.IsPartition,
 		})
 	}
 
@@ -306,42 +324,48 @@ func (c *Chunk) Split() error {
 
 	for _, r := range res {
 		fullMetas = append(fullMetas, meta.DataCompareMeta{
-			SourceSchemaName: common.StringUPPER(c.SourceSchema),
-			SourceTableName:  common.StringUPPER(c.SourceTable),
-			TargetSchemaName: common.StringUPPER(c.Cfg.MySQLConfig.SchemaName),
-			TargetTableName:  common.StringUPPER(c.SourceTable),
-			SourceColumnInfo: c.SourceColumnInfo,
-			TargetColumnInfo: c.TargetColumnInfo,
-			WhereRange:       common.StringsBuilder(c.WhereColumn, " < ", r["START_ID"]),
-			WhereColumn:      c.WhereColumn,
-			IsPartition:      c.IsPartition,
+			DBTypeS:     common.TaskDBOracle,
+			DBTypeT:     common.TaskDBMySQL,
+			SchemaNameS: common.StringUPPER(c.SourceSchema),
+			TableNameS:  common.StringUPPER(c.SourceTable),
+			SchemaNameT: common.StringUPPER(c.Cfg.MySQLConfig.SchemaName),
+			TableNameT:  common.StringUPPER(c.SourceTable),
+			ColumnInfoS: c.SourceColumnInfo,
+			ColumnInfoT: c.TargetColumnInfo,
+			WhereRange:  common.StringsBuilder(c.WhereColumn, " < ", r["START_ID"]),
+			WhereColumn: c.WhereColumn,
+			IsPartition: c.IsPartition,
 		})
 		fullMetas = append(fullMetas, meta.DataCompareMeta{
-			SourceSchemaName: common.StringUPPER(c.SourceSchema),
-			SourceTableName:  common.StringUPPER(c.SourceTable),
-			TargetSchemaName: common.StringUPPER(c.Cfg.MySQLConfig.SchemaName),
-			TargetTableName:  common.StringUPPER(c.SourceTable),
-			SourceColumnInfo: c.SourceColumnInfo,
-			TargetColumnInfo: c.TargetColumnInfo,
-			WhereRange:       common.StringsBuilder(c.WhereColumn, " > ", res[0]["END_ID"]),
-			WhereColumn:      c.WhereColumn,
-			IsPartition:      c.IsPartition,
+			DBTypeS:     common.TaskDBOracle,
+			DBTypeT:     common.TaskDBMySQL,
+			SchemaNameS: common.StringUPPER(c.SourceSchema),
+			TableNameS:  common.StringUPPER(c.SourceTable),
+			SchemaNameT: common.StringUPPER(c.Cfg.MySQLConfig.SchemaName),
+			TableNameT:  common.StringUPPER(c.SourceTable),
+			ColumnInfoS: c.SourceColumnInfo,
+			ColumnInfoT: c.TargetColumnInfo,
+			WhereRange:  common.StringsBuilder(c.WhereColumn, " > ", res[0]["END_ID"]),
+			WhereColumn: c.WhereColumn,
+			IsPartition: c.IsPartition,
 		})
 	}
 
 	// 元数据库信息 batch 写入
-	err = meta.NewDataCompareMetaModel(c.MetaDB).BatchCreate(c.Ctx, fullMetas, c.Cfg.AppConfig.InsertBatchSize)
+	err = meta.NewDataCompareMetaModel(c.MetaDB).BatchCreateDataCompareMeta(c.Ctx, fullMetas, c.Cfg.AppConfig.InsertBatchSize)
 	if err != nil {
 		return fmt.Errorf("create table [%s.%s] data_diff_meta [batch size] failed: %v", c.SourceSchema, c.SourceTable, err)
 	}
 
-	err = meta.NewWaitSyncMetaModel(c.MetaDB).Update(c.Ctx, &meta.WaitSyncMeta{
-		SourceSchemaName: common.StringUPPER(c.SourceSchema),
-		SourceTableName:  common.StringUPPER(c.SourceTable),
-		SyncMode:         c.SyncMode,
-		FullGlobalSCN:    c.SourceGlobalSCN,
-		FullSplitTimes:   len(fullMetas),
-		IsPartition:      c.IsPartition,
+	err = meta.NewWaitSyncMetaModel(c.MetaDB).UpdateWaitSyncMeta(c.Ctx, &meta.WaitSyncMeta{
+		DBTypeS:        common.TaskDBOracle,
+		DBTypeT:        common.TaskDBMySQL,
+		SchemaNameS:    common.StringUPPER(c.SourceSchema),
+		TableNameS:     common.StringUPPER(c.SourceTable),
+		Mode:           c.SyncMode,
+		FullGlobalSCN:  c.SourceGlobalSCN,
+		FullSplitTimes: len(fullMetas),
+		IsPartition:    c.IsPartition,
 	})
 	if err != nil {
 		return err
