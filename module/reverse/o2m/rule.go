@@ -675,7 +675,14 @@ func (r *Rule) ChangeTableName() string {
 func (r *Rule) ChangeTableColumnType(sourceSchema, sourceTable, sourceColumn string, column interface{}) (string, error) {
 	var columnType string
 	// 获取内置映射规则
-	originColumnType, buildInColumnType, err := OracleTableColumnMapRule(sourceSchema, sourceTable, column.(o2m.Column))
+	buildinDatatypeNames, err := meta.NewBuildinDatatypeRuleModel(r.MetaDB).BatchQueryBuildinDatatype(r.Ctx, &meta.BuildinDatatypeRule{
+		DBTypeS: common.TaskDBOracle,
+		DBTypeT: common.TaskDBMySQL,
+	})
+	if err != nil {
+		return columnType, err
+	}
+	originColumnType, buildInColumnType, err := OracleTableColumnMapRule(sourceSchema, sourceTable, column.(o2m.Column), buildinDatatypeNames)
 	if err != nil {
 		return columnType, err
 	}

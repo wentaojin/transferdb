@@ -105,10 +105,10 @@ func OracleTableColumnMapRuleCheck(
 	mysqlColMeta := genColumnNullCommentDefaultMeta(mysqlColInfo.NULLABLE, mysqlColInfo.Comment, mysqlColInfo.MySQLOriginDataDefault)
 
 	// 字段类型判断
-	// CHARACTER SET %s COLLATE %s（Only 作用于字符类型）
-	switch oracleDataType {
+	// CHARACTER SET %s COLLATE %s (Only 作用于字符类型)
+	switch common.StringUPPER(oracleDataType) {
 	// 数字
-	case "NUMBER":
+	case common.BuildInOracleDatatypeNumber:
 		switch {
 		case oracleDataScale > 0:
 			// oracle 真实数据类型 number(*) -> number(38,127)
@@ -290,7 +290,7 @@ func OracleTableColumnMapRuleCheck(
 			}
 		}
 		return fixedMsg, tableRows, nil
-	case "DECIMAL":
+	case common.BuildInOracleDatatypeDecimal:
 		switch {
 		case oracleDataScale == 0 && oracleDataPrecision == 0:
 			if mysqlDataType == "DECIMAL" && mysqlDataPrecision == 10 && mysqlDataScale == oracleDataScale && oracleDiffColMeta == mysqlDiffColMeta {
@@ -327,7 +327,7 @@ func OracleTableColumnMapRuleCheck(
 			)
 			return fixedMsg, tableRows, nil
 		}
-	case "DEC":
+	case common.BuildInOracleDatatypeDec:
 		switch {
 		case oracleDataScale == 0 && oracleDataPrecision == 0:
 			if mysqlDataType == "DECIMAL" && mysqlDataPrecision == 10 && mysqlDataScale == oracleDataScale && oracleDiffColMeta == mysqlDiffColMeta {
@@ -364,7 +364,7 @@ func OracleTableColumnMapRuleCheck(
 			)
 			return fixedMsg, tableRows, nil
 		}
-	case "DOUBLE PRECISION":
+	case common.BuildInOracleDatatypeDoublePrecision:
 		if mysqlDataType == "DOUBLE" && mysqlDataPrecision == 22 && mysqlDataScale == 0 && oracleDiffColMeta == mysqlDiffColMeta {
 			return "", nil, nil
 		}
@@ -381,25 +381,7 @@ func OracleTableColumnMapRuleCheck(
 			oracleColMeta,
 		)
 		return fixedMsg, tableRows, nil
-	case "FLOAT":
-		if oracleDataPrecision == 0 {
-			if mysqlDataType == "FLOAT" && mysqlDataPrecision == 12 && mysqlDataScale == 0 && oracleDiffColMeta == mysqlDiffColMeta {
-				return "", nil, nil
-			}
-			tableRows = table.Row{tableName, columnName,
-				fmt.Sprintf("FLOAT %s", oracleColMeta),
-				fmt.Sprintf("%s(%d,%d) %s", mysqlDataType, mysqlDataPrecision, mysqlDataScale, mysqlColMeta),
-				fmt.Sprintf("FLOAT %s", oracleColMeta)}
-
-			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s %s;\n",
-				targetSchema,
-				tableName,
-				columnName,
-				"FLOAT",
-				oracleColMeta,
-			)
-			return fixedMsg, tableRows, nil
-		}
+	case common.BuildInOracleDatatypeFloat:
 		if mysqlDataType == "DOUBLE" && mysqlDataPrecision == 22 && mysqlDataScale == 0 && oracleDiffColMeta == mysqlDiffColMeta {
 			return "", nil, nil
 		}
@@ -416,7 +398,7 @@ func OracleTableColumnMapRuleCheck(
 			oracleColMeta,
 		)
 		return fixedMsg, tableRows, nil
-	case "INTEGER":
+	case common.BuildInOracleDatatypeInteger:
 		if mysqlDataType == "INT" && mysqlDataPrecision >= 10 && mysqlDataScale == 0 && oracleDiffColMeta == mysqlDiffColMeta {
 			return "", nil, nil
 		}
@@ -433,7 +415,7 @@ func OracleTableColumnMapRuleCheck(
 			oracleColMeta,
 		)
 		return fixedMsg, tableRows, nil
-	case "INT":
+	case common.BuildInOracleDatatypeInt:
 		if mysqlDataType == "INT" && mysqlDataPrecision >= 10 && mysqlDataScale == 0 && oracleDiffColMeta == mysqlDiffColMeta {
 			return "", nil, nil
 		}
@@ -450,7 +432,7 @@ func OracleTableColumnMapRuleCheck(
 			oracleColMeta,
 		)
 		return fixedMsg, tableRows, nil
-	case "REAL":
+	case common.BuildInOracleDatatypeReal:
 		if mysqlDataType == "DOUBLE" && mysqlDataPrecision == 22 && mysqlDataScale == 0 && oracleDiffColMeta == mysqlDiffColMeta {
 			return "", nil, nil
 		}
@@ -467,7 +449,7 @@ func OracleTableColumnMapRuleCheck(
 			oracleColMeta,
 		)
 		return fixedMsg, tableRows, nil
-	case "NUMERIC":
+	case common.BuildInOracleDatatypeNumeric:
 		if mysqlDataType == "DECIMAL" && mysqlDataPrecision == oracleDataPrecision && mysqlDataScale == oracleDataScale && oracleDiffColMeta == mysqlDiffColMeta {
 			return "", nil, nil
 		}
@@ -484,7 +466,7 @@ func OracleTableColumnMapRuleCheck(
 			oracleColMeta,
 		)
 		return fixedMsg, tableRows, nil
-	case "BINARY_FLOAT":
+	case common.BuildInOracleDatatypeBinaryFloat:
 		if mysqlDataType == "DOUBLE" && mysqlDataPrecision == 22 && mysqlDataScale == 0 && oracleDiffColMeta == mysqlDiffColMeta {
 			return "", nil, nil
 		}
@@ -501,7 +483,7 @@ func OracleTableColumnMapRuleCheck(
 			oracleColMeta,
 		)
 		return fixedMsg, tableRows, nil
-	case "BINARY_DOUBLE":
+	case common.BuildInOracleDatatypeBinaryDouble:
 		if mysqlDataType == "DOUBLE" && mysqlDataPrecision == 22 && mysqlDataScale == 0 && oracleDiffColMeta == mysqlDiffColMeta {
 			return "", nil, nil
 		}
@@ -518,8 +500,8 @@ func OracleTableColumnMapRuleCheck(
 			oracleColMeta,
 		)
 		return fixedMsg, tableRows, nil
-	case "SMALLINT":
-		if mysqlDataType == "DECIMAL" && mysqlDataPrecision == 38 && mysqlDataScale == 0 && oracleDiffColMeta == mysqlDiffColMeta {
+	case common.BuildInOracleDatatypeSmallint:
+		if mysqlDataType == "SMALLINT" && mysqlDataPrecision == 6 && mysqlDataScale == 0 && oracleDiffColMeta == mysqlDiffColMeta {
 			return "", nil, nil
 		}
 		tableRows = table.Row{tableName, columnName,
@@ -537,7 +519,7 @@ func OracleTableColumnMapRuleCheck(
 		return fixedMsg, tableRows, nil
 
 		// 字符
-	case "BFILE":
+	case common.BuildInOracleDatatypeBfile:
 		if mysqlDataType == "VARCHAR" && mysqlDataLength == 255 && oracleDiffColMeta == mysqlDiffColMeta {
 			return "", nil, nil
 		}
@@ -558,7 +540,7 @@ func OracleTableColumnMapRuleCheck(
 		return fixedMsg, tableRows, nil
 
 	// 二进制
-	case "LONG":
+	case common.BuildInOracleDatatypeLong:
 		if mysqlDataType == "LONGTEXT" && mysqlDataLength == 4294967295 && oracleDiffColMeta == mysqlDiffColMeta {
 			return "", nil, nil
 		}
@@ -577,7 +559,7 @@ func OracleTableColumnMapRuleCheck(
 			oracleColMeta,
 		)
 		return fixedMsg, tableRows, nil
-	case "LONG RAW":
+	case common.BuildInOracleDatatypeLongRAW:
 		if mysqlDataType == "LONGBLOB" && mysqlDataLength == 4294967295 && oracleDiffColMeta == mysqlDiffColMeta {
 			return "", nil, nil
 		}
@@ -596,7 +578,7 @@ func OracleTableColumnMapRuleCheck(
 			oracleColMeta,
 		)
 		return fixedMsg, tableRows, nil
-	case "NCHAR VARYING":
+	case common.BuildInOracleDatatypeNcharVarying:
 		if mysqlDataType == "NCHAR VARYING" && mysqlDataLength == oracleDataLength && oracleDiffColMeta == mysqlDiffColMeta {
 			return "", nil, nil
 		}
@@ -615,7 +597,7 @@ func OracleTableColumnMapRuleCheck(
 			oracleColMeta,
 		)
 		return fixedMsg, tableRows, nil
-	case "NCLOB":
+	case common.BuildInOracleDatatypeNclob:
 		if mysqlDataType == "TEXT" && mysqlDataLength == 65535 && oracleDiffColMeta == mysqlDiffColMeta {
 			return "", nil, nil
 		}
@@ -634,7 +616,7 @@ func OracleTableColumnMapRuleCheck(
 			oracleColMeta,
 		)
 		return fixedMsg, tableRows, nil
-	case "RAW":
+	case common.BuildInOracleDatatypeRaw:
 		// Fixed: MySQL Binary 数据类型定长，长度不足补 0x00, 容易导致数据对比不一致，统一使用 Varbinary 数据类型
 		//if oracleDataLength < 256 {
 		//	if mysqlDataType == "BINARY" && mysqlDataLength == oracleDataLength && oracleDiffColMeta == mysqlDiffColMeta {
@@ -675,7 +657,7 @@ func OracleTableColumnMapRuleCheck(
 			oracleColMeta,
 		)
 		return fixedMsg, tableRows, nil
-	case "XMLTYPE":
+	case common.BuildInOracleDatatypeXmltype:
 		if mysqlDataType == "LONGTEXT" && mysqlDataLength == 4294967295 && oracleDiffColMeta == mysqlDiffColMeta {
 			return "", nil, nil
 		}
@@ -696,7 +678,7 @@ func OracleTableColumnMapRuleCheck(
 		return fixedMsg, tableRows, nil
 
 		// 二进制
-	case "CLOB":
+	case common.BuildInOracleDatatypeClob:
 		if mysqlDataType == "LONGTEXT" && mysqlDataLength == 4294967295 && oracleDiffColMeta == mysqlDiffColMeta {
 			return "", nil, nil
 		}
@@ -715,7 +697,7 @@ func OracleTableColumnMapRuleCheck(
 			oracleColMeta,
 		)
 		return fixedMsg, tableRows, nil
-	case "BLOB":
+	case common.BuildInOracleDatatypeBlob:
 		if mysqlDataType == "BLOB" && mysqlDataLength == 65535 && oracleDiffColMeta == mysqlDiffColMeta {
 			return "", nil, nil
 		}
@@ -736,7 +718,7 @@ func OracleTableColumnMapRuleCheck(
 		return fixedMsg, tableRows, nil
 
 		// 时间
-	case "DATE":
+	case common.BuildInOracleDatatypeDate:
 		if mysqlDataType == "DATETIME" && mysqlDataLength == 0 && mysqlDataPrecision == 0 && mysqlDataScale == 0 && mysqlDatetimePrecision == 0 && oracleDiffColMeta == mysqlDiffColMeta {
 			return "", nil, nil
 		}
@@ -759,32 +741,7 @@ func OracleTableColumnMapRuleCheck(
 		// mysql 同等长度（data_length） char 字符类型 > oracle bytes 字节类型
 
 	// 字符
-	case "CHARACTER":
-		if oracleDataLength < 256 {
-			if mysqlDataType == "CHAR" && mysqlDataLength == oracleDataLength && oracleDiffColMeta == mysqlDiffColMeta && strings.EqualFold(oracleColumnCharUsed, "char") {
-				return "", nil, nil
-			}
-			tableRows = table.Row{tableName, columnName,
-				fmt.Sprintf("CHARACTER(%d %s) %s", oracleDataLength, oracleColumnCharUsed, oracleColMeta),
-				fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
-				fmt.Sprintf("CHAR(%d) %s", oracleDataLength, oracleColMeta)}
-
-			// 忽略 bytes -> char 语句修复输出
-			if mysqlDataType == "CHAR" && mysqlDataLength == oracleDataLength && oracleDiffColMeta == mysqlDiffColMeta {
-				return fixedMsg, tableRows, nil
-			}
-
-			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s CHARACTER SET %s COLLATE %s %s;\n",
-				targetSchema,
-				tableName,
-				columnName,
-				fmt.Sprintf("CHAR(%d)", oracleDataLength),
-				mysqlCharacterSet,
-				mysqlCollation,
-				oracleColMeta,
-			)
-			return fixedMsg, tableRows, nil
-		}
+	case common.BuildInOracleDatatypeCharacter:
 		if mysqlDataType == "VARCHAR" && mysqlDataLength == oracleDataLength && oracleDiffColMeta == mysqlDiffColMeta && strings.EqualFold(oracleColumnCharUsed, "char") {
 			return "", nil, nil
 		}
@@ -808,7 +765,7 @@ func OracleTableColumnMapRuleCheck(
 			oracleColMeta,
 		)
 		return fixedMsg, tableRows, nil
-	case "ROWID":
+	case common.BuildInOracleDatatypeRowid:
 		if mysqlDataType == "CHAR" && mysqlDataLength == 10 && oracleDiffColMeta == mysqlDiffColMeta {
 			return "", nil, nil
 		}
@@ -827,7 +784,7 @@ func OracleTableColumnMapRuleCheck(
 			oracleColMeta,
 		)
 		return fixedMsg, tableRows, nil
-	case "UROWID":
+	case common.BuildInOracleDatatypeUrowid:
 		if mysqlDataType == "VARCHAR" && mysqlDataLength == oracleDataLength && oracleDiffColMeta == mysqlDiffColMeta {
 			return "", nil, nil
 		}
@@ -846,7 +803,7 @@ func OracleTableColumnMapRuleCheck(
 			oracleColMeta,
 		)
 		return fixedMsg, tableRows, nil
-	case "VARCHAR":
+	case common.BuildInOracleDatatypeVarchar:
 		if mysqlDataType == "VARCHAR" && mysqlDataLength == oracleDataLength && oracleDiffColMeta == mysqlDiffColMeta && strings.EqualFold(oracleColumnCharUsed, "char") {
 			return "", nil, nil
 		}
@@ -870,32 +827,7 @@ func OracleTableColumnMapRuleCheck(
 			oracleColMeta,
 		)
 		return fixedMsg, tableRows, nil
-	case "CHAR":
-		if oracleDataLength < 256 {
-			if mysqlDataType == "CHAR" && mysqlDataLength == oracleDataLength && oracleDiffColMeta == mysqlDiffColMeta && strings.EqualFold(oracleColumnCharUsed, "char") {
-				return "", nil, nil
-			}
-			tableRows = table.Row{tableName, columnName,
-				fmt.Sprintf("CHAR(%d %s) %s", oracleDataLength, oracleColumnCharUsed, oracleColMeta),
-				fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
-				fmt.Sprintf("CHAR(%d) %s", oracleDataLength, oracleColMeta)}
-
-			// 忽略 bytes -> char 语句修复输出
-			if mysqlDataType == "CHAR" && mysqlDataLength == oracleDataLength && oracleDiffColMeta == mysqlDiffColMeta {
-				return fixedMsg, tableRows, nil
-			}
-
-			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s CHARACTER SET %s COLLATE %s %s;\n",
-				targetSchema,
-				tableName,
-				columnName,
-				fmt.Sprintf("CHAR(%d)", oracleDataLength),
-				mysqlCharacterSet,
-				mysqlCollation,
-				oracleColMeta,
-			)
-			return fixedMsg, tableRows, nil
-		}
+	case common.BuildInOracleDatatypeChar:
 		if mysqlDataType == "VARCHAR" && mysqlDataLength == oracleDataLength && oracleDiffColMeta == mysqlDiffColMeta && oracleColumnCharUsed == "char" {
 			return "", nil, nil
 		}
@@ -918,32 +850,7 @@ func OracleTableColumnMapRuleCheck(
 			oracleColMeta,
 		)
 		return fixedMsg, tableRows, nil
-	case "NCHAR":
-		if oracleDataLength < 256 {
-			if mysqlDataType == "NCHAR" && mysqlDataLength == oracleDataLength && oracleDiffColMeta == mysqlDiffColMeta && oracleColumnCharUsed == "char" {
-				return "", nil, nil
-			}
-			tableRows = table.Row{tableName, columnName,
-				fmt.Sprintf("NCHAR(%d %s) %s", oracleDataLength, oracleColumnCharUsed, oracleColMeta),
-				fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
-				fmt.Sprintf("NCHAR(%d) %s", oracleDataLength, oracleColMeta)}
-
-			// 忽略 bytes -> char 语句修复输出
-			if mysqlDataType == "NCHAR" && mysqlDataLength == oracleDataLength && oracleDiffColMeta == mysqlDiffColMeta {
-				return fixedMsg, tableRows, nil
-			}
-
-			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s CHARACTER SET %s COLLATE %s %s;\n",
-				targetSchema,
-				tableName,
-				columnName,
-				fmt.Sprintf("NCHAR(%d)", oracleDataLength),
-				mysqlCharacterSet,
-				mysqlCollation,
-				oracleColMeta,
-			)
-			return fixedMsg, tableRows, nil
-		}
+	case common.BuildInOracleDatatypeNchar:
 		if mysqlDataType == "NVARCHAR" && mysqlDataLength == oracleDataLength && oracleDiffColMeta == mysqlDiffColMeta && oracleColumnCharUsed == "char" {
 			return "", nil, nil
 		}
@@ -967,7 +874,7 @@ func OracleTableColumnMapRuleCheck(
 			oracleColMeta,
 		)
 		return fixedMsg, tableRows, nil
-	case "VARCHAR2":
+	case common.BuildInOracleDatatypeVarchar2:
 		if mysqlDataType == "VARCHAR" && mysqlDataLength == oracleDataLength && oracleDiffColMeta == mysqlDiffColMeta && oracleColumnCharUsed == "char" {
 			return "", nil, nil
 		}
@@ -991,7 +898,7 @@ func OracleTableColumnMapRuleCheck(
 			oracleColMeta,
 		)
 		return fixedMsg, tableRows, nil
-	case "NVARCHAR2":
+	case common.BuildInOracleDatatypeNvarchar2:
 		if mysqlDataType == "NVARCHAR" && mysqlDataLength == oracleDataLength && oracleDiffColMeta == mysqlDiffColMeta && oracleColumnCharUsed == "char" {
 			return "", nil, nil
 		}
@@ -1018,7 +925,26 @@ func OracleTableColumnMapRuleCheck(
 
 		// 默认其他类型
 	default:
-		if strings.Contains(oracleDataType, "INTERVAL") {
+		if strings.Contains(oracleDataType, "INTERVAL YEAR") {
+			if mysqlDataType == "VARCHAR" && mysqlDataLength == 30 && oracleDiffColMeta == mysqlDiffColMeta {
+				return "", nil, nil
+			}
+			tableRows = table.Row{tableName, columnName,
+				fmt.Sprintf("%s %s", oracleDataType, oracleColMeta),
+				fmt.Sprintf("%s(%d) %s", mysqlDataType, mysqlDataLength, mysqlColMeta),
+				fmt.Sprintf("VARCHAR(30) %s", oracleColMeta)}
+
+			fixedMsg = fmt.Sprintf("ALTER TABLE %s.%s MODIFY COLUMN %s %s CHARACTER SET %s COLLATE %s %s;\n",
+				targetSchema,
+				tableName,
+				columnName,
+				"VARCHAR(30)",
+				mysqlCharacterSet,
+				mysqlCollation,
+				oracleColMeta,
+			)
+			return fixedMsg, tableRows, nil
+		} else if strings.Contains(oracleDataType, "INTERVAL DAY") {
 			if mysqlDataType == "VARCHAR" && mysqlDataLength == 30 && oracleDiffColMeta == mysqlDiffColMeta {
 				return "", nil, nil
 			}

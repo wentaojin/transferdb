@@ -119,6 +119,7 @@ const (
 
 	// INTERVAL DAY(p) TO SECOND(s) 组合过多，代码内匹配处理
 	// p and s value max 9 -> INTERVAL DAY(9) TO SECOND(9)
+	BuildInOracleDatatypeIntervalDay = "INTERVAL DAY"
 )
 
 // Oracle 数据类型名映射规则 O2M
@@ -194,6 +195,7 @@ var BuildInOracleO2MDatatypeNameMap = map[string]string{
 	BuildInOracleDatatypeTimestampWithLocalTimeZone7: "DATETIME",
 	BuildInOracleDatatypeTimestampWithLocalTimeZone8: "DATETIME",
 	BuildInOracleDatatypeTimestampWithLocalTimeZone9: "DATETIME",
+	BuildInOracleDatatypeIntervalDay:                 "VARCHAR",
 }
 
 /*

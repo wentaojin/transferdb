@@ -499,6 +499,13 @@ func (rw *BuildinDatatypeRule) InitO2MBuildinDatatypeRule(ctx context.Context) e
 		DatatypeNameT: common.BuildInOracleO2MDatatypeNameMap[common.BuildInOracleDatatypeTimestampWithLocalTimeZone9],
 	})
 
+	buildinDataTypeR = append(buildinDataTypeR, &BuildinDatatypeRule{
+		DBTypeS:       common.TaskDBOracle,
+		DBTypeT:       common.TaskDBMySQL,
+		DatatypeNameS: common.BuildInOracleDatatypeIntervalDay,
+		DatatypeNameT: common.BuildInOracleO2MDatatypeNameMap[common.BuildInOracleDatatypeIntervalDay],
+	})
+
 	return rw.DB(ctx).Clauses(clause.OnConflict{
 		Columns: []clause.Column{
 			{Name: "db_type_s"},
