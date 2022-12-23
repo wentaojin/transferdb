@@ -148,15 +148,32 @@ func (r *Migrate) NewIncr() error {
 		if err != nil {
 			return err
 		}
+
+		// 获取自定义库表名规则
+		tableNameRule, err := r.getTableNameRule()
+		if err != nil {
+			return err
+		}
+
 		var incrSyncMetas []meta.IncrSyncMeta
 		if len(tableMetas) > 0 {
 			for _, table := range tableMetas {
+				// 库名、表名规则
+				var targetTableName string
+				if val, ok := tableNameRule[common.StringUPPER(table.TableNameS)]; ok {
+					targetTableName = val
+				} else {
+					targetTableName = common.StringUPPER(table.TableNameS)
+				}
+
 				incrSyncMetas = append(incrSyncMetas, meta.IncrSyncMeta{
 					DBTypeS:     common.TaskDBOracle,
 					DBTypeT:     common.TaskDBMySQL,
 					GlobalScnS:  table.FullGlobalSCN,
 					SchemaNameS: common.StringUPPER(table.SchemaNameS),
 					TableNameS:  common.StringUPPER(table.TableNameS),
+					SchemaNameT: common.StringUPPER(r.cfg.MySQLConfig.SchemaName),
+					TableNameT:  common.StringUPPER(targetTableName),
 					TableScnS:   table.FullGlobalSCN,
 					IsPartition: table.IsPartition,
 				})
@@ -175,6 +192,12 @@ func (r *Migrate) NewIncr() error {
 }
 
 func (r *Migrate) syncTableIncrRecord() error {
+	// 获取自定义库表名规则
+	tableNameRule, err := r.getTableNameRule()
+	if err != nil {
+		return err
+	}
+
 	// 获取增量所需得日志文件
 	logFiles, err := r.getTableIncrRecordLogfile()
 	if err != nil {
@@ -182,6 +205,7 @@ func (r *Migrate) syncTableIncrRecord() error {
 	}
 	zap.L().Info("increment table log file get",
 		zap.String("logfile", fmt.Sprintf("%v", logFiles)))
+
 	// 遍历所有日志文件
 	for _, log := range logFiles {
 		// 获取日志文件起始 SCN
@@ -217,12 +241,12 @@ func (r *Migrate) syncTableIncrRecord() error {
 
 		var (
 			transferTableMetaMap map[string]uint64
-			transferTableSlice   []string
+			syncSourceTables     []string
 		)
 		transferTableMetaMap = make(map[string]uint64)
 		for _, tbl := range incrSyncMetas {
 			transferTableMetaMap[strings.ToUpper(tbl.TableNameS)] = tbl.TableScnS
-			transferTableSlice = append(transferTableSlice, strings.ToUpper(tbl.TableNameS))
+			syncSourceTables = append(syncSourceTables, strings.ToUpper(tbl.TableNameS))
 		}
 
 		// 获取 logminer query 起始最小 SCN
@@ -246,7 +270,9 @@ func (r *Migrate) syncTableIncrRecord() error {
 		// 捕获数据
 		rowsResult, err := getOracleIncrRecord(r.ctx, r.oracle,
 			common.StringUPPER(r.cfg.OracleConfig.SchemaName),
-			common.StringArrayToCapitalChar(transferTableSlice),
+			common.StringUPPER(r.cfg.MySQLConfig.SchemaName),
+			common.StringArrayToCapitalChar(syncSourceTables),
+			tableNameRule,
 			strconv.FormatUint(minSourceTableSCN, 10),
 			r.cfg.AllConfig.LogminerQueryTimeout)
 		if err != nil {
@@ -286,7 +312,7 @@ func (r *Migrate) syncTableIncrRecord() error {
 				if logFileStartSCN == currentRedoLogFirstChange && log["LOG_FILE"] == currentRedoLogFileName {
 					logminerContentMap, err = filterOracleIncrRecord(
 						rowsResult,
-						transferTableSlice,
+						syncSourceTables,
 						transferTableMetaMap,
 						r.cfg.AllConfig.FilterThreads,
 						common.MigrateCurrentResetFlag,
@@ -299,7 +325,7 @@ func (r *Migrate) syncTableIncrRecord() error {
 				} else {
 					logminerContentMap, err = filterOracleIncrRecord(
 						rowsResult,
-						transferTableSlice,
+						syncSourceTables,
 						transferTableMetaMap,
 						r.cfg.AllConfig.FilterThreads,
 						0,
@@ -314,7 +340,6 @@ func (r *Migrate) syncTableIncrRecord() error {
 					if err := applyOracleIncrRecord(r.metaDB, r.mysql, r.cfg, logminerContentMap); err != nil {
 						return err
 					}
-
 					if logFileStartSCN == currentRedoLogFirstChange && log["LOG_FILE"] == currentRedoLogFileName {
 						// 当前所有日志文件内容应用完毕，判断是否直接更新 GLOBAL_SCN 至当前重做日志文件起始 SCN
 						err = meta.NewCommonModel(r.metaDB).UpdateIncrSyncMetaSCNByCurrentRedo(r.ctx,
@@ -336,7 +361,7 @@ func (r *Migrate) syncTableIncrRecord() error {
 							currentRedoLogMaxSCN,
 							logFileStartSCN,
 							logFileEndSCN,
-							transferTableSlice)
+							syncSourceTables)
 						if err != nil {
 							return err
 						}
@@ -349,7 +374,7 @@ func (r *Migrate) syncTableIncrRecord() error {
 			}
 			logminerContentMap, err = filterOracleIncrRecord(
 				rowsResult,
-				transferTableSlice,
+				syncSourceTables,
 				transferTableMetaMap,
 				r.cfg.AllConfig.FilterThreads,
 				0,
@@ -368,7 +393,7 @@ func (r *Migrate) syncTableIncrRecord() error {
 					common.TaskDBMySQL,
 					r.cfg.OracleConfig.SchemaName,
 					logFileEndSCN,
-					transferTableSlice)
+					syncSourceTables)
 				if err != nil {
 					return err
 				}
@@ -401,7 +426,7 @@ func (r *Migrate) syncTableIncrRecord() error {
 					currentRedoLogMaxSCN,
 					logFileStartSCN,
 					logFileEndSCN,
-					transferTableSlice)
+					syncSourceTables)
 				if err != nil {
 					return err
 				}
@@ -413,7 +438,7 @@ func (r *Migrate) syncTableIncrRecord() error {
 				common.TaskDBMySQL,
 				r.cfg.OracleConfig.SchemaName,
 				logFileEndSCN,
-				transferTableSlice)
+				syncSourceTables)
 			if err != nil {
 				return err
 			}

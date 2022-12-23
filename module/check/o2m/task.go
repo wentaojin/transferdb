@@ -16,6 +16,7 @@ limitations under the License.
 package o2m
 
 import (
+	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/database/mysql"
 	"github.com/wentaojin/transferdb/database/oracle"
 )
@@ -23,7 +24,8 @@ import (
 type Task struct {
 	SourceSchemaName      string `json:"source_schema_name"`
 	TargetSchemaName      string `json:"target_schema_name"`
-	TableName             string `json:"table_name"`
+	SourceTableName       string `json:"source_table_name"`
+	TargetTableName       string `json:"target_table_name"`
 	TargetDBType          string `json:"target_db_type"`
 	SourceDBCharacterSet  string `json:"source_db_character_set"`
 	SourceDBNLSSort       string `json:"source_dbnls_sort"`
@@ -38,13 +40,21 @@ type Task struct {
 
 func GenCheckTaskTable(sourceSchemaName, targetSchemaName, sourceDBCharacterSet, nlsSort, nlsComp string,
 	sourceTableCollation map[string]string, sourceSchemaCollation string,
-	sourceDBCollation bool, targetDBType string, oracle *oracle.Oracle, mysql *mysql.MySQL, exporters []string) []*Task {
+	sourceDBCollation bool, targetDBType string, oracle *oracle.Oracle, mysql *mysql.MySQL, tableNameRule map[string]string, exporters []string) []*Task {
 	var tasks []*Task
 	for _, t := range exporters {
+		// 库名、表名规则
+		var targetTableName string
+		if val, ok := tableNameRule[common.StringUPPER(t)]; ok {
+			targetTableName = val
+		} else {
+			targetTableName = common.StringUPPER(t)
+		}
 		tasks = append(tasks, &Task{
 			SourceSchemaName:      sourceSchemaName,
 			TargetSchemaName:      targetSchemaName,
-			TableName:             t,
+			SourceTableName:       t,
+			TargetTableName:       targetTableName,
 			SourceDBCharacterSet:  sourceDBCharacterSet,
 			SourceDBNLSSort:       nlsSort,
 			SourceDBNLSComp:       nlsComp,
@@ -60,7 +70,7 @@ func GenCheckTaskTable(sourceSchemaName, targetSchemaName, sourceDBCharacterSet,
 }
 
 func (t *Task) GenOracleTable() (*Table, error) {
-	info, err := NewOracleTableINFO(t.SourceSchemaName, t.TableName, t.Oracle, t.SourceDBCharacterSet, t.SourceDBNLSComp, t.SourceTableCollation, t.SourceSchemaCollation, t.SourceDBCollation)
+	info, err := NewOracleTableINFO(t.SourceSchemaName, t.SourceTableName, t.Oracle, t.SourceDBCharacterSet, t.SourceDBNLSComp, t.SourceTableCollation, t.SourceSchemaCollation, t.SourceDBCollation)
 	if err != nil {
 		return info, err
 	}
@@ -68,7 +78,7 @@ func (t *Task) GenOracleTable() (*Table, error) {
 }
 
 func (t *Task) GenMySQLTable() (*Table, string, error) {
-	info, version, err := NewMySQLTableINFO(t.TargetSchemaName, t.TableName, t.TargetDBType, t.MySQL)
+	info, version, err := NewMySQLTableINFO(t.TargetSchemaName, t.TargetTableName, t.TargetDBType, t.MySQL)
 	if err != nil {
 		return info, version, err
 	}

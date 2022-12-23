@@ -27,8 +27,8 @@ type Job struct {
 func (j *Job) Schedule() {
 	// 从 channel 接收数据
 	for c := range j.ch {
-		if _, ok := j.data[common.StringUPPER(c.TableName)]; ok {
-			j.data[common.StringUPPER(c.TableName)] = append(j.data[common.StringUPPER(c.TableName)], c)
+		if _, ok := j.data[common.StringUPPER(c.SourceTable)]; ok {
+			j.data[common.StringUPPER(c.SourceTable)] = append(j.data[common.StringUPPER(c.SourceTable)], c)
 		}
 	}
 }

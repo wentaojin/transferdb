@@ -263,7 +263,24 @@ func (r *O2M) NewCSVer() error {
 		}
 	}
 	if len(waitSyncTables) > 0 {
-		err = r.csvWaitSyncTable(waitSyncTables, oracleCollation)
+		// 获取表名自定义规则
+		tableNameRules, err := meta.NewTableNameRuleModel(r.metaDB).DetailTableNameRule(r.ctx, &meta.TableNameRule{
+			DBTypeS:     common.TaskDBOracle,
+			DBTypeT:     common.TaskDBMySQL,
+			SchemaNameS: r.cfg.OracleConfig.SchemaName,
+			SchemaNameT: r.cfg.MySQLConfig.SchemaName,
+		})
+		if err != nil {
+			return err
+		}
+		tableNameRuleMap := make(map[string]string)
+
+		if len(tableNameRules) > 0 {
+			for _, tr := range tableNameRules {
+				tableNameRuleMap[common.StringUPPER(tr.TableNameS)] = common.StringUPPER(tr.TableNameT)
+			}
+		}
+		err = r.csvWaitSyncTable(waitSyncTables, tableNameRuleMap, oracleCollation)
 		if err != nil {
 			return err
 		}
@@ -396,8 +413,8 @@ func (r *O2M) csvPartSyncTable(csvPartTables []string) error {
 	return nil
 }
 
-func (r *O2M) csvWaitSyncTable(csvWaitTables []string, oracleCollation bool) error {
-	err := r.initWaitSyncTableRowID(csvWaitTables, oracleCollation)
+func (r *O2M) csvWaitSyncTable(csvWaitTables []string, tableNameRule map[string]string, oracleCollation bool) error {
+	err := r.initWaitSyncTableRowID(csvWaitTables, tableNameRule, oracleCollation)
 	if err != nil {
 		return err
 	}
@@ -408,7 +425,7 @@ func (r *O2M) csvWaitSyncTable(csvWaitTables []string, oracleCollation bool) err
 	return nil
 }
 
-func (r *O2M) initWaitSyncTableRowID(csvWaitTables []string, oracleCollation bool) error {
+func (r *O2M) initWaitSyncTableRowID(csvWaitTables []string, tableNameRule map[string]string, oracleCollation bool) error {
 	startTask := time.Now()
 	// 全量同步前，获取 SCN 以及初始化元数据表
 	globalSCN, err := r.oracle.GetOracleCurrentSnapshotSCN()
@@ -428,6 +445,14 @@ func (r *O2M) initWaitSyncTableRowID(csvWaitTables []string, oracleCollation boo
 		workerID := idx
 		g.Go(func() error {
 			startTime := time.Now()
+
+			// 库名、表名规则
+			var targetTableName string
+			if val, ok := tableNameRule[common.StringUPPER(t)]; ok {
+				targetTableName = val
+			} else {
+				targetTableName = common.StringUPPER(t)
+			}
 
 			if r.cfg.CSVConfig.OutputDir == "" {
 				return fmt.Errorf("csv config paramter output-dir can't be null, please configure")
@@ -466,7 +491,7 @@ func (r *O2M) initWaitSyncTableRowID(csvWaitTables []string, oracleCollation boo
 					SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 					TableNameS:  common.StringUPPER(t),
 					SchemaNameT: common.StringUPPER(r.cfg.MySQLConfig.SchemaName),
-					TableNameT:  common.StringUPPER(t),
+					TableNameT:  common.StringUPPER(targetTableName),
 					GlobalScnS:  globalSCN,
 					ColumnInfoS: sourceColumnInfo,
 					RowidInfoS:  "1 = 1",
@@ -474,8 +499,8 @@ func (r *O2M) initWaitSyncTableRowID(csvWaitTables []string, oracleCollation boo
 					IsPartition: isPartition,
 					CSVFile: filepath.Join(r.cfg.CSVConfig.OutputDir,
 						common.StringUPPER(r.cfg.OracleConfig.SchemaName), common.StringUPPER(t),
-						common.StringsBuilder(common.StringUPPER(r.cfg.OracleConfig.SchemaName),
-							`.`, common.StringUPPER(t), `.0.csv`)),
+						common.StringsBuilder(common.StringUPPER(r.cfg.MySQLConfig.SchemaName),
+							`.`, common.StringUPPER(targetTableName), `.0.csv`)),
 				}, &meta.WaitSyncMeta{
 					DBTypeS:        common.TaskDBOracle,
 					DBTypeT:        common.TaskDBMySQL,
@@ -527,7 +552,7 @@ func (r *O2M) initWaitSyncTableRowID(csvWaitTables []string, oracleCollation boo
 					SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 					TableNameS:  common.StringUPPER(t),
 					SchemaNameT: common.StringUPPER(r.cfg.MySQLConfig.SchemaName),
-					TableNameT:  common.StringUPPER(t),
+					TableNameT:  common.StringUPPER(targetTableName),
 					GlobalScnS:  globalSCN,
 					ColumnInfoS: sourceColumnInfo,
 					RowidInfoS:  "1 = 1",
@@ -535,8 +560,8 @@ func (r *O2M) initWaitSyncTableRowID(csvWaitTables []string, oracleCollation boo
 					IsPartition: isPartition,
 					CSVFile: filepath.Join(r.cfg.CSVConfig.OutputDir,
 						common.StringUPPER(r.cfg.OracleConfig.SchemaName), common.StringUPPER(t),
-						common.StringsBuilder(common.StringUPPER(r.cfg.OracleConfig.SchemaName),
-							`.`, common.StringUPPER(t), `.0.csv`)),
+						common.StringsBuilder(common.StringUPPER(r.cfg.MySQLConfig.SchemaName),
+							`.`, common.StringUPPER(targetTableName), `.0.csv`)),
 				}, &meta.WaitSyncMeta{
 					DBTypeS:        common.TaskDBOracle,
 					DBTypeT:        common.TaskDBMySQL,
@@ -559,8 +584,8 @@ func (r *O2M) initWaitSyncTableRowID(csvWaitTables []string, oracleCollation boo
 				var csvFile string
 				csvFile = filepath.Join(r.cfg.CSVConfig.OutputDir,
 					common.StringUPPER(r.cfg.OracleConfig.SchemaName), common.StringUPPER(t),
-					common.StringsBuilder(common.StringUPPER(r.cfg.OracleConfig.SchemaName), `.`,
-						common.StringUPPER(t), `.`, strconv.Itoa(i), `.csv`))
+					common.StringsBuilder(common.StringUPPER(r.cfg.MySQLConfig.SchemaName), `.`,
+						common.StringUPPER(targetTableName), `.`, strconv.Itoa(i), `.csv`))
 
 				fullMetas = append(fullMetas, meta.FullSyncMeta{
 					DBTypeS:     common.TaskDBOracle,
@@ -568,7 +593,7 @@ func (r *O2M) initWaitSyncTableRowID(csvWaitTables []string, oracleCollation boo
 					SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 					TableNameS:  common.StringUPPER(t),
 					SchemaNameT: common.StringUPPER(r.cfg.MySQLConfig.SchemaName),
-					TableNameT:  common.StringUPPER(t),
+					TableNameT:  common.StringUPPER(targetTableName),
 					GlobalScnS:  globalSCN,
 					ColumnInfoS: sourceColumnInfo,
 					RowidInfoS:  res["CMD"],

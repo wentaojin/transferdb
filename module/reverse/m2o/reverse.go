@@ -31,7 +31,7 @@ import (
 	"time"
 )
 
-type M2O struct {
+type Reverse struct {
 	ctx    context.Context
 	cfg    *config.Config
 	mysql  *mysql.MySQL
@@ -39,8 +39,8 @@ type M2O struct {
 	metaDB *meta.Meta
 }
 
-func NewM2OReverse(ctx context.Context, cfg *config.Config, mysql *mysql.MySQL, oracle *oracle.Oracle, metaDB *meta.Meta) *M2O {
-	return &M2O{
+func NewM2OReverse(ctx context.Context, cfg *config.Config, mysql *mysql.MySQL, oracle *oracle.Oracle, metaDB *meta.Meta) *Reverse {
+	return &Reverse{
 		ctx:    ctx,
 		cfg:    cfg,
 		mysql:  mysql,
@@ -49,36 +49,36 @@ func NewM2OReverse(ctx context.Context, cfg *config.Config, mysql *mysql.MySQL, 
 	}
 }
 
-func (m2o *M2O) NewReverse() error {
+func (r *Reverse) NewReverse() error {
 	startTime := time.Now()
 	zap.L().Info("reverse table mysql to oracle start",
-		zap.String("schema", m2o.cfg.MySQLConfig.SchemaName))
+		zap.String("schema", r.cfg.MySQLConfig.SchemaName))
 
 	// 获取配置文件待同步表列表
-	exporters, viewTables, err := filterCFGTable(m2o.cfg, m2o.mysql)
+	exporters, viewTables, err := filterCFGTable(r.cfg, r.mysql)
 	if err != nil {
 		return err
 	}
 
 	if (len(exporters) + len(viewTables)) == 0 {
 		zap.L().Warn("there are no table objects in the mysql schema",
-			zap.String("schema", m2o.cfg.MySQLConfig.SchemaName))
+			zap.String("schema", r.cfg.MySQLConfig.SchemaName))
 		return nil
 	}
 
 	// 判断 error_log_detail 是否存在错误记录，是否可进行 reverse
-	errTotals, err := meta.NewErrorLogDetailModel(m2o.metaDB).CountsErrorLogBySchema(m2o.ctx, &meta.ErrorLogDetail{
+	errTotals, err := meta.NewErrorLogDetailModel(r.metaDB).CountsErrorLogBySchema(r.ctx, &meta.ErrorLogDetail{
 		DBTypeS:     common.TaskDBMySQL,
 		DBTypeT:     common.TaskDBOracle,
-		SchemaNameS: common.StringUPPER(m2o.cfg.MySQLConfig.SchemaName),
+		SchemaNameS: common.StringUPPER(r.cfg.MySQLConfig.SchemaName),
 		RunMode:     common.ReverseM2OMode,
 	})
 	if errTotals > 0 || err != nil {
-		return fmt.Errorf("reverse schema [%s] table mode [%s] task failed: %v, table [error_log_detail] exist failed error, please clear and rerunning", m2o.cfg.MySQLConfig.SchemaName, common.ReverseM2OMode, err)
+		return fmt.Errorf("reverse schema [%s] table mode [%s] task failed: %v, table [error_log_detail] exist failed error, please clear and rerunning", r.cfg.MySQLConfig.SchemaName, common.ReverseM2OMode, err)
 	}
 
 	// 目标段版本判断
-	oracleDBVersion, err := m2o.oracle.GetOracleDBVersion()
+	oracleDBVersion, err := r.oracle.GetOracleDBVersion()
 	if err != nil {
 		return fmt.Errorf("get oracle db version falied: %v", err)
 	}
@@ -87,18 +87,36 @@ func (m2o *M2O) NewReverse() error {
 	isExtended := false
 
 	if common.VersionOrdinal(oracleDBVersion) >= common.VersionOrdinal(common.OracleTableColumnCollationDBVersion) {
-		isExtended, err = m2o.oracle.GetOracleExtendedMode()
+		isExtended, err = r.oracle.GetOracleExtendedMode()
 		if err != nil {
 			return fmt.Errorf("get oracle version [%s] extended mode failed: %v", oracleDBVersion, err)
 		}
 	}
 
-	reverseTaskTables, errCompatibility, tableCharSetMap, tableCollationMap, err := PreCheckCompatibility(m2o.cfg, m2o.mysql, exporters, oracleDBVersion, isExtended)
+	reverseTaskTables, errCompatibility, tableCharSetMap, tableCollationMap, err := PreCheckCompatibility(r.cfg, r.mysql, exporters, oracleDBVersion, isExtended)
 	if err != nil {
 		return err
 	}
 
-	tables, err := GenReverseTableTask(m2o.cfg, m2o.mysql, m2o.oracle, reverseTaskTables, oracleDBVersion, isExtended, tableCharSetMap, tableCollationMap)
+	// 获取表名自定义规则
+	tableNameRules, err := meta.NewTableNameRuleModel(r.metaDB).DetailTableNameRule(r.ctx, &meta.TableNameRule{
+		DBTypeS:     common.TaskDBMySQL,
+		DBTypeT:     common.TaskDBOracle,
+		SchemaNameS: r.cfg.OracleConfig.SchemaName,
+		SchemaNameT: r.cfg.MySQLConfig.SchemaName,
+	})
+	if err != nil {
+		return err
+	}
+	tableNameRuleMap := make(map[string]string)
+
+	if len(tableNameRules) > 0 {
+		for _, tr := range tableNameRules {
+			tableNameRuleMap[common.StringUPPER(tr.TableNameS)] = common.StringUPPER(tr.TableNameT)
+		}
+	}
+
+	tables, err := GenReverseTableTask(r.cfg, r.mysql, r.oracle, tableNameRuleMap, reverseTaskTables, oracleDBVersion, isExtended, tableCharSetMap, tableCollationMap)
 	if err != nil {
 		return err
 	}
@@ -108,38 +126,38 @@ func (m2o *M2O) NewReverse() error {
 		return err
 	}
 
-	reverseFile := filepath.Join(pwdDir, fmt.Sprintf("reverse_%s.sql", m2o.cfg.MySQLConfig.SchemaName))
-	compFile := filepath.Join(pwdDir, fmt.Sprintf("compatibility_%s.sql", m2o.cfg.MySQLConfig.SchemaName))
+	reverseFile := filepath.Join(pwdDir, fmt.Sprintf("reverse_%s.sql", r.cfg.MySQLConfig.SchemaName))
+	compFile := filepath.Join(pwdDir, fmt.Sprintf("compatibility_%s.sql", r.cfg.MySQLConfig.SchemaName))
 
 	// file writer
-	f, err := reverse.NewWriter(reverseFile, compFile, m2o.mysql, m2o.oracle)
+	f, err := reverse.NewWriter(reverseFile, compFile, r.mysql, r.oracle)
 	if err != nil {
 		return err
 	}
 
 	// schema create
 	err = GenCreateSchema(f,
-		common.StringUPPER(m2o.cfg.MySQLConfig.SchemaName), common.StringUPPER(m2o.cfg.OracleConfig.SchemaName))
+		common.StringUPPER(r.cfg.MySQLConfig.SchemaName), common.StringUPPER(r.cfg.OracleConfig.SchemaName))
 	if err != nil {
 		return err
 	}
 
 	// 表类型不兼容项输出
-	err = GenCompatibilityTable(f, common.StringUPPER(m2o.cfg.MySQLConfig.SchemaName), errCompatibility, viewTables)
+	err = GenCompatibilityTable(f, common.StringUPPER(r.cfg.MySQLConfig.SchemaName), errCompatibility, viewTables)
 	if err != nil {
 		return err
 	}
 
 	// 表转换
 	g := &errgroup.Group{}
-	g.SetLimit(m2o.cfg.AppConfig.Threads)
+	g.SetLimit(r.cfg.AppConfig.Threads)
 
 	for _, table := range tables {
 		t := table
 		g.Go(func() error {
-			rule, err := IReader(m2o.ctx, m2o.mysql, m2o.oracle, m2o.metaDB, t, t)
+			rule, err := IReader(r.ctx, r.mysql, r.oracle, r.metaDB, t, t)
 			if err != nil {
-				if err = meta.NewErrorLogDetailModel(m2o.metaDB).CreateErrorLog(m2o.ctx, &meta.ErrorLogDetail{
+				if err = meta.NewErrorLogDetailModel(r.metaDB).CreateErrorLog(r.ctx, &meta.ErrorLogDetail{
 					DBTypeS:     common.TaskDBMySQL,
 					DBTypeT:     common.TaskDBOracle,
 					SchemaNameS: t.SourceSchemaName,
@@ -161,7 +179,7 @@ func (m2o *M2O) NewReverse() error {
 			}
 			ddl, err := IReverse(t, rule)
 			if err != nil {
-				if err = meta.NewErrorLogDetailModel(m2o.metaDB).CreateErrorLog(m2o.ctx, &meta.ErrorLogDetail{
+				if err = meta.NewErrorLogDetailModel(r.metaDB).CreateErrorLog(r.ctx, &meta.ErrorLogDetail{
 					DBTypeS:     common.TaskDBMySQL,
 					DBTypeT:     common.TaskDBOracle,
 					SchemaNameS: t.SourceSchemaName,
@@ -183,7 +201,7 @@ func (m2o *M2O) NewReverse() error {
 			}
 			err = IWriter(f, ddl)
 			if err != nil {
-				if err = meta.NewErrorLogDetailModel(m2o.metaDB).CreateErrorLog(m2o.ctx, &meta.ErrorLogDetail{
+				if err = meta.NewErrorLogDetailModel(r.metaDB).CreateErrorLog(r.ctx, &meta.ErrorLogDetail{
 					DBTypeS:     common.TaskDBMySQL,
 					DBTypeT:     common.TaskDBOracle,
 					SchemaNameS: t.SourceSchemaName,
@@ -216,10 +234,10 @@ func (m2o *M2O) NewReverse() error {
 		return err
 	}
 
-	errTotals, err = meta.NewErrorLogDetailModel(m2o.metaDB).CountsErrorLogBySchema(m2o.ctx, &meta.ErrorLogDetail{
+	errTotals, err = meta.NewErrorLogDetailModel(r.metaDB).CountsErrorLogBySchema(r.ctx, &meta.ErrorLogDetail{
 		DBTypeS:     common.TaskDBMySQL,
 		DBTypeT:     common.TaskDBOracle,
-		SchemaNameS: common.StringUPPER(m2o.cfg.MySQLConfig.SchemaName),
+		SchemaNameS: common.StringUPPER(r.cfg.MySQLConfig.SchemaName),
 		RunMode:     common.ReverseM2OMode,
 	})
 	if err != nil {
@@ -228,9 +246,9 @@ func (m2o *M2O) NewReverse() error {
 
 	endTime := time.Now()
 	zap.L().Info("reverse", zap.String("create table and index output", filepath.Join(pwdDir,
-		fmt.Sprintf("reverse_%s.sql", m2o.cfg.MySQLConfig.SchemaName))))
+		fmt.Sprintf("reverse_%s.sql", r.cfg.MySQLConfig.SchemaName))))
 	zap.L().Info("compatibility", zap.String("maybe exist compatibility output", filepath.Join(pwdDir,
-		fmt.Sprintf("compatibility_%s.sql", m2o.cfg.MySQLConfig.SchemaName))))
+		fmt.Sprintf("compatibility_%s.sql", r.cfg.MySQLConfig.SchemaName))))
 	if errTotals == 0 {
 		zap.L().Info("reverse table mysql to oracle finished",
 			zap.Int("table totals", len(tables)),

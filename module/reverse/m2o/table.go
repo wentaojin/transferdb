@@ -150,7 +150,7 @@ func PreCheckCompatibility(cfg *config.Config, mysql *mysql.MySQL, exporters []s
 	return reverseTaskTables, errCompatibility, tableCharSetMap, tableCollationMap, nil
 }
 
-func GenReverseTableTask(cfg *config.Config, mysql *mysql.MySQL, oracle *oracle.Oracle, exporters []string, oracleDBVersion string, isExtended bool, tableCharSetMap map[string]string, tableCollationMap map[string]string) ([]*Table, error) {
+func GenReverseTableTask(cfg *config.Config, mysql *mysql.MySQL, oracle *oracle.Oracle, tableNameRule map[string]string, exporters []string, oracleDBVersion string, isExtended bool, tableCharSetMap map[string]string, tableCollationMap map[string]string) ([]*Table, error) {
 	var (
 		tables []*Table
 	)
@@ -183,15 +183,22 @@ func GenReverseTableTask(cfg *config.Config, mysql *mysql.MySQL, oracle *oracle.
 		for _, t := range exporters {
 			ts := t
 			g2.Go(func() error {
+				var targetTableName string
+				if val, ok := tableNameRule[common.StringUPPER(ts)]; ok {
+					targetTableName = val
+				} else {
+					targetTableName = common.StringUPPER(ts)
+				}
+
 				tbl := &Table{
 					MySQLDBType:             cfg.MySQLConfig.DBType,
 					OracleDBVersion:         oracleDBVersion,
 					OracleExtendedMode:      isExtended,
 					SourceSchemaName:        common.StringUPPER(sourceSchema),
-					TargetSchemaName:        common.StringUPPER(cfg.OracleConfig.SchemaName),
 					SourceTableName:         common.StringUPPER(ts),
+					TargetSchemaName:        common.StringUPPER(cfg.OracleConfig.SchemaName),
+					TargetTableName:         targetTableName,
 					IsPartition:             common.IsContainString(partitionTables, common.StringUPPER(ts)),
-					TargetTableName:         common.StringUPPER(ts),
 					SourceTableCharacterSet: tableCharSetMap[ts],
 					SourceTableCollation:    tableCollationMap[ts],
 					Overwrite:               cfg.MySQLConfig.Overwrite,

@@ -105,9 +105,9 @@ func (m *Meta) DB(ctx context.Context) *gorm.DB {
 
 func (m *Meta) MigrateTables() (err error) {
 	return m.migrateStream(
-		new(ColumnRuleMap),
-		new(TableRuleMap),
-		new(SchemaRuleMap),
+		new(ColumnDatatypeRule),
+		new(TableDatatypeRule),
+		new(SchemaDatatypeRule),
 		new(DataCompareMeta),
 		new(WaitSyncMeta),
 		new(FullSyncMeta),
@@ -116,6 +116,7 @@ func (m *Meta) MigrateTables() (err error) {
 		new(BuildinColumnDefaultval),
 		new(BuildinObjectCompatible),
 		new(BuildinDatatypeRule),
+		new(TableNameRule),
 	)
 }
 

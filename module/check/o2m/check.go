@@ -156,10 +156,28 @@ func (r *O2M) NewCheck() error {
 			zap.String("cost", finishTime.Sub(beginTime).String()))
 	}
 
+	// 获取表名自定义规则
+	tableNameRules, err := meta.NewTableNameRuleModel(r.metaDB).DetailTableNameRule(r.ctx, &meta.TableNameRule{
+		DBTypeS:     common.TaskDBOracle,
+		DBTypeT:     common.TaskDBMySQL,
+		SchemaNameS: r.cfg.OracleConfig.SchemaName,
+		SchemaNameT: r.cfg.MySQLConfig.SchemaName,
+	})
+	if err != nil {
+		return err
+	}
+	tableNameRuleMap := make(map[string]string)
+
+	if len(tableNameRules) > 0 {
+		for _, tr := range tableNameRules {
+			tableNameRuleMap[common.StringUPPER(tr.TableNameS)] = common.StringUPPER(tr.TableNameT)
+		}
+	}
+
 	// 任务检查表
 	tasks := GenCheckTaskTable(r.cfg.OracleConfig.SchemaName, r.cfg.MySQLConfig.SchemaName, oracleDBCharacterSet,
 		nlsSort, nlsComp, oracleTableCollation, oracleSchemaCollation, oracleDBCollation,
-		r.cfg.MySQLConfig.DBType, r.oracle, r.mysql, exporters)
+		r.cfg.MySQLConfig.DBType, r.oracle, r.mysql, tableNameRuleMap, exporters)
 
 	pwdDir, err := os.Getwd()
 	if err != nil {

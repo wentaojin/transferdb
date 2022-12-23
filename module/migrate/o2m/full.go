@@ -371,6 +371,12 @@ func (r *Migrate) fullWaitSyncTable(fullWaitTables []string, oracleCollation boo
 
 func (r *Migrate) initWaitSyncTableRowID(csvWaitTables []string, oracleCollation bool) error {
 	startTask := time.Now()
+	// 获取自定义库表名规则
+	tableNameRule, err := r.getTableNameRule()
+	if err != nil {
+		return err
+	}
+
 	// 全量同步前，获取 SCN 以及初始化元数据表
 	globalSCN, err := r.oracle.GetOracleCurrentSnapshotSCN()
 	if err != nil {
@@ -389,6 +395,13 @@ func (r *Migrate) initWaitSyncTableRowID(csvWaitTables []string, oracleCollation
 		workerID := idx
 		g.Go(func() error {
 			startTime := time.Now()
+			// 库名、表名规则
+			var targetTableName string
+			if val, ok := tableNameRule[common.StringUPPER(t)]; ok {
+				targetTableName = val
+			} else {
+				targetTableName = common.StringUPPER(t)
+			}
 
 			sourceColumnInfo, err := r.adjustTableSelectColumn(t, oracleCollation)
 			if err != nil {
@@ -423,7 +436,7 @@ func (r *Migrate) initWaitSyncTableRowID(csvWaitTables []string, oracleCollation
 					SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 					TableNameS:  common.StringUPPER(t),
 					SchemaNameT: common.StringUPPER(r.cfg.MySQLConfig.SchemaName),
-					TableNameT:  common.StringUPPER(t),
+					TableNameT:  common.StringUPPER(targetTableName),
 					GlobalScnS:  globalSCN,
 					ColumnInfoS: sourceColumnInfo,
 					RowidInfoS:  "1 = 1",
@@ -480,7 +493,7 @@ func (r *Migrate) initWaitSyncTableRowID(csvWaitTables []string, oracleCollation
 					SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 					TableNameS:  common.StringUPPER(t),
 					SchemaNameT: common.StringUPPER(r.cfg.MySQLConfig.SchemaName),
-					TableNameT:  common.StringUPPER(t),
+					TableNameT:  common.StringUPPER(targetTableName),
 					GlobalScnS:  globalSCN,
 					ColumnInfoS: sourceColumnInfo,
 					RowidInfoS:  "1 = 1",
@@ -511,7 +524,7 @@ func (r *Migrate) initWaitSyncTableRowID(csvWaitTables []string, oracleCollation
 					SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 					TableNameS:  common.StringUPPER(t),
 					SchemaNameT: common.StringUPPER(r.cfg.MySQLConfig.SchemaName),
-					TableNameT:  common.StringUPPER(t),
+					TableNameT:  common.StringUPPER(targetTableName),
 					GlobalScnS:  globalSCN,
 					ColumnInfoS: sourceColumnInfo,
 					RowidInfoS:  res["CMD"],
@@ -562,6 +575,27 @@ func (r *Migrate) initWaitSyncTableRowID(csvWaitTables []string, oracleCollation
 		zap.String("schema", r.cfg.OracleConfig.SchemaName),
 		zap.String("cost", time.Now().Sub(startTask).String()))
 	return nil
+}
+
+func (r *Migrate) getTableNameRule() (map[string]string, error) {
+	// 获取表名自定义规则
+	tableNameRules, err := meta.NewTableNameRuleModel(r.metaDB).DetailTableNameRule(r.ctx, &meta.TableNameRule{
+		DBTypeS:     common.TaskDBOracle,
+		DBTypeT:     common.TaskDBMySQL,
+		SchemaNameS: r.cfg.OracleConfig.SchemaName,
+		SchemaNameT: r.cfg.MySQLConfig.SchemaName,
+	})
+	if err != nil {
+		return nil, err
+	}
+	tableNameRuleMap := make(map[string]string)
+
+	if len(tableNameRules) > 0 {
+		for _, tr := range tableNameRules {
+			tableNameRuleMap[common.StringUPPER(tr.TableNameS)] = common.StringUPPER(tr.TableNameT)
+		}
+	}
+	return tableNameRuleMap, nil
 }
 
 func (r *Migrate) adjustTableSelectColumn(sourceTable string, oracleCollation bool) (string, error) {

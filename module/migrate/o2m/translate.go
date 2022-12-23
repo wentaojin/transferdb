@@ -145,17 +145,12 @@ func GenMySQLPrepareBindVarStmt(columns, bindVarBatch int) string {
 
 // Oracle SQL 转换
 // ORACLE 数据库同步需要开附加日志且表需要捕获字段列日志，Logminer 内容 UPDATE/DELETE/INSERT 语句会带所有字段信息
-func translateAndAddOracleIncrRecord(
-	metaDB *meta.Meta,
-	mysql *mysql.MySQL,
-	sourceTableName string,
-	targetSchema string,
-	logminers []logminer, taskQueue chan IncrTask) error {
+func translateAndAddOracleIncrRecord(metaDB *meta.Meta, mysql *mysql.MySQL, sourceSchema, sourceTable string, logminers []logminer, taskQueue chan IncrTask) error {
 
 	startTime := time.Now()
 	zap.L().Info("oracle table increment log apply start",
-		zap.String("mysql schema", targetSchema),
-		zap.String("table", sourceTableName),
+		zap.String("oracle schema", sourceSchema),
+		zap.String("oracle table", sourceTable),
 		zap.Time("start time", startTime))
 
 	for _, rows := range logminers {
@@ -177,8 +172,8 @@ func translateAndAddOracleIncrRecord(
 			rows.SQLUndo = common.ReplaceQuotesString(rows.SQLUndo)
 			rows.SQLUndo = common.ReplaceSpecifiedString(rows.SQLUndo, ";", "")
 			rows.SQLUndo = common.ReplaceSpecifiedString(rows.SQLUndo,
-				common.StringsBuilder(rows.SegOwner, "."),
-				common.StringsBuilder(strings.ToUpper(targetSchema), "."))
+				common.StringsBuilder(rows.SourceSchema, "."),
+				common.StringsBuilder(common.StringUPPER(rows.TargetSchema), "."))
 		}
 
 		// 比如：INSERT INTO MARVIN.MARVIN1 (ID,NAME) VALUES (1,'marvin')
@@ -186,7 +181,7 @@ func translateAndAddOracleIncrRecord(
 		// 比如：UPDATE MARVIN.MARVIN1 SET ID = 2 , NAME = 'marvin' WHERE ID = 2 AND NAME = 'pty'
 		// 比如: drop table marvin.marvin7
 		// 比如: truncate table marvin.marvin7
-		mysqlRedo, operationType, err := translateOracleToMySQLSQL(rows.SQLRedo, rows.SQLUndo, strings.ToUpper(targetSchema))
+		mysqlRedo, operationType, err := translateOracleToMySQLSQL(rows.SQLRedo, rows.SQLUndo, common.StringUPPER(rows.TargetSchema), common.StringUPPER(rows.TargetSchema))
 		if err != nil {
 			return err
 		}
@@ -198,10 +193,10 @@ func translateAndAddOracleIncrRecord(
 			MySQL:          mysql,
 			GlobalSCN:      rows.SCN, // 更新元数据 GLOBAL_SCN 至当前消费的 SCN 号
 			SourceTableSCN: rows.SCN,
-			SourceSchema:   rows.SegOwner,
-			SourceTable:    rows.TableName,
-			TargetSchema:   strings.ToUpper(targetSchema),
-			TargetTable:    rows.TableName,
+			SourceSchema:   rows.SourceSchema,
+			SourceTable:    rows.SourceTable,
+			TargetSchema:   rows.TargetSchema,
+			TargetTable:    rows.TargetTable,
 			OracleRedo:     rows.SQLRedo,
 			MySQLRedo:      mysqlRedo,
 			Operation:      rows.Operation,
@@ -214,8 +209,8 @@ func translateAndAddOracleIncrRecord(
 
 	endTime := time.Now()
 	zap.L().Info("oracle table increment log apply finished",
-		zap.String("mysql schema", targetSchema),
-		zap.String("table", sourceTableName),
+		zap.String("oracle schema", sourceSchema),
+		zap.String("oracle table", sourceTable),
 		zap.String("status", "success"),
 		zap.Time("start time", startTime),
 		zap.Time("end time", endTime),
@@ -230,7 +225,7 @@ func translateAndAddOracleIncrRecord(
 // Oracle SQL 转换
 // 1、INSERT INTO / REPLACE INTO
 // 2、UPDATE / DELETE、REPLACE INTO
-func translateOracleToMySQLSQL(oracleSQLRedo, oracleSQLUndo, targetSchema string) ([]string, string, error) {
+func translateOracleToMySQLSQL(oracleSQLRedo, oracleSQLUndo, targetSchema, targetTable string) ([]string, string, error) {
 	var (
 		sqls          []string
 		operationType string
@@ -241,6 +236,11 @@ func translateOracleToMySQLSQL(oracleSQLRedo, oracleSQLUndo, targetSchema string
 	}
 
 	stmt := extractStmt(astNode)
+
+	// 库名、表名转换
+	stmt.Schema = targetSchema
+	stmt.Table = targetTable
+
 	switch {
 	case stmt.Operation == common.MigrateOperationUpdate:
 		operationType = common.MigrateOperationUpdate
@@ -256,7 +256,6 @@ func translateOracleToMySQLSQL(oracleSQLRedo, oracleSQLUndo, targetSchema string
 		}
 
 		var deleteSQL string
-		stmt.Schema = targetSchema
 
 		if stmt.WhereExpr == "" {
 			deleteSQL = common.StringsBuilder(`DELETE FROM `, stmt.Schema, ".", stmt.Table)
@@ -284,7 +283,6 @@ func translateOracleToMySQLSQL(oracleSQLRedo, oracleSQLUndo, targetSchema string
 
 	case stmt.Operation == common.MigrateOperationInsert:
 		operationType = common.MigrateOperationInsert
-		stmt.Schema = targetSchema
 
 		var values []string
 
@@ -304,7 +302,7 @@ func translateOracleToMySQLSQL(oracleSQLRedo, oracleSQLUndo, targetSchema string
 
 	case stmt.Operation == common.MigrateOperationDelete:
 		operationType = common.MigrateOperationDelete
-		stmt.Schema = targetSchema
+
 		var deleteSQL string
 
 		if stmt.WhereExpr == "" {
@@ -317,14 +315,12 @@ func translateOracleToMySQLSQL(oracleSQLRedo, oracleSQLUndo, targetSchema string
 
 	case stmt.Operation == common.MigrateOperationTruncate:
 		operationType = common.MigrateOperationTruncateTable
-		stmt.Schema = targetSchema
 
 		truncateSQL := common.StringsBuilder(`TRUNCATE TABLE `, stmt.Schema, ".", stmt.Table)
 		sqls = append(sqls, truncateSQL)
 
 	case stmt.Operation == common.MigrateOperationDrop:
 		operationType = common.MigrateOperationDropTable
-		stmt.Schema = targetSchema
 
 		dropSQL := common.StringsBuilder(`DROP TABLE `, stmt.Schema, ".", stmt.Table)
 

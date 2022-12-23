@@ -304,8 +304,26 @@ func (r *O2M) NewCompare() error {
 	}
 
 	// compare 任务列表
-	partTableTasks := NewPartCompareTableTask(r.ctx, r.cfg, partSyncTables, r.mysql, r.oracle)
-	waitTableTasks := NewWaitCompareTableTask(r.ctx, r.cfg, waitSyncTables, oracleCollation, r.mysql, r.oracle)
+	// 获取表名自定义规则
+	tableNameRules, err := meta.NewTableNameRuleModel(r.metaDB).DetailTableNameRule(r.ctx, &meta.TableNameRule{
+		DBTypeS:     common.TaskDBOracle,
+		DBTypeT:     common.TaskDBMySQL,
+		SchemaNameS: r.cfg.OracleConfig.SchemaName,
+		SchemaNameT: r.cfg.MySQLConfig.SchemaName,
+	})
+	if err != nil {
+		return err
+	}
+	tableNameRuleMap := make(map[string]string)
+
+	if len(tableNameRules) > 0 {
+		for _, tr := range tableNameRules {
+			tableNameRuleMap[common.StringUPPER(tr.TableNameS)] = common.StringUPPER(tr.TableNameT)
+		}
+	}
+
+	partTableTasks := NewPartCompareTableTask(r.ctx, r.cfg, partSyncTables, r.mysql, r.oracle, tableNameRuleMap)
+	waitTableTasks := NewWaitCompareTableTask(r.ctx, r.cfg, waitSyncTables, oracleCollation, r.mysql, r.oracle, tableNameRuleMap)
 
 	// 数据对比
 	pwdDir, err := os.Getwd()
@@ -387,9 +405,9 @@ func (r *O2M) comparePartTableTasks(f *compare.File, partTableTasks []*Task) err
 			DBTypeS:     common.TaskDBOracle,
 			DBTypeT:     common.TaskDBMySQL,
 			SchemaNameS: r.cfg.OracleConfig.SchemaName,
-			TableNameS:  task.tableName,
+			TableNameS:  task.sourceTableName,
 			SchemaNameT: r.cfg.MySQLConfig.SchemaName,
-			TableNameT:  task.tableName,
+			TableNameT:  task.targetTableName,
 		})
 		if err != nil {
 			return err
@@ -457,7 +475,7 @@ func (r *O2M) comparePartTableTasks(f *compare.File, partTableTasks []*Task) err
 		if err := g1.Wait(); err != nil {
 			zap.L().Error("diff table oracle to mysql failed",
 				zap.String("schema", r.cfg.OracleConfig.SchemaName),
-				zap.String("table", task.tableName),
+				zap.String("table", task.sourceTableName),
 				zap.Error(fmt.Errorf("diff table task failed, detail see [error_log_detail], please rerunning")))
 			// 忽略错误 continue
 			continue
@@ -468,7 +486,7 @@ func (r *O2M) comparePartTableTasks(f *compare.File, partTableTasks []*Task) err
 			DBTypeS:     common.TaskDBOracle,
 			DBTypeT:     common.TaskDBMySQL,
 			SchemaNameS: r.cfg.OracleConfig.SchemaName,
-			TableNameS:  task.tableName,
+			TableNameS:  task.sourceTableName,
 			RunMode:     common.CompareO2MMode,
 		})
 		if err != nil {
@@ -478,7 +496,7 @@ func (r *O2M) comparePartTableTasks(f *compare.File, partTableTasks []*Task) err
 		if errCounts >= 1 {
 			zap.L().Warn("update mysql [wait_sync_meta] meta",
 				zap.String("schema", r.cfg.OracleConfig.SchemaName),
-				zap.String("table", task.tableName),
+				zap.String("table", task.sourceTableName),
 				zap.String("mode", common.CompareO2MMode),
 				zap.String("updated", "skip"))
 			return nil
@@ -488,7 +506,7 @@ func (r *O2M) comparePartTableTasks(f *compare.File, partTableTasks []*Task) err
 			DBTypeS:        common.TaskDBOracle,
 			DBTypeT:        common.TaskDBMySQL,
 			SchemaNameS:    r.cfg.OracleConfig.SchemaName,
-			TableNameS:     task.tableName,
+			TableNameS:     task.sourceTableName,
 			Mode:           common.CompareO2MMode,
 			FullSplitTimes: 0,
 		})
@@ -498,7 +516,7 @@ func (r *O2M) comparePartTableTasks(f *compare.File, partTableTasks []*Task) err
 		diffEndTime := time.Now()
 		zap.L().Info("diff single table oracle to mysql finished",
 			zap.String("schema", r.cfg.OracleConfig.SchemaName),
-			zap.String("table", task.tableName),
+			zap.String("table", task.sourceTableName),
 			zap.String("cost", diffEndTime.Sub(diffStartTime).String()))
 	}
 	return nil
@@ -525,7 +543,7 @@ func (r *O2M) compareWaitTableTasks(f *compare.File, waitTableTasks []*Task) err
 			return err
 		}
 		chunks = append(chunks, NewChunk(r.ctx, r.cfg, r.oracle, r.mysql, r.metaDB,
-			cid, globalSCN, r.cfg.OracleConfig.SchemaName, task.tableName, isPartition, sourceColumnInfo, targetColumnInfo,
+			cid, globalSCN, task.sourceTableName, task.targetTableName, isPartition, sourceColumnInfo, targetColumnInfo,
 			whereColumn, common.CompareO2MMode))
 	}
 

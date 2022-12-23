@@ -36,38 +36,51 @@ import (
 type Task struct {
 	ctx             context.Context
 	cfg             *config.Config
-	tableName       string
+	sourceTableName string
+	targetTableName string
 	oracleCollation bool
 	mysql           *mysql.MySQL
 	oracle          *oracle.Oracle
 }
 
-func NewPartCompareTableTask(ctx context.Context, cfg *config.Config, compareTables []string, mysql *mysql.MySQL, oracle *oracle.Oracle) []*Task {
+func NewPartCompareTableTask(ctx context.Context, cfg *config.Config, compareTables []string, mysql *mysql.MySQL, oracle *oracle.Oracle, tableNameRule map[string]string) []*Task {
 	var tasks []*Task
 	for _, table := range compareTables {
+		// 库名、表名规则
+		var targetTableName string
+		if val, ok := tableNameRule[common.StringUPPER(table)]; ok {
+			targetTableName = val
+		} else {
+			targetTableName = common.StringUPPER(table)
+		}
 		tasks = append(tasks, &Task{
-			ctx:       ctx,
-			cfg:       cfg,
-			tableName: table,
-			mysql:     mysql,
-			oracle:    oracle,
+			ctx:             ctx,
+			cfg:             cfg,
+			sourceTableName: table,
+			targetTableName: targetTableName,
+			mysql:           mysql,
+			oracle:          oracle,
 		})
 	}
 	return tasks
 }
 
-func NewWaitCompareTableTask(ctx context.Context,
-	cfg *config.Config,
-	compareTables []string,
-	oracleCollation bool,
-	mysql *mysql.MySQL,
-	oracle *oracle.Oracle) []*Task {
+func NewWaitCompareTableTask(ctx context.Context, cfg *config.Config, compareTables []string, oracleCollation bool, mysql *mysql.MySQL, oracle *oracle.Oracle,
+	tableNameRule map[string]string) []*Task {
 	var tasks []*Task
 	for _, table := range compareTables {
+		// 库名、表名规则
+		var targetTableName string
+		if val, ok := tableNameRule[common.StringUPPER(table)]; ok {
+			targetTableName = val
+		} else {
+			targetTableName = common.StringUPPER(table)
+		}
 		tasks = append(tasks, &Task{
 			ctx:             ctx,
 			cfg:             cfg,
-			tableName:       table,
+			sourceTableName: table,
+			targetTableName: targetTableName,
 			oracleCollation: oracleCollation,
 			mysql:           mysql,
 			oracle:          oracle,
@@ -140,7 +153,7 @@ func (t *Task) AdjustDBSelectColumn() (sourceColumnInfo string, targetColumnInfo
 	var (
 		sourceColumnInfos, targetColumnInfos []string
 	)
-	columnInfo, err := t.oracle.GetOracleSchemaTableColumn(t.cfg.OracleConfig.SchemaName, t.tableName, t.oracleCollation)
+	columnInfo, err := t.oracle.GetOracleSchemaTableColumn(t.cfg.OracleConfig.SchemaName, t.sourceTableName, t.oracleCollation)
 	if err != nil {
 		return sourceColumnInfo, targetColumnInfo, err
 	}
@@ -198,7 +211,7 @@ func (t *Task) FilterDBWhereColumn() (string, error) {
 	// 字段筛选优先级：配置文件优先级 > PK > UK > Index > Distinct Value
 
 	// 获取表字段
-	columnInfo, err := t.oracle.GetOracleSchemaTableColumn(t.cfg.OracleConfig.SchemaName, t.tableName, t.oracleCollation)
+	columnInfo, err := t.oracle.GetOracleSchemaTableColumn(t.cfg.OracleConfig.SchemaName, t.sourceTableName, t.oracleCollation)
 	if err != nil {
 		return "", err
 	}
@@ -213,12 +226,12 @@ func (t *Task) FilterDBWhereColumn() (string, error) {
 	}
 
 	if len(integerColumns) == 0 {
-		return "", fmt.Errorf("oracle schema [%s] table [%s] number column isn't exist, not support, pelase exclude skip or add number column index", t.cfg.OracleConfig.SchemaName, t.tableName)
+		return "", fmt.Errorf("oracle schema [%s] table [%s] number column isn't exist, not support, pelase exclude skip or add number column index", t.cfg.OracleConfig.SchemaName, t.sourceTableName)
 	}
 
 	// PK、UK
 	var puConstraints []o2m.ConstraintPUKey
-	pkInfo, err := t.oracle.GetOracleSchemaTablePrimaryKey(t.cfg.OracleConfig.SchemaName, t.tableName)
+	pkInfo, err := t.oracle.GetOracleSchemaTablePrimaryKey(t.cfg.OracleConfig.SchemaName, t.sourceTableName)
 	if err != nil {
 		return "", err
 	}
@@ -229,7 +242,7 @@ func (t *Task) FilterDBWhereColumn() (string, error) {
 		})
 	}
 
-	ukInfo, err := t.oracle.GetOracleSchemaTableUniqueKey(t.cfg.OracleConfig.SchemaName, t.tableName)
+	ukInfo, err := t.oracle.GetOracleSchemaTableUniqueKey(t.cfg.OracleConfig.SchemaName, t.sourceTableName)
 	if err != nil {
 		return "", err
 	}
@@ -258,7 +271,7 @@ func (t *Task) FilterDBWhereColumn() (string, error) {
 
 	// index
 	var indexes []o2m.Index
-	indexInfo, err := t.oracle.GetOracleSchemaTableNormalIndex(t.cfg.OracleConfig.SchemaName, t.tableName)
+	indexInfo, err := t.oracle.GetOracleSchemaTableNormalIndex(t.cfg.OracleConfig.SchemaName, t.sourceTableName)
 	if err != nil {
 		return "", err
 	}
@@ -276,7 +289,7 @@ func (t *Task) FilterDBWhereColumn() (string, error) {
 		})
 	}
 
-	indexInfo, err = t.oracle.GetOracleSchemaTableUniqueIndex(t.cfg.OracleConfig.SchemaName, t.tableName)
+	indexInfo, err = t.oracle.GetOracleSchemaTableUniqueIndex(t.cfg.OracleConfig.SchemaName, t.sourceTableName)
 	if err != nil {
 		return "", err
 	}
@@ -321,15 +334,15 @@ func (t *Task) FilterDBWhereColumn() (string, error) {
 
 	// 如果表不存在主键/唯一键/唯一索引，直接返回报错中断，因为可能导致数据校验不准
 	if len(puConstraints) == 0 && len(ukIndex) == 0 {
-		return "", fmt.Errorf("oracle schema [%s] table [%s] pk/uk/unique index isn't exist, it's not support, please skip", t.cfg.OracleConfig.SchemaName, t.tableName)
+		return "", fmt.Errorf("oracle schema [%s] table [%s] pk/uk/unique index isn't exist, it's not support, please skip", t.cfg.OracleConfig.SchemaName, t.sourceTableName)
 	}
 
 	// 普通索引、联合主键/联合唯一键/联合唯一索引，选择 number distinct 高的字段
 	indexArr = append(indexArr, nonUkIndex...)
 
-	orderCols, err := t.oracle.GetOracleTableColumnDistinctValue(t.cfg.OracleConfig.SchemaName, t.tableName, integerColumns)
+	orderCols, err := t.oracle.GetOracleTableColumnDistinctValue(t.cfg.OracleConfig.SchemaName, t.sourceTableName, integerColumns)
 	if err != nil {
-		return "", fmt.Errorf("get oracle schema [%s] table [%s] column distinct values failed: %v", t.cfg.OracleConfig.SchemaName, t.tableName, err)
+		return "", fmt.Errorf("get oracle schema [%s] table [%s] column distinct values failed: %v", t.cfg.OracleConfig.SchemaName, t.sourceTableName, err)
 	}
 
 	if len(indexArr) > 0 {
@@ -341,11 +354,11 @@ func (t *Task) FilterDBWhereColumn() (string, error) {
 			}
 		}
 	}
-	return "", fmt.Errorf("oracle schema [%s] table [%s] pk/uk/index number datatype column isn't exist, please skip or fixed", t.cfg.OracleConfig.SchemaName, t.tableName)
+	return "", fmt.Errorf("oracle schema [%s] table [%s] pk/uk/index number datatype column isn't exist, please skip or fixed", t.cfg.OracleConfig.SchemaName, t.sourceTableName)
 }
 
 func (t *Task) IsPartitionTable() (string, error) {
-	isOK, err := t.oracle.IsOraclePartitionTable(t.cfg.OracleConfig.SchemaName, t.tableName)
+	isOK, err := t.oracle.IsOraclePartitionTable(t.cfg.OracleConfig.SchemaName, t.sourceTableName)
 	if err != nil {
 		return "", err
 	}

@@ -686,7 +686,7 @@ func (r *Rule) ChangeTableColumnType(sourceSchema, sourceTable, sourceColumn str
 		return columnType, err
 	}
 	// 获取自定义映射规则
-	columnDataTypeMapSlice, err := meta.NewColumnRuleMapModel(r.MetaDB).DetailColumnRule(r.Ctx, &meta.ColumnRuleMap{
+	columnDataTypeMapSlice, err := meta.NewColumnDatatypeRuleModel(r.MetaDB).DetailColumnRule(r.Ctx, &meta.ColumnDatatypeRule{
 		DBTypeS:     common.TaskDBOracle,
 		DBTypeT:     common.TaskDBMySQL,
 		SchemaNameS: r.SourceSchema,
@@ -697,7 +697,7 @@ func (r *Rule) ChangeTableColumnType(sourceSchema, sourceTable, sourceColumn str
 		return columnType, err
 	}
 
-	tableDataTypeMapSlice, err := meta.NewTableRuleMapModel(r.MetaDB).DetailTableRule(r.Ctx, &meta.TableRuleMap{
+	tableDataTypeMapSlice, err := meta.NewTableDatatypeRuleModel(r.MetaDB).DetailTableRule(r.Ctx, &meta.TableDatatypeRule{
 		DBTypeS:     common.TaskDBOracle,
 		DBTypeT:     common.TaskDBMySQL,
 		SchemaNameS: r.SourceSchema,
@@ -707,7 +707,7 @@ func (r *Rule) ChangeTableColumnType(sourceSchema, sourceTable, sourceColumn str
 		return columnType, err
 	}
 
-	schemaDataTypeMapSlice, err := meta.NewSchemaRuleMapModel(r.MetaDB).DetailSchemaRule(r.Ctx, &meta.SchemaRuleMap{
+	schemaDataTypeMapSlice, err := meta.NewSchemaDatatypeRuleModel(r.MetaDB).DetailSchemaRule(r.Ctx, &meta.SchemaDatatypeRule{
 		DBTypeS:     common.TaskDBOracle,
 		DBTypeT:     common.TaskDBMySQL,
 		SchemaNameS: r.SourceSchema,
@@ -780,8 +780,8 @@ func loadColumnDefaultValueRule(defaultValue string, defaultValueMapSlice []meta
 	return defaultValue, nil
 }
 
-func loadDataTypeRuleUsingTableOrSchema(originColumnType string, buildInColumnType string, tableDataTypeMapSlice []meta.TableRuleMap,
-	schemaDataTypeMapSlice []meta.SchemaRuleMap) string {
+func loadDataTypeRuleUsingTableOrSchema(originColumnType string, buildInColumnType string, tableDataTypeMapSlice []meta.TableDatatypeRule,
+	schemaDataTypeMapSlice []meta.SchemaDatatypeRule) string {
 	switch {
 	case len(tableDataTypeMapSlice) != 0 && len(schemaDataTypeMapSlice) == 0:
 		return loadColumnTypeRuleOnlyUsingTable(originColumnType, buildInColumnType, tableDataTypeMapSlice)
@@ -799,7 +799,7 @@ func loadDataTypeRuleUsingTableOrSchema(originColumnType string, buildInColumnTy
 	}
 }
 
-func loadDataTypeRuleUsingTableAndSchema(originColumnType string, buildInColumnType string, tableDataTypeMapSlice []meta.TableRuleMap, schemaDataTypeMapSlice []meta.SchemaRuleMap) string {
+func loadDataTypeRuleUsingTableAndSchema(originColumnType string, buildInColumnType string, tableDataTypeMapSlice []meta.TableDatatypeRule, schemaDataTypeMapSlice []meta.SchemaDatatypeRule) string {
 	// 规则判断
 	customTableDataType := loadColumnTypeRuleOnlyUsingTable(originColumnType, buildInColumnType, tableDataTypeMapSlice)
 
@@ -821,7 +821,7 @@ func loadDataTypeRuleUsingTableAndSchema(originColumnType string, buildInColumnT
 	库、表、字段自定义映射规则
 */
 // 表级别自定义映射规则
-func loadColumnTypeRuleOnlyUsingTable(originColumnType string, buildInColumnType string, tableDataTypeMapSlice []meta.TableRuleMap) string {
+func loadColumnTypeRuleOnlyUsingTable(originColumnType string, buildInColumnType string, tableDataTypeMapSlice []meta.TableDatatypeRule) string {
 	if len(tableDataTypeMapSlice) == 0 {
 		return buildInColumnType
 	}
@@ -867,7 +867,7 @@ func loadColumnTypeRuleOnlyUsingTable(originColumnType string, buildInColumnType
 }
 
 // 库级别自定义映射规则
-func loadColumnTypeRuleOnlyUsingSchema(originColumnType, buildInColumnType string, schemaDataTypeMapSlice []meta.SchemaRuleMap) string {
+func loadColumnTypeRuleOnlyUsingSchema(originColumnType, buildInColumnType string, schemaDataTypeMapSlice []meta.SchemaDatatypeRule) string {
 	if len(schemaDataTypeMapSlice) == 0 {
 		return buildInColumnType
 	}
@@ -914,7 +914,7 @@ func loadColumnTypeRuleOnlyUsingSchema(originColumnType, buildInColumnType strin
 }
 
 // 字段级别自定义映射规则
-func loadColumnTypeRuleOnlyUsingColumn(columnName string, originColumnType string, buildInColumnType string, columnDataTypeMapSlice []meta.ColumnRuleMap) string {
+func loadColumnTypeRuleOnlyUsingColumn(columnName string, originColumnType string, buildInColumnType string, columnDataTypeMapSlice []meta.ColumnDatatypeRule) string {
 	if len(columnDataTypeMapSlice) == 0 {
 		return buildInColumnType
 	}

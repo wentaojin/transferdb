@@ -27,7 +27,7 @@ import (
 */
 // 数据类型转换优先级： column > table > schema > build-in
 // 自定义列转换规则 - 字段列级别
-type ColumnRuleMap struct {
+type ColumnDatatypeRule struct {
 	ID          uint   `gorm:"primary_key;autoIncrement;comment:'自增编号'" json:"id"`
 	DBTypeS     string `gorm:"type:varchar(15);index:idx_dbtype_st_map,unique;comment:'源数据库类型'" json:"db_type_s"`
 	DBTypeT     string `gorm:"type:varchar(15);index:idx_dbtype_st_map,unique;comment:'目标数据库类型'" json:"db_type_t"`
@@ -39,22 +39,22 @@ type ColumnRuleMap struct {
 	*BaseModel
 }
 
-func NewColumnRuleMapModel(m *Meta) *ColumnRuleMap {
-	return &ColumnRuleMap{BaseModel: &BaseModel{
+func NewColumnDatatypeRuleModel(m *Meta) *ColumnDatatypeRule {
+	return &ColumnDatatypeRule{BaseModel: &BaseModel{
 		Meta: m,
 	}}
 }
 
-func (rw *ColumnRuleMap) ParseSchemaTable() (string, error) {
+func (rw *ColumnDatatypeRule) ParseSchemaTable() (string, error) {
 	stmt := &gorm.Statement{DB: rw.GormDB}
 	err := stmt.Parse(rw)
 	if err != nil {
-		return "", fmt.Errorf("parse struct [ColumnRuleMap] get table_name failed: %v", err)
+		return "", fmt.Errorf("parse struct [ColumnDatatypeRule] get table_name failed: %v", err)
 	}
 	return stmt.Schema.Table, nil
 }
 
-func (rw *ColumnRuleMap) CreateColumnRule(ctx context.Context, createS *ColumnRuleMap) error {
+func (rw *ColumnDatatypeRule) CreateColumnRule(ctx context.Context, createS *ColumnDatatypeRule) error {
 	table, err := rw.ParseSchemaTable()
 	if err != nil {
 		return err
@@ -65,8 +65,8 @@ func (rw *ColumnRuleMap) CreateColumnRule(ctx context.Context, createS *ColumnRu
 	return nil
 }
 
-func (rw *ColumnRuleMap) DetailColumnRule(ctx context.Context, detailS *ColumnRuleMap) ([]ColumnRuleMap, error) {
-	var columnRuleMap []ColumnRuleMap
+func (rw *ColumnDatatypeRule) DetailColumnRule(ctx context.Context, detailS *ColumnDatatypeRule) ([]ColumnDatatypeRule, error) {
+	var columnRuleMap []ColumnDatatypeRule
 
 	table, err := rw.ParseSchemaTable()
 	if err != nil {

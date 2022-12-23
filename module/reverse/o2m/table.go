@@ -52,7 +52,7 @@ type Table struct {
 	MySQL                 *mysql.MySQL    `json:"-"`
 }
 
-func GenReverseTableTask(ctx context.Context, cfg *config.Config, mysql *mysql.MySQL, oracle *oracle.Oracle, exporters []string, nlsSort, nlsComp string) ([]*Table, error) {
+func GenReverseTableTask(ctx context.Context, cfg *config.Config, mysql *mysql.MySQL, oracle *oracle.Oracle, tableNameRule map[string]string, exporters []string, nlsSort, nlsComp string) ([]*Table, error) {
 	var tables []*Table
 
 	beginTime := time.Now()
@@ -164,6 +164,13 @@ func GenReverseTableTask(ctx context.Context, cfg *config.Config, mysql *mysql.M
 			t := exporter
 			g2.Go(func() error {
 				// 库名、表名规则
+				var targetTableName string
+				if val, ok := tableNameRule[common.StringUPPER(t)]; ok {
+					targetTableName = val
+				} else {
+					targetTableName = common.StringUPPER(t)
+				}
+
 				tbl := &Table{
 					Ctx:               ctx,
 					SourceSchemaName:  common.StringUPPER(cfg.OracleConfig.SchemaName),
@@ -171,7 +178,7 @@ func GenReverseTableTask(ctx context.Context, cfg *config.Config, mysql *mysql.M
 					SourceTableName:   common.StringUPPER(t),
 					TargetDBType:      common.StringUPPER(cfg.MySQLConfig.DBType),
 					TargetDBVersion:   dbVersion,
-					TargetTableName:   common.StringUPPER(t),
+					TargetTableName:   targetTableName,
 					TargetTableOption: common.StringUPPER(cfg.MySQLConfig.TableOption),
 					SourceTableType:   tablesMap[t],
 					SourceDBNLSSort:   nlsSort,

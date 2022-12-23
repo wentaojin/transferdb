@@ -57,7 +57,7 @@ func applyOracleIncrRecord(metaDB *meta.Meta, mysqlDB *mysql.MySQL, cfg *config.
 
 	for tableName, lcs := range logminerMap {
 		rowsResult := lcs
-		tbl := tableName
+		sourceTable := tableName
 		g.Go(func() error {
 			if len(rowsResult) > 0 {
 				var (
@@ -69,24 +69,24 @@ func applyOracleIncrRecord(metaDB *meta.Meta, mysqlDB *mysql.MySQL, cfg *config.
 				go getIncrResult(done, resultQueue)
 
 				// 转换捕获内容以及数据应用
-				go func(mysql *mysql.MySQL, tbl, targetSchema string, rowsResult []logminer, taskQueue chan IncrTask) {
+				go func(mysql *mysql.MySQL, sourceSchema, sourceTable string, rowsResult []logminer, taskQueue chan IncrTask) {
 					defer func() {
 						if err := recover(); err != nil {
 							zap.L().Fatal("translatorAndApplyOracleIncrementRecord",
-								zap.String("schema", cfg.MySQLConfig.SchemaName),
-								zap.String("table", tbl),
+								zap.String("oracle schema", cfg.OracleConfig.SchemaName),
+								zap.String("oracle table", sourceTable),
 								zap.Error(fmt.Errorf("%v", err)))
 						}
 					}()
 					if err := translateAndAddOracleIncrRecord(
 						metaDB,
 						mysql,
-						tbl,
-						targetSchema,
+						sourceSchema,
+						sourceTable,
 						rowsResult, taskQueue); err != nil {
 						return
 					}
-				}(mysqlDB, tbl, cfg.MySQLConfig.SchemaName, rowsResult, taskQueue)
+				}(mysqlDB, cfg.OracleConfig.SchemaName, sourceTable, rowsResult, taskQueue)
 
 				// 必须在任务分配和获取结果后创建工作池
 				go createWorkerPool(cfg.AllConfig.WorkerThreads, taskQueue, resultQueue)
@@ -96,8 +96,8 @@ func applyOracleIncrRecord(metaDB *meta.Meta, mysqlDB *mysql.MySQL, cfg *config.
 				return nil
 			}
 			zap.L().Warn("increment table log file logminer null data, transferdb will continue to capture",
-				zap.String("mysql schema", cfg.MySQLConfig.SchemaName),
-				zap.String("table", tbl),
+				zap.String("oracle schema", cfg.OracleConfig.SchemaName),
+				zap.String("oracle table", sourceTable),
 				zap.String("status", "success"))
 			return nil
 		})

@@ -35,8 +35,8 @@ type Chunk struct {
 	Ctx              context.Context `json:"-"`
 	ChunkID          int             `json:"chunk_id"`
 	SourceGlobalSCN  uint64          `json:"source_global_scn"`
-	SourceSchema     string          `json:"source_schema"`
 	SourceTable      string          `json:"source_table"`
+	TargetTable      string          `json:"target_table"`
 	IsPartition      string          `json:"is_partition"`
 	SourceColumnInfo string          `json:"source_column_info"`
 	TargetColumnInfo string          `json:"target_column_info"`
@@ -50,14 +50,14 @@ type Chunk struct {
 }
 
 func NewChunk(ctx context.Context, cfg *config.Config, oracle *oracle.Oracle, mysql *mysql.MySQL, metaDB *meta.Meta,
-	chunkID int, sourceGlobalSCN uint64, sourceSchema, sourceTable string, isPartition string, sourceColumnInfo, targetColumnInfo string,
+	chunkID int, sourceGlobalSCN uint64, sourceTable, targetTable string, isPartition string, sourceColumnInfo, targetColumnInfo string,
 	whereColumn string, syncMode string) *Chunk {
 	return &Chunk{
 		Ctx:              ctx,
 		ChunkID:          chunkID,
 		SourceGlobalSCN:  sourceGlobalSCN,
-		SourceSchema:     sourceSchema,
 		SourceTable:      sourceTable,
+		TargetTable:      targetTable,
 		IsPartition:      isPartition,
 		SourceColumnInfo: sourceColumnInfo,
 		TargetColumnInfo: targetColumnInfo,
@@ -123,11 +123,11 @@ func (c *Chunk) Split() error {
 		err := meta.NewCommonModel(c.MetaDB).CreateDataCompareMetaAndUpdateWaitSyncMeta(c.Ctx, &meta.DataCompareMeta{
 			DBTypeS:     common.TaskDBOracle,
 			DBTypeT:     common.TaskDBMySQL,
-			SchemaNameS: common.StringUPPER(c.SourceSchema),
+			SchemaNameS: common.StringUPPER(c.Cfg.OracleConfig.SchemaName),
 			TableNameS:  common.StringUPPER(c.SourceTable),
 			ColumnInfoS: c.SourceColumnInfo,
 			SchemaNameT: common.StringUPPER(c.Cfg.MySQLConfig.SchemaName),
-			TableNameT:  common.StringUPPER(c.SourceTable),
+			TableNameT:  common.StringUPPER(c.TargetTable),
 			ColumnInfoT: c.TargetColumnInfo,
 			WhereColumn: c.WhereColumn,
 			WhereRange:  c.WhereRange,
@@ -135,7 +135,7 @@ func (c *Chunk) Split() error {
 		}, &meta.WaitSyncMeta{
 			DBTypeS:        common.TaskDBOracle,
 			DBTypeT:        common.TaskDBMySQL,
-			SchemaNameS:    common.StringUPPER(c.SourceSchema),
+			SchemaNameS:    common.StringUPPER(c.Cfg.OracleConfig.SchemaName),
 			TableNameS:     common.StringUPPER(c.SourceTable),
 			Mode:           c.SyncMode,
 			FullGlobalSCN:  c.SourceGlobalSCN,
@@ -164,11 +164,11 @@ func (c *Chunk) Split() error {
 		err = meta.NewCommonModel(c.MetaDB).CreateDataCompareMetaAndUpdateWaitSyncMeta(c.Ctx, &meta.DataCompareMeta{
 			DBTypeS:     common.TaskDBOracle,
 			DBTypeT:     common.TaskDBMySQL,
-			SchemaNameS: common.StringUPPER(c.SourceSchema),
+			SchemaNameS: common.StringUPPER(c.Cfg.OracleConfig.SchemaName),
 			TableNameS:  common.StringUPPER(c.SourceTable),
 			ColumnInfoS: c.SourceColumnInfo,
 			SchemaNameT: common.StringUPPER(c.Cfg.MySQLConfig.SchemaName),
-			TableNameT:  common.StringUPPER(c.SourceTable),
+			TableNameT:  common.StringUPPER(c.TargetTable),
 			ColumnInfoT: c.TargetColumnInfo,
 			WhereColumn: c.WhereColumn,
 			WhereRange:  c.WhereRange,
@@ -176,7 +176,7 @@ func (c *Chunk) Split() error {
 		}, &meta.WaitSyncMeta{
 			DBTypeS:        common.TaskDBOracle,
 			DBTypeT:        common.TaskDBMySQL,
-			SchemaNameS:    common.StringUPPER(c.SourceSchema),
+			SchemaNameS:    common.StringUPPER(c.Cfg.OracleConfig.SchemaName),
 			TableNameS:     common.StringUPPER(c.SourceTable),
 			Mode:           c.SyncMode,
 			FullGlobalSCN:  c.SourceGlobalSCN,
@@ -190,14 +190,14 @@ func (c *Chunk) Split() error {
 	}
 
 	// third
-	tableRowsByStatistics, err := c.Oracle.GetOracleTableRowsByStatistics(c.SourceSchema, c.SourceTable)
+	tableRowsByStatistics, err := c.Oracle.GetOracleTableRowsByStatistics(common.StringUPPER(c.Cfg.OracleConfig.SchemaName), c.SourceTable)
 	if err != nil {
 		return err
 	}
 	// 统计信息数据行数 0，直接全表扫
 	if tableRowsByStatistics == 0 {
 		zap.L().Warn("get oracle table rows",
-			zap.String("schema", c.SourceSchema),
+			zap.String("schema", common.StringUPPER(c.Cfg.OracleConfig.SchemaName)),
 			zap.String("table", c.SourceTable),
 			zap.String("where", "1 = 1"),
 			zap.Int("statistics rows", tableRowsByStatistics))
@@ -206,11 +206,11 @@ func (c *Chunk) Split() error {
 		err = meta.NewCommonModel(c.MetaDB).CreateDataCompareMetaAndUpdateWaitSyncMeta(c.Ctx, &meta.DataCompareMeta{
 			DBTypeS:     common.TaskDBOracle,
 			DBTypeT:     common.TaskDBMySQL,
-			SchemaNameS: common.StringUPPER(c.SourceSchema),
+			SchemaNameS: common.StringUPPER(c.Cfg.OracleConfig.SchemaName),
 			TableNameS:  common.StringUPPER(c.SourceTable),
 			ColumnInfoS: c.SourceColumnInfo,
 			SchemaNameT: common.StringUPPER(c.Cfg.MySQLConfig.SchemaName),
-			TableNameT:  common.StringUPPER(c.SourceTable),
+			TableNameT:  common.StringUPPER(c.TargetTable),
 			ColumnInfoT: c.TargetColumnInfo,
 			WhereColumn: c.WhereColumn,
 			WhereRange:  c.WhereRange,
@@ -218,7 +218,7 @@ func (c *Chunk) Split() error {
 		}, &meta.WaitSyncMeta{
 			DBTypeS:        common.TaskDBOracle,
 			DBTypeT:        common.TaskDBMySQL,
-			SchemaNameS:    common.StringUPPER(c.SourceSchema),
+			SchemaNameS:    common.StringUPPER(c.Cfg.OracleConfig.SchemaName),
 			TableNameS:     common.StringUPPER(c.SourceTable),
 			Mode:           c.SyncMode,
 			FullGlobalSCN:  c.SourceGlobalSCN,
@@ -232,7 +232,7 @@ func (c *Chunk) Split() error {
 	}
 
 	zap.L().Info("get oracle table statistics rows",
-		zap.String("schema", c.SourceSchema),
+		zap.String("schema", common.StringUPPER(c.Cfg.OracleConfig.SchemaName)),
 		zap.String("table", c.SourceTable),
 		zap.Int("rows", tableRowsByStatistics))
 
@@ -242,13 +242,13 @@ func (c *Chunk) Split() error {
 		c.WhereColumn = customColumn
 	}
 
-	taskName := common.StringsBuilder(c.SourceSchema, `_`, c.SourceTable, `_`, `TASK`, strconv.Itoa(c.ChunkID))
+	taskName := common.StringsBuilder(common.StringUPPER(c.Cfg.OracleConfig.SchemaName), `_`, c.SourceTable, `_`, `TASK`, strconv.Itoa(c.ChunkID))
 
 	if err = c.Oracle.StartOracleChunkCreateTask(taskName); err != nil {
 		return err
 	}
 
-	err = c.Oracle.StartOracleCreateChunkByNUMBER(taskName, common.StringUPPER(c.SourceSchema), common.StringUPPER(c.SourceTable), c.WhereColumn, strconv.Itoa(c.Cfg.DiffConfig.ChunkSize))
+	err = c.Oracle.StartOracleCreateChunkByNUMBER(taskName, common.StringUPPER(c.Cfg.OracleConfig.SchemaName), common.StringUPPER(c.SourceTable), c.WhereColumn, strconv.Itoa(c.Cfg.DiffConfig.ChunkSize))
 	if err != nil {
 		return err
 	}
@@ -261,7 +261,7 @@ func (c *Chunk) Split() error {
 	// 判断数据是否存在，更新 data_diff_meta 记录
 	if len(chunkRes) == 0 {
 		zap.L().Warn("get oracle table rowids rows",
-			zap.String("schema", c.SourceSchema),
+			zap.String("schema", common.StringUPPER(c.Cfg.OracleConfig.SchemaName)),
 			zap.String("table", c.SourceTable),
 			zap.String("where", "1 = 1"),
 			zap.Int("rows", len(chunkRes)))
@@ -271,11 +271,11 @@ func (c *Chunk) Split() error {
 		err = meta.NewCommonModel(c.MetaDB).CreateDataCompareMetaAndUpdateWaitSyncMeta(c.Ctx, &meta.DataCompareMeta{
 			DBTypeS:     common.TaskDBOracle,
 			DBTypeT:     common.TaskDBMySQL,
-			SchemaNameS: common.StringUPPER(c.SourceSchema),
+			SchemaNameS: common.StringUPPER(c.Cfg.OracleConfig.SchemaName),
 			TableNameS:  common.StringUPPER(c.SourceTable),
 			ColumnInfoS: c.SourceColumnInfo,
 			SchemaNameT: common.StringUPPER(c.Cfg.MySQLConfig.SchemaName),
-			TableNameT:  common.StringUPPER(c.SourceTable),
+			TableNameT:  common.StringUPPER(c.TargetTable),
 			ColumnInfoT: c.TargetColumnInfo,
 			WhereColumn: c.WhereColumn,
 			WhereRange:  c.WhereRange,
@@ -283,7 +283,7 @@ func (c *Chunk) Split() error {
 		}, &meta.WaitSyncMeta{
 			DBTypeS:        common.TaskDBOracle,
 			DBTypeT:        common.TaskDBMySQL,
-			SchemaNameS:    common.StringUPPER(c.SourceSchema),
+			SchemaNameS:    common.StringUPPER(c.Cfg.OracleConfig.SchemaName),
 			TableNameS:     common.StringUPPER(c.SourceTable),
 			Mode:           c.SyncMode,
 			FullGlobalSCN:  c.SourceGlobalSCN,
@@ -301,10 +301,10 @@ func (c *Chunk) Split() error {
 		fullMetas = append(fullMetas, meta.DataCompareMeta{
 			DBTypeS:     common.TaskDBOracle,
 			DBTypeT:     common.TaskDBMySQL,
-			SchemaNameS: common.StringUPPER(c.SourceSchema),
+			SchemaNameS: common.StringUPPER(c.Cfg.OracleConfig.SchemaName),
 			TableNameS:  common.StringUPPER(c.SourceTable),
 			SchemaNameT: common.StringUPPER(c.Cfg.MySQLConfig.SchemaName),
-			TableNameT:  common.StringUPPER(c.SourceTable),
+			TableNameT:  common.StringUPPER(c.TargetTable),
 			ColumnInfoS: c.SourceColumnInfo,
 			ColumnInfoT: c.TargetColumnInfo,
 			WhereRange:  r["CMD"],
@@ -326,10 +326,10 @@ func (c *Chunk) Split() error {
 		fullMetas = append(fullMetas, meta.DataCompareMeta{
 			DBTypeS:     common.TaskDBOracle,
 			DBTypeT:     common.TaskDBMySQL,
-			SchemaNameS: common.StringUPPER(c.SourceSchema),
+			SchemaNameS: common.StringUPPER(c.Cfg.OracleConfig.SchemaName),
 			TableNameS:  common.StringUPPER(c.SourceTable),
 			SchemaNameT: common.StringUPPER(c.Cfg.MySQLConfig.SchemaName),
-			TableNameT:  common.StringUPPER(c.SourceTable),
+			TableNameT:  common.StringUPPER(c.TargetTable),
 			ColumnInfoS: c.SourceColumnInfo,
 			ColumnInfoT: c.TargetColumnInfo,
 			WhereRange:  common.StringsBuilder(c.WhereColumn, " < ", r["START_ID"]),
@@ -339,10 +339,10 @@ func (c *Chunk) Split() error {
 		fullMetas = append(fullMetas, meta.DataCompareMeta{
 			DBTypeS:     common.TaskDBOracle,
 			DBTypeT:     common.TaskDBMySQL,
-			SchemaNameS: common.StringUPPER(c.SourceSchema),
+			SchemaNameS: common.StringUPPER(c.Cfg.OracleConfig.SchemaName),
 			TableNameS:  common.StringUPPER(c.SourceTable),
 			SchemaNameT: common.StringUPPER(c.Cfg.MySQLConfig.SchemaName),
-			TableNameT:  common.StringUPPER(c.SourceTable),
+			TableNameT:  common.StringUPPER(c.TargetTable),
 			ColumnInfoS: c.SourceColumnInfo,
 			ColumnInfoT: c.TargetColumnInfo,
 			WhereRange:  common.StringsBuilder(c.WhereColumn, " > ", res[0]["END_ID"]),
@@ -354,13 +354,13 @@ func (c *Chunk) Split() error {
 	// 元数据库信息 batch 写入
 	err = meta.NewDataCompareMetaModel(c.MetaDB).BatchCreateDataCompareMeta(c.Ctx, fullMetas, c.Cfg.AppConfig.InsertBatchSize)
 	if err != nil {
-		return fmt.Errorf("create table [%s.%s] data_diff_meta [batch size] failed: %v", c.SourceSchema, c.SourceTable, err)
+		return fmt.Errorf("create table [%s.%s] data_diff_meta [batch size] failed: %v", common.StringUPPER(c.Cfg.OracleConfig.SchemaName), c.SourceTable, err)
 	}
 
 	err = meta.NewWaitSyncMetaModel(c.MetaDB).UpdateWaitSyncMeta(c.Ctx, &meta.WaitSyncMeta{
 		DBTypeS:        common.TaskDBOracle,
 		DBTypeT:        common.TaskDBMySQL,
-		SchemaNameS:    common.StringUPPER(c.SourceSchema),
+		SchemaNameS:    common.StringUPPER(c.Cfg.OracleConfig.SchemaName),
 		TableNameS:     common.StringUPPER(c.SourceTable),
 		Mode:           c.SyncMode,
 		FullGlobalSCN:  c.SourceGlobalSCN,

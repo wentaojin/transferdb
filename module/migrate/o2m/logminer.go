@@ -32,24 +32,26 @@ import (
 // V$LOGMNR_CONTENTS 字段解释参考链接
 // https://docs.oracle.com/en/database/oracle/oracle-database/21/refrn/V-LOGMNR_CONTENTS.html#GUID-B9196942-07BF-4935-B603-FA875064F5C3
 type logminer struct {
-	SCN       uint64
-	SegOwner  string
-	TableName string
-	SQLRedo   string
-	SQLUndo   string
-	Operation string
+	SCN          uint64
+	SourceSchema string
+	SourceTable  string
+	TargetSchema string
+	TargetTable  string
+	SQLRedo      string
+	SQLUndo      string
+	Operation    string
 }
 
 // 捕获增量数据
-func getOracleIncrRecord(ctx context.Context, oracle *oracle.Oracle, sourceSchema string, sourceTable string, lastCheckpoint string, queryTimeout int) ([]logminer, error) {
+func getOracleIncrRecord(ctx context.Context, oracle *oracle.Oracle, sourceSchema, targetSchema string, sourceTable string, tableNameRule map[string]string, lastCheckpoint string, queryTimeout int) ([]logminer, error) {
 	var lcs []logminer
 
 	c, cancel := context.WithTimeout(ctx, time.Duration(queryTimeout)*time.Second)
 	defer cancel()
 
 	querySQL := common.StringsBuilder(`SELECT SCN,
-       SEG_OWNER,
-       TABLE_NAME,
+       SEG_OWNER AS SOURCE_SCHEMA,
+       TABLE_NAME AS SOURCE_TABLE,
        SQL_REDO,
        SQL_UNDO,
        OPERATION
@@ -70,9 +72,13 @@ func getOracleIncrRecord(ctx context.Context, oracle *oracle.Oracle, sourceSchem
 
 	for rows.Next() {
 		var lc logminer
-		if err = rows.Scan(&lc.SCN, &lc.SegOwner, &lc.TableName, &lc.SQLRedo, &lc.SQLUndo, &lc.Operation); err != nil {
+		if err = rows.Scan(&lc.SCN, &lc.SourceSchema, &lc.SourceTable, &lc.SQLRedo, &lc.SQLUndo, &lc.Operation); err != nil {
 			return lcs, err
 		}
+
+		// 目标库名以及表名
+		lc.TargetSchema = targetSchema
+		lc.TargetTable = tableNameRule[common.StringUPPER(lc.SourceTable)]
 		lcs = append(lcs, lc)
 	}
 	endTime := time.Now()
@@ -93,7 +99,7 @@ func getOracleIncrRecord(ctx context.Context, oracle *oracle.Oracle, sourceSchem
 // 按表级别筛选以及过滤数据
 func filterOracleIncrRecord(
 	lognimers []logminer,
-	exporters []string,
+	syncSourceTables []string,
 	exporterTableSourceSCN map[string]uint64,
 	workerThreads, currentResetFlag int) (map[string][]logminer, error) {
 	var (
@@ -102,7 +108,7 @@ func filterOracleIncrRecord(
 	)
 	lcMap = make(map[string][]logminer)
 
-	for _, table := range exporters {
+	for _, table := range syncSourceTables {
 		lcMap[common.StringUPPER(table)] = lc
 	}
 
@@ -126,7 +132,7 @@ func filterOracleIncrRecord(
 			// 1、数据同步只同步 INSERT/DELETE/UPDATE DML以及只同步 truncate table/ drop table 限定 DDL
 			// 2、根据元数据表 incr_synce_meta 对应表已经同步写入得 SCN SQL 记录,过滤 Oracle 提交记录 SCN 号，过滤,防止重复写入
 			if currentResetFlag == 0 {
-				if rows.SCN >= sourceTableSCNMAP[strings.ToUpper(rows.TableName)] {
+				if rows.SCN >= sourceTableSCNMAP[strings.ToUpper(rows.SourceTable)] {
 					if rows.Operation == common.MigrateOperationDDL {
 						splitDDL := strings.Split(rows.SQLRedo, ` `)
 						ddl := common.StringsBuilder(splitDDL[0], ` `, splitDDL[1])
@@ -146,7 +152,7 @@ func filterOracleIncrRecord(
 				return nil
 
 			} else if currentResetFlag == 1 {
-				if rows.SCN > sourceTableSCNMAP[strings.ToUpper(rows.TableName)] {
+				if rows.SCN > sourceTableSCNMAP[strings.ToUpper(rows.SQLRedo)] {
 					if rows.Operation == common.MigrateOperationDDL {
 						splitDDL := strings.Split(rows.SQLRedo, ` `)
 						ddl := common.StringsBuilder(splitDDL[0], ` `, splitDDL[1])
