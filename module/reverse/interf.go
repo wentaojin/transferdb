@@ -15,6 +15,12 @@ limitations under the License.
 */
 package reverse
 
+type Changer interface {
+	ChangeTableName() (map[string]string, error)
+	ChangeTableColumnDatatype() (map[string]map[string]string, error)
+	ChangeTableColumnDefaultValue() (map[string]map[string]string, error)
+}
+
 type Reader interface {
 	GetTablePrimaryKey() ([]map[string]string, error)
 	GetTableUniqueKey() ([]map[string]string, error)
@@ -28,8 +34,10 @@ type Reader interface {
 }
 
 type Generator interface {
+	GenSchemaName() string
+	GenTableName() string
+	GenTableNamePrefix() (string, string)
 	GenTableKeyMeta() (tableKeyMetas []string, compatibilityIndexSQL []string, err error)
-	GenTablePrefix() (string, string)
 	GenTablePrimaryKey() (primaryKeyMetas []string, err error)
 	GenTableUniqueKey() (uniqueKeyMetas []string, err error)
 	GenTableForeignKey() (foreignKeyMetas []string, err error)
@@ -40,11 +48,6 @@ type Generator interface {
 	GenTableColumn() (columnMetas []string, err error)
 	GenTableColumnComment() (columnComments []string, err error)
 	GenCreateTableDDL() (reverseDDL string, checkKeyDDL []string, foreignKeyDDL []string, compatibleDDL []string, err error)
-
-	ChangeSchemaName() string
-	ChangeTableName() string
-	ChangeTableColumnType(sourceSchema, sourceTable, sourceColumn string, column interface{}) (string, error)
-	ChangeTableColumnDefaultValue(dataDefault string) (string, error)
 }
 
 type Writer interface {

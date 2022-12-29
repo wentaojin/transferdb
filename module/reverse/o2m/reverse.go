@@ -78,7 +78,7 @@ func (r *Reverse) NewReverse() error {
 		return fmt.Errorf("reverse schema [%s] table mode [%s] task failed: %v, table [error_log_detail] exist failed error, please clear and rerunning", r.cfg.OracleConfig.SchemaName, common.ReverseO2MMode, err)
 	}
 
-	// 获取 r.oracle 数据库字符排序规则
+	// 获取 oracle 数据库字符排序规则
 	nlsComp, err := r.oracle.GetOracleDBCharacterNLSCompCollation()
 	if err != nil {
 		return err
@@ -96,6 +96,18 @@ func (r *Reverse) NewReverse() error {
 
 	if !strings.EqualFold(nlsSort, nlsComp) {
 		return fmt.Errorf("r.oracle db nls_sort [%s] and nls_comp [%s] isn't different, need be equal; because mysql db isn't support", nlsSort, nlsComp)
+	}
+
+	// oracle 版本是否可指定表、字段 collation
+	// oracle db nls_sort/nls_comp 值需要相等，USING_NLS_COMP 值取 nls_comp
+	oracleDBVersion, err := r.oracle.GetOracleDBVersion()
+	if err != nil {
+		return err
+	}
+
+	oracleCollation := false
+	if common.VersionOrdinal(oracleDBVersion) >= common.VersionOrdinal(common.OracleTableColumnCollationDBVersion) {
+		oracleCollation = true
 	}
 
 	// 筛选过滤可能不支持的表类型
@@ -151,26 +163,22 @@ func (r *Reverse) NewReverse() error {
 		exporterTables = exporters
 	}
 
-	// 获取表名自定义规则
-	tableNameRules, err := meta.NewTableNameRuleModel(r.metaDB).DetailTableNameRule(r.ctx, &meta.TableNameRule{
-		DBTypeS:     common.TaskDBOracle,
-		DBTypeT:     common.TaskDBMySQL,
-		SchemaNameS: r.cfg.OracleConfig.SchemaName,
-		SchemaNameT: r.cfg.MySQLConfig.SchemaName,
+	// 获取规则
+	tableNameRuleMap, tableColumnRuleMap, tableDefaultRuleMap, err := IChanger(&Change{
+		Ctx:              r.ctx,
+		SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+		TargetSchemaName: common.StringUPPER(r.cfg.MySQLConfig.SchemaName),
+		SourceTables:     exporterTables,
+		OracleCollation:  oracleCollation,
+		Oracle:           r.oracle,
+		MetaDB:           r.metaDB,
 	})
 	if err != nil {
 		return err
 	}
-	tableNameRuleMap := make(map[string]string)
-
-	if len(tableNameRules) > 0 {
-		for _, tr := range tableNameRules {
-			tableNameRuleMap[common.StringUPPER(tr.TableNameS)] = common.StringUPPER(tr.TableNameT)
-		}
-	}
 
 	// 获取 reverse 表任务列表
-	tables, err := GenReverseTableTask(r.ctx, r.cfg, r.mysql, r.oracle, tableNameRuleMap, exporterTables, nlsSort, nlsComp)
+	tables, err := GenReverseTableTask(r, tableNameRuleMap, tableColumnRuleMap, tableDefaultRuleMap, oracleDBVersion, oracleCollation, exporterTables, nlsSort, nlsComp)
 	if err != nil {
 		return err
 	}
@@ -209,7 +217,7 @@ func (r *Reverse) NewReverse() error {
 	for _, table := range tables {
 		t := table
 		g.Go(func() error {
-			rule, err := IReader(r.ctx, r.metaDB, t, t)
+			rule, err := IReader(t, t)
 			if err != nil {
 				if err = meta.NewErrorLogDetailModel(r.metaDB).CreateErrorLog(r.ctx, &meta.ErrorLogDetail{
 					DBTypeS:     common.TaskDBOracle,

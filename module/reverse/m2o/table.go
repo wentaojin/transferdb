@@ -23,6 +23,7 @@ import (
 	"github.com/jedib0t/go-pretty/v6/text"
 	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/config"
+	"github.com/wentaojin/transferdb/database/meta"
 	"github.com/wentaojin/transferdb/database/mysql"
 	"github.com/wentaojin/transferdb/database/oracle"
 	"github.com/wentaojin/transferdb/module/reverse"
@@ -40,13 +41,17 @@ type Table struct {
 	SourceSchemaName        string          `json:"source_schema_name"`
 	TargetSchemaName        string          `json:"target_schema_name"`
 	SourceTableName         string          `json:"source_table_name"`
-	IsPartition             bool            `json:"is_partition"`
 	TargetTableName         string          `json:"target_table_name"`
+	IsPartition             bool            `json:"is_partition"`
 	SourceTableCharacterSet string          `json:"source_table_character_set"`
 	SourceTableCollation    string          `json:"source_table_collation"`
-	Overwrite               bool            `json:"overwrite"`
-	Oracle                  *oracle.Oracle  `json:"-"`
-	MySQL                   *mysql.MySQL    `json:"-"`
+
+	TableColumnDatatypeRule   map[string]string `json:"table_column_datatype_rule"`
+	TableColumnDefaultValRule map[string]string `json:"table_column_default_val_rule"`
+	Overwrite                 bool              `json:"overwrite"`
+	Oracle                    *oracle.Oracle    `json:"-"`
+	MySQL                     *mysql.MySQL      `json:"-"`
+	MetaDB                    *meta.Meta        `json:"-"`
 }
 
 func PreCheckCompatibility(cfg *config.Config, mysql *mysql.MySQL, exporters []string, oracleDBVersion string, isExtended bool) ([]string, map[string][]map[string]string, map[string]string, map[string]string, error) {
@@ -150,12 +155,12 @@ func PreCheckCompatibility(cfg *config.Config, mysql *mysql.MySQL, exporters []s
 	return reverseTaskTables, errCompatibility, tableCharSetMap, tableCollationMap, nil
 }
 
-func GenReverseTableTask(cfg *config.Config, mysql *mysql.MySQL, oracle *oracle.Oracle, tableNameRule map[string]string, exporters []string, oracleDBVersion string, isExtended bool, tableCharSetMap map[string]string, tableCollationMap map[string]string) ([]*Table, error) {
+func GenReverseTableTask(r *Reverse, tableNameRule map[string]string, tableColumnRule, tableDefaultRule map[string]map[string]string, exporters []string, oracleDBVersion string, isExtended bool, tableCharSetMap map[string]string, tableCollationMap map[string]string) ([]*Table, error) {
 	var (
 		tables []*Table
 	)
 
-	sourceSchema := common.StringUPPER(cfg.MySQLConfig.SchemaName)
+	sourceSchema := common.StringUPPER(r.cfg.MySQLConfig.SchemaName)
 	beginTime := time.Now()
 	defer func() {
 		endTime := time.Now()
@@ -168,7 +173,7 @@ func GenReverseTableTask(cfg *config.Config, mysql *mysql.MySQL, oracle *oracle.
 
 	startTime := time.Now()
 
-	partitionTables, err := mysql.GetMySQLPartitionTable(cfg.MySQLConfig.SchemaName)
+	partitionTables, err := r.mysql.GetMySQLPartitionTable(r.cfg.MySQLConfig.SchemaName)
 	if err != nil {
 		return tables, err
 	}
@@ -178,7 +183,7 @@ func GenReverseTableTask(cfg *config.Config, mysql *mysql.MySQL, oracle *oracle.
 
 	g1.Go(func() error {
 		g2 := &errgroup.Group{}
-		g2.SetLimit(cfg.AppConfig.Threads)
+		g2.SetLimit(r.cfg.AppConfig.Threads)
 
 		for _, t := range exporters {
 			ts := t
@@ -191,19 +196,22 @@ func GenReverseTableTask(cfg *config.Config, mysql *mysql.MySQL, oracle *oracle.
 				}
 
 				tbl := &Table{
-					MySQLDBType:             cfg.MySQLConfig.DBType,
-					OracleDBVersion:         oracleDBVersion,
-					OracleExtendedMode:      isExtended,
-					SourceSchemaName:        common.StringUPPER(sourceSchema),
-					SourceTableName:         common.StringUPPER(ts),
-					TargetSchemaName:        common.StringUPPER(cfg.OracleConfig.SchemaName),
-					TargetTableName:         targetTableName,
-					IsPartition:             common.IsContainString(partitionTables, common.StringUPPER(ts)),
-					SourceTableCharacterSet: tableCharSetMap[ts],
-					SourceTableCollation:    tableCollationMap[ts],
-					Overwrite:               cfg.MySQLConfig.Overwrite,
-					MySQL:                   mysql,
-					Oracle:                  oracle,
+					MySQLDBType:               r.cfg.MySQLConfig.DBType,
+					OracleDBVersion:           oracleDBVersion,
+					OracleExtendedMode:        isExtended,
+					SourceSchemaName:          common.StringUPPER(sourceSchema),
+					SourceTableName:           common.StringUPPER(ts),
+					TargetSchemaName:          common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+					TargetTableName:           targetTableName,
+					IsPartition:               common.IsContainString(partitionTables, common.StringUPPER(ts)),
+					SourceTableCharacterSet:   tableCharSetMap[ts],
+					SourceTableCollation:      tableCollationMap[ts],
+					TableColumnDatatypeRule:   tableColumnRule[common.StringUPPER(ts)],
+					TableColumnDefaultValRule: tableDefaultRule[common.StringUPPER(ts)],
+					Overwrite:                 r.cfg.MySQLConfig.Overwrite,
+					MySQL:                     r.mysql,
+					Oracle:                    r.oracle,
+					MetaDB:                    r.metaDB,
 				}
 				tableChan <- tbl
 				return nil
@@ -275,6 +283,17 @@ func (t *Table) GetTableColumnMeta() ([]map[string]string, error) {
 
 func (t *Table) GetTableColumnComment() ([]map[string]string, error) {
 	return t.MySQL.GetMySQLTableColumnComment(t.SourceSchemaName, t.SourceTableName)
+}
+
+func (t *Table) GetTablePartitionDetail() (string, error) {
+	if t.IsPartition {
+		partitionDetail, err := t.MySQL.GetMySQLPartitionTableDetailINFO(t.SourceSchemaName, t.SourceTableName)
+		if err != nil {
+			return partitionDetail, err
+		}
+		return partitionDetail, nil
+	}
+	return "", nil
 }
 
 func (t *Table) String() string {

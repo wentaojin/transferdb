@@ -16,39 +16,36 @@ limitations under the License.
 package o2m
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/database/meta"
 	"go.uber.org/zap"
 	"regexp"
 	"strings"
-
-	"github.com/wentaojin/transferdb/common"
 )
 
 type Rule struct {
-	Ctx               context.Context     `json:"-"`
-	SourceSchema      string              `json:"source_schema"`
-	SourceTableName   string              `json:"source_table_name"`
-	TargetSchema      string              `json:"target_schema"`
-	TargetTableName   string              `json:"target_table_name"`
-	PrimaryKeyINFO    []map[string]string `json:"primary_key_info"`
-	UniqueKeyINFO     []map[string]string `json:"unique_key_info"`
-	ForeignKeyINFO    []map[string]string `json:"foreign_key_info"`
-	CheckKeyINFO      []map[string]string `json:"check_key_info"`
-	UniqueIndexINFO   []map[string]string `json:"unique_index_info"`
-	NormalIndexINFO   []map[string]string `json:"normal_index_info"`
-	TableCommentINFO  []map[string]string `json:"table_comment_info"`
-	TableColumnINFO   []map[string]string `json:"table_column_info"`
-	ColumnCommentINFO []map[string]string `json:"column_comment_info"`
-	OracleCollation   bool                `json:"oracle_collation"`
-
-	MetaDB *meta.Meta `json:"-"`
+	SourceSchema             string              `json:"source_schema"`
+	SourceTableName          string              `json:"source_table_name"`
+	TargetSchema             string              `json:"target_schema"`
+	TargetTableName          string              `json:"target_table_name"`
+	PrimaryKeyINFO           []map[string]string `json:"primary_key_info"`
+	UniqueKeyINFO            []map[string]string `json:"unique_key_info"`
+	ForeignKeyINFO           []map[string]string `json:"foreign_key_info"`
+	CheckKeyINFO             []map[string]string `json:"check_key_info"`
+	UniqueIndexINFO          []map[string]string `json:"unique_index_info"`
+	NormalIndexINFO          []map[string]string `json:"normal_index_info"`
+	TableCommentINFO         []map[string]string `json:"table_comment_info"`
+	TableColumnINFO          []map[string]string `json:"table_column_info"`
+	ColumnCommentINFO        []map[string]string `json:"column_comment_info"`
+	ColumnDatatypeRule       map[string]string   `json:"column_datatype_rule"`
+	ColumnDataDefaultvalRule map[string]string   `json:"column_data_defaultval_rule"`
+	OracleCollation          bool                `json:"oracle_collation"`
 }
 
 func (r *Rule) GenCreateTableDDL() (reverseDDL string, checkKeyDDL []string, foreignKeyDDL []string, compatibleDDL []string, err error) {
-	targetSchema, targetTable := r.GenTablePrefix()
+	targetSchema, targetTable := r.GenTableNamePrefix()
 
 	tableColumnMetas, err := r.GenTableColumn()
 	if err != nil {
@@ -170,9 +167,9 @@ func (r *Rule) GenTableKeyMeta() (tableKeyMetas []string, compatibilityIndexSQL 
 	return tableKeyMetas, compatibilityIndexSQL, nil
 }
 
-func (r *Rule) GenTablePrefix() (string, string) {
-	targetSchema := r.ChangeSchemaName()
-	targetTable := r.ChangeTableName()
+func (r *Rule) GenTableNamePrefix() (string, string) {
+	targetSchema := r.GenSchemaName()
+	targetTable := r.GenTableName()
 
 	return targetSchema, targetTable
 }
@@ -541,6 +538,7 @@ func (r *Rule) GenTableColumn() (columnMetas []string, err error) {
 			nullable        string
 			comment         string
 			dataDefault     string
+			columnType      string
 		)
 		if r.OracleCollation {
 			// 字段排序规则检查
@@ -558,19 +556,10 @@ func (r *Rule) GenTableColumn() (columnMetas []string, err error) {
 			columnCollation = ""
 		}
 
-		columnType, err := r.ChangeTableColumnType(r.SourceSchema, r.SourceTableName, rowCol["COLUMN_NAME"], Column{
-			DataType: rowCol["DATA_TYPE"],
-			ColumnInfo: ColumnInfo{
-				DataLength:    rowCol["DATA_LENGTH"],
-				DataPrecision: rowCol["DATA_PRECISION"],
-				DataScale:     rowCol["DATA_SCALE"],
-				NULLABLE:      rowCol["NULLABLE"],
-				DataDefault:   rowCol["DATA_DEFAULT"],
-				Comment:       rowCol["COMMENTS"],
-			},
-		})
-		if err != nil {
-			return columnMetas, err
+		if val, ok := r.ColumnDatatypeRule[rowCol["COLUMN_NAME"]]; ok {
+			columnType = val
+		} else {
+			return columnMetas, fmt.Errorf("oracle table [%s.%s] column [%s] data type isn't exist", r.SourceSchema, r.SourceTableName, rowCol["COLUMN_NAME"])
 		}
 
 		if strings.EqualFold(rowCol["NULLABLE"], "Y") {
@@ -586,9 +575,10 @@ func (r *Rule) GenTableColumn() (columnMetas []string, err error) {
 		}
 
 		if !strings.EqualFold(rowCol["DATA_DEFAULT"], "") {
-			dataDefault, err = r.ChangeTableColumnDefaultValue(rowCol["DATA_DEFAULT"])
-			if err != nil {
-				return columnMetas, err
+			if val, ok := r.ColumnDataDefaultvalRule[rowCol["COLUMN_NAME"]]; ok {
+				dataDefault = val
+			} else {
+				return columnMetas, fmt.Errorf("oracle table [%s.%s] column [%s] default value isn't exist", r.SourceSchema, r.SourceTableName, rowCol["COLUMN_NAME"])
 			}
 		} else {
 			dataDefault = rowCol["DATA_DEFAULT"]
@@ -648,7 +638,7 @@ func (r *Rule) GenTableColumnComment() (columnComments []string, err error) {
 	return
 }
 
-func (r *Rule) ChangeSchemaName() string {
+func (r *Rule) GenSchemaName() string {
 	if r.TargetSchema == "" {
 		return r.SourceSchema
 	}
@@ -658,7 +648,7 @@ func (r *Rule) ChangeSchemaName() string {
 	return r.SourceSchema
 }
 
-func (r *Rule) ChangeTableName() string {
+func (r *Rule) GenTableName() string {
 	if r.TargetTableName == "" {
 		return r.SourceTableName
 	}
@@ -668,99 +658,12 @@ func (r *Rule) ChangeTableName() string {
 	return r.SourceTableName
 }
 
-// 数据库查询获取自定义表结构转换规则
-// 加载数据类型转换规则【处理字段级别、表级别、库级别数据类型映射规则】
-// 数据类型转换规则判断，未设置自定义规则，默认采用内置默认字段类型转换
-func (r *Rule) ChangeTableColumnType(sourceSchema, sourceTable, sourceColumn string, column interface{}) (string, error) {
-	var columnType string
-	// 获取内置映射规则
-	buildinDatatypeNames, err := meta.NewBuildinDatatypeRuleModel(r.MetaDB).BatchQueryBuildinDatatype(r.Ctx, &meta.BuildinDatatypeRule{
-		DBTypeS: common.TaskDBOracle,
-		DBTypeT: common.TaskDBMySQL,
-	})
-	if err != nil {
-		return columnType, err
-	}
-	originColumnType, buildInColumnType, err := OracleTableColumnMapRule(sourceSchema, sourceTable, column.(Column), buildinDatatypeNames)
-	if err != nil {
-		return columnType, err
-	}
-	// 获取自定义映射规则
-	columnDataTypeMapSlice, err := meta.NewColumnDatatypeRuleModel(r.MetaDB).DetailColumnRule(r.Ctx, &meta.ColumnDatatypeRule{
-		DBTypeS:     common.TaskDBOracle,
-		DBTypeT:     common.TaskDBMySQL,
-		SchemaNameS: r.SourceSchema,
-		TableNameS:  r.SourceTableName,
-		ColumnNameS: sourceColumn,
-	})
-	if err != nil {
-		return columnType, err
-	}
-
-	tableDataTypeMapSlice, err := meta.NewTableDatatypeRuleModel(r.MetaDB).DetailTableRule(r.Ctx, &meta.TableDatatypeRule{
-		DBTypeS:     common.TaskDBOracle,
-		DBTypeT:     common.TaskDBMySQL,
-		SchemaNameS: r.SourceSchema,
-		TableNameS:  r.SourceTableName,
-	})
-	if err != nil {
-		return columnType, err
-	}
-
-	schemaDataTypeMapSlice, err := meta.NewSchemaDatatypeRuleModel(r.MetaDB).DetailSchemaRule(r.Ctx, &meta.SchemaDatatypeRule{
-		DBTypeS:     common.TaskDBOracle,
-		DBTypeT:     common.TaskDBMySQL,
-		SchemaNameS: r.SourceSchema,
-	})
-	if err != nil {
-		return columnType, err
-	}
-
-	// 优先级
-	// column > table > schema > buildin
-	if len(columnDataTypeMapSlice) == 0 {
-		return loadDataTypeRuleUsingTableOrSchema(originColumnType, buildInColumnType,
-			tableDataTypeMapSlice, schemaDataTypeMapSlice), nil
-	}
-
-	// only column rule
-	columnTypeFromColumn := loadColumnTypeRuleOnlyUsingColumn(sourceColumn, originColumnType, buildInColumnType, columnDataTypeMapSlice)
-
-	// table or schema rule check, return column type
-	columnTypeFromOther := loadDataTypeRuleUsingTableOrSchema(originColumnType, buildInColumnType, tableDataTypeMapSlice, schemaDataTypeMapSlice)
-
-	// column or other rule check, return column type
-	switch {
-	case columnTypeFromColumn != buildInColumnType && columnTypeFromOther == buildInColumnType:
-		return strings.ToUpper(columnTypeFromColumn), nil
-	case columnTypeFromColumn != buildInColumnType && columnTypeFromOther != buildInColumnType:
-		return strings.ToUpper(columnTypeFromColumn), nil
-	case columnTypeFromColumn == buildInColumnType && columnTypeFromOther != buildInColumnType:
-		return strings.ToUpper(columnTypeFromOther), nil
-	default:
-		return strings.ToUpper(buildInColumnType), nil
-	}
-}
-
-func (r *Rule) ChangeTableColumnDefaultValue(dataDefault string) (string, error) {
-	var defaultVal string
-	defaultValueMapSlice, err := meta.NewBuildinColumnDefaultvalModel(r.MetaDB).DetailColumnDefaultVal(r.Ctx, &meta.BuildinColumnDefaultval{
-		DBTypeS: common.TaskDBOracle,
-		DBTypeT: common.TaskDBMySQL,
-	})
-	if err != nil {
-		return defaultVal, err
-	}
-
-	return loadColumnDefaultValueRule(dataDefault, defaultValueMapSlice)
-}
-
 func (r *Rule) String() string {
 	jsonStr, _ := json.Marshal(r)
 	return string(jsonStr)
 }
 
-func loadColumnDefaultValueRule(defaultValue string, defaultValueMapSlice []meta.BuildinColumnDefaultval) (string, error) {
+func loadColumnDefaultValueRule(defaultValue string, defaultValueMapSlice []meta.BuildinColumnDefaultval) string {
 	// 额外处理 Oracle 默认值 ('6') 或者 (5) 或者 ('xsddd') 等包含小括号的默认值，而非 '(xxxx)' 之类的默认值
 	// Oracle 对于同类型 ('xxx') 或者 (xxx) 内部会自动处理，所以 O2M/O2T 需要处理成 'xxx' 或者 xxx
 	if strings.HasPrefix(defaultValue, "(") && strings.HasSuffix(defaultValue, ")") {
@@ -769,15 +672,15 @@ func loadColumnDefaultValueRule(defaultValue string, defaultValueMapSlice []meta
 	}
 
 	if len(defaultValueMapSlice) == 0 {
-		return defaultValue, nil
+		return defaultValue
 	}
 
 	for _, dv := range defaultValueMapSlice {
 		if strings.EqualFold(strings.TrimSpace(dv.DefaultValueS), strings.TrimSpace(defaultValue)) && dv.DefaultValueT != "" {
-			return dv.DefaultValueT, nil
+			return dv.DefaultValueT
 		}
 	}
-	return defaultValue, nil
+	return defaultValue
 }
 
 func loadDataTypeRuleUsingTableOrSchema(originColumnType string, buildInColumnType string, tableDataTypeMapSlice []meta.TableDatatypeRule,

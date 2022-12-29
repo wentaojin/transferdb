@@ -16,14 +16,28 @@ limitations under the License.
 package o2m
 
 import (
-	"context"
 	"fmt"
-	"github.com/wentaojin/transferdb/database/meta"
 	"github.com/wentaojin/transferdb/module/reverse"
 	"strings"
 )
 
-func IReader(ctx context.Context, metaDB *meta.Meta, t *Table, rd reverse.Reader) (*Rule, error) {
+func IChanger(c reverse.Changer) (map[string]string, map[string]map[string]string, map[string]map[string]string, error) {
+	tableNameRuleMap, err := c.ChangeTableName()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	tableColumnDatatypeMap, err := c.ChangeTableColumnDatatype()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	tableDefaultValueMap, err := c.ChangeTableColumnDefaultValue()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return tableNameRuleMap, tableColumnDatatypeMap, tableDefaultValueMap, nil
+}
+
+func IReader(t *Table, rd reverse.Reader) (*Rule, error) {
 	primaryKey, err := rd.GetTablePrimaryKey()
 	if err != nil {
 		return nil, err
@@ -64,22 +78,22 @@ func IReader(ctx context.Context, metaDB *meta.Meta, t *Table, rd reverse.Reader
 	}
 
 	return &Rule{
-		Ctx:               ctx,
-		SourceSchema:      t.SourceSchemaName,
-		SourceTableName:   t.SourceTableName,
-		TargetSchema:      t.TargetSchemaName,
-		TargetTableName:   t.TargetTableName,
-		PrimaryKeyINFO:    primaryKey,
-		UniqueKeyINFO:     uniqueKey,
-		ForeignKeyINFO:    foreignKey,
-		CheckKeyINFO:      checkKey,
-		UniqueIndexINFO:   uniqueIndex,
-		NormalIndexINFO:   normalIndex,
-		TableCommentINFO:  tableComment,
-		TableColumnINFO:   columnMeta,
-		ColumnCommentINFO: columnComment,
-		OracleCollation:   t.OracleCollation,
-		MetaDB:            metaDB,
+		SourceSchema:             t.SourceSchemaName,
+		SourceTableName:          t.SourceTableName,
+		TargetSchema:             t.TargetSchemaName,
+		TargetTableName:          t.TargetTableName,
+		PrimaryKeyINFO:           primaryKey,
+		UniqueKeyINFO:            uniqueKey,
+		ForeignKeyINFO:           foreignKey,
+		CheckKeyINFO:             checkKey,
+		UniqueIndexINFO:          uniqueIndex,
+		NormalIndexINFO:          normalIndex,
+		TableCommentINFO:         tableComment,
+		TableColumnINFO:          columnMeta,
+		ColumnCommentINFO:        columnComment,
+		ColumnDatatypeRule:       t.TableColumnDatatypeRule,
+		ColumnDataDefaultvalRule: t.TableColumnDefaultValRule,
+		OracleCollation:          t.OracleCollation,
 	}, nil
 }
 
@@ -118,8 +132,8 @@ func IReverse(t *Table, s reverse.Generator) (*DDL, error) {
 		SourceSchemaName: t.SourceSchemaName,
 		SourceTableName:  t.SourceTableName,
 		SourceTableType:  t.SourceTableType,
-		TargetSchemaName: s.ChangeSchemaName(), // change schema name
-		TargetTableName:  s.ChangeTableName(),  // change table name
+		TargetSchemaName: s.GenSchemaName(), // change schema name
+		TargetTableName:  s.GenTableName(),  // change table name
 		TargetDBType:     t.TargetDBType,
 		TargetDBVersion:  t.TargetDBVersion,
 		ReverseDDL:       reverseDDL,

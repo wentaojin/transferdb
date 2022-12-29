@@ -22,7 +22,7 @@ import (
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/valyala/fastjson"
 	"github.com/wentaojin/transferdb/common"
-	"github.com/wentaojin/transferdb/config"
+	"github.com/wentaojin/transferdb/database/meta"
 	"github.com/wentaojin/transferdb/database/mysql"
 	"github.com/wentaojin/transferdb/database/oracle"
 	"github.com/wentaojin/transferdb/module/reverse"
@@ -47,19 +47,23 @@ type Table struct {
 	SourceDBNLSSort       string          `json:"sourcedb_nlssort"`
 	SourceDBNLSComp       string          `json:"sourcedb_nlscomp"`
 	SourceTableType       string          `json:"source_table_type"`
-	Overwrite             bool            `json:"overwrite"`
-	Oracle                *oracle.Oracle  `json:"-"`
-	MySQL                 *mysql.MySQL    `json:"-"`
+
+	TableColumnDatatypeRule   map[string]string `json:"table_column_datatype_rule"`
+	TableColumnDefaultValRule map[string]string `json:"table_column_default_val_rule"`
+	Overwrite                 bool              `json:"overwrite"`
+	Oracle                    *oracle.Oracle    `json:"-"`
+	MySQL                     *mysql.MySQL      `json:"-"`
+	MetaDB                    *meta.Meta        `json:"-"`
 }
 
-func GenReverseTableTask(ctx context.Context, cfg *config.Config, mysql *mysql.MySQL, oracle *oracle.Oracle, tableNameRule map[string]string, exporters []string, nlsSort, nlsComp string) ([]*Table, error) {
+func GenReverseTableTask(r *Reverse, tableNameRule map[string]string, tableColumnRule, tableDefaultRule map[string]map[string]string, oracleDBVersion string, oracleCollation bool, exporters []string, nlsSort, nlsComp string) ([]*Table, error) {
 	var tables []*Table
 
 	beginTime := time.Now()
 	defer func() {
 		endTime := time.Now()
 		zap.L().Info("gen oracle table list finished",
-			zap.String("schema", cfg.OracleConfig.SchemaName),
+			zap.String("schema", r.cfg.OracleConfig.SchemaName),
 			zap.Int("table totals", len(exporters)),
 			zap.Int("table gens", len(tables)),
 			zap.String("cost", endTime.Sub(beginTime).String()))
@@ -67,7 +71,7 @@ func GenReverseTableTask(ctx context.Context, cfg *config.Config, mysql *mysql.M
 
 	// 获取 oracle 环境信息
 	startTime := time.Now()
-	characterSet, err := oracle.GetOracleDBCharacterSet()
+	characterSet, err := r.oracle.GetOracleDBCharacterSet()
 	if err != nil {
 		return tables, err
 	}
@@ -75,25 +79,13 @@ func GenReverseTableTask(ctx context.Context, cfg *config.Config, mysql *mysql.M
 		return tables, fmt.Errorf("oracle db character set [%v] isn't support", characterSet)
 	}
 
-	// oracle 版本是否可指定表、字段 collation
-	// oracle db nls_sort/nls_comp 值需要相等，USING_NLS_COMP 值取 nls_comp
-	oraDBVersion, err := oracle.GetOracleDBVersion()
-	if err != nil {
-		return tables, err
-	}
-
-	oraCollation := false
-	if common.VersionOrdinal(oraDBVersion) >= common.VersionOrdinal(common.OracleTableColumnCollationDBVersion) {
-		oraCollation = true
-	}
-
 	endTime := time.Now()
 	zap.L().Info("get oracle db character and version finished",
-		zap.String("schema", cfg.OracleConfig.SchemaName),
-		zap.String("db version", oraDBVersion),
+		zap.String("schema", r.cfg.OracleConfig.SchemaName),
+		zap.String("db version", oracleDBVersion),
 		zap.String("db character", characterSet),
 		zap.Int("table totals", len(exporters)),
-		zap.Bool("table collation", oraCollation),
+		zap.Bool("table collation", oracleCollation),
 		zap.String("cost", endTime.Sub(startTime).String()))
 
 	var (
@@ -101,49 +93,49 @@ func GenReverseTableTask(ctx context.Context, cfg *config.Config, mysql *mysql.M
 		schemaCollation string
 	)
 
-	if oraCollation {
+	if oracleCollation {
 		startTime = time.Now()
-		schemaCollation, err = oracle.GetOracleSchemaCollation(common.StringUPPER(cfg.OracleConfig.SchemaName))
+		schemaCollation, err = r.oracle.GetOracleSchemaCollation(common.StringUPPER(r.cfg.OracleConfig.SchemaName))
 		if err != nil {
 			return tables, err
 		}
-		tblCollation, err = oracle.GetOracleSchemaTableCollation(common.StringUPPER(cfg.OracleConfig.SchemaName), schemaCollation)
+		tblCollation, err = r.oracle.GetOracleSchemaTableCollation(common.StringUPPER(r.cfg.OracleConfig.SchemaName), schemaCollation)
 		if err != nil {
 			return tables, err
 		}
 		endTime = time.Now()
 		zap.L().Info("get oracle schema and table collation finished",
-			zap.String("schema", cfg.OracleConfig.SchemaName),
-			zap.String("db version", oraDBVersion),
+			zap.String("schema", r.cfg.OracleConfig.SchemaName),
+			zap.String("db version", oracleDBVersion),
 			zap.String("db character", characterSet),
 			zap.Int("table totals", len(exporters)),
-			zap.Bool("table collation", oraCollation),
+			zap.Bool("table collation", oracleCollation),
 			zap.String("cost", endTime.Sub(startTime).String()))
 	}
 
 	startTime = time.Now()
-	tablesMap, err := oracle.GetOracleSchemaTableType(common.StringUPPER(cfg.OracleConfig.SchemaName))
+	tablesMap, err := r.oracle.GetOracleSchemaTableType(common.StringUPPER(r.cfg.OracleConfig.SchemaName))
 	if err != nil {
 		return tables, err
 	}
 	endTime = time.Now()
 	zap.L().Info("get oracle table type finished",
-		zap.String("schema", cfg.OracleConfig.SchemaName),
-		zap.String("db version", oraDBVersion),
+		zap.String("schema", r.cfg.OracleConfig.SchemaName),
+		zap.String("db version", oracleDBVersion),
 		zap.String("db character", characterSet),
 		zap.Int("table totals", len(exporters)),
-		zap.Bool("table collation", oraCollation),
+		zap.Bool("table collation", oracleCollation),
 		zap.String("cost", endTime.Sub(startTime).String()))
 
 	// 获取 MySQL 版本
-	mysqlVersion, err := mysql.GetMySQLDBVersion()
+	mysqlVersion, err := r.mysql.GetMySQLDBVersion()
 	if err != nil {
 		return nil, err
 	}
 
 	var dbVersion string
 
-	if common.StringUPPER(common.StringUPPER(cfg.MySQLConfig.DBType)) == common.TaskDBTiDB {
+	if common.StringUPPER(common.StringUPPER(r.cfg.MySQLConfig.DBType)) == common.TaskDBTiDB {
 		dbVersion = mysqlVersion
 	} else {
 		if strings.Contains(mysqlVersion, common.MySQLVersionDelimiter) {
@@ -159,7 +151,7 @@ func GenReverseTableTask(ctx context.Context, cfg *config.Config, mysql *mysql.M
 
 	g1.Go(func() error {
 		g2 := &errgroup.Group{}
-		g2.SetLimit(cfg.AppConfig.Threads)
+		g2.SetLimit(r.cfg.AppConfig.Threads)
 		for _, exporter := range exporters {
 			t := exporter
 			g2.Go(func() error {
@@ -172,23 +164,26 @@ func GenReverseTableTask(ctx context.Context, cfg *config.Config, mysql *mysql.M
 				}
 
 				tbl := &Table{
-					Ctx:               ctx,
-					SourceSchemaName:  common.StringUPPER(cfg.OracleConfig.SchemaName),
-					TargetSchemaName:  common.StringUPPER(cfg.MySQLConfig.SchemaName),
-					SourceTableName:   common.StringUPPER(t),
-					TargetDBType:      common.StringUPPER(cfg.MySQLConfig.DBType),
-					TargetDBVersion:   dbVersion,
-					TargetTableName:   targetTableName,
-					TargetTableOption: common.StringUPPER(cfg.MySQLConfig.TableOption),
-					SourceTableType:   tablesMap[t],
-					SourceDBNLSSort:   nlsSort,
-					SourceDBNLSComp:   nlsComp,
-					Overwrite:         cfg.MySQLConfig.Overwrite,
-					Oracle:            oracle,
-					MySQL:             mysql,
+					Ctx:                       r.ctx,
+					SourceSchemaName:          common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+					TargetSchemaName:          common.StringUPPER(r.cfg.MySQLConfig.SchemaName),
+					SourceTableName:           common.StringUPPER(t),
+					TargetDBType:              common.StringUPPER(r.cfg.MySQLConfig.DBType),
+					TargetDBVersion:           dbVersion,
+					TargetTableName:           targetTableName,
+					TargetTableOption:         common.StringUPPER(r.cfg.MySQLConfig.TableOption),
+					SourceTableType:           tablesMap[t],
+					SourceDBNLSSort:           nlsSort,
+					SourceDBNLSComp:           nlsComp,
+					TableColumnDatatypeRule:   tableColumnRule[common.StringUPPER(t)],
+					TableColumnDefaultValRule: tableDefaultRule[common.StringUPPER(t)],
+					Overwrite:                 r.cfg.MySQLConfig.Overwrite,
+					Oracle:                    r.oracle,
+					MySQL:                     r.mysql,
+					MetaDB:                    r.metaDB,
 				}
-				tbl.OracleCollation = oraCollation
-				if oraCollation {
+				tbl.OracleCollation = oracleCollation
+				if oracleCollation {
 					tbl.SourceSchemaCollation = schemaCollation
 					tbl.SourceTableCollation = tblCollation[common.StringUPPER(t)]
 				}
@@ -217,7 +212,7 @@ func GenReverseTableTask(ctx context.Context, cfg *config.Config, mysql *mysql.M
 
 	endTime = time.Now()
 	zap.L().Info("gen oracle slice table finished",
-		zap.String("schema", cfg.OracleConfig.SchemaName),
+		zap.String("schema", r.cfg.OracleConfig.SchemaName),
 		zap.Int("table totals", len(exporters)),
 		zap.Int("table gens", len(tables)),
 		zap.String("cost", endTime.Sub(startTime).String()))
@@ -225,7 +220,7 @@ func GenReverseTableTask(ctx context.Context, cfg *config.Config, mysql *mysql.M
 	return tables, nil
 }
 
-// O2M special
+// O2M Special, It's not in the interface
 func (t *Table) GenTableSuffix(primaryColumns []string, singleIntegerPK bool) (tableSuffix string, err error) {
 	var (
 		tableCollation string
@@ -374,6 +369,7 @@ func (t *Table) GenTableSuffix(primaryColumns []string, singleIntegerPK bool) (t
 	return tableSuffix, nil
 }
 
+// O2T Special, It's not in the interface
 // 判断 Oracle 主键是否是整型主键
 func (t *Table) IsSingleIntegerPK(primaryColumns []string, columnMetas []string) bool {
 	singleIntegerPK := false
@@ -405,7 +401,6 @@ func (t *Table) GetTablePrimaryKey() ([]map[string]string, error) {
 
 func (t *Table) GetTableUniqueKey() ([]map[string]string, error) {
 	return t.Oracle.GetOracleSchemaTableUniqueKey(t.SourceSchemaName, t.SourceTableName)
-
 }
 
 func (t *Table) GetTableForeignKey() ([]map[string]string, error) {

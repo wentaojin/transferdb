@@ -98,25 +98,19 @@ func (r *Reverse) NewReverse() error {
 		return err
 	}
 
-	// 获取表名自定义规则
-	tableNameRules, err := meta.NewTableNameRuleModel(r.metaDB).DetailTableNameRule(r.ctx, &meta.TableNameRule{
-		DBTypeS:     common.TaskDBMySQL,
-		DBTypeT:     common.TaskDBOracle,
-		SchemaNameS: r.cfg.OracleConfig.SchemaName,
-		SchemaNameT: r.cfg.MySQLConfig.SchemaName,
+	// 获取规则
+	tableNameRuleMap, tableColumnRuleMap, tableDefaultRuleMap, err := IChanger(&Change{
+		Ctx:              r.ctx,
+		SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+		TargetSchemaName: common.StringUPPER(r.cfg.MySQLConfig.SchemaName),
+		SourceTables:     reverseTaskTables,
+		MySQL:            r.mysql,
+		MetaDB:           r.metaDB,
 	})
 	if err != nil {
 		return err
 	}
-	tableNameRuleMap := make(map[string]string)
-
-	if len(tableNameRules) > 0 {
-		for _, tr := range tableNameRules {
-			tableNameRuleMap[common.StringUPPER(tr.TableNameS)] = common.StringUPPER(tr.TableNameT)
-		}
-	}
-
-	tables, err := GenReverseTableTask(r.cfg, r.mysql, r.oracle, tableNameRuleMap, reverseTaskTables, oracleDBVersion, isExtended, tableCharSetMap, tableCollationMap)
+	tables, err := GenReverseTableTask(r, tableNameRuleMap, tableColumnRuleMap, tableDefaultRuleMap, reverseTaskTables, oracleDBVersion, isExtended, tableCharSetMap, tableCollationMap)
 	if err != nil {
 		return err
 	}
@@ -155,7 +149,7 @@ func (r *Reverse) NewReverse() error {
 	for _, table := range tables {
 		t := table
 		g.Go(func() error {
-			rule, err := IReader(r.ctx, r.mysql, r.oracle, r.metaDB, t, t)
+			rule, err := IReader(t, t)
 			if err != nil {
 				if err = meta.NewErrorLogDetailModel(r.metaDB).CreateErrorLog(r.ctx, &meta.ErrorLogDetail{
 					DBTypeS:     common.TaskDBMySQL,

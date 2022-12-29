@@ -16,15 +16,27 @@ limitations under the License.
 package m2o
 
 import (
-	"context"
 	"fmt"
-	"github.com/wentaojin/transferdb/database/meta"
-	"github.com/wentaojin/transferdb/database/mysql"
-	"github.com/wentaojin/transferdb/database/oracle"
 	"github.com/wentaojin/transferdb/module/reverse"
 )
 
-func IReader(ctx context.Context, mysql *mysql.MySQL, oracle *oracle.Oracle, metaDB *meta.Meta, t *Table, rd reverse.Reader) (*Rule, error) {
+func IChanger(c reverse.Changer) (map[string]string, map[string]map[string]string, map[string]map[string]string, error) {
+	tableNameRuleMap, err := c.ChangeTableName()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	tableColumnDatatypeMap, err := c.ChangeTableColumnDatatype()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	tableDefaultValueMap, err := c.ChangeTableColumnDefaultValue()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return tableNameRuleMap, tableColumnDatatypeMap, tableDefaultValueMap, nil
+}
+
+func IReader(t *Table, rd reverse.Reader) (*Rule, error) {
 	primaryKey, err := rd.GetTablePrimaryKey()
 	if err != nil {
 		return nil, err
@@ -63,26 +75,30 @@ func IReader(ctx context.Context, mysql *mysql.MySQL, oracle *oracle.Oracle, met
 	if err != nil {
 		return nil, err
 	}
+	TablePartitionDetail, err := t.GetTablePartitionDetail()
+	if err != nil {
+		return nil, err
+	}
 
 	return &Rule{
-		Ctx:               ctx,
-		SourceSchema:      t.SourceSchemaName,
-		SourceTableName:   t.SourceTableName,
-		TargetSchema:      t.TargetSchemaName,
-		TargetTableName:   t.TargetTableName,
-		PrimaryKeyINFO:    primaryKey,
-		UniqueKeyINFO:     uniqueKey,
-		ForeignKeyINFO:    foreignKey,
-		CheckKeyINFO:      checkKey,
-		UniqueIndexINFO:   uniqueIndex,
-		NormalIndexINFO:   normalIndex,
-		TableCommentINFO:  tableComment,
-		TableColumnINFO:   columnMeta,
-		ColumnCommentINFO: columnComment,
-		IsPartition:       t.IsPartition,
-		Oracle:            oracle,
-		MySQL:             mysql,
-		MetaDB:            metaDB,
+		OracleDBVersion:          t.OracleDBVersion,
+		OracleExtendedMode:       t.OracleExtendedMode,
+		SourceSchema:             t.SourceSchemaName,
+		SourceTableName:          t.SourceTableName,
+		TargetSchema:             t.TargetSchemaName,
+		TargetTableName:          t.TargetTableName,
+		PrimaryKeyINFO:           primaryKey,
+		UniqueKeyINFO:            uniqueKey,
+		ForeignKeyINFO:           foreignKey,
+		CheckKeyINFO:             checkKey,
+		UniqueIndexINFO:          uniqueIndex,
+		NormalIndexINFO:          normalIndex,
+		TableCommentINFO:         tableComment,
+		TableColumnINFO:          columnMeta,
+		ColumnCommentINFO:        columnComment,
+		ColumnDatatypeRule:       t.TableColumnDatatypeRule,
+		ColumnDataDefaultvalRule: t.TableColumnDefaultValRule,
+		TablePartitionDetail:     TablePartitionDetail,
 	}, nil
 }
 
@@ -110,9 +126,9 @@ func IReverse(t *Table, s reverse.Generator) (*DDL, error) {
 	return &DDL{
 		SourceSchemaName: t.SourceSchemaName,
 		SourceTableName:  t.SourceTableName,
-		SourceTableType:  "NORMAL",             // MySQL/TiDB table type
-		TargetSchemaName: s.ChangeSchemaName(), // change schema name
-		TargetTableName:  s.ChangeTableName(),  // change table name
+		SourceTableType:  "NORMAL",          // MySQL/TiDB table type
+		TargetSchemaName: s.GenSchemaName(), // change schema name
+		TargetTableName:  s.GenTableName(),  // change table name
 		ReverseDDL:       reverseDDL,
 		TableComment:     tableComment,
 		ColumnCommentDDL: columnComments,
