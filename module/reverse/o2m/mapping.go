@@ -179,17 +179,27 @@ func OracleTableColumnMapRule(sourceSchema, sourceTable string, column Column, b
 			return originColumnType, buildInColumnType, fmt.Errorf("oracle table column type [%s] map mysql column type rule isn't exist, please checkin", common.BuildInOracleDatatypeBfile)
 		}
 	case common.BuildInOracleDatatypeChar:
-		originColumnType = fmt.Sprintf("%s(%d)", common.BuildInOracleDatatypeChar, dataLength)
 		if val, ok := buildinDatatypeMap[common.BuildInOracleDatatypeChar]; ok {
-			buildInColumnType = fmt.Sprintf("%s(%d)", common.StringUPPER(val), dataLength)
+			if strings.EqualFold(column.CharUsed, "C") {
+				originColumnType = fmt.Sprintf("%s(%s)", common.BuildInOracleDatatypeChar, column.CharLength)
+				buildInColumnType = fmt.Sprintf("%s(%s)", common.StringUPPER(val), column.CharLength)
+			} else {
+				originColumnType = fmt.Sprintf("%s(%d)", common.BuildInOracleDatatypeChar, dataLength)
+				buildInColumnType = fmt.Sprintf("%s(%d)", common.StringUPPER(val), dataLength)
+			}
 			return originColumnType, buildInColumnType, nil
 		} else {
 			return originColumnType, buildInColumnType, fmt.Errorf("oracle table column type [%s] map mysql column type rule isn't exist, please checkin", common.BuildInOracleDatatypeChar)
 		}
 	case common.BuildInOracleDatatypeCharacter:
-		originColumnType = fmt.Sprintf("%s(%d)", common.BuildInOracleDatatypeCharacter, dataLength)
 		if val, ok := buildinDatatypeMap[common.BuildInOracleDatatypeCharacter]; ok {
-			buildInColumnType = fmt.Sprintf("%s(%d)", common.StringUPPER(val), dataLength)
+			if strings.EqualFold(column.CharUsed, "C") {
+				originColumnType = fmt.Sprintf("%s(%s)", common.BuildInOracleDatatypeCharacter, column.CharLength)
+				buildInColumnType = fmt.Sprintf("%s(%s)", common.StringUPPER(val), column.CharLength)
+			} else {
+				originColumnType = fmt.Sprintf("%s(%d)", common.BuildInOracleDatatypeCharacter, dataLength)
+				buildInColumnType = fmt.Sprintf("%s(%d)", common.StringUPPER(val), dataLength)
+			}
 			return originColumnType, buildInColumnType, nil
 		} else {
 			return originColumnType, buildInColumnType, fmt.Errorf("oracle table column type [%s] map mysql column type rule isn't exist, please checkin", common.BuildInOracleDatatypeCharacter)
@@ -299,17 +309,27 @@ func OracleTableColumnMapRule(sourceSchema, sourceTable string, column Column, b
 			return originColumnType, buildInColumnType, fmt.Errorf("oracle table column type [%s] map mysql column type rule isn't exist, please checkin", common.BuildInOracleDatatypeBinaryDouble)
 		}
 	case common.BuildInOracleDatatypeNchar:
-		originColumnType = fmt.Sprintf("%s(%d)", common.BuildInOracleDatatypeNchar, dataLength)
 		if val, ok := buildinDatatypeMap[common.BuildInOracleDatatypeNchar]; ok {
-			buildInColumnType = fmt.Sprintf("%s(%d)", common.StringUPPER(val), dataLength)
+			if strings.EqualFold(column.CharUsed, "C") {
+				originColumnType = fmt.Sprintf("%s(%s)", common.BuildInOracleDatatypeNchar, column.CharLength)
+				buildInColumnType = fmt.Sprintf("%s(%s)", common.StringUPPER(val), column.CharLength)
+			} else {
+				originColumnType = fmt.Sprintf("%s(%d)", common.BuildInOracleDatatypeNchar, dataLength)
+				buildInColumnType = fmt.Sprintf("%s(%d)", common.StringUPPER(val), dataLength)
+			}
 			return originColumnType, buildInColumnType, nil
 		} else {
 			return originColumnType, buildInColumnType, fmt.Errorf("oracle table column type [%s] map mysql column type rule isn't exist, please checkin", common.BuildInOracleDatatypeNchar)
 		}
 	case common.BuildInOracleDatatypeNcharVarying:
-		originColumnType = fmt.Sprintf("%s(%d)", common.BuildInOracleDatatypeNcharVarying, dataLength)
 		if val, ok := buildinDatatypeMap[common.BuildInOracleDatatypeNcharVarying]; ok {
-			buildInColumnType = fmt.Sprintf("%s(%d)", common.StringUPPER(val), dataLength)
+			if strings.EqualFold(column.CharUsed, "C") {
+				originColumnType = fmt.Sprintf("%s(%s)", common.BuildInOracleDatatypeNcharVarying, column.CharLength)
+				buildInColumnType = fmt.Sprintf("%s(%s)", common.StringUPPER(val), column.CharLength)
+			} else {
+				originColumnType = fmt.Sprintf("%s(%d)", common.BuildInOracleDatatypeNcharVarying, dataLength)
+				buildInColumnType = fmt.Sprintf("%s(%d)", common.StringUPPER(val), dataLength)
+			}
 			return originColumnType, buildInColumnType, nil
 		} else {
 			return originColumnType, buildInColumnType, fmt.Errorf("oracle table column type [%s] map mysql column type rule isn't exist, please checkin", common.BuildInOracleDatatypeNcharVarying)
@@ -331,9 +351,14 @@ func OracleTableColumnMapRule(sourceSchema, sourceTable string, column Column, b
 			return originColumnType, buildInColumnType, fmt.Errorf("oracle table column type [%s] map mysql column type rule isn't exist, please checkin", common.BuildInOracleDatatypeNumeric)
 		}
 	case common.BuildInOracleDatatypeNvarchar2:
-		originColumnType = fmt.Sprintf("%s(%d)", common.BuildInOracleDatatypeNvarchar2, dataLength)
 		if val, ok := buildinDatatypeMap[common.BuildInOracleDatatypeNvarchar2]; ok {
-			buildInColumnType = fmt.Sprintf("%s(%d)", common.StringUPPER(val), dataLength)
+			if strings.EqualFold(column.CharUsed, "C") {
+				originColumnType = fmt.Sprintf("%s(%s)", common.BuildInOracleDatatypeNvarchar2, column.CharLength)
+				buildInColumnType = fmt.Sprintf("%s(%s)", common.StringUPPER(val), column.CharLength)
+			} else {
+				originColumnType = fmt.Sprintf("%s(%d)", common.BuildInOracleDatatypeNvarchar2, dataLength)
+				buildInColumnType = fmt.Sprintf("%s(%d)", common.StringUPPER(val), dataLength)
+			}
 			return originColumnType, buildInColumnType, nil
 		} else {
 			return originColumnType, buildInColumnType, fmt.Errorf("oracle table column type [%s] map mysql column type rule isn't exist, please checkin", common.BuildInOracleDatatypeNvarchar2)
@@ -385,17 +410,27 @@ func OracleTableColumnMapRule(sourceSchema, sourceTable string, column Column, b
 			return originColumnType, buildInColumnType, fmt.Errorf("oracle table column type [%s] map mysql column type rule isn't exist, please checkin", common.BuildInOracleDatatypeUrowid)
 		}
 	case common.BuildInOracleDatatypeVarchar2:
-		originColumnType = fmt.Sprintf("%s(%d)", common.BuildInOracleDatatypeVarchar2, dataLength)
 		if val, ok := buildinDatatypeMap[common.BuildInOracleDatatypeVarchar2]; ok {
-			buildInColumnType = fmt.Sprintf("%s(%d)", common.StringUPPER(val), dataLength)
+			if strings.EqualFold(column.CharUsed, "C") {
+				originColumnType = fmt.Sprintf("%s(%s)", common.BuildInOracleDatatypeVarchar2, column.CharLength)
+				buildInColumnType = fmt.Sprintf("%s(%s)", common.StringUPPER(val), column.CharLength)
+			} else {
+				originColumnType = fmt.Sprintf("%s(%d)", common.BuildInOracleDatatypeVarchar2, dataLength)
+				buildInColumnType = fmt.Sprintf("%s(%d)", common.StringUPPER(val), dataLength)
+			}
 			return originColumnType, buildInColumnType, nil
 		} else {
 			return originColumnType, buildInColumnType, fmt.Errorf("oracle table column type [%s] map mysql column type rule isn't exist, please checkin", common.BuildInOracleDatatypeVarchar2)
 		}
 	case common.BuildInOracleDatatypeVarchar:
-		originColumnType = fmt.Sprintf("%s(%d)", common.BuildInOracleDatatypeVarchar, dataLength)
 		if val, ok := buildinDatatypeMap[common.BuildInOracleDatatypeVarchar]; ok {
-			buildInColumnType = fmt.Sprintf("%s(%d)", common.StringUPPER(val), dataLength)
+			if strings.EqualFold(column.CharUsed, "C") {
+				originColumnType = fmt.Sprintf("%s(%s)", common.BuildInOracleDatatypeVarchar, column.CharLength)
+				buildInColumnType = fmt.Sprintf("%s(%s)", common.StringUPPER(val), column.CharLength)
+			} else {
+				originColumnType = fmt.Sprintf("%s(%d)", common.BuildInOracleDatatypeVarchar, dataLength)
+				buildInColumnType = fmt.Sprintf("%s(%d)", common.StringUPPER(val), dataLength)
+			}
 			return originColumnType, buildInColumnType, nil
 		} else {
 			return originColumnType, buildInColumnType, fmt.Errorf("oracle table column type [%s] map mysql column type rule isn't exist, please checkin", common.BuildInOracleDatatypeVarchar)

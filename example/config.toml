@@ -146,7 +146,7 @@ schema-name = "marvin"
 # 源端迁移任务表（只用于 prepare/reverse/check/all/full 阶段，assess 阶段不适用，assess 只适用于 schema 级别）
 # include-table 和 exclude-table 不能同时配置，两者只能配置一个,如果两个都没配置则 Schema 内表全迁移
 # include-table 和 exclude-table 支持正则表达式以及通配符（tab_*/tab*）
-include-table = []
+include-table = ["marvin02","marvin03"]
 exclude-table = []
 
 # 只用于 prepare/reverse/check/all/full 阶段，assess 阶段不适用

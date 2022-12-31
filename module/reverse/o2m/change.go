@@ -99,7 +99,9 @@ func (r *Change) ChangeTableColumnDatatype() (map[string]map[string]string, erro
 
 		for _, rowCol := range tableColumnINFO {
 			originColumnType, buildInColumnType, err := OracleTableColumnMapRule(r.SourceSchemaName, sourceTable, Column{
-				DataType: rowCol["DATA_TYPE"],
+				DataType:   rowCol["DATA_TYPE"],
+				CharUsed:   rowCol["CHAR_USED"],
+				CharLength: rowCol["CHAR_LENGTH"],
 				ColumnInfo: ColumnInfo{
 					DataLength:    rowCol["DATA_LENGTH"],
 					DataPrecision: rowCol["DATA_PRECISION"],
