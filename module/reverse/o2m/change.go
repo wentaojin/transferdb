@@ -129,14 +129,14 @@ func (r *Change) ChangeTableColumnDatatype() (map[string]map[string]string, erro
 			// 优先级
 			// column > table > schema > buildin
 			if len(columnDataTypeMapSlice) == 0 {
-				columnDatatypeMap[rowCol["COLUMN_NAME"]] = loadDataTypeRuleUsingTableOrSchema(originColumnType, buildInColumnType, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+				columnDatatypeMap[rowCol["COLUMN_NAME"]] = LoadDataTypeRuleUsingTableOrSchema(originColumnType, buildInColumnType, tableDataTypeMapSlice, schemaDataTypeMapSlice)
 			}
 
 			// only column rule
-			columnTypeFromColumn := loadColumnTypeRuleOnlyUsingColumn(rowCol["COLUMN_NAME"], originColumnType, buildInColumnType, columnDataTypeMapSlice)
+			columnTypeFromColumn := LoadColumnTypeRuleOnlyUsingColumn(rowCol["COLUMN_NAME"], originColumnType, buildInColumnType, columnDataTypeMapSlice)
 
 			// table or schema rule check, return column type
-			columnTypeFromOther := loadDataTypeRuleUsingTableOrSchema(originColumnType, buildInColumnType, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+			columnTypeFromOther := LoadDataTypeRuleUsingTableOrSchema(originColumnType, buildInColumnType, tableDataTypeMapSlice, schemaDataTypeMapSlice)
 
 			// column or other rule check, return column type
 			switch {
@@ -179,7 +179,7 @@ func (r *Change) ChangeTableColumnDefaultValue() (map[string]map[string]string, 
 		for _, rowCol := range tableColumnINFO {
 			var dataDefault string
 			if !strings.EqualFold(rowCol["DATA_DEFAULT"], "") {
-				dataDefault = loadColumnDefaultValueRule(rowCol["DATA_DEFAULT"], defaultValueMapSlice)
+				dataDefault = LoadColumnDefaultValueRule(rowCol["DATA_DEFAULT"], defaultValueMapSlice)
 			} else {
 				dataDefault = rowCol["DATA_DEFAULT"]
 			}

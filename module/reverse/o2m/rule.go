@@ -663,7 +663,7 @@ func (r *Rule) String() string {
 	return string(jsonStr)
 }
 
-func loadColumnDefaultValueRule(defaultValue string, defaultValueMapSlice []meta.BuildinColumnDefaultval) string {
+func LoadColumnDefaultValueRule(defaultValue string, defaultValueMapSlice []meta.BuildinColumnDefaultval) string {
 	// 额外处理 Oracle 默认值 ('6') 或者 (5) 或者 ('xsddd') 等包含小括号的默认值，而非 '(xxxx)' 之类的默认值
 	// Oracle 对于同类型 ('xxx') 或者 (xxx) 内部会自动处理，所以 O2M/O2T 需要处理成 'xxx' 或者 xxx
 	if strings.HasPrefix(defaultValue, "(") && strings.HasSuffix(defaultValue, ")") {
@@ -683,7 +683,7 @@ func loadColumnDefaultValueRule(defaultValue string, defaultValueMapSlice []meta
 	return defaultValue
 }
 
-func loadDataTypeRuleUsingTableOrSchema(originColumnType string, buildInColumnType string, tableDataTypeMapSlice []meta.TableDatatypeRule,
+func LoadDataTypeRuleUsingTableOrSchema(originColumnType string, buildInColumnType string, tableDataTypeMapSlice []meta.TableDatatypeRule,
 	schemaDataTypeMapSlice []meta.SchemaDatatypeRule) string {
 	switch {
 	case len(tableDataTypeMapSlice) != 0 && len(schemaDataTypeMapSlice) == 0:
@@ -817,7 +817,7 @@ func loadColumnTypeRuleOnlyUsingSchema(originColumnType, buildInColumnType strin
 }
 
 // 字段级别自定义映射规则
-func loadColumnTypeRuleOnlyUsingColumn(columnName string, originColumnType string, buildInColumnType string, columnDataTypeMapSlice []meta.ColumnDatatypeRule) string {
+func LoadColumnTypeRuleOnlyUsingColumn(columnName string, originColumnType string, buildInColumnType string, columnDataTypeMapSlice []meta.ColumnDatatypeRule) string {
 	if len(columnDataTypeMapSlice) == 0 {
 		return buildInColumnType
 	}
