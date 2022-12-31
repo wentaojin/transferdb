@@ -33,74 +33,74 @@ import (
 )
 
 type Reverse struct {
-	ctx    context.Context
-	cfg    *config.Config
-	mysql  *mysql.MySQL
-	oracle *oracle.Oracle
-	metaDB *meta.Meta
+	Ctx    context.Context
+	Cfg    *config.Config
+	Mysql  *mysql.MySQL
+	Oracle *oracle.Oracle
+	MetaDB *meta.Meta
 }
 
 func NewO2MReverse(ctx context.Context, cfg *config.Config, mysql *mysql.MySQL, oracle *oracle.Oracle, metaDB *meta.Meta) *Reverse {
 	return &Reverse{
-		ctx:    ctx,
-		cfg:    cfg,
-		mysql:  mysql,
-		oracle: oracle,
-		metaDB: metaDB,
+		Ctx:    ctx,
+		Cfg:    cfg,
+		Mysql:  mysql,
+		Oracle: oracle,
+		MetaDB: metaDB,
 	}
 }
 
 func (r *Reverse) NewReverse() error {
 	startTime := time.Now()
-	zap.L().Info("reverse table r.oracle to mysql start",
-		zap.String("schema", r.cfg.OracleConfig.SchemaName))
+	zap.L().Info("reverse table r.Oracle to mysql start",
+		zap.String("schema", r.Cfg.OracleConfig.SchemaName))
 
 	// 获取配置文件待同步表列表
-	exporters, err := filterCFGTable(r.cfg, r.oracle)
+	exporters, err := filterCFGTable(r.Cfg, r.Oracle)
 	if err != nil {
 		return err
 	}
 
 	if len(exporters) == 0 {
-		zap.L().Warn("there are no table objects in the r.oracle schema",
-			zap.String("schema", r.cfg.OracleConfig.SchemaName))
+		zap.L().Warn("there are no table objects in the r.Oracle schema",
+			zap.String("schema", r.Cfg.OracleConfig.SchemaName))
 		return nil
 	}
 
 	// 判断 error_log_detail 是否存在错误记录，是否可进行 reverse
-	errTotals, err := meta.NewErrorLogDetailModel(r.metaDB).CountsErrorLogBySchema(r.ctx, &meta.ErrorLogDetail{
+	errTotals, err := meta.NewErrorLogDetailModel(r.MetaDB).CountsErrorLogBySchema(r.Ctx, &meta.ErrorLogDetail{
 		DBTypeS:     common.TaskDBOracle,
 		DBTypeT:     common.TaskDBMySQL,
-		SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+		SchemaNameS: common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
 		RunMode:     common.ReverseO2MMode,
 	})
 	if errTotals > 0 || err != nil {
-		return fmt.Errorf("reverse schema [%s] table mode [%s] task failed: %v, table [error_log_detail] exist failed error, please clear and rerunning", r.cfg.OracleConfig.SchemaName, common.ReverseO2MMode, err)
+		return fmt.Errorf("reverse schema [%s] table mode [%s] task failed: %v, table [error_log_detail] exist failed error, please clear and rerunning", r.Cfg.OracleConfig.SchemaName, common.ReverseO2MMode, err)
 	}
 
 	// 获取 oracle 数据库字符排序规则
-	nlsComp, err := r.oracle.GetOracleDBCharacterNLSCompCollation()
+	nlsComp, err := r.Oracle.GetOracleDBCharacterNLSCompCollation()
 	if err != nil {
 		return err
 	}
-	nlsSort, err := r.oracle.GetOracleDBCharacterNLSSortCollation()
+	nlsSort, err := r.Oracle.GetOracleDBCharacterNLSSortCollation()
 	if err != nil {
 		return err
 	}
 	if _, ok := common.OracleCollationMap[common.StringUPPER(nlsComp)]; !ok {
-		return fmt.Errorf("r.oracle db nls comp [%s] , mysql db isn't support", nlsComp)
+		return fmt.Errorf("r.Oracle db nls comp [%s] , mysql db isn't support", nlsComp)
 	}
 	if _, ok := common.OracleCollationMap[common.StringUPPER(nlsSort)]; !ok {
-		return fmt.Errorf("r.oracle db nls sort [%s] , mysql db isn't support", nlsSort)
+		return fmt.Errorf("r.Oracle db nls sort [%s] , mysql db isn't support", nlsSort)
 	}
 
 	if !strings.EqualFold(nlsSort, nlsComp) {
-		return fmt.Errorf("r.oracle db nls_sort [%s] and nls_comp [%s] isn't different, need be equal; because mysql db isn't support", nlsSort, nlsComp)
+		return fmt.Errorf("r.Oracle db nls_sort [%s] and nls_comp [%s] isn't different, need be equal; because mysql db isn't support", nlsSort, nlsComp)
 	}
 
 	// oracle 版本是否可指定表、字段 collation
 	// oracle db nls_sort/nls_comp 值需要相等，USING_NLS_COMP 值取 nls_comp
-	oracleDBVersion, err := r.oracle.GetOracleDBVersion()
+	oracleDBVersion, err := r.Oracle.GetOracleDBVersion()
 	if err != nil {
 		return err
 	}
@@ -111,41 +111,41 @@ func (r *Reverse) NewReverse() error {
 	}
 
 	// 筛选过滤可能不支持的表类型
-	partitionTables, err := filterOraclePartitionTable(r.cfg, r.oracle, exporters)
+	partitionTables, err := filterOraclePartitionTable(r.Cfg, r.Oracle, exporters)
 	if err != nil {
-		return fmt.Errorf("error on filter r.oracle partition table: %v", err)
+		return fmt.Errorf("error on filter r.Oracle partition table: %v", err)
 	}
-	temporaryTables, err := filterOracleTemporaryTable(r.cfg, r.oracle, exporters)
+	temporaryTables, err := filterOracleTemporaryTable(r.Cfg, r.Oracle, exporters)
 	if err != nil {
-		return fmt.Errorf("error on filter r.oracle temporary table: %v", err)
+		return fmt.Errorf("error on filter r.Oracle temporary table: %v", err)
 
 	}
-	clusteredTables, err := filterOracleClusteredTable(r.cfg, r.oracle, exporters)
+	clusteredTables, err := filterOracleClusteredTable(r.Cfg, r.Oracle, exporters)
 	if err != nil {
-		return fmt.Errorf("error on filter r.oracle clustered table: %v", err)
+		return fmt.Errorf("error on filter r.Oracle clustered table: %v", err)
 
 	}
-	materializedView, err := filterOracleMaterializedView(r.cfg, r.oracle, exporters)
+	materializedView, err := filterOracleMaterializedView(r.Cfg, r.Oracle, exporters)
 	if err != nil {
-		return fmt.Errorf("error on filter r.oracle materialized view: %v", err)
+		return fmt.Errorf("error on filter r.Oracle materialized view: %v", err)
 
 	}
 
 	if len(partitionTables) != 0 {
 		zap.L().Warn("partition tables",
-			zap.String("schema", r.cfg.OracleConfig.SchemaName),
+			zap.String("schema", r.Cfg.OracleConfig.SchemaName),
 			zap.String("partition table list", fmt.Sprintf("%v", partitionTables)),
 			zap.String("suggest", "if necessary, please manually convert and process the tables in the above list"))
 	}
 	if len(temporaryTables) != 0 {
 		zap.L().Warn("temporary tables",
-			zap.String("schema", r.cfg.OracleConfig.SchemaName),
+			zap.String("schema", r.Cfg.OracleConfig.SchemaName),
 			zap.String("temporary table list", fmt.Sprintf("%v", temporaryTables)),
 			zap.String("suggest", "if necessary, please manually process the tables in the above list"))
 	}
 	if len(clusteredTables) != 0 {
 		zap.L().Warn("clustered tables",
-			zap.String("schema", r.cfg.OracleConfig.SchemaName),
+			zap.String("schema", r.Cfg.OracleConfig.SchemaName),
 			zap.String("clustered table list", fmt.Sprintf("%v", clusteredTables)),
 			zap.String("suggest", "if necessary, please manually process the tables in the above list"))
 	}
@@ -153,7 +153,7 @@ func (r *Reverse) NewReverse() error {
 	var exporterTables []string
 	if len(materializedView) != 0 {
 		zap.L().Warn("materialized views",
-			zap.String("schema", r.cfg.OracleConfig.SchemaName),
+			zap.String("schema", r.Cfg.OracleConfig.SchemaName),
 			zap.String("materialized view list", fmt.Sprintf("%v", materializedView)),
 			zap.String("suggest", "if necessary, please manually process the tables in the above list"))
 
@@ -165,13 +165,13 @@ func (r *Reverse) NewReverse() error {
 
 	// 获取规则
 	tableNameRuleMap, tableColumnRuleMap, tableDefaultRuleMap, err := IChanger(&Change{
-		Ctx:              r.ctx,
-		SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
-		TargetSchemaName: common.StringUPPER(r.cfg.MySQLConfig.SchemaName),
+		Ctx:              r.Ctx,
+		SourceSchemaName: common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
+		TargetSchemaName: common.StringUPPER(r.Cfg.MySQLConfig.SchemaName),
 		SourceTables:     exporterTables,
 		OracleCollation:  oracleCollation,
-		Oracle:           r.oracle,
-		MetaDB:           r.metaDB,
+		Oracle:           r.Oracle,
+		MetaDB:           r.MetaDB,
 	})
 	if err != nil {
 		return err
@@ -188,38 +188,38 @@ func (r *Reverse) NewReverse() error {
 		return err
 	}
 
-	reverseFile := filepath.Join(pwdDir, fmt.Sprintf("reverse_%s.sql", r.cfg.OracleConfig.SchemaName))
-	compFile := filepath.Join(pwdDir, fmt.Sprintf("compatibility_%s.sql", r.cfg.OracleConfig.SchemaName))
+	reverseFile := filepath.Join(pwdDir, fmt.Sprintf("reverse_%s.sql", r.Cfg.OracleConfig.SchemaName))
+	compFile := filepath.Join(pwdDir, fmt.Sprintf("compatibility_%s.sql", r.Cfg.OracleConfig.SchemaName))
 
 	// file writer
-	f, err := reverse.NewWriter(reverseFile, compFile, r.mysql, r.oracle)
+	f, err := reverse.NewWriter(reverseFile, compFile, r.Mysql, r.Oracle)
 	if err != nil {
 		return err
 	}
 
 	// schema create
 	err = GenCreateSchema(f,
-		common.StringUPPER(r.cfg.OracleConfig.SchemaName), common.StringUPPER(r.cfg.MySQLConfig.SchemaName), nlsComp)
+		common.StringUPPER(r.Cfg.OracleConfig.SchemaName), common.StringUPPER(r.Cfg.MySQLConfig.SchemaName), nlsComp)
 	if err != nil {
 		return err
 	}
 
 	// 表类型不兼容项输出
-	err = GenCompatibilityTable(f, common.StringUPPER(r.cfg.OracleConfig.SchemaName), partitionTables, temporaryTables, clusteredTables, materializedView)
+	err = GenCompatibilityTable(f, common.StringUPPER(r.Cfg.OracleConfig.SchemaName), partitionTables, temporaryTables, clusteredTables, materializedView)
 	if err != nil {
 		return err
 	}
 
 	// 表转换
 	g := &errgroup.Group{}
-	g.SetLimit(r.cfg.AppConfig.Threads)
+	g.SetLimit(r.Cfg.AppConfig.Threads)
 
 	for _, table := range tables {
 		t := table
 		g.Go(func() error {
 			rule, err := IReader(t, t)
 			if err != nil {
-				if err = meta.NewErrorLogDetailModel(r.metaDB).CreateErrorLog(r.ctx, &meta.ErrorLogDetail{
+				if err = meta.NewErrorLogDetailModel(r.MetaDB).CreateErrorLog(r.Ctx, &meta.ErrorLogDetail{
 					DBTypeS:     common.TaskDBOracle,
 					DBTypeT:     common.TaskDBMySQL,
 					SchemaNameS: t.SourceSchemaName,
@@ -229,7 +229,7 @@ func (r *Reverse) NewReverse() error {
 					InfoDetail:  t.String(),
 					ErrorDetail: err.Error(),
 				}); err != nil {
-					zap.L().Error("reverse table r.oracle to mysql failed",
+					zap.L().Error("reverse table r.Oracle to mysql failed",
 						zap.String("schema", t.SourceSchemaName),
 						zap.String("table", t.SourceTableName),
 						zap.Error(
@@ -241,7 +241,7 @@ func (r *Reverse) NewReverse() error {
 			}
 			ddl, err := IReverse(t, rule)
 			if err != nil {
-				if err = meta.NewErrorLogDetailModel(r.metaDB).CreateErrorLog(r.ctx, &meta.ErrorLogDetail{
+				if err = meta.NewErrorLogDetailModel(r.MetaDB).CreateErrorLog(r.Ctx, &meta.ErrorLogDetail{
 					DBTypeS:     common.TaskDBOracle,
 					DBTypeT:     common.TaskDBMySQL,
 					SchemaNameS: t.SourceSchemaName,
@@ -251,7 +251,7 @@ func (r *Reverse) NewReverse() error {
 					InfoDetail:  t.String(),
 					ErrorDetail: err.Error(),
 				}); err != nil {
-					zap.L().Error("reverse table r.oracle to mysql failed",
+					zap.L().Error("reverse table r.Oracle to mysql failed",
 						zap.String("schema", t.SourceSchemaName),
 						zap.String("table", t.SourceTableName),
 						zap.Error(
@@ -264,7 +264,7 @@ func (r *Reverse) NewReverse() error {
 
 			err = IWriter(f, ddl)
 			if err != nil {
-				if err = meta.NewErrorLogDetailModel(r.metaDB).CreateErrorLog(r.ctx, &meta.ErrorLogDetail{
+				if err = meta.NewErrorLogDetailModel(r.MetaDB).CreateErrorLog(r.Ctx, &meta.ErrorLogDetail{
 					DBTypeS:     common.TaskDBOracle,
 					DBTypeT:     common.TaskDBMySQL,
 					SchemaNameS: t.SourceSchemaName,
@@ -274,7 +274,7 @@ func (r *Reverse) NewReverse() error {
 					InfoDetail:  t.String(),
 					ErrorDetail: err.Error(),
 				}); err != nil {
-					zap.L().Error("reverse table r.oracle to mysql failed",
+					zap.L().Error("reverse table r.Oracle to mysql failed",
 						zap.String("schema", t.SourceSchemaName),
 						zap.String("table", t.SourceTableName),
 						zap.Error(
@@ -298,10 +298,10 @@ func (r *Reverse) NewReverse() error {
 		return err
 	}
 
-	errTotals, err = meta.NewErrorLogDetailModel(r.metaDB).CountsErrorLogBySchema(r.ctx, &meta.ErrorLogDetail{
+	errTotals, err = meta.NewErrorLogDetailModel(r.MetaDB).CountsErrorLogBySchema(r.Ctx, &meta.ErrorLogDetail{
 		DBTypeS:     common.TaskDBOracle,
 		DBTypeT:     common.TaskDBMySQL,
-		SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+		SchemaNameS: common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
 		RunMode:     common.ReverseO2MMode,
 	})
 	if err != nil {
@@ -310,9 +310,9 @@ func (r *Reverse) NewReverse() error {
 
 	endTime := time.Now()
 	zap.L().Info("reverse", zap.String("create table and index output", filepath.Join(pwdDir,
-		fmt.Sprintf("reverse_%s.sql", r.cfg.OracleConfig.SchemaName))))
+		fmt.Sprintf("reverse_%s.sql", r.Cfg.OracleConfig.SchemaName))))
 	zap.L().Info("compatibility", zap.String("maybe exist compatibility output", filepath.Join(pwdDir,
-		fmt.Sprintf("compatibility_%s.sql", r.cfg.OracleConfig.SchemaName))))
+		fmt.Sprintf("compatibility_%s.sql", r.Cfg.OracleConfig.SchemaName))))
 	if errTotals == 0 {
 		zap.L().Info("reverse table oracle to mysql finished",
 			zap.Int("table totals", len(exporters)),
