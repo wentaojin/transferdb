@@ -20,8 +20,10 @@ import (
 	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/database/meta"
 	"github.com/wentaojin/transferdb/database/mysql"
+	"golang.org/x/sync/errgroup"
 	"regexp"
 	"strings"
+	"sync"
 )
 
 type Change struct {
@@ -29,12 +31,14 @@ type Change struct {
 	SourceSchemaName string          `json:"source_schema"`
 	TargetSchemaName string          `json:"target_schema_name"`
 	SourceTables     []string        `json:"source_tables"`
+	Threads          int             `json:"threads"`
 	MySQL            *mysql.MySQL    `json:"-"`
 	MetaDB           *meta.Meta      `json:"-"`
 }
 
 func (r *Change) ChangeTableName() (map[string]string, error) {
-	tableNameRuleMap := make(map[string]string)
+	tableNameRule := make(map[string]string)
+	customTableNameRule := make(map[string]string)
 	// 获取表名自定义规则
 	tableNameRules, err := meta.NewTableNameRuleModel(r.MetaDB).DetailTableNameRule(r.Ctx, &meta.TableNameRule{
 		DBTypeS:     common.TaskDBMySQL,
@@ -43,15 +47,53 @@ func (r *Change) ChangeTableName() (map[string]string, error) {
 		SchemaNameT: r.TargetSchemaName,
 	})
 	if err != nil {
-		return tableNameRuleMap, err
+		return tableNameRule, err
 	}
 
 	if len(tableNameRules) > 0 {
 		for _, tr := range tableNameRules {
-			tableNameRuleMap[common.StringUPPER(tr.TableNameS)] = common.StringUPPER(tr.TableNameT)
+			tableNameRule[common.StringUPPER(tr.TableNameS)] = common.StringUPPER(tr.TableNameT)
 		}
 	}
-	return tableNameRuleMap, nil
+
+	wg := &sync.WaitGroup{}
+	tableChS := make(chan string, common.BufferSize)
+	tableChT := make(chan string, common.BufferSize)
+	done := make(chan struct{})
+
+	go func(done func()) {
+		for c := range tableChT {
+			if val, ok := customTableNameRule[common.StringUPPER(c)]; ok {
+				tableNameRule[common.StringUPPER(c)] = val
+			} else {
+				tableNameRule[common.StringUPPER(c)] = common.StringUPPER(c)
+			}
+		}
+		done()
+	}(func() {
+		done <- struct{}{}
+	})
+
+	go func() {
+		for _, sourceTable := range r.SourceTables {
+			tableChS <- sourceTable
+		}
+		close(tableChS)
+	}()
+
+	for i := 0; i < r.Threads; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for c := range tableChS {
+				tableChT <- c
+			}
+		}()
+	}
+	wg.Wait()
+	close(tableChT)
+	<-done
+	return tableNameRule, nil
 }
 
 // 数据库查询获取自定义表结构转换规则
@@ -69,6 +111,7 @@ func (r *Change) ChangeTableColumnDatatype() (map[string]map[string]string, erro
 		return tableColumnDatatypeMap, err
 	}
 
+	// 获取自定义 schema 级别数据类型映射规则
 	schemaDataTypeMapSlice, err := meta.NewSchemaDatatypeRuleModel(r.MetaDB).DetailSchemaRule(r.Ctx, &meta.SchemaDatatypeRule{
 		DBTypeS:     common.TaskDBMySQL,
 		DBTypeT:     common.TaskDBOracle,
@@ -78,81 +121,111 @@ func (r *Change) ChangeTableColumnDatatype() (map[string]map[string]string, erro
 		return tableColumnDatatypeMap, err
 	}
 
-	for _, sourceTable := range r.SourceTables {
-		// 获取自定义 table/schema 级别数据类型映射规则
-		tableDataTypeMapSlice, err := meta.NewTableDatatypeRuleModel(r.MetaDB).DetailTableRule(r.Ctx, &meta.TableDatatypeRule{
-			DBTypeS:     common.TaskDBMySQL,
-			DBTypeT:     common.TaskDBOracle,
-			SchemaNameS: r.SourceSchemaName,
-			TableNameS:  sourceTable,
-		})
-		if err != nil {
-			return tableColumnDatatypeMap, err
-		}
+	wg := &errgroup.Group{}
+	wg.SetLimit(r.Threads)
 
-		columnDatatypeMap := make(map[string]string)
+	tableColumnChan := make(chan map[string]map[string]string, common.BufferSize)
+	done := make(chan struct{})
 
-		// 获取表字段信息
-		tableColumnINFO, err := r.MySQL.GetMySQLTableColumn(r.SourceSchemaName, sourceTable)
-		if err != nil {
-			return tableColumnDatatypeMap, err
-		}
-
-		for _, rowCol := range tableColumnINFO {
-			originColumnType, buildInColumnType, err := MySQLTableColumnMapRule(r.SourceSchemaName, sourceTable, Column{
-				DataType: rowCol["DATA_TYPE"],
-				ColumnInfo: ColumnInfo{
-					DataLength:        rowCol["DATA_LENGTH"],
-					DataPrecision:     rowCol["DATA_PRECISION"],
-					DataScale:         rowCol["DATA_SCALE"],
-					DatetimePrecision: rowCol["DATETIME_PRECISION"],
-					NULLABLE:          rowCol["NULLABLE"],
-					DataDefault:       rowCol["DATA_DEFAULT"],
-					Comment:           rowCol["COMMENTS"],
-				},
-			}, buildinDatatypeNames)
-			if err != nil {
-				return tableColumnDatatypeMap, err
+	go func(done func()) {
+		for c := range tableColumnChan {
+			for key, val := range c {
+				tableColumnDatatypeMap[key] = val
 			}
-			// 获取自定义映射规则
-			columnDataTypeMapSlice, err := meta.NewColumnDatatypeRuleModel(r.MetaDB).DetailColumnRule(r.Ctx, &meta.ColumnDatatypeRule{
+		}
+		done()
+	}(func() {
+		done <- struct{}{}
+	})
+
+	for _, table := range r.SourceTables {
+		sourceTable := table
+		wg.Go(func() error {
+			// 获取自定义 table 级别数据类型映射规则
+			tableDataTypeMapSlice, err := meta.NewTableDatatypeRuleModel(r.MetaDB).DetailTableRule(r.Ctx, &meta.TableDatatypeRule{
 				DBTypeS:     common.TaskDBMySQL,
 				DBTypeT:     common.TaskDBOracle,
 				SchemaNameS: r.SourceSchemaName,
 				TableNameS:  sourceTable,
-				ColumnNameS: rowCol["COLUMN_NAME"],
 			})
 			if err != nil {
-				return tableColumnDatatypeMap, err
+				return err
 			}
 
-			// 优先级
-			// column > table > schema > buildin
-			if len(columnDataTypeMapSlice) == 0 {
-				columnDatatypeMap[rowCol["COLUMN_NAME"]] = loadDataTypeRuleUsingTableOrSchema(originColumnType, buildInColumnType, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+			// 获取表字段信息
+			tableColumnINFO, err := r.MySQL.GetMySQLTableColumn(r.SourceSchemaName, sourceTable)
+			if err != nil {
+				return err
 			}
 
-			// only column rule
-			columnTypeFromColumn := loadColumnTypeRuleOnlyUsingColumn(rowCol["COLUMN_NAME"], originColumnType, buildInColumnType, columnDataTypeMapSlice)
+			columnDatatypeMap := make(map[string]string, 1)
+			tableDatatypeTempMap := make(map[string]map[string]string, 1)
 
-			// table or schema rule check, return column type
-			columnTypeFromOther := loadDataTypeRuleUsingTableOrSchema(originColumnType, buildInColumnType, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+			for _, rowCol := range tableColumnINFO {
+				originColumnType, buildInColumnType, err := MySQLTableColumnMapRule(r.SourceSchemaName, sourceTable, Column{
+					DataType: rowCol["DATA_TYPE"],
+					ColumnInfo: ColumnInfo{
+						DataLength:        rowCol["DATA_LENGTH"],
+						DataPrecision:     rowCol["DATA_PRECISION"],
+						DataScale:         rowCol["DATA_SCALE"],
+						DatetimePrecision: rowCol["DATETIME_PRECISION"],
+						NULLABLE:          rowCol["NULLABLE"],
+						DataDefault:       rowCol["DATA_DEFAULT"],
+						Comment:           rowCol["COMMENTS"],
+					},
+				}, buildinDatatypeNames)
+				if err != nil {
+					return err
+				}
+				// 获取自定义映射规则
+				columnDataTypeMapSlice, err := meta.NewColumnDatatypeRuleModel(r.MetaDB).DetailColumnRule(r.Ctx, &meta.ColumnDatatypeRule{
+					DBTypeS:     common.TaskDBMySQL,
+					DBTypeT:     common.TaskDBOracle,
+					SchemaNameS: r.SourceSchemaName,
+					TableNameS:  sourceTable,
+					ColumnNameS: rowCol["COLUMN_NAME"],
+				})
+				if err != nil {
+					return err
+				}
 
-			// column or other rule check, return column type
-			switch {
-			case columnTypeFromColumn != buildInColumnType && columnTypeFromOther == buildInColumnType:
-				columnDatatypeMap[rowCol["COLUMN_NAME"]] = common.StringUPPER(columnTypeFromColumn)
-			case columnTypeFromColumn != buildInColumnType && columnTypeFromOther != buildInColumnType:
-				columnDatatypeMap[rowCol["COLUMN_NAME"]] = common.StringUPPER(columnTypeFromColumn)
-			case columnTypeFromColumn == buildInColumnType && columnTypeFromOther != buildInColumnType:
-				columnDatatypeMap[rowCol["COLUMN_NAME"]] = common.StringUPPER(columnTypeFromOther)
-			default:
-				columnDatatypeMap[rowCol["COLUMN_NAME"]] = common.StringUPPER(buildInColumnType)
+				// 优先级
+				// column > table > schema > buildin
+				if len(columnDataTypeMapSlice) == 0 {
+					columnDatatypeMap[rowCol["COLUMN_NAME"]] = loadDataTypeRuleUsingTableOrSchema(originColumnType, buildInColumnType, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+				}
+
+				// only column rule
+				columnTypeFromColumn := loadColumnTypeRuleOnlyUsingColumn(rowCol["COLUMN_NAME"], originColumnType, buildInColumnType, columnDataTypeMapSlice)
+
+				// table or schema rule check, return column type
+				columnTypeFromOther := loadDataTypeRuleUsingTableOrSchema(originColumnType, buildInColumnType, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+
+				// column or other rule check, return column type
+				switch {
+				case columnTypeFromColumn != buildInColumnType && columnTypeFromOther == buildInColumnType:
+					columnDatatypeMap[rowCol["COLUMN_NAME"]] = common.StringUPPER(columnTypeFromColumn)
+				case columnTypeFromColumn != buildInColumnType && columnTypeFromOther != buildInColumnType:
+					columnDatatypeMap[rowCol["COLUMN_NAME"]] = common.StringUPPER(columnTypeFromColumn)
+				case columnTypeFromColumn == buildInColumnType && columnTypeFromOther != buildInColumnType:
+					columnDatatypeMap[rowCol["COLUMN_NAME"]] = common.StringUPPER(columnTypeFromOther)
+				default:
+					columnDatatypeMap[rowCol["COLUMN_NAME"]] = common.StringUPPER(buildInColumnType)
+				}
 			}
-		}
 
-		tableColumnDatatypeMap[sourceTable] = columnDatatypeMap
+			tableDatatypeTempMap[sourceTable] = columnDatatypeMap
+			tableColumnChan <- tableDatatypeTempMap
+			return nil
+		})
 	}
+
+	if err = wg.Wait(); err != nil {
+		return nil, err
+	}
+	close(tableColumnChan)
+	<-done
+
 	return tableColumnDatatypeMap, nil
 }
 
@@ -172,42 +245,71 @@ func (r *Change) ChangeTableColumnDefaultValue() (map[string]map[string]string, 
 		return tableDefaultValMap, err
 	}
 
-	for _, sourceTable := range r.SourceTables {
-		// 获取表字段信息
-		tableColumnINFO, err := r.MySQL.GetMySQLTableColumn(r.SourceSchemaName, sourceTable)
-		if err != nil {
-			return tableDefaultValMap, err
+	wg := &errgroup.Group{}
+	wg.SetLimit(r.Threads)
+
+	columnDefaultChan := make(chan map[string]map[string]string, common.BufferSize)
+	done := make(chan struct{})
+
+	go func(done func()) {
+		for c := range columnDefaultChan {
+			for key, val := range c {
+				tableDefaultValMap[key] = val
+			}
 		}
+		done()
+	}(func() {
+		done <- struct{}{}
+	})
 
-		columnDataDefaultValMap := make(map[string]string)
+	for _, table := range r.SourceTables {
+		sourceTable := table
+		wg.Go(func() error {
+			// 获取表字段信息
+			tableColumnINFO, err := r.MySQL.GetMySQLTableColumn(r.SourceSchemaName, sourceTable)
+			if err != nil {
+				return err
+			}
 
-		for _, rowCol := range tableColumnINFO {
-			// Special M2O
-			// MySQL/TiDB default value character insensitive
-			var (
-				regDataDefault string
-				dataDefault    string
-			)
-			if common.IsContainString(common.SpecialMySQLDataDefaultsWithDataTYPE, common.StringUPPER(rowCol["DATA_TYPE"])) {
-				if reg.MatchString(rowCol["DATA_DEFAULT"]) || strings.EqualFold(rowCol["DATA_DEFAULT"], "CURRENT_TIMESTAMP") || strings.EqualFold(rowCol["DATA_DEFAULT"], "") {
-					regDataDefault = rowCol["DATA_DEFAULT"]
+			columnDataDefaultValMap := make(map[string]string, 1)
+			tableDefaultValTempMap := make(map[string]map[string]string, 1)
+
+			for _, rowCol := range tableColumnINFO {
+				// Special M2O
+				// MySQL/TiDB default value character insensitive
+				var (
+					regDataDefault string
+					dataDefault    string
+				)
+				if common.IsContainString(common.SpecialMySQLDataDefaultsWithDataTYPE, common.StringUPPER(rowCol["DATA_TYPE"])) {
+					if reg.MatchString(rowCol["DATA_DEFAULT"]) || strings.EqualFold(rowCol["DATA_DEFAULT"], "CURRENT_TIMESTAMP") || strings.EqualFold(rowCol["DATA_DEFAULT"], "") {
+						regDataDefault = rowCol["DATA_DEFAULT"]
+					} else {
+						regDataDefault = common.StringsBuilder(`'`, rowCol["DATA_DEFAULT"], `'`)
+					}
 				} else {
-					regDataDefault = common.StringsBuilder(`'`, rowCol["DATA_DEFAULT"], `'`)
+					regDataDefault = rowCol["DATA_DEFAULT"]
 				}
-			} else {
-				regDataDefault = rowCol["DATA_DEFAULT"]
+
+				if !strings.EqualFold(regDataDefault, "") {
+					dataDefault = loadColumnDefaultValueRule(regDataDefault, defaultValueMapSlice)
+				} else {
+					dataDefault = regDataDefault
+				}
+				columnDataDefaultValMap[rowCol["COLUMN_NAME"]] = dataDefault
 			}
 
-			if !strings.EqualFold(regDataDefault, "") {
-				dataDefault = loadColumnDefaultValueRule(regDataDefault, defaultValueMapSlice)
-			} else {
-				dataDefault = regDataDefault
-			}
-			columnDataDefaultValMap[rowCol["COLUMN_NAME"]] = dataDefault
-		}
-
-		tableDefaultValMap[sourceTable] = columnDataDefaultValMap
+			tableDefaultValTempMap[sourceTable] = columnDataDefaultValMap
+			columnDefaultChan <- tableDefaultValTempMap
+			return nil
+		})
 	}
+
+	if err = wg.Wait(); err != nil {
+		return nil, err
+	}
+	close(columnDefaultChan)
+	<-done
 
 	return tableDefaultValMap, nil
 }

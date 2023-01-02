@@ -21,7 +21,7 @@
 # 用于数据写入 batch 提交事务数
 insert-batch-size = 100
 # 是否开启更新元数据 meta-schema 库表慢日志，单位毫秒
-slowlog-threshold = 300
+slowlog-threshold = 1024
 # 任务并发 -- 只用于 reverse/check 模式阶段
 threads = 256
 # pprof 端口
@@ -146,7 +146,7 @@ schema-name = "marvin"
 # 源端迁移任务表（只用于 prepare/reverse/check/all/full 阶段，assess 阶段不适用，assess 只适用于 schema 级别）
 # include-table 和 exclude-table 不能同时配置，两者只能配置一个,如果两个都没配置则 Schema 内表全迁移
 # include-table 和 exclude-table 支持正则表达式以及通配符（tab_*/tab*）
-include-table = ["marvin02","marvin03"]
+include-table = []
 exclude-table = []
 
 # 只用于 prepare/reverse/check/all/full 阶段，assess 阶段不适用

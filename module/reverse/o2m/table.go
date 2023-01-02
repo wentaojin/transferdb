@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/jedib0t/go-pretty/v6/table"
-	"github.com/valyala/fastjson"
 	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/database/meta"
 	"github.com/wentaojin/transferdb/database/mysql"
@@ -220,181 +219,6 @@ func GenReverseTableTask(r *Reverse, tableNameRule map[string]string, tableColum
 	return tables, nil
 }
 
-// O2M Special, It's not in the interface
-func (t *Table) GenTableSuffix(primaryColumns []string, singleIntegerPK bool) (tableSuffix string, err error) {
-	var (
-		tableCollation string
-	)
-	// schema、db、table collation
-	if t.OracleCollation {
-		// table collation
-		if t.SourceTableCollation != "" {
-			if val, ok := common.OracleCollationMap[t.SourceTableCollation]; ok {
-				tableCollation = val
-			} else {
-				return tableSuffix, fmt.Errorf("oracle table collation [%v] isn't support", t.SourceTableCollation)
-			}
-		}
-		// schema collation
-		if t.SourceTableCollation == "" && t.SourceSchemaCollation != "" {
-			if val, ok := common.OracleCollationMap[t.SourceSchemaCollation]; ok {
-				tableCollation = val
-			} else {
-				return tableSuffix, fmt.Errorf("oracle schema collation [%v] table collation [%v] isn't support", t.SourceSchemaCollation, t.SourceTableCollation)
-			}
-		}
-		if t.SourceTableName == "" && t.SourceSchemaCollation == "" {
-			return tableSuffix, fmt.Errorf("oracle schema collation [%v] table collation [%v] isn't support", t.SourceSchemaCollation, t.SourceTableCollation)
-		}
-	} else {
-		// db collation
-		if val, ok := common.OracleCollationMap[t.SourceDBNLSComp]; ok {
-			tableCollation = val
-		} else {
-			return tableSuffix, fmt.Errorf("oracle db nls_comp [%v] nls_sort [%v] isn't support", t.SourceDBNLSComp, t.SourceDBNLSSort)
-		}
-	}
-	// table-option 表后缀可选项
-	if strings.EqualFold(t.TargetDBType, common.TaskDBMySQL) || t.TargetTableOption == "" {
-		zap.L().Warn("reverse oracle table suffix",
-			zap.String("table", t.String()),
-			zap.String("table-option", "table-option is null, would be disabled"))
-		// table suffix
-		tableSuffix = fmt.Sprintf("ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s",
-			strings.ToLower(common.MySQLCharacterSet), tableCollation)
-
-	} else {
-		// TiDB
-		clusteredIdxVal, err := t.MySQL.GetTiDBClusteredIndexValue()
-		if err != nil {
-			return tableSuffix, err
-		}
-		switch common.StringUPPER(clusteredIdxVal) {
-		case common.TiDBClusteredIndexOFFValue:
-			zap.L().Warn("reverse oracle table suffix",
-				zap.String("table", t.String()),
-				zap.String("tidb_enable_clustered_index", common.TiDBClusteredIndexOFFValue),
-				zap.String("table-option", "tidb_enable_clustered_index is off, would be enabled"))
-
-			if t.TargetTableOption != "" {
-				tableSuffix = fmt.Sprintf("ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s %s",
-					strings.ToLower(common.MySQLCharacterSet), tableCollation, common.StringUPPER(t.TargetTableOption))
-			} else {
-				tableSuffix = fmt.Sprintf("ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s",
-					strings.ToLower(common.MySQLCharacterSet), tableCollation)
-			}
-		case common.TiDBClusteredIndexONValue:
-			zap.L().Warn("reverse oracle table suffix",
-				zap.String("table", t.String()),
-				zap.String("tidb_enable_clustered_index", common.TiDBClusteredIndexONValue),
-				zap.String("table-option", "tidb_enable_clustered_index is on, would be disabled"))
-
-			tableSuffix = fmt.Sprintf("ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s",
-				strings.ToLower(common.MySQLCharacterSet), tableCollation)
-
-		default:
-			// tidb_enable_clustered_index = int_only / tidb_enable_clustered_index 不存在值，等于空
-			pkVal, err := t.MySQL.GetTiDBAlterPKValue()
-			if err != nil {
-				return tableSuffix, err
-			}
-			if !fastjson.Exists([]byte(pkVal), "alter-primary-key") {
-				zap.L().Warn("reverse oracle table suffix",
-					zap.String("table", t.String()),
-					zap.String("tidb_enable_clustered_index", common.StringUPPER(clusteredIdxVal)),
-					zap.String("alter-primary-key", "not exist"),
-					zap.String("table-option", "alter-primary-key isn't exits, would be disable"))
-
-				tableSuffix = fmt.Sprintf("ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s",
-					strings.ToLower(common.MySQLCharacterSet), tableCollation)
-
-			} else {
-				var p fastjson.Parser
-				v, err := p.Parse(pkVal)
-				if err != nil {
-					return tableSuffix, err
-				}
-
-				isAlterPK := v.GetBool("alter-primary-key")
-
-				// alter-primary-key = false
-				// 整型主键 table-option 不生效
-				// 单列主键是整型
-				if !isAlterPK && len(primaryColumns) == 1 && singleIntegerPK {
-					zap.L().Warn("reverse oracle table suffix",
-						zap.String("table", t.String()),
-						zap.String("tidb_enable_clustered_index", common.StringUPPER(clusteredIdxVal)),
-						zap.Bool("alter-primary-key", isAlterPK),
-						zap.String("table-option", "integer primary key, would be disable"))
-
-					tableSuffix = fmt.Sprintf("ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s",
-						strings.ToLower(common.MySQLCharacterSet), tableCollation)
-
-				} else {
-					// table-option 生效
-					// alter-primary-key = true
-					// alter-primary-key = false && 联合主键 len(pkINFO)>1
-					// alter-primary-key = false && 非整型主键
-					if isAlterPK || (!isAlterPK && len(primaryColumns) > 1) || (!isAlterPK && !singleIntegerPK) {
-						zap.L().Warn("reverse oracle table suffix",
-							zap.String("table", t.String()),
-							zap.String("tidb_enable_clustered_index", common.StringUPPER(clusteredIdxVal)),
-							zap.Bool("alter-primary-key", isAlterPK),
-							zap.String("table-option", "enabled"))
-
-						if t.TargetTableOption != "" {
-							tableSuffix = fmt.Sprintf("ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s %s",
-								strings.ToLower(common.MySQLCharacterSet), tableCollation, common.StringUPPER(t.TargetTableOption))
-						} else {
-							tableSuffix = fmt.Sprintf("ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s",
-								strings.ToLower(common.MySQLCharacterSet), tableCollation)
-						}
-					} else {
-						zap.L().Error("reverse oracle table suffix",
-							zap.String("table", t.String()),
-							zap.String("tidb_enable_clustered_index", common.StringUPPER(clusteredIdxVal)),
-							zap.Bool("alter-primary-key", isAlterPK),
-							zap.String("table-option", "disabled"),
-							zap.Error(fmt.Errorf("not support")))
-						return tableSuffix, fmt.Errorf("reverse oracle table suffix error: table-option not support")
-					}
-				}
-			}
-		}
-	}
-	zap.L().Info("reverse oracle table suffix",
-		zap.String("table", t.String()),
-		zap.String("create table suffix", tableSuffix))
-
-	return tableSuffix, nil
-}
-
-// O2T Special, It's not in the interface
-// 判断 Oracle 主键是否是整型主键
-func (t *Table) IsSingleIntegerPK(primaryColumns []string, columnMetas []string) bool {
-	singleIntegerPK := false
-
-	// 单列主键且整型主键
-	if len(primaryColumns) == 1 {
-		// 单列主键数据类型获取判断
-		for _, columnMeta := range columnMetas {
-			columnName := strings.Fields(columnMeta)[0]
-			columnType := strings.Fields(columnMeta)[1]
-
-			if strings.EqualFold(primaryColumns[0], columnName) {
-				// Map 规则转换后的字段对应数据类型
-				// columnMeta 视角 columnName columnType ....
-				for _, integerType := range common.TiDBIntegerPrimaryKeyList {
-					if find := strings.Contains(common.StringUPPER(columnType), common.StringUPPER(integerType)); find {
-						singleIntegerPK = true
-					}
-				}
-			}
-		}
-	}
-	return singleIntegerPK
-}
-
 func (t *Table) GetTablePrimaryKey() ([]map[string]string, error) {
 	return t.Oracle.GetOracleSchemaTablePrimaryKey(t.SourceSchemaName, t.SourceTableName)
 }
@@ -408,7 +232,7 @@ func (t *Table) GetTableForeignKey() ([]map[string]string, error) {
 }
 
 func (t *Table) GetTableCheckKey() ([]map[string]string, error) {
-	return t.Oracle.GetOracleSchemaTableForeignKey(t.SourceSchemaName, t.SourceTableName)
+	return t.Oracle.GetOracleSchemaTableCheckKey(t.SourceSchemaName, t.SourceTableName)
 }
 
 func (t *Table) GetTableUniqueIndex() ([]map[string]string, error) {
@@ -433,6 +257,59 @@ func (t *Table) GetTableColumnMeta() ([]map[string]string, error) {
 func (t *Table) GetTableColumnComment() ([]map[string]string, error) {
 	// 获取表数据字段列备注
 	return t.Oracle.GetOracleSchemaTableColumnComment(t.SourceSchemaName, t.SourceTableName)
+}
+
+func (t *Table) GetTableInfo() (interface{}, error) {
+	primaryKey, err := t.GetTablePrimaryKey()
+	if err != nil {
+		return nil, err
+	}
+	uniqueKey, err := t.GetTableUniqueKey()
+	if err != nil {
+		return nil, err
+	}
+	foreignKey, err := t.GetTableForeignKey()
+	if err != nil {
+		return nil, err
+	}
+	checkKey, err := t.GetTableCheckKey()
+	if err != nil {
+		return nil, err
+	}
+	uniqueIndex, err := t.GetTableUniqueIndex()
+	if err != nil {
+		return nil, err
+	}
+	normalIndex, err := t.GetTableNormalIndex()
+	if err != nil {
+		return nil, err
+	}
+	tableComment, err := t.GetTableComment()
+	if err != nil {
+		return nil, err
+	}
+	columnMeta, err := t.GetTableColumnMeta()
+	if err != nil {
+		return nil, err
+	}
+	// M2O -> mysql/tidb need, because oracle comment sql special
+	// O2M -> it is not need
+	columnComment, err := t.GetTableColumnComment()
+	if err != nil {
+		return nil, err
+	}
+
+	return &Info{
+		PrimaryKeyINFO:    primaryKey,
+		UniqueKeyINFO:     uniqueKey,
+		ForeignKeyINFO:    foreignKey,
+		CheckKeyINFO:      checkKey,
+		UniqueIndexINFO:   uniqueIndex,
+		NormalIndexINFO:   normalIndex,
+		TableCommentINFO:  tableComment,
+		TableColumnINFO:   columnMeta,
+		ColumnCommentINFO: columnComment,
+	}, nil
 }
 
 func (t *Table) String() string {

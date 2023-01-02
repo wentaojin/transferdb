@@ -16,7 +16,6 @@ limitations under the License.
 package m2o
 
 import (
-	"fmt"
 	"github.com/wentaojin/transferdb/module/reverse"
 )
 
@@ -36,112 +35,27 @@ func IChanger(c reverse.Changer) (map[string]string, map[string]map[string]strin
 	return tableNameRuleMap, tableColumnDatatypeMap, tableDefaultValueMap, nil
 }
 
-func IReader(t *Table, rd reverse.Reader) (*Rule, error) {
-	primaryKey, err := rd.GetTablePrimaryKey()
+func IReader(r reverse.Reader) (*Rule, error) {
+	i, err := r.GetTableInfo()
 	if err != nil {
 		return nil, err
 	}
-	uniqueKey, err := rd.GetTableUniqueKey()
-	if err != nil {
-		return nil, err
-	}
-	foreignKey, err := rd.GetTableForeignKey()
-	if err != nil {
-		return nil, err
-	}
-	checkKey, err := rd.GetTableCheckKey()
-	if err != nil {
-		return nil, err
-	}
-	uniqueIndex, err := rd.GetTableUniqueIndex()
-	if err != nil {
-		return nil, err
-	}
-	normalIndex, err := rd.GetTableNormalIndex()
-	if err != nil {
-		return nil, err
-	}
-	tableComment, err := rd.GetTableComment()
-	if err != nil {
-		return nil, err
-	}
-	columnMeta, err := rd.GetTableColumnMeta()
-	if err != nil {
-		return nil, err
-	}
-	// M2O -> mysql/tidb need, because oracle comment sql special
-	// O2M -> it is not need
-	columnComment, err := rd.GetTableColumnComment()
-	if err != nil {
-		return nil, err
-	}
-	TablePartitionDetail, err := t.GetTablePartitionDetail()
-	if err != nil {
-		return nil, err
-	}
-
 	return &Rule{
-		OracleDBVersion:          t.OracleDBVersion,
-		OracleExtendedMode:       t.OracleExtendedMode,
-		SourceSchema:             t.SourceSchemaName,
-		SourceTableName:          t.SourceTableName,
-		TargetSchema:             t.TargetSchemaName,
-		TargetTableName:          t.TargetTableName,
-		PrimaryKeyINFO:           primaryKey,
-		UniqueKeyINFO:            uniqueKey,
-		ForeignKeyINFO:           foreignKey,
-		CheckKeyINFO:             checkKey,
-		UniqueIndexINFO:          uniqueIndex,
-		NormalIndexINFO:          normalIndex,
-		TableCommentINFO:         tableComment,
-		TableColumnINFO:          columnMeta,
-		ColumnCommentINFO:        columnComment,
-		ColumnDatatypeRule:       t.TableColumnDatatypeRule,
-		ColumnDataDefaultvalRule: t.TableColumnDefaultValRule,
-		TablePartitionDetail:     TablePartitionDetail,
+		Table: r.(*Table),
+		Info:  i.(*Info),
 	}, nil
 }
 
-func IReverse(t *Table, s reverse.Generator) (*DDL, error) {
-	reverseDDL, checkKeyDDL, foreignKeyDDL, compatibleDDL, err := s.GenCreateTableDDL()
+func IReverse(s reverse.Generator) (*DDL, error) {
+	d, err := s.GenCreateTableDDL()
 	if err != nil {
 		return nil, err
 	}
-	tableComment, err := s.GenTableComment()
-	if err != nil {
-		return nil, err
-	}
-
-	columnComments, err := s.GenTableColumnComment()
-	if err != nil {
-		return nil, err
-	}
-
-	normalIndexDDL, normalIndexCompSQL, err := s.GenTableNormalIndex()
-	if err != nil {
-		return nil, fmt.Errorf("mysql db reverse table key non-unique index failed: %v", err)
-	}
-	compatibleDDL = append(compatibleDDL, normalIndexCompSQL...)
-
-	return &DDL{
-		SourceSchemaName: t.SourceSchemaName,
-		SourceTableName:  t.SourceTableName,
-		SourceTableType:  "NORMAL",          // MySQL/TiDB table type
-		TargetSchemaName: s.GenSchemaName(), // change schema name
-		TargetTableName:  s.GenTableName(),  // change table name
-		ReverseDDL:       reverseDDL,
-		TableComment:     tableComment,
-		ColumnCommentDDL: columnComments,
-		CheckKeyDDL:      checkKeyDDL,
-		ForeignKeyDDL:    foreignKeyDDL,
-		CompatibleDDL:    compatibleDDL,
-		TableIndexDDL:    normalIndexDDL,
-		IsPartition:      t.IsPartition,
-	}, nil
+	return d.(*DDL), nil
 }
 
 func IWriter(f *reverse.File, w reverse.Writer) error {
-	err := w.Writer(f)
+	err := w.File(f)
 	if err != nil {
 		return err
 	}

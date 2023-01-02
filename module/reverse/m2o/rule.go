@@ -20,116 +20,95 @@ import (
 	"fmt"
 	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/database/meta"
-	"go.uber.org/zap"
 	"strings"
 )
 
 type Rule struct {
-	OracleDBVersion          string              `json:"oracle_db_version"`
-	OracleExtendedMode       bool                `json:"oracle_extended_mode"`
-	SourceSchema             string              `json:"source_schema"`
-	SourceTableName          string              `json:"source_table_name"`
-	TargetSchema             string              `json:"target_schema"`
-	TargetTableName          string              `json:"target_table_name"`
-	PrimaryKeyINFO           []map[string]string `json:"primary_key_info"`
-	UniqueKeyINFO            []map[string]string `json:"unique_key_info"`
-	ForeignKeyINFO           []map[string]string `json:"foreign_key_info"`
-	CheckKeyINFO             []map[string]string `json:"check_key_info"`
-	UniqueIndexINFO          []map[string]string `json:"unique_index_info"`
-	NormalIndexINFO          []map[string]string `json:"normal_index_info"`
-	TableCommentINFO         []map[string]string `json:"table_comment_info"`
-	TableColumnINFO          []map[string]string `json:"table_column_info"`
-	ColumnCommentINFO        []map[string]string `json:"column_comment_info"`
-	ColumnDatatypeRule       map[string]string   `json:"column_datatype_rule"`
-	ColumnDataDefaultvalRule map[string]string   `json:"column_data_defaultval_rule"`
-	TablePartitionDetail     string              `json:"table_partition_detail"`
+	*Table
+	*Info
 }
 
-func (r *Rule) GenCreateTableDDL() (reverseDDL string, checkKeyDDL []string, foreignKeyDDL []string, compatibleDDL []string, err error) {
-	targetSchema, targetTable := r.GenTableNamePrefix()
+type Info struct {
+	PrimaryKeyINFO       []map[string]string `json:"primary_key_info"`
+	UniqueKeyINFO        []map[string]string `json:"unique_key_info"`
+	ForeignKeyINFO       []map[string]string `json:"foreign_key_info"`
+	CheckKeyINFO         []map[string]string `json:"check_key_info"`
+	UniqueIndexINFO      []map[string]string `json:"unique_index_info"`
+	NormalIndexINFO      []map[string]string `json:"normal_index_info"`
+	TableCommentINFO     []map[string]string `json:"table_comment_info"`
+	TableColumnINFO      []map[string]string `json:"table_column_info"`
+	ColumnCommentINFO    []map[string]string `json:"column_comment_info"`
+	TablePartitionDetail string              `json:"table_partition_detail"`
+}
+
+func (r *Rule) GenCreateTableDDL() (interface{}, error) {
+	targetSchema, targetTable := r.GenTablePrefix()
 
 	tableColumnMetas, err := r.GenTableColumn()
 	if err != nil {
-		return reverseDDL, checkKeyDDL, foreignKeyDDL, compatibleDDL, err
+		return nil, err
 	}
 
-	tableKeyMetas, compDDL, err := r.GenTableKeyMeta()
+	tableKeyMetas, compatibleDDL, err := r.GenTableKeys()
 	if err != nil {
-		return reverseDDL, checkKeyDDL, foreignKeyDDL, compatibleDDL, err
-	}
-	compatibleDDL = compDDL
-
-	// table create sql -> target
-	if strings.EqualFold(r.TablePartitionDetail, "") {
-		if len(tableKeyMetas) > 0 {
-			reverseDDL = fmt.Sprintf("CREATE TABLE %s.%s (\n%s,\n%s\n)",
-				targetSchema, targetTable,
-				strings.Join(tableColumnMetas, ",\n"),
-				strings.Join(tableKeyMetas, ",\n"))
-		} else {
-			reverseDDL = fmt.Sprintf("CREATE TABLE %s.%s (\n%s\n)",
-				targetSchema, targetTable,
-				strings.Join(tableColumnMetas, ",\n"))
-		}
-	} else {
-		if len(tableKeyMetas) > 0 {
-			reverseDDL = fmt.Sprintf("CREATE TABLE %s.%s (\n%s,\n%s\n) PARTITION BY %s;",
-				targetSchema,
-				targetTable,
-				strings.Join(tableColumnMetas, ",\n"),
-				strings.Join(tableKeyMetas, ",\n"),
-				r.TablePartitionDetail)
-		} else {
-			reverseDDL = fmt.Sprintf("CREATE TABLE %s.%s (\n%s\n) PARTITION BY %s;",
-				targetSchema,
-				targetTable,
-				strings.Join(tableColumnMetas, ",\n"),
-				r.TablePartitionDetail)
-		}
+		return nil, err
 	}
 
-	// table check、foreign -> target
+	tablePrefix := fmt.Sprintf("CREATE TABLE %s.%s", r.TargetSchemaName, r.TargetTableName)
+
+	tableSuffix, err := r.GenTableSuffix()
+	if err != nil {
+		return nil, err
+	}
+
 	checkKeyMetas, err := r.GenTableCheckKey()
 	if err != nil {
-		return reverseDDL, checkKeyDDL, foreignKeyDDL, compatibleDDL, err
+		return nil, err
 	}
 
-	if len(checkKeyMetas) > 0 {
-		for _, ck := range checkKeyMetas {
-			ckSQL := fmt.Sprintf("ALTER TABLE `%s`.`%s` ADD %s;", targetSchema, targetTable, ck)
-			zap.L().Info("reverse",
-				zap.String("schema", targetSchema),
-				zap.String("table", targetTable),
-				zap.String("ck sql", ckSQL))
-
-			checkKeyDDL = append(checkKeyDDL, ckSQL)
-		}
-	}
-
-	foreignKeyMetas, err := r.GenTableForeignKey()
+	foreignKeys, err := r.GenTableForeignKey()
 	if err != nil {
-		return reverseDDL, checkKeyDDL, foreignKeyDDL, compatibleDDL, err
+		return nil, err
 	}
 
-	if len(foreignKeyDDL) > 0 {
-		for _, fk := range foreignKeyMetas {
-			addFkSQL := fmt.Sprintf("ALTER TABLE `%s`.`%s` ADD %s;", targetSchema, targetTable, fk)
-			zap.L().Info("reverse",
-				zap.String("schema", targetSchema),
-				zap.String("table", targetTable),
-				zap.String("fk sql", addFkSQL))
-			foreignKeyDDL = append(foreignKeyDDL, addFkSQL)
-		}
+	tableComment, err := r.GenTableComment()
+	if err != nil {
+		return nil, err
 	}
 
-	zap.L().Info("reverse oracle table struct", zap.String("table", r.String()))
+	columnComment, err := r.GenTableColumnComment()
+	if err != nil {
+		return nil, err
+	}
+	tableNormalIndex, compNormalIndex, err := r.GenTableNormalIndex()
+	if err != nil {
+		return nil, err
+	}
+	compatibleDDL = append(compatibleDDL, compNormalIndex...)
 
-	return reverseDDL, checkKeyDDL, foreignKeyDDL, compatibleDDL, nil
+	return &DDL{
+		SourceSchemaName:     r.SourceSchemaName,
+		SourceTableName:      r.SourceTableName,
+		SourceTableType:      "NORMAL",     // MySQL/TiDB table type
+		TargetSchemaName:     targetSchema, // change schema name
+		TargetTableName:      targetTable,  // change table name
+		TablePrefix:          tablePrefix,
+		TableColumns:         tableColumnMetas,
+		TableKeys:            tableKeyMetas,
+		TableIndexes:         tableNormalIndex,
+		TableSuffix:          tableSuffix,
+		TableComment:         tableComment,
+		ColumnCommentDDL:     columnComment,
+		TableCheckKeys:       checkKeyMetas,
+		TableForeignKeys:     foreignKeys,
+		TableCompatibleDDL:   compatibleDDL,
+		TablePartitionDetail: r.TablePartitionDetail,
+	}, nil
 }
 
-func (r *Rule) GenTableKeyMeta() (tableKeyMetas []string, compatibilityIndexSQL []string, err error) {
+func (r *Rule) GenTableKeys() (tableKeyMetas []string, compatibilityIndexSQL []string, err error) {
 	// 唯一约束/普通索引/唯一索引
-	uniqueKeyMetas, err := r.GenTableUniqueKey()
+	uniqueKeys, err := r.GenTableUniqueKey()
 	if err != nil {
 		return tableKeyMetas, compatibilityIndexSQL, fmt.Errorf("table json [%v], mysql db reverse table unique constraint failed: %v", r.String(), err)
 	}
@@ -144,17 +123,17 @@ func (r *Rule) GenTableKeyMeta() (tableKeyMetas []string, compatibilityIndexSQL 
 	}
 
 	// 主键
-	primaryKeyMetas, err := r.GenTablePrimaryKey()
+	primaryKeys, err := r.GenTablePrimaryKey()
 	if err != nil {
 		return tableKeyMetas, compatibilityIndexSQL, err
 	}
 
-	if len(primaryKeyMetas) > 0 {
-		tableKeyMetas = append(tableKeyMetas, primaryKeyMetas...)
+	if len(primaryKeys) > 0 {
+		tableKeyMetas = append(tableKeyMetas, primaryKeys...)
 	}
 
-	if len(uniqueKeyMetas) > 0 {
-		tableKeyMetas = append(tableKeyMetas, uniqueKeyMetas...)
+	if len(uniqueKeys) > 0 {
+		tableKeyMetas = append(tableKeyMetas, uniqueKeys...)
 	}
 
 	if len(uniqueIndexMetas) > 0 {
@@ -164,38 +143,38 @@ func (r *Rule) GenTableKeyMeta() (tableKeyMetas []string, compatibilityIndexSQL 
 	return tableKeyMetas, compatibilityIndexSQL, nil
 }
 
-func (r *Rule) GenTablePrimaryKey() (primaryKeyMetas []string, err error) {
+func (r *Rule) GenTablePrimaryKey() (primaryKeys []string, err error) {
 	if len(r.PrimaryKeyINFO) > 0 {
 		for _, rowUKCol := range r.PrimaryKeyINFO {
 			var uk string
 			if rowUKCol["CONSTRAINT_TYPE"] == "PK" {
 				uk = fmt.Sprintf("PRIMARY KEY (%s)", strings.ToUpper(rowUKCol["COLUMN_LIST"]))
 			} else {
-				return primaryKeyMetas, fmt.Errorf("table json [%v], error on get table primary key: %v", r.String(), err)
+				return primaryKeys, fmt.Errorf("table json [%v], error on get table primary key: %v", r.String(), err)
 			}
-			primaryKeyMetas = append(primaryKeyMetas, uk)
+			primaryKeys = append(primaryKeys, uk)
 		}
 	}
-	return primaryKeyMetas, nil
+	return primaryKeys, nil
 }
 
-func (r *Rule) GenTableUniqueKey() (uniqueKeyMetas []string, err error) {
+func (r *Rule) GenTableUniqueKey() (uniqueKeys []string, err error) {
 	if len(r.UniqueKeyINFO) > 0 {
 		for _, rowUKCol := range r.UniqueKeyINFO {
 			var uk string
 			if rowUKCol["CONSTRAINT_TYPE"] == "PK" {
-				return uniqueKeyMetas, fmt.Errorf("table json [%v], error on get table primary key: %v", r.String(), err)
+				return uniqueKeys, fmt.Errorf("table json [%v], error on get table primary key: %v", r.String(), err)
 			} else {
 				uk = fmt.Sprintf("CONSTRAINT %s UNIQUE (%s)",
 					strings.ToUpper(rowUKCol["CONSTRAINT_NAME"]), strings.ToUpper(rowUKCol["COLUMN_LIST"]))
 			}
-			uniqueKeyMetas = append(uniqueKeyMetas, uk)
+			uniqueKeys = append(uniqueKeys, uk)
 		}
 	}
-	return uniqueKeyMetas, nil
+	return uniqueKeys, nil
 }
 
-func (r *Rule) GenTableForeignKey() (foreignKeyMetas []string, err error) {
+func (r *Rule) GenTableForeignKey() (foreignKeys []string, err error) {
 	if len(r.ForeignKeyINFO) > 0 {
 		for _, rowFKCol := range r.ForeignKeyINFO {
 			if rowFKCol["DELETE_RULE"] == "" || rowFKCol["DELETE_RULE"] == "NO ACTION" || rowFKCol["DELETE_RULE"] == "RESTRICT" {
@@ -205,7 +184,7 @@ func (r *Rule) GenTableForeignKey() (foreignKeyMetas []string, err error) {
 					strings.ToUpper(rowFKCol["R_OWNER"]),
 					strings.ToUpper(rowFKCol["RTABLE_NAME"]),
 					strings.ToUpper(rowFKCol["RCOLUMN_LIST"]))
-				foreignKeyMetas = append(foreignKeyMetas, fk)
+				foreignKeys = append(foreignKeys, fk)
 			}
 			if rowFKCol["DELETE_RULE"] == "CASCADE" {
 				fk := fmt.Sprintf("CONSTRAINT %s FOREIGN KEY (%s) REFERENCES %s.%s (%s) ON DELETE CASCADE",
@@ -214,7 +193,7 @@ func (r *Rule) GenTableForeignKey() (foreignKeyMetas []string, err error) {
 					strings.ToUpper(rowFKCol["R_OWNER"]),
 					strings.ToUpper(rowFKCol["RTABLE_NAME"]),
 					strings.ToUpper(rowFKCol["RCOLUMN_LIST"]))
-				foreignKeyMetas = append(foreignKeyMetas, fk)
+				foreignKeys = append(foreignKeys, fk)
 			}
 			if rowFKCol["DELETE_RULE"] == "SET NULL" {
 				fk := fmt.Sprintf("CONSTRAINT %s FOREIGN KEY(%s) REFERENCES %s.%s (%s) ON DELETE SET NULL",
@@ -223,7 +202,7 @@ func (r *Rule) GenTableForeignKey() (foreignKeyMetas []string, err error) {
 					strings.ToUpper(rowFKCol["R_OWNER"]),
 					strings.ToUpper(rowFKCol["RTABLE_NAME"]),
 					strings.ToUpper(rowFKCol["RCOLUMN_LIST"]))
-				foreignKeyMetas = append(foreignKeyMetas, fk)
+				foreignKeys = append(foreignKeys, fk)
 			}
 			if rowFKCol["UPDATE_RULE"] == "" || rowFKCol["UPDATE_RULE"] == "NO ACTION" || rowFKCol["UPDATE_RULE"] == "RESTRICT" {
 				fk := fmt.Sprintf("CONSTRAINT %s FOREIGN KEY (%s) REFERENCES `%s`.%s (%s) ON UPDATE %s",
@@ -234,7 +213,7 @@ func (r *Rule) GenTableForeignKey() (foreignKeyMetas []string, err error) {
 					strings.ToUpper(rowFKCol["RCOLUMN_LIST"]),
 					strings.ToUpper(rowFKCol["UPDATE_RULE"]),
 				)
-				foreignKeyMetas = append(foreignKeyMetas, fk)
+				foreignKeys = append(foreignKeys, fk)
 			}
 			if rowFKCol["UPDATE_RULE"] == "CASCADE" {
 				fk := fmt.Sprintf("CONSTRAINT %s FOREIGN KEY (%s) REFERENCES %s.%s (%s) ON UPDATE CASCADE",
@@ -243,7 +222,7 @@ func (r *Rule) GenTableForeignKey() (foreignKeyMetas []string, err error) {
 					strings.ToUpper(rowFKCol["R_OWNER"]),
 					strings.ToUpper(rowFKCol["RTABLE_NAME"]),
 					strings.ToUpper(rowFKCol["RCOLUMN_LIST"]))
-				foreignKeyMetas = append(foreignKeyMetas, fk)
+				foreignKeys = append(foreignKeys, fk)
 			}
 			if rowFKCol["UPDATE_RULE"] == "SET NULL" {
 				fk := fmt.Sprintf("CONSTRAINT %s FOREIGN KEY(%s) REFERENCES %s.%s (%s) ON UPDATE SET NULL",
@@ -252,58 +231,58 @@ func (r *Rule) GenTableForeignKey() (foreignKeyMetas []string, err error) {
 					strings.ToUpper(rowFKCol["R_OWNER"]),
 					strings.ToUpper(rowFKCol["RTABLE_NAME"]),
 					strings.ToUpper(rowFKCol["RCOLUMN_LIST"]))
-				foreignKeyMetas = append(foreignKeyMetas, fk)
+				foreignKeys = append(foreignKeys, fk)
 			}
 		}
 	}
-	return foreignKeyMetas, nil
+	return foreignKeys, nil
 }
 
-func (r *Rule) GenTableCheckKey() (checkKeyMetas []string, err error) {
+func (r *Rule) GenTableCheckKey() (checkKeys []string, err error) {
 	if len(r.CheckKeyINFO) > 0 {
 		for _, rowFKCol := range r.CheckKeyINFO {
 			ck := fmt.Sprintf("CONSTRAINT %s CHECK (%s)",
 				strings.ToUpper(rowFKCol["CONSTRAINT_NAME"]),
 				strings.ToUpper(rowFKCol["SEARCH_CONDITION"]))
-			checkKeyMetas = append(checkKeyMetas, ck)
+			checkKeys = append(checkKeys, ck)
 		}
 	}
-	return checkKeyMetas, nil
+	return checkKeys, nil
 }
 
-func (r *Rule) GenTableUniqueIndex() (uniqueIndexMetas []string, compatibilityIndexSQL []string, err error) {
+func (r *Rule) GenTableUniqueIndex() (uniqueIndexes []string, compatibilityIndexSQL []string, err error) {
 	// MySQL Unique Index = Unique Constraint
 	return
 }
 
-func (r *Rule) GenTableNormalIndex() (normalIndexMetas []string, compatibilityIndexSQL []string, err error) {
+func (r *Rule) GenTableNormalIndex() (normalIndexes []string, compatibilityIndexSQL []string, err error) {
 	if len(r.NormalIndexINFO) > 0 {
 		for _, kv := range r.NormalIndexINFO {
 			var idx string
 			if kv["UNIQUENESS"] == "UNIQUE" {
 				idx = fmt.Sprintf("CREATE UNIQUE INDEX %s ON %s.%s (%s);",
 					strings.ToUpper(kv["INDEX_NAME"]),
-					r.TargetSchema,
+					r.TargetSchemaName,
 					r.TargetTableName,
 					strings.ToUpper(kv["COLUMN_LIST"]),
 				)
 			} else {
 				idx = fmt.Sprintf("CREATE INDEX %s ON %s.%s (%s);",
 					strings.ToUpper(kv["INDEX_NAME"]),
-					r.TargetSchema,
+					r.TargetSchemaName,
 					r.TargetTableName,
 					strings.ToUpper(kv["COLUMN_LIST"]),
 				)
 			}
-			normalIndexMetas = append(normalIndexMetas, idx)
+			normalIndexes = append(normalIndexes, idx)
 		}
 	}
-	return normalIndexMetas, compatibilityIndexSQL, nil
+	return normalIndexes, compatibilityIndexSQL, nil
 }
 
 func (r *Rule) GenTableComment() (tableComment string, err error) {
 	if len(r.TableColumnINFO) > 0 && r.TableCommentINFO[0]["TABLE_COMMENT"] != "" {
-		tableComment = fmt.Sprintf(`COMMENT ON TABLE %s.%s IS '%s';`, r.TargetSchema, r.TargetTableName, r.TableCommentINFO[0]["TABLE_COMMENT"])
+		tableComment = fmt.Sprintf(`COMMENT ON TABLE %s.%s IS '%s';`, r.TargetSchemaName, r.TargetTableName, r.TableCommentINFO[0]["TABLE_COMMENT"])
 	}
 	return tableComment, nil
 }
@@ -369,19 +348,19 @@ func (r *Rule) GenTableColumn() (columnMetas []string, err error) {
 		columnName = rowCol["COLUMN_NAME"]
 
 		if !strings.EqualFold(rowCol["DATA_DEFAULT"], "") {
-			if val, ok := r.ColumnDataDefaultvalRule[columnName]; ok {
+			if val, ok := r.TableColumnDefaultValRule[columnName]; ok {
 				dataDefault = val
 			} else {
-				return columnMetas, fmt.Errorf("mysql table [%s.%s] column [%s] default value isn't exist", r.SourceSchema, r.SourceTableName, columnName)
+				return columnMetas, fmt.Errorf("mysql table [%s.%s] column [%s] default value isn't exist", r.SourceSchemaName, r.SourceTableName, columnName)
 			}
 		} else {
 			dataDefault = rowCol["DATA_DEFAULT"]
 		}
 
-		if val, ok := r.ColumnDatatypeRule[columnName]; ok {
+		if val, ok := r.TableColumnDatatypeRule[columnName]; ok {
 			columnType = val
 		} else {
-			return columnMetas, fmt.Errorf("mysql table [%s.%s] column [%s] data type isn't exist", r.SourceSchema, r.SourceTableName, columnName)
+			return columnMetas, fmt.Errorf("mysql table [%s.%s] column [%s] data type isn't exist", r.SourceSchemaName, r.SourceTableName, columnName)
 		}
 
 		if strings.EqualFold(nullable, "NULL") {
@@ -422,28 +401,33 @@ func (r *Rule) GenTableColumnComment() (columnComments []string, err error) {
 	if len(r.TableColumnINFO) > 0 {
 		for _, rowCol := range r.TableColumnINFO {
 			if rowCol["COMMENTS"] != "" {
-				columnComments = append(columnComments, fmt.Sprintf(`COMMENT ON COLUMN %s.%s.%s IS '%s';`, r.TargetSchema, r.TargetTableName, rowCol["COLUMN_NAME"], common.SpecialLettersUsingOracle([]byte(rowCol["COMMENTS"]))))
+				columnComments = append(columnComments, fmt.Sprintf(`COMMENT ON COLUMN %s.%s.%s IS '%s';`, r.TargetSchemaName, r.TargetTableName, rowCol["COLUMN_NAME"], common.SpecialLettersUsingOracle([]byte(rowCol["COMMENTS"]))))
 			}
 		}
 	}
 	return columnComments, nil
 }
 
-func (r *Rule) GenTableNamePrefix() (string, string) {
+func (r *Rule) GenTablePrefix() (string, string) {
 	targetSchema := r.GenSchemaName()
 	targetTable := r.GenTableName()
 
 	return targetSchema, targetTable
 }
 
+func (r *Rule) GenTableSuffix() (string, error) {
+	// m2o null
+	return "", nil
+}
+
 func (r *Rule) GenSchemaName() string {
-	if r.TargetSchema == "" {
-		return r.SourceSchema
+	if r.TargetSchemaName == "" {
+		return r.SourceSchemaName
 	}
-	if r.TargetSchema != "" {
-		return r.TargetSchema
+	if r.TargetSchemaName != "" {
+		return r.TargetSchemaName
 	}
-	return r.SourceSchema
+	return r.SourceSchemaName
 }
 
 func (r *Rule) GenTableName() string {

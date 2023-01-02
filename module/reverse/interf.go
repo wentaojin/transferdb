@@ -31,27 +31,29 @@ type Reader interface {
 	GetTableComment() ([]map[string]string, error)
 	GetTableColumnMeta() ([]map[string]string, error)
 	GetTableColumnComment() ([]map[string]string, error)
+	GetTableInfo() (interface{}, error)
 }
 
 type Generator interface {
 	GenSchemaName() string
 	GenTableName() string
-	GenTableNamePrefix() (string, string)
-	GenTableKeyMeta() (tableKeyMetas []string, compatibilityIndexSQL []string, err error)
-	GenTablePrimaryKey() (primaryKeyMetas []string, err error)
-	GenTableUniqueKey() (uniqueKeyMetas []string, err error)
-	GenTableForeignKey() (foreignKeyMetas []string, err error)
-	GenTableCheckKey() (checkKeyMetas []string, err error)
-	GenTableUniqueIndex() (uniqueIndexMetas []string, compatibilityIndexSQL []string, err error)
-	GenTableNormalIndex() (normalIndexMetas []string, compatibilityIndexSQL []string, err error)
+	GenTablePrefix() (string, string)
+	GenTableSuffix() (string, error)
+	GenTableKeys() (tableKeys []string, compatibilityIndexSQL []string, err error)
+	GenTablePrimaryKey() (primaryKeys []string, err error)
+	GenTableUniqueKey() (uniqueKeys []string, err error)
+	GenTableForeignKey() (foreignKeys []string, err error)
+	GenTableCheckKey() (checkKeys []string, err error)
+	GenTableUniqueIndex() (uniqueIndexes []string, compatibilityIndexSQL []string, err error)
+	GenTableNormalIndex() (normalIndexes []string, compatibilityIndexSQL []string, err error)
 	GenTableComment() (tableComment string, err error)
-	GenTableColumn() (columnMetas []string, err error)
+	GenTableColumn() (tableColumns []string, err error)
 	GenTableColumnComment() (columnComments []string, err error)
-	GenCreateTableDDL() (reverseDDL string, checkKeyDDL []string, foreignKeyDDL []string, compatibleDDL []string, err error)
+	GenCreateTableDDL() (interface{}, error)
 }
 
 type Writer interface {
-	Writer(f *File) error
+	File(f *File) error
 }
 
 type Reverser interface {

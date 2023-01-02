@@ -285,6 +285,64 @@ func (t *Table) GetTableColumnComment() ([]map[string]string, error) {
 	return t.MySQL.GetMySQLTableColumnComment(t.SourceSchemaName, t.SourceTableName)
 }
 
+func (t *Table) GetTableInfo() (interface{}, error) {
+	primaryKey, err := t.GetTablePrimaryKey()
+	if err != nil {
+		return nil, err
+	}
+	uniqueKey, err := t.GetTableUniqueKey()
+	if err != nil {
+		return nil, err
+	}
+	foreignKey, err := t.GetTableForeignKey()
+	if err != nil {
+		return nil, err
+	}
+	checkKey, err := t.GetTableCheckKey()
+	if err != nil {
+		return nil, err
+	}
+	uniqueIndex, err := t.GetTableUniqueIndex()
+	if err != nil {
+		return nil, err
+	}
+	normalIndex, err := t.GetTableNormalIndex()
+	if err != nil {
+		return nil, err
+	}
+	tableComment, err := t.GetTableComment()
+	if err != nil {
+		return nil, err
+	}
+	columnMeta, err := t.GetTableColumnMeta()
+	if err != nil {
+		return nil, err
+	}
+	// M2O -> mysql/tidb need, because oracle comment sql special
+	// O2M -> it is not need
+	columnComment, err := t.GetTableColumnComment()
+	if err != nil {
+		return nil, err
+	}
+	tablePartitionDetail, err := t.GetTablePartitionDetail()
+	if err != nil {
+		return nil, err
+	}
+
+	return &Info{
+		PrimaryKeyINFO:       primaryKey,
+		UniqueKeyINFO:        uniqueKey,
+		ForeignKeyINFO:       foreignKey,
+		CheckKeyINFO:         checkKey,
+		UniqueIndexINFO:      uniqueIndex,
+		NormalIndexINFO:      normalIndex,
+		TableCommentINFO:     tableComment,
+		TableColumnINFO:      columnMeta,
+		ColumnCommentINFO:    columnComment,
+		TablePartitionDetail: tablePartitionDetail,
+	}, nil
+}
+
 func (t *Table) GetTablePartitionDetail() (string, error) {
 	if t.IsPartition {
 		partitionDetail, err := t.MySQL.GetMySQLPartitionTableDetailINFO(t.SourceSchemaName, t.SourceTableName)

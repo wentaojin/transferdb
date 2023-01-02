@@ -104,6 +104,7 @@ func (r *Reverse) NewReverse() error {
 		SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 		TargetSchemaName: common.StringUPPER(r.cfg.MySQLConfig.SchemaName),
 		SourceTables:     reverseTaskTables,
+		Threads:          r.cfg.AppConfig.Threads,
 		MySQL:            r.mysql,
 		MetaDB:           r.metaDB,
 	})
@@ -149,7 +150,7 @@ func (r *Reverse) NewReverse() error {
 	for _, table := range tables {
 		t := table
 		g.Go(func() error {
-			rule, err := IReader(t, t)
+			rule, err := IReader(t)
 			if err != nil {
 				if err = meta.NewErrorLogDetailModel(r.metaDB).CreateErrorLog(r.ctx, &meta.ErrorLogDetail{
 					DBTypeS:     common.TaskDBMySQL,
@@ -171,7 +172,7 @@ func (r *Reverse) NewReverse() error {
 				}
 				return nil
 			}
-			ddl, err := IReverse(t, rule)
+			ddl, err := IReverse(rule)
 			if err != nil {
 				if err = meta.NewErrorLogDetailModel(r.metaDB).CreateErrorLog(r.ctx, &meta.ErrorLogDetail{
 					DBTypeS:     common.TaskDBMySQL,

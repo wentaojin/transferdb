@@ -164,18 +164,23 @@ func (r *Reverse) NewReverse() error {
 	}
 
 	// 获取规则
+	ruleTime := time.Now()
 	tableNameRuleMap, tableColumnRuleMap, tableDefaultRuleMap, err := IChanger(&Change{
 		Ctx:              r.Ctx,
 		SourceSchemaName: common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
 		TargetSchemaName: common.StringUPPER(r.Cfg.MySQLConfig.SchemaName),
 		SourceTables:     exporterTables,
 		OracleCollation:  oracleCollation,
+		Threads:          r.Cfg.AppConfig.Threads,
 		Oracle:           r.Oracle,
 		MetaDB:           r.MetaDB,
 	})
 	if err != nil {
 		return err
 	}
+	zap.L().Warn("get rules",
+		zap.String("schema", r.Cfg.OracleConfig.SchemaName),
+		zap.String("cost", time.Now().Sub(ruleTime).String()))
 
 	// 获取 reverse 表任务列表
 	tables, err := GenReverseTableTask(r, tableNameRuleMap, tableColumnRuleMap, tableDefaultRuleMap, oracleDBVersion, oracleCollation, exporterTables, nlsSort, nlsComp)
@@ -217,7 +222,7 @@ func (r *Reverse) NewReverse() error {
 	for _, table := range tables {
 		t := table
 		g.Go(func() error {
-			rule, err := IReader(t, t)
+			rule, err := IReader(t)
 			if err != nil {
 				if err = meta.NewErrorLogDetailModel(r.MetaDB).CreateErrorLog(r.Ctx, &meta.ErrorLogDetail{
 					DBTypeS:     common.TaskDBOracle,
@@ -239,7 +244,7 @@ func (r *Reverse) NewReverse() error {
 				}
 				return nil
 			}
-			ddl, err := IReverse(t, rule)
+			ddl, err := IReverse(rule)
 			if err != nil {
 				if err = meta.NewErrorLogDetailModel(r.MetaDB).CreateErrorLog(r.Ctx, &meta.ErrorLogDetail{
 					DBTypeS:     common.TaskDBOracle,
