@@ -169,8 +169,11 @@ func (t *Task) AdjustDBSelectColumn() (sourceColumnInfo string, targetColumnInfo
 			sourceColumnInfos = append(sourceColumnInfos, common.StringsBuilder("DECODE(SUBSTR(", colName, ",1,1),'.','0' || ", colName, ",", colName, ") AS ", colName))
 			targetColumnInfos = append(targetColumnInfos, common.StringsBuilder("CAST(0 + CAST(", colName, " AS CHAR) AS CHAR) AS ", colName))
 		// 字符
-		case "BFILE", "CHARACTER", "LONG", "NCHAR VARYING", "ROWID", "UROWID", "VARCHAR", "XMLTYPE", "CHAR", "NCHAR", "NVARCHAR2", "NCLOB", "CLOB":
+		case "BFILE", "CHARACTER", "LONG", "NCHAR VARYING", "ROWID", "UROWID", "VARCHAR", "CHAR", "NCHAR", "NVARCHAR2", "NCLOB", "CLOB":
 			sourceColumnInfos = append(sourceColumnInfos, common.StringsBuilder("NVL(", colName, ",'') AS ", colName))
+			targetColumnInfos = append(targetColumnInfos, common.StringsBuilder("IFNULL(", colName, ",'') AS ", colName))
+		case "XMLTYPE":
+			sourceColumnInfos = append(sourceColumnInfos, common.StringsBuilder("NVL(XMLSERIALIZE(CONTENT ", colName, " AS CLOB),'') AS ", colName))
 			targetColumnInfos = append(targetColumnInfos, common.StringsBuilder("IFNULL(", colName, ",'') AS ", colName))
 		// 二进制
 		case "BLOB", "LONG RAW", "RAW":

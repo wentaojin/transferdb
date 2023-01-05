@@ -70,8 +70,8 @@ charset = "utf8"
 # 4、建议是 insert-batch-size 整数倍
 rows = 100000
 # 数据文件输出目录, 所有表数据输出文件目录，需要磁盘空间充足
-# 目录格式：/data1/${target_dbname}/${table_name}
-output-dir = "/data1"
+# 目录格式：/tmp/${target_dbname}/${table_name}
+output-dir = "/tmp"
 # 用于初始化表任务并发数【写下游 meta 数据库】
 task-threads = 128
 # 表导出导入并发数，同时处理多少张上游表，可动态变更
@@ -146,7 +146,7 @@ schema-name = "marvin"
 # 源端迁移任务表（只用于 prepare/reverse/check/all/full 阶段，assess 阶段不适用，assess 只适用于 schema 级别）
 # include-table 和 exclude-table 不能同时配置，两者只能配置一个,如果两个都没配置则 Schema 内表全迁移
 # include-table 和 exclude-table 支持正则表达式以及通配符（tab_*/tab*）
-include-table = []
+include-table = ["xmltb"]
 exclude-table = []
 
 # 只用于 prepare/reverse/check/all/full 阶段，assess 阶段不适用

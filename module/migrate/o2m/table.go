@@ -17,6 +17,7 @@ package o2m
 
 import (
 	"context"
+	"fmt"
 	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/database/meta"
 	"github.com/wentaojin/transferdb/database/mysql"
@@ -132,13 +133,14 @@ func (t *Chunk) ApplyTableRows() error {
 	for _, result := range t.BatchResults {
 		valArgs := result
 		g.Go(func() error {
-			err := t.MySQL.WriteMySQLTable(common.StringsBuilder(GenMySQLInsertSQLStmtPrefix(
+			query := common.StringsBuilder(GenMySQLInsertSQLStmtPrefix(
 				t.SyncMeta.SchemaNameT,
 				t.SyncMeta.TableNameT,
 				t.SourceColumns,
-				t.SafeMode), valArgs))
+				t.SafeMode), valArgs)
+			err := t.MySQL.WriteMySQLTable(query)
 			if err != nil {
-				return err
+				return fmt.Errorf("error on write db, sql: [%v], error: %v", query, err)
 			}
 			return nil
 		})

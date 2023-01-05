@@ -309,7 +309,7 @@ func (r *O2M) csvPartSyncTable(csvPartTables []string) error {
 	for _, table := range csvPartTables {
 		t := table
 		g.Go(func() error {
-			startTime := time.Now()
+			taskTime := time.Now()
 			zap.L().Info("source schema table csv data start",
 				zap.String("schema", r.cfg.OracleConfig.SchemaName),
 				zap.String("table", t))
@@ -356,7 +356,7 @@ func (r *O2M) csvPartSyncTable(csvPartTables []string) error {
 						oracleDBCharacterSet, querySQL, m.CSVFile, columnFields,
 						r.cfg.CSVConfig, rowsResult).WriteFile()
 					if err != nil {
-						return err
+						return fmt.Errorf("get oracle schema table [%v] write file failed: %v", m.String(), err)
 					}
 
 					// 清理记录
@@ -397,7 +397,7 @@ func (r *O2M) csvPartSyncTable(csvPartTables []string) error {
 			zap.L().Info("source schema table csv data finished",
 				zap.String("schema", r.cfg.OracleConfig.SchemaName),
 				zap.String("table", t),
-				zap.String("cost", time.Now().Sub(startTime).String()))
+				zap.String("cost", time.Now().Sub(taskTime).String()))
 			return nil
 		})
 	}
@@ -665,8 +665,11 @@ func (r *O2M) adjustTableSelectColumn(sourceTable string, oracleCollation bool) 
 		case "DECIMAL", "DEC", "DOUBLE PRECISION", "FLOAT", "INTEGER", "INT", "REAL", "NUMERIC", "BINARY_FLOAT", "BINARY_DOUBLE", "SMALLINT":
 			columnNames = append(columnNames, rowCol["COLUMN_NAME"])
 		// 字符
-		case "BFILE", "CHARACTER", "LONG", "NCHAR VARYING", "ROWID", "UROWID", "VARCHAR", "XMLTYPE", "CHAR", "NCHAR", "NVARCHAR2", "NCLOB", "CLOB":
+		case "BFILE", "CHARACTER", "LONG", "NCHAR VARYING", "ROWID", "UROWID", "VARCHAR", "CHAR", "NCHAR", "NVARCHAR2", "NCLOB", "CLOB":
 			columnNames = append(columnNames, rowCol["COLUMN_NAME"])
+		// XMLTYPE
+		case "XMLTYPE":
+			columnNames = append(columnNames, fmt.Sprintf(" XMLSERIALIZE(CONTENT %s AS CLOB) AS %s", rowCol["COLUMN_NAME"], rowCol["COLUMN_NAME"]))
 		// 二进制
 		case "BLOB", "LONG RAW", "RAW":
 			columnNames = append(columnNames, rowCol["COLUMN_NAME"])

@@ -388,7 +388,7 @@ func (r *Migrate) initWaitSyncTableRowID(csvWaitTables []string, oracleCollation
 	}
 
 	g := &errgroup.Group{}
-	g.SetLimit(r.cfg.CSVConfig.TaskThreads)
+	g.SetLimit(r.cfg.FullConfig.TaskThreads)
 
 	for idx, table := range csvWaitTables {
 		t := table
@@ -616,8 +616,11 @@ func (r *Migrate) adjustTableSelectColumn(sourceTable string, oracleCollation bo
 		case "DECIMAL", "DEC", "DOUBLE PRECISION", "FLOAT", "INTEGER", "INT", "REAL", "NUMERIC", "BINARY_FLOAT", "BINARY_DOUBLE", "SMALLINT":
 			columnNames = append(columnNames, rowCol["COLUMN_NAME"])
 		// 字符
-		case "BFILE", "CHARACTER", "LONG", "NCHAR VARYING", "ROWID", "UROWID", "VARCHAR", "XMLTYPE", "CHAR", "NCHAR", "NVARCHAR2", "NCLOB", "CLOB":
+		case "BFILE", "CHARACTER", "LONG", "NCHAR VARYING", "ROWID", "UROWID", "VARCHAR", "CHAR", "NCHAR", "NVARCHAR2", "NCLOB", "CLOB":
 			columnNames = append(columnNames, rowCol["COLUMN_NAME"])
+		// XMLTYPE
+		case "XMLTYPE":
+			columnNames = append(columnNames, fmt.Sprintf(" XMLSERIALIZE(CONTENT %s AS CLOB) AS %s", rowCol["COLUMN_NAME"], rowCol["COLUMN_NAME"]))
 		// 二进制
 		case "BLOB", "LONG RAW", "RAW":
 			columnNames = append(columnNames, rowCol["COLUMN_NAME"])

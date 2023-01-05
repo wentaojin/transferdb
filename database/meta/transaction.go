@@ -34,7 +34,7 @@ func (rw *Transaction) CreateDataCompareMetaAndUpdateWaitSyncMeta(ctx context.Co
 	txn := rw.DB(ctx).Begin()
 	err := txn.Create(dataDiffMeta).Error
 	if err != nil {
-		return fmt.Errorf("create table [data_diff_meta] reocrd by transaction failed: %v", err)
+		return fmt.Errorf("create table [data_compare_meta] reocrd by transaction failed: %v", err)
 	}
 	err = txn.Model(&WaitSyncMeta{}).
 		Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND table_name_s = ? AND mode = ?",
