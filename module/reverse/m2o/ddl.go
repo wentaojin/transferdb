@@ -76,12 +76,12 @@ func (d *DDL) File(f *reverse.File) error {
 	var reverseDDL string
 	if strings.EqualFold(d.TablePartitionDetail, "") {
 		if len(d.TableKeys) > 0 {
-			reverseDDL = fmt.Sprintf("%s (\n%s,\n%s\n)",
+			reverseDDL = fmt.Sprintf("%s (\n%s,\n%s\n);",
 				d.TablePrefix,
 				strings.Join(d.TableColumns, ",\n"),
 				strings.Join(d.TableKeys, ",\n"))
 		} else {
-			reverseDDL = fmt.Sprintf("%s (\n%s\n)",
+			reverseDDL = fmt.Sprintf("%s (\n%s\n);",
 				d.TablePrefix,
 				strings.Join(d.TableColumns, ",\n"))
 		}

@@ -417,7 +417,7 @@ func NewMySQLTableINFO(schemaName, tableName, targetDBType string, mysql *mysql.
 		return mysqlTable, version, err
 	}
 
-	indexes, err := getMySQLTableIndex(schemaName, tableName, mysql)
+	indexes, err := getMySQLTableIndex(schemaName, tableName, mysql, targetDBType)
 	if err != nil {
 		return mysqlTable, version, err
 	}
@@ -512,10 +512,10 @@ func getMySQLTableColumn(schemaName, tableName string, mysql *mysql.MySQL) (map[
 	return columns, nil
 }
 
-func getMySQLTableIndex(schemaName, tableName string, mysql *mysql.MySQL) ([]Index, error) {
+func getMySQLTableIndex(schemaName, tableName string, mysql *mysql.MySQL, targetDBType string) ([]Index, error) {
 	var indexes []Index
 
-	indexInfo, err := mysql.GetMySQLTableIndex(schemaName, tableName)
+	indexInfo, err := mysql.GetMySQLTableIndex(schemaName, tableName, targetDBType)
 	if err != nil {
 		return indexes, err
 	}

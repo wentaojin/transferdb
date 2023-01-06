@@ -77,7 +77,7 @@ func (r *Reverse) NewReverse() error {
 		return fmt.Errorf("reverse schema [%s] table mode [%s] task failed: %v, table [error_log_detail] exist failed error, please clear and rerunning", r.cfg.MySQLConfig.SchemaName, common.ReverseM2OMode, err)
 	}
 
-	// 目标段版本判断
+	// 环境信息
 	oracleDBVersion, err := r.oracle.GetOracleDBVersion()
 	if err != nil {
 		return fmt.Errorf("get oracle db version falied: %v", err)

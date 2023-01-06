@@ -702,12 +702,5 @@ func (rw *BuildinDatatypeRule) InitM2OBuildinDatatypeRule(ctx context.Context) e
 		DatatypeNameS: common.BuildInMySQLDatatypeVarbinary,
 		DatatypeNameT: common.BuildInMySQLM2ODatatypeNameMap[common.BuildInMySQLDatatypeVarbinary],
 	})
-	return rw.DB(ctx).Clauses(clause.OnConflict{
-		Columns: []clause.Column{
-			{Name: "db_type_s"},
-			{Name: "db_type_t"},
-			{Name: "datatype_name_s"},
-		},
-		DoNothing: true,
-	}).CreateInBatches(buildinDataTypeR, 20).Error
+	return rw.DB(ctx).Clauses(clause.Insert{Modifier: "IGNORE"}).CreateInBatches(buildinDataTypeR, 20).Error
 }

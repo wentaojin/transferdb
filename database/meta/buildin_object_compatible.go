@@ -604,12 +604,5 @@ func (rw *BuildinObjectCompatible) InitO2MBuildinObjectCompatible(ctx context.Co
 		IsConvertible: common.AssessNoConvertible,
 	})
 
-	return rw.DB(ctx).Clauses(clause.OnConflict{
-		Columns: []clause.Column{
-			{Name: "db_type_s"},
-			{Name: "db_type_t"},
-			{Name: "object_name_s"},
-		},
-		DoNothing: true,
-	}).CreateInBatches(buildinObjComps, 20).Error
+	return rw.DB(ctx).Clauses(clause.Insert{Modifier: "IGNORE"}).CreateInBatches(buildinObjComps, 20).Error
 }

@@ -83,7 +83,7 @@ func (r *O2M) NewCheck() error {
 		return fmt.Errorf("check schema [%s] mode [%s] table task failed: %v, table [error_log_detail] exist failed error, please clear and rerunning", strings.ToUpper(r.cfg.OracleConfig.SchemaName), common.CheckO2MMode, err)
 	}
 
-	// oracle 环境信息
+	// 环境信息
 	beginTime := time.Now()
 	oracleDBCharacterSet, err := r.oracle.GetOracleDBCharacterSet()
 	if err != nil {

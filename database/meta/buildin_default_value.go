@@ -115,11 +115,5 @@ func (rw *BuildinColumnDefaultval) InitM2OBuildinColumnDefaultValue(ctx context.
 		DefaultValueS: common.BuildInMySQLColumnDefaultValueCurrentTimestamp,
 		DefaultValueT: common.BuildInMySQLM2OColumnDefaultValueMap[common.BuildInMySQLColumnDefaultValueCurrentTimestamp],
 	})
-	return rw.DB(ctx).Clauses(clause.OnConflict{
-		Columns: []clause.Column{
-			{Name: "source_default_value"},
-			{Name: "reverse_mode"},
-		},
-		DoNothing: true,
-	}).CreateInBatches(buildinColumDefaultvals, 1).Error
+	return rw.DB(ctx).Clauses(clause.Insert{Modifier: "IGNORE"}).CreateInBatches(buildinColumDefaultvals, 1).Error
 }

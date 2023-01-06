@@ -289,8 +289,16 @@ func (m *MySQL) GetMySQLTableForeignKey(schemaName, tableName string) ([]map[str
 	return res, nil
 }
 
-func (m *MySQL) GetMySQLTableIndex(schemaName, tableName string) ([]map[string]string, error) {
-	_, res, err := Query(m.Ctx, m.MySQLDB, fmt.Sprintf(`SELECT 
+func (m *MySQL) GetMySQLTableIndex(schemaName, tableName string, targetDBTye string) ([]map[string]string, error) {
+	var query string
+	mysqlVersion, err := m.GetMySQLDBVersion()
+	if err != nil {
+		return nil, err
+	}
+
+	if strings.EqualFold(targetDBTye, common.TaskDBTiDB) {
+		if strings.Contains(common.StringUPPER(mysqlVersion), common.TaskDBTiDB) {
+			query = fmt.Sprintf(`SELECT 
 		INDEX_NAME,
 		INDEX_TYPE,
 		IFNULL(EXPRESSION,'') COLUMN_EXPRESSION,
@@ -301,7 +309,115 @@ WHERE
   INDEX_NAME NOT IN ('PRIMARY','UNIQUE')
   AND UPPER(TABLE_SCHEMA) = UPPER('%s')
   AND UPPER(TABLE_NAME) = UPPER('%s')
-GROUP BY INDEX_NAME,UNIQUENESS,INDEX_TYPE,COLUMN_EXPRESSION`, schemaName, tableName))
+GROUP BY INDEX_NAME,UNIQUENESS,INDEX_TYPE,COLUMN_EXPRESSION`, schemaName, tableName)
+		} else {
+			return nil, fmt.Errorf("target db type isn't tidb, please adjust target db type, currently target db version: [%v]", mysqlVersion)
+		}
+	} else {
+		var mysqlDBVersion string
+
+		if strings.Contains(mysqlVersion, common.MySQLVersionDelimiter) {
+			mysqlDBVersion = strings.Split(mysqlVersion, common.MySQLVersionDelimiter)[0]
+		} else {
+			mysqlDBVersion = mysqlVersion
+		}
+		if common.VersionOrdinal(mysqlDBVersion) >= common.VersionOrdinal(common.MySQLExpressionIndexVersion) {
+			query = fmt.Sprintf(`SELECT 
+		INDEX_NAME,
+		INDEX_TYPE,
+		IFNULL(EXPRESSION,'') COLUMN_EXPRESSION,
+		IF(NON_UNIQUE=1,"NONUNIQUE","UNIQUE") AS UNIQUENESS,
+       GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX SEPARATOR ',') AS COLUMN_LIST
+FROM INFORMATION_SCHEMA.STATISTICS
+WHERE 
+  INDEX_NAME NOT IN ('PRIMARY','UNIQUE')
+  AND UPPER(TABLE_SCHEMA) = UPPER('%s')
+  AND UPPER(TABLE_NAME) = UPPER('%s')
+GROUP BY INDEX_NAME,UNIQUENESS,INDEX_TYPE,COLUMN_EXPRESSION`, schemaName, tableName)
+		} else {
+			query = fmt.Sprintf(`SELECT 
+		INDEX_NAME,
+		INDEX_TYPE,
+		IF(NON_UNIQUE=1,"NONUNIQUE","UNIQUE") AS UNIQUENESS,
+       GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX SEPARATOR ',') AS COLUMN_LIST
+FROM INFORMATION_SCHEMA.STATISTICS
+WHERE 
+  INDEX_NAME NOT IN ('PRIMARY','UNIQUE')
+  AND UPPER(TABLE_SCHEMA) = UPPER('%s')
+  AND UPPER(TABLE_NAME) = UPPER('%s')
+GROUP BY INDEX_NAME,UNIQUENESS,INDEX_TYPE`, schemaName, tableName)
+		}
+	}
+	_, res, err := Query(m.Ctx, m.MySQLDB, query)
+	if err != nil {
+		return res, err
+	}
+	return res, nil
+}
+
+func (m *MySQL) GetMySQLTableNormalIndex(schemaName, tableName string, targetDBTye string) ([]map[string]string, error) {
+	var query string
+	mysqlVersion, err := m.GetMySQLDBVersion()
+	if err != nil {
+		return nil, err
+	}
+
+	if strings.EqualFold(targetDBTye, common.TaskDBTiDB) {
+		if strings.Contains(common.StringUPPER(mysqlVersion), common.TaskDBTiDB) {
+			query = fmt.Sprintf(`SELECT 
+		INDEX_NAME,
+		INDEX_TYPE,
+		IFNULL(EXPRESSION,'') COLUMN_EXPRESSION,
+		IF(NON_UNIQUE=1,"NONUNIQUE","UNIQUE") AS UNIQUENESS,
+       GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX SEPARATOR ',') AS COLUMN_LIST
+FROM INFORMATION_SCHEMA.STATISTICS
+WHERE 
+  INDEX_NAME NOT IN ('PRIMARY','UNIQUE')
+  AND UPPER(TABLE_SCHEMA) = UPPER('%s')
+  AND UPPER(TABLE_NAME) = UPPER('%s')
+  AND NON_UNIQUE = 1
+GROUP BY INDEX_NAME,UNIQUENESS,INDEX_TYPE,COLUMN_EXPRESSION`, schemaName, tableName)
+		} else {
+			return nil, fmt.Errorf("target db type isn't tidb, please adjust target db type, currently target db version: [%v]", mysqlVersion)
+		}
+	} else {
+		var mysqlDBVersion string
+
+		if strings.Contains(mysqlVersion, common.MySQLVersionDelimiter) {
+			mysqlDBVersion = strings.Split(mysqlVersion, common.MySQLVersionDelimiter)[0]
+		} else {
+			mysqlDBVersion = mysqlVersion
+		}
+		if common.VersionOrdinal(mysqlDBVersion) >= common.VersionOrdinal(common.MySQLExpressionIndexVersion) {
+			query = fmt.Sprintf(`SELECT 
+		INDEX_NAME,
+		INDEX_TYPE,
+		IFNULL(EXPRESSION,'') COLUMN_EXPRESSION,
+		IF(NON_UNIQUE=1,"NONUNIQUE","UNIQUE") AS UNIQUENESS,
+       GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX SEPARATOR ',') AS COLUMN_LIST
+FROM INFORMATION_SCHEMA.STATISTICS
+WHERE 
+  INDEX_NAME NOT IN ('PRIMARY','UNIQUE')
+  AND UPPER(TABLE_SCHEMA) = UPPER('%s')
+  AND UPPER(TABLE_NAME) = UPPER('%s')
+  AND NON_UNIQUE = 1
+GROUP BY INDEX_NAME,UNIQUENESS,INDEX_TYPE,COLUMN_EXPRESSION`, schemaName, tableName)
+		} else {
+			query = fmt.Sprintf(`SELECT 
+		INDEX_NAME,
+		INDEX_TYPE,
+		IF(NON_UNIQUE=1,"NONUNIQUE","UNIQUE") AS UNIQUENESS,
+       GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX SEPARATOR ',') AS COLUMN_LIST
+FROM INFORMATION_SCHEMA.STATISTICS
+WHERE 
+  INDEX_NAME NOT IN ('PRIMARY','UNIQUE')
+  AND UPPER(TABLE_SCHEMA) = UPPER('%s')
+  AND UPPER(TABLE_NAME) = UPPER('%s')
+  AND NON_UNIQUE = 1
+GROUP BY INDEX_NAME,UNIQUENESS,INDEX_TYPE`, schemaName, tableName)
+		}
+	}
+	_, res, err := Query(m.Ctx, m.MySQLDB, query)
 	if err != nil {
 		return res, err
 	}

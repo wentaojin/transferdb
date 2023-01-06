@@ -22,6 +22,8 @@ package common
 const (
 	// MySQL 支持 check 约束版本 > 8.0.15
 	MySQLCheckConsVersion = "8.0.15"
+	// MySQL 表达式索引版本 > 8.0.0
+	MySQLExpressionIndexVersion = "8.0.0"
 	// MySQL 版本分隔符号
 	MySQLVersionDelimiter = "-"
 	// MySQL 字符集

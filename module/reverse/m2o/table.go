@@ -261,7 +261,21 @@ func (t *Table) GetTableCheckKey() ([]map[string]string, error) {
 	if strings.EqualFold(t.MySQLDBType, common.TaskDBTiDB) {
 		return nil, nil
 	}
-	return t.MySQL.GetMySQLTableCheckKey(t.SourceSchemaName, t.SourceTableName)
+	mysqlVersion, err := t.MySQL.GetMySQLDBVersion()
+	if err != nil {
+		return nil, err
+	}
+	var mysqlDBVersion string
+	if strings.Contains(mysqlVersion, common.MySQLVersionDelimiter) {
+		mysqlDBVersion = strings.Split(mysqlVersion, common.MySQLVersionDelimiter)[0]
+	} else {
+		mysqlDBVersion = mysqlVersion
+	}
+	if common.VersionOrdinal(mysqlDBVersion) >= common.VersionOrdinal(common.MySQLCheckConsVersion) {
+		return t.MySQL.GetMySQLTableCheckKey(t.SourceSchemaName, t.SourceTableName)
+	} else {
+		return nil, nil
+	}
 }
 
 func (t *Table) GetTableUniqueIndex() ([]map[string]string, error) {
@@ -270,7 +284,7 @@ func (t *Table) GetTableUniqueIndex() ([]map[string]string, error) {
 }
 
 func (t *Table) GetTableNormalIndex() ([]map[string]string, error) {
-	return t.MySQL.GetMySQLTableIndex(t.SourceSchemaName, t.SourceTableName)
+	return t.MySQL.GetMySQLTableNormalIndex(t.SourceSchemaName, t.SourceTableName, t.MySQLDBType)
 }
 
 func (t *Table) GetTableComment() ([]map[string]string, error) {
