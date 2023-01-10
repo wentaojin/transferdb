@@ -347,14 +347,10 @@ func (r *Rule) GenTableColumn() (columnMetas []string, err error) {
 
 		columnName = rowCol["COLUMN_NAME"]
 
-		if !strings.EqualFold(rowCol["DATA_DEFAULT"], "") {
-			if val, ok := r.TableColumnDefaultValRule[columnName]; ok {
-				dataDefault = val
-			} else {
-				return columnMetas, fmt.Errorf("mysql table [%s.%s] column [%s] default value isn't exist", r.SourceSchemaName, r.SourceTableName, columnName)
-			}
+		if val, ok := r.TableColumnDefaultValRule[columnName]; ok {
+			dataDefault = val
 		} else {
-			dataDefault = rowCol["DATA_DEFAULT"]
+			return columnMetas, fmt.Errorf("mysql table [%s.%s] column [%s] default value isn't exist", r.SourceSchemaName, r.SourceTableName, columnName)
 		}
 
 		if val, ok := r.TableColumnDatatypeRule[columnName]; ok {
@@ -445,12 +441,21 @@ func (r *Rule) String() string {
 	return string(jsonStr)
 }
 
-func loadColumnDefaultValueRule(defaultValue string, defaultValueMapSlice []meta.BuildinColumnDefaultval) string {
-	if len(defaultValueMapSlice) == 0 {
+func LoadColumnDefaultValueRule(columnName string, defaultValue string, columnDefaultValueMapSlice []meta.BuildinColumnDefaultval, globalDefaultValueMapSlice []meta.BuildinGlobalDefaultval) string {
+	if len(columnDefaultValueMapSlice) == 0 && len(globalDefaultValueMapSlice) == 0 {
 		return defaultValue
 	}
 
-	for _, dv := range defaultValueMapSlice {
+	// 默认值优先级: 字段级别默认值 > 全局级别默认值
+	if len(columnDefaultValueMapSlice) > 0 {
+		for _, dv := range columnDefaultValueMapSlice {
+			if strings.EqualFold(columnName, dv.ColumnNameS) && strings.EqualFold(strings.TrimSpace(dv.DefaultValueS), strings.TrimSpace(defaultValue)) {
+				return dv.DefaultValueT
+			}
+		}
+	}
+
+	for _, dv := range globalDefaultValueMapSlice {
 		if strings.EqualFold(strings.TrimSpace(dv.DefaultValueS), strings.TrimSpace(defaultValue)) && dv.DefaultValueT != "" {
 			return dv.DefaultValueT
 		}
@@ -458,7 +463,7 @@ func loadColumnDefaultValueRule(defaultValue string, defaultValueMapSlice []meta
 	return defaultValue
 }
 
-func loadDataTypeRuleUsingTableOrSchema(originColumnType string, buildInColumnType string, tableDataTypeMapSlice []meta.TableDatatypeRule, schemaDataTypeMapSlice []meta.SchemaDatatypeRule) string {
+func LoadDataTypeRuleUsingTableOrSchema(originColumnType string, buildInColumnType string, tableDataTypeMapSlice []meta.TableDatatypeRule, schemaDataTypeMapSlice []meta.SchemaDatatypeRule) string {
 	switch {
 	case len(tableDataTypeMapSlice) != 0 && len(schemaDataTypeMapSlice) == 0:
 		return loadColumnTypeRuleOnlyUsingTable(originColumnType, buildInColumnType, tableDataTypeMapSlice)

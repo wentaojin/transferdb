@@ -20,14 +20,15 @@ import (
 	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/database/meta"
 	"github.com/wentaojin/transferdb/database/oracle"
+	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
-	"strings"
 	"sync"
+	"time"
 )
 
 type Change struct {
 	Ctx              context.Context `json:"-"`
-	SourceSchemaName string          `json:"source_schema"`
+	SourceSchemaName string          `json:"source_schema_name"`
 	TargetSchemaName string          `json:"target_schema_name"`
 	SourceTables     []string        `json:"source_tables"`
 	Threads          int             `json:"threads"`
@@ -37,6 +38,7 @@ type Change struct {
 }
 
 func (r *Change) ChangeTableName() (map[string]string, error) {
+	startTime := time.Now()
 	tableNameRule := make(map[string]string)
 	customTableNameRule := make(map[string]string)
 	// 获取表名自定义规则
@@ -94,6 +96,10 @@ func (r *Change) ChangeTableName() (map[string]string, error) {
 	close(tableChT)
 	<-done
 
+	zap.L().Warn("get source table name mapping rules",
+		zap.String("schema", r.SourceSchemaName),
+		zap.String("cost", time.Now().Sub(startTime).String()))
+
 	return tableNameRule, nil
 }
 
@@ -101,6 +107,7 @@ func (r *Change) ChangeTableName() (map[string]string, error) {
 // 加载数据类型转换规则【处理字段级别、表级别、库级别数据类型映射规则】
 // 数据类型转换规则判断，未设置自定义规则，默认采用内置默认字段类型转换
 func (r *Change) ChangeTableColumnDatatype() (map[string]map[string]string, error) {
+	startTime := time.Now()
 	tableDatatypeMap := make(map[string]map[string]string)
 
 	// 获取内置字段数据类型名映射规则
@@ -114,6 +121,26 @@ func (r *Change) ChangeTableColumnDatatype() (map[string]map[string]string, erro
 
 	// 获取自定义 schema 级别数据类型映射规则
 	schemaDataTypeMapSlice, err := meta.NewSchemaDatatypeRuleModel(r.MetaDB).DetailSchemaRule(r.Ctx, &meta.SchemaDatatypeRule{
+		DBTypeS:     common.TaskDBOracle,
+		DBTypeT:     common.TaskDBMySQL,
+		SchemaNameS: r.SourceSchemaName,
+	})
+	if err != nil {
+		return tableDatatypeMap, err
+	}
+
+	// 获取自定义 table 级别数据类型映射规则
+	tableDataTypeMapSlice, err := meta.NewTableDatatypeRuleModel(r.MetaDB).DetailTableRule(r.Ctx, &meta.TableDatatypeRule{
+		DBTypeS:     common.TaskDBOracle,
+		DBTypeT:     common.TaskDBMySQL,
+		SchemaNameS: r.SourceSchemaName,
+	})
+	if err != nil {
+		return tableDatatypeMap, err
+	}
+
+	// 获取自定义字段数据类型映射规则
+	columnDataTypeMapSlice, err := meta.NewColumnDatatypeRuleModel(r.MetaDB).DetailColumnRule(r.Ctx, &meta.ColumnDatatypeRule{
 		DBTypeS:     common.TaskDBOracle,
 		DBTypeT:     common.TaskDBMySQL,
 		SchemaNameS: r.SourceSchemaName,
@@ -142,17 +169,6 @@ func (r *Change) ChangeTableColumnDatatype() (map[string]map[string]string, erro
 	for _, table := range r.SourceTables {
 		sourceTable := table
 		wg.Go(func() error {
-			// 获取自定义 table 级别数据类型映射规则
-			tableDataTypeMapSlice, err := meta.NewTableDatatypeRuleModel(r.MetaDB).DetailTableRule(r.Ctx, &meta.TableDatatypeRule{
-				DBTypeS:     common.TaskDBOracle,
-				DBTypeT:     common.TaskDBMySQL,
-				SchemaNameS: r.SourceSchemaName,
-				TableNameS:  sourceTable,
-			})
-			if err != nil {
-				return err
-			}
-
 			// 获取表字段信息
 			tableColumnINFO, err := r.Oracle.GetOracleSchemaTableColumn(r.SourceSchemaName, sourceTable, r.OracleCollation)
 			if err != nil {
@@ -176,17 +192,6 @@ func (r *Change) ChangeTableColumnDatatype() (map[string]map[string]string, erro
 						Comment:       rowCol["COMMENTS"],
 					},
 				}, buildinDatatypeNames)
-				if err != nil {
-					return err
-				}
-				// 获取自定义字段数据类型映射规则
-				columnDataTypeMapSlice, err := meta.NewColumnDatatypeRuleModel(r.MetaDB).DetailColumnRule(r.Ctx, &meta.ColumnDatatypeRule{
-					DBTypeS:     common.TaskDBOracle,
-					DBTypeT:     common.TaskDBMySQL,
-					SchemaNameS: r.SourceSchemaName,
-					TableNameS:  sourceTable,
-					ColumnNameS: rowCol["COLUMN_NAME"],
-				})
 				if err != nil {
 					return err
 				}
@@ -229,15 +234,28 @@ func (r *Change) ChangeTableColumnDatatype() (map[string]map[string]string, erro
 	close(tableColumnChan)
 	<-done
 
+	zap.L().Warn("get source table column datatype mapping rules",
+		zap.String("schema", r.SourceSchemaName),
+		zap.String("cost", time.Now().Sub(startTime).String()))
 	return tableDatatypeMap, nil
 }
 
 func (r *Change) ChangeTableColumnDefaultValue() (map[string]map[string]string, error) {
+	startTime := time.Now()
 	tableDefaultValMap := make(map[string]map[string]string)
-	// 获取内置字段默认值映射规则
-	defaultValueMapSlice, err := meta.NewBuildinColumnDefaultvalModel(r.MetaDB).DetailColumnDefaultVal(r.Ctx, &meta.BuildinColumnDefaultval{
+	// 获取内置字段默认值映射规则 -> global
+	globalDefaultValueMapSlice, err := meta.NewBuildinGlobalDefaultvalModel(r.MetaDB).DetailGlobalDefaultVal(r.Ctx, &meta.BuildinGlobalDefaultval{
 		DBTypeS: common.TaskDBOracle,
 		DBTypeT: common.TaskDBMySQL,
+	})
+	if err != nil {
+		return tableDefaultValMap, err
+	}
+	// 获取自定义字段默认值映射规则
+	columnDefaultValueMapSlice, err := meta.NewBuildinColumnDefaultvalModel(r.MetaDB).DetailColumnDefaultVal(r.Ctx, &meta.BuildinColumnDefaultval{
+		DBTypeS:     common.TaskDBOracle,
+		DBTypeT:     common.TaskDBMySQL,
+		SchemaNameS: r.SourceSchemaName,
 	})
 	if err != nil {
 		return tableDefaultValMap, err
@@ -273,13 +291,10 @@ func (r *Change) ChangeTableColumnDefaultValue() (map[string]map[string]string, 
 			tableDefaultValTempMap := make(map[string]map[string]string, 1)
 
 			for _, rowCol := range tableColumnINFO {
-				var dataDefault string
-				if !strings.EqualFold(rowCol["DATA_DEFAULT"], "") {
-					dataDefault = LoadColumnDefaultValueRule(rowCol["DATA_DEFAULT"], defaultValueMapSlice)
-				} else {
-					dataDefault = rowCol["DATA_DEFAULT"]
-				}
-				columnDataDefaultValMap[rowCol["COLUMN_NAME"]] = dataDefault
+				// 优先级
+				// column > global
+				columnDataDefaultValMap[rowCol["COLUMN_NAME"]] = LoadColumnDefaultValueRule(
+					rowCol["COLUMN_NAME"], rowCol["DATA_DEFAULT"], columnDefaultValueMapSlice, globalDefaultValueMapSlice)
 			}
 
 			tableDefaultValTempMap[sourceTable] = columnDataDefaultValMap
@@ -293,5 +308,8 @@ func (r *Change) ChangeTableColumnDefaultValue() (map[string]map[string]string, 
 	close(columnDefaultChan)
 	<-done
 
+	zap.L().Warn("get source table column default value mapping rules",
+		zap.String("schema", r.SourceSchemaName),
+		zap.String("cost", time.Now().Sub(startTime).String()))
 	return tableDefaultValMap, nil
 }

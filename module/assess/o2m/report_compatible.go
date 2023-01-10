@@ -219,13 +219,13 @@ func GetAssessDatabaseCompatibleResult(ctx context.Context, metaDB *meta.Meta, o
 	}
 
 	// 获取自定义默认值内容
-	defaultValues, err := meta.NewBuildinColumnDefaultvalModel(metaDB).DetailColumnDefaultVal(ctx, &meta.BuildinColumnDefaultval{
+	defaultValues, err := meta.NewBuildinGlobalDefaultvalModel(metaDB).DetailGlobalDefaultVal(ctx, &meta.BuildinGlobalDefaultval{
 		DBTypeS: common.TaskDBOracle,
 		DBTypeT: common.TaskDBMySQL})
 	if err != nil {
 		return nil, nil, err
 	}
-	defaultValuesMap := make(map[string]meta.BuildinColumnDefaultval)
+	defaultValuesMap := make(map[string]meta.BuildinGlobalDefaultval)
 	for _, d := range defaultValues {
 		defaultValuesMap[common.StringUPPER(d.DefaultValueS)] = d
 	}

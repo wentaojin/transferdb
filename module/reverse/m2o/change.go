@@ -20,15 +20,17 @@ import (
 	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/database/meta"
 	"github.com/wentaojin/transferdb/database/mysql"
+	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 )
 
 type Change struct {
 	Ctx              context.Context `json:"-"`
-	SourceSchemaName string          `json:"source_schema"`
+	SourceSchemaName string          `json:"source_schema_name"`
 	TargetSchemaName string          `json:"target_schema_name"`
 	SourceTables     []string        `json:"source_tables"`
 	Threads          int             `json:"threads"`
@@ -37,6 +39,7 @@ type Change struct {
 }
 
 func (r *Change) ChangeTableName() (map[string]string, error) {
+	startTime := time.Now()
 	tableNameRule := make(map[string]string)
 	customTableNameRule := make(map[string]string)
 	// 获取表名自定义规则
@@ -93,6 +96,10 @@ func (r *Change) ChangeTableName() (map[string]string, error) {
 	wg.Wait()
 	close(tableChT)
 	<-done
+
+	zap.L().Warn("get source table column table mapping rules",
+		zap.String("schema", r.SourceSchemaName),
+		zap.String("cost", time.Now().Sub(startTime).String()))
 	return tableNameRule, nil
 }
 
@@ -100,6 +107,7 @@ func (r *Change) ChangeTableName() (map[string]string, error) {
 // 加载数据类型转换规则【处理字段级别、表级别、库级别数据类型映射规则】
 // 数据类型转换规则判断，未设置自定义规则，默认采用内置默认字段类型转换
 func (r *Change) ChangeTableColumnDatatype() (map[string]map[string]string, error) {
+	startTime := time.Now()
 	tableColumnDatatypeMap := make(map[string]map[string]string)
 
 	// 获取内置映射规则
@@ -113,6 +121,26 @@ func (r *Change) ChangeTableColumnDatatype() (map[string]map[string]string, erro
 
 	// 获取自定义 schema 级别数据类型映射规则
 	schemaDataTypeMapSlice, err := meta.NewSchemaDatatypeRuleModel(r.MetaDB).DetailSchemaRule(r.Ctx, &meta.SchemaDatatypeRule{
+		DBTypeS:     common.TaskDBMySQL,
+		DBTypeT:     common.TaskDBOracle,
+		SchemaNameS: r.SourceSchemaName,
+	})
+	if err != nil {
+		return tableColumnDatatypeMap, err
+	}
+
+	// 获取自定义 table 级别数据类型映射规则
+	tableDataTypeMapSlice, err := meta.NewTableDatatypeRuleModel(r.MetaDB).DetailTableRule(r.Ctx, &meta.TableDatatypeRule{
+		DBTypeS:     common.TaskDBMySQL,
+		DBTypeT:     common.TaskDBOracle,
+		SchemaNameS: r.SourceSchemaName,
+	})
+	if err != nil {
+		return tableColumnDatatypeMap, err
+	}
+
+	// 获取自定义 column 映射规则
+	columnDataTypeMapSlice, err := meta.NewColumnDatatypeRuleModel(r.MetaDB).DetailColumnRule(r.Ctx, &meta.ColumnDatatypeRule{
 		DBTypeS:     common.TaskDBMySQL,
 		DBTypeT:     common.TaskDBOracle,
 		SchemaNameS: r.SourceSchemaName,
@@ -141,17 +169,6 @@ func (r *Change) ChangeTableColumnDatatype() (map[string]map[string]string, erro
 	for _, table := range r.SourceTables {
 		sourceTable := table
 		wg.Go(func() error {
-			// 获取自定义 table 级别数据类型映射规则
-			tableDataTypeMapSlice, err := meta.NewTableDatatypeRuleModel(r.MetaDB).DetailTableRule(r.Ctx, &meta.TableDatatypeRule{
-				DBTypeS:     common.TaskDBMySQL,
-				DBTypeT:     common.TaskDBOracle,
-				SchemaNameS: r.SourceSchemaName,
-				TableNameS:  sourceTable,
-			})
-			if err != nil {
-				return err
-			}
-
 			// 获取表字段信息
 			tableColumnINFO, err := r.MySQL.GetMySQLTableColumn(r.SourceSchemaName, sourceTable)
 			if err != nil {
@@ -177,29 +194,18 @@ func (r *Change) ChangeTableColumnDatatype() (map[string]map[string]string, erro
 				if err != nil {
 					return err
 				}
-				// 获取自定义映射规则
-				columnDataTypeMapSlice, err := meta.NewColumnDatatypeRuleModel(r.MetaDB).DetailColumnRule(r.Ctx, &meta.ColumnDatatypeRule{
-					DBTypeS:     common.TaskDBMySQL,
-					DBTypeT:     common.TaskDBOracle,
-					SchemaNameS: r.SourceSchemaName,
-					TableNameS:  sourceTable,
-					ColumnNameS: rowCol["COLUMN_NAME"],
-				})
-				if err != nil {
-					return err
-				}
 
 				// 优先级
 				// column > table > schema > buildin
 				if len(columnDataTypeMapSlice) == 0 {
-					columnDatatypeMap[rowCol["COLUMN_NAME"]] = loadDataTypeRuleUsingTableOrSchema(originColumnType, buildInColumnType, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+					columnDatatypeMap[rowCol["COLUMN_NAME"]] = LoadDataTypeRuleUsingTableOrSchema(originColumnType, buildInColumnType, tableDataTypeMapSlice, schemaDataTypeMapSlice)
 				}
 
 				// only column rule
 				columnTypeFromColumn := loadColumnTypeRuleOnlyUsingColumn(rowCol["COLUMN_NAME"], originColumnType, buildInColumnType, columnDataTypeMapSlice)
 
 				// table or schema rule check, return column type
-				columnTypeFromOther := loadDataTypeRuleUsingTableOrSchema(originColumnType, buildInColumnType, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+				columnTypeFromOther := LoadDataTypeRuleUsingTableOrSchema(originColumnType, buildInColumnType, tableDataTypeMapSlice, schemaDataTypeMapSlice)
 
 				// column or other rule check, return column type
 				switch {
@@ -226,15 +232,29 @@ func (r *Change) ChangeTableColumnDatatype() (map[string]map[string]string, erro
 	close(tableColumnChan)
 	<-done
 
+	zap.L().Warn("get source table column datatype mapping rules",
+		zap.String("schema", r.SourceSchemaName),
+		zap.String("cost", time.Now().Sub(startTime).String()))
 	return tableColumnDatatypeMap, nil
 }
 
 func (r *Change) ChangeTableColumnDefaultValue() (map[string]map[string]string, error) {
+	startTime := time.Now()
 	tableDefaultValMap := make(map[string]map[string]string)
-	// 获取内置字段默认值映射规则
-	defaultValueMapSlice, err := meta.NewBuildinColumnDefaultvalModel(r.MetaDB).DetailColumnDefaultVal(r.Ctx, &meta.BuildinColumnDefaultval{
+	// 获取内置字段默认值映射规则 -> global
+	globalDefaultValueMapSlice, err := meta.NewBuildinGlobalDefaultvalModel(r.MetaDB).DetailGlobalDefaultVal(r.Ctx, &meta.BuildinGlobalDefaultval{
 		DBTypeS: common.TaskDBMySQL,
 		DBTypeT: common.TaskDBOracle,
+	})
+	if err != nil {
+		return tableDefaultValMap, err
+	}
+
+	// 获取自定义字段默认值映射规则 -> column
+	columnDefaultValueMapSlice, err := meta.NewBuildinColumnDefaultvalModel(r.MetaDB).DetailColumnDefaultVal(r.Ctx, &meta.BuildinColumnDefaultval{
+		DBTypeS:     common.TaskDBOracle,
+		DBTypeT:     common.TaskDBMySQL,
+		SchemaNameS: r.SourceSchemaName,
 	})
 	if err != nil {
 		return tableDefaultValMap, err
@@ -277,10 +297,8 @@ func (r *Change) ChangeTableColumnDefaultValue() (map[string]map[string]string, 
 			for _, rowCol := range tableColumnINFO {
 				// Special M2O
 				// MySQL/TiDB default value character insensitive
-				var (
-					regDataDefault string
-					dataDefault    string
-				)
+				var regDataDefault string
+
 				if common.IsContainString(common.SpecialMySQLDataDefaultsWithDataTYPE, common.StringUPPER(rowCol["DATA_TYPE"])) {
 					if reg.MatchString(rowCol["DATA_DEFAULT"]) || strings.EqualFold(rowCol["DATA_DEFAULT"], "CURRENT_TIMESTAMP") || strings.EqualFold(rowCol["DATA_DEFAULT"], "") {
 						regDataDefault = rowCol["DATA_DEFAULT"]
@@ -291,12 +309,9 @@ func (r *Change) ChangeTableColumnDefaultValue() (map[string]map[string]string, 
 					regDataDefault = rowCol["DATA_DEFAULT"]
 				}
 
-				if !strings.EqualFold(regDataDefault, "") {
-					dataDefault = loadColumnDefaultValueRule(regDataDefault, defaultValueMapSlice)
-				} else {
-					dataDefault = regDataDefault
-				}
-				columnDataDefaultValMap[rowCol["COLUMN_NAME"]] = dataDefault
+				// 优先级
+				// column > global
+				columnDataDefaultValMap[rowCol["COLUMN_NAME"]] = LoadColumnDefaultValueRule(rowCol["COLUMN_NAME"], regDataDefault, columnDefaultValueMapSlice, globalDefaultValueMapSlice)
 			}
 
 			tableDefaultValTempMap[sourceTable] = columnDataDefaultValMap
@@ -311,5 +326,8 @@ func (r *Change) ChangeTableColumnDefaultValue() (map[string]map[string]string, 
 	close(columnDefaultChan)
 	<-done
 
+	zap.L().Warn("get source table column default value mapping rules",
+		zap.String("schema", r.SourceSchemaName),
+		zap.String("cost", time.Now().Sub(startTime).String()))
 	return tableDefaultValMap, nil
 }

@@ -99,10 +99,11 @@ func (r *Reverse) NewReverse() error {
 	}
 
 	// 获取规则
+	ruleTime := time.Now()
 	tableNameRuleMap, tableColumnRuleMap, tableDefaultRuleMap, err := IChanger(&Change{
 		Ctx:              r.ctx,
-		SourceSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
-		TargetSchemaName: common.StringUPPER(r.cfg.MySQLConfig.SchemaName),
+		SourceSchemaName: common.StringUPPER(r.cfg.MySQLConfig.SchemaName),
+		TargetSchemaName: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 		SourceTables:     reverseTaskTables,
 		Threads:          r.cfg.AppConfig.Threads,
 		MySQL:            r.mysql,
@@ -111,6 +112,10 @@ func (r *Reverse) NewReverse() error {
 	if err != nil {
 		return err
 	}
+	zap.L().Warn("get all rules",
+		zap.String("schema", r.cfg.MySQLConfig.SchemaName),
+		zap.String("cost", time.Now().Sub(ruleTime).String()))
+
 	tables, err := GenReverseTableTask(r, tableNameRuleMap, tableColumnRuleMap, tableDefaultRuleMap, reverseTaskTables, oracleDBVersion, isExtended, tableCharSetMap, tableCollationMap)
 	if err != nil {
 		return err

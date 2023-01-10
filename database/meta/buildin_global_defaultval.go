@@ -24,31 +24,31 @@ import (
 )
 
 // 自定义字段默认值转换规则 - global 级别
-type BuildinColumnDefaultval struct {
+type BuildinGlobalDefaultval struct {
 	ID            uint   `gorm:"primary_key;autoIncrement;comment:'自增编号'" json:"id"`
 	DBTypeS       string `gorm:"type:varchar(15);index:idx_dbtype_st_map,unique;comment:'源数据库类型'" json:"db_type_s"`
 	DBTypeT       string `gorm:"type:varchar(15);index:idx_dbtype_st_map,unique;comment:'目标数据库类型'" json:"db_type_t"`
-	DefaultValueS string `gorm:"not null;index:idx_dbtype_st_map,unique;comment:'源端默认值'" json:"default_value_s"`
-	DefaultValueT string `gorm:"not null;comment:'目标默认值'" json:"default_value_t"`
+	DefaultValueS string `gorm:"type:varchar(30);not null;index:idx_dbtype_st_map,unique;comment:'源端默认值'" json:"default_value_s"`
+	DefaultValueT string `gorm:"type:varchar(30);not null;comment:'目标默认值'" json:"default_value_t"`
 	*BaseModel
 }
 
-func NewBuildinColumnDefaultvalModel(m *Meta) *BuildinColumnDefaultval {
-	return &BuildinColumnDefaultval{BaseModel: &BaseModel{
+func NewBuildinGlobalDefaultvalModel(m *Meta) *BuildinGlobalDefaultval {
+	return &BuildinGlobalDefaultval{BaseModel: &BaseModel{
 		Meta: m,
 	}}
 }
 
-func (rw *BuildinColumnDefaultval) ParseSchemaTable() (string, error) {
+func (rw *BuildinGlobalDefaultval) ParseSchemaTable() (string, error) {
 	stmt := &gorm.Statement{DB: rw.GormDB}
 	err := stmt.Parse(rw)
 	if err != nil {
-		return "", fmt.Errorf("parse struct [BuildinColumnDefaultval] get table_name failed: %v", err)
+		return "", fmt.Errorf("parse struct [BuildinGlobalDefaultval] get table_name failed: %v", err)
 	}
 	return stmt.Schema.Table, nil
 }
 
-func (rw *BuildinColumnDefaultval) CreateColumnDefaultVal(ctx context.Context, createS *BuildinColumnDefaultval) error {
+func (rw *BuildinGlobalDefaultval) CreateGlobalDefaultVal(ctx context.Context, createS *BuildinGlobalDefaultval) error {
 	table, err := rw.ParseSchemaTable()
 	if err != nil {
 		return err
@@ -59,8 +59,8 @@ func (rw *BuildinColumnDefaultval) CreateColumnDefaultVal(ctx context.Context, c
 	return nil
 }
 
-func (rw *BuildinColumnDefaultval) DetailColumnDefaultVal(ctx context.Context, detailS *BuildinColumnDefaultval) ([]BuildinColumnDefaultval, error) {
-	var defaultRuleMap []BuildinColumnDefaultval
+func (rw *BuildinGlobalDefaultval) DetailGlobalDefaultVal(ctx context.Context, detailS *BuildinGlobalDefaultval) ([]BuildinGlobalDefaultval, error) {
+	var defaultRuleMap []BuildinGlobalDefaultval
 
 	table, err := rw.ParseSchemaTable()
 	if err != nil {
@@ -75,22 +75,22 @@ func (rw *BuildinColumnDefaultval) DetailColumnDefaultVal(ctx context.Context, d
 	return defaultRuleMap, nil
 }
 
-func (rw *BuildinColumnDefaultval) RowsAffected(ctx context.Context, defaultVal *BuildinColumnDefaultval) int64 {
-	u := &BuildinColumnDefaultval{}
+func (rw *BuildinGlobalDefaultval) RowsAffected(ctx context.Context, defaultVal *BuildinGlobalDefaultval) int64 {
+	u := &BuildinGlobalDefaultval{}
 	return rw.DB(ctx).Where(defaultVal).Find(&u).RowsAffected
 }
 
-func (rw *BuildinColumnDefaultval) InitO2MBuildinColumnDefaultValue(ctx context.Context) error {
-	var buildinColumDefaultvals []*BuildinColumnDefaultval
+func (rw *BuildinGlobalDefaultval) InitO2MBuildinGlobalDefaultValue(ctx context.Context) error {
+	var buildinColumDefaultvals []*BuildinGlobalDefaultval
 
-	buildinColumDefaultvals = append(buildinColumDefaultvals, &BuildinColumnDefaultval{
+	buildinColumDefaultvals = append(buildinColumDefaultvals, &BuildinGlobalDefaultval{
 		DBTypeS:       common.TaskDBOracle,
 		DBTypeT:       common.TaskDBMySQL,
 		DefaultValueS: common.BuildInOracleColumnDefaultValueSysdate,
 		DefaultValueT: common.BuildInOracleO2MColumnDefaultValueMap[common.BuildInOracleColumnDefaultValueSysdate],
 	})
 
-	buildinColumDefaultvals = append(buildinColumDefaultvals, &BuildinColumnDefaultval{
+	buildinColumDefaultvals = append(buildinColumDefaultvals, &BuildinGlobalDefaultval{
 		DBTypeS:       common.TaskDBOracle,
 		DBTypeT:       common.TaskDBMySQL,
 		DefaultValueS: common.BuildInOracleColumnDefaultValueSYSGUID,
@@ -106,10 +106,10 @@ func (rw *BuildinColumnDefaultval) InitO2MBuildinColumnDefaultValue(ctx context.
 	}).CreateInBatches(buildinColumDefaultvals, 2).Error
 }
 
-func (rw *BuildinColumnDefaultval) InitM2OBuildinColumnDefaultValue(ctx context.Context) error {
-	var buildinColumDefaultvals []*BuildinColumnDefaultval
+func (rw *BuildinGlobalDefaultval) InitM2OBuildinGlobalDefaultValue(ctx context.Context) error {
+	var buildinColumDefaultvals []*BuildinGlobalDefaultval
 
-	buildinColumDefaultvals = append(buildinColumDefaultvals, &BuildinColumnDefaultval{
+	buildinColumDefaultvals = append(buildinColumDefaultvals, &BuildinGlobalDefaultval{
 		DBTypeS:       common.TaskDBMySQL,
 		DBTypeT:       common.TaskDBOracle,
 		DefaultValueS: common.BuildInMySQLColumnDefaultValueCurrentTimestamp,

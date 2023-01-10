@@ -204,7 +204,7 @@ func (r *Rule) GenTableSuffix() (string, error) {
 			if val, ok := common.OracleCollationMap[r.SourceTableCollation]; ok {
 				tableCollation = val
 			} else {
-				return tableSuffix, fmt.Errorf("oracle table collation [%v] isn'r.support", r.SourceTableCollation)
+				return tableSuffix, fmt.Errorf("oracle table collation [%v] isn't support", r.SourceTableCollation)
 			}
 		}
 		// schema collation
@@ -212,18 +212,18 @@ func (r *Rule) GenTableSuffix() (string, error) {
 			if val, ok := common.OracleCollationMap[r.SourceSchemaCollation]; ok {
 				tableCollation = val
 			} else {
-				return tableSuffix, fmt.Errorf("oracle schema collation [%v] table collation [%v] isn'r.support", r.SourceSchemaCollation, r.SourceTableCollation)
+				return tableSuffix, fmt.Errorf("oracle schema collation [%v] table collation [%v] isn't support", r.SourceSchemaCollation, r.SourceTableCollation)
 			}
 		}
 		if r.SourceTableName == "" && r.SourceSchemaCollation == "" {
-			return tableSuffix, fmt.Errorf("oracle schema collation [%v] table collation [%v] isn'r.support", r.SourceSchemaCollation, r.SourceTableCollation)
+			return tableSuffix, fmt.Errorf("oracle schema collation [%v] table collation [%v] isn't support", r.SourceSchemaCollation, r.SourceTableCollation)
 		}
 	} else {
 		// db collation
 		if val, ok := common.OracleCollationMap[r.SourceDBNLSComp]; ok {
 			tableCollation = val
 		} else {
-			return tableSuffix, fmt.Errorf("oracle db nls_comp [%v] nls_sort [%v] isn'r.support", r.SourceDBNLSComp, r.SourceDBNLSSort)
+			return tableSuffix, fmt.Errorf("oracle db nls_comp [%v] nls_sort [%v] isn't support", r.SourceDBNLSComp, r.SourceDBNLSSort)
 		}
 	}
 	// table-option 表后缀可选项
@@ -275,7 +275,7 @@ func (r *Rule) GenTableSuffix() (string, error) {
 					zap.String("table", r.String()),
 					zap.String("tidb_enable_clustered_index", common.StringUPPER(clusteredIdxVal)),
 					zap.String("alter-primary-key", "not exist"),
-					zap.String("table-option", "alter-primary-key isn'r.exits, would be disable"))
+					zap.String("table-option", "alter-primary-key isn't exits, would be disable"))
 
 				tableSuffix = fmt.Sprintf("ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s",
 					strings.ToLower(common.MySQLCharacterSet), tableCollation)
@@ -726,7 +726,7 @@ func (r *Rule) GenTableColumn() (tableColumns []string, err error) {
 		if val, ok := r.TableColumnDatatypeRule[rowCol["COLUMN_NAME"]]; ok {
 			columnType = val
 		} else {
-			return tableColumns, fmt.Errorf("oracle table [%s.%s] column [%s] data type isn'r.exist", r.SourceSchemaName, r.SourceTableName, rowCol["COLUMN_NAME"])
+			return tableColumns, fmt.Errorf("oracle table [%s.%s] column [%s] data type isn't exist", r.SourceSchemaName, r.SourceTableName, rowCol["COLUMN_NAME"])
 		}
 
 		if strings.EqualFold(rowCol["NULLABLE"], "Y") {
@@ -741,14 +741,10 @@ func (r *Rule) GenTableColumn() (tableColumns []string, err error) {
 			comment = rowCol["COMMENTS"]
 		}
 
-		if !strings.EqualFold(rowCol["DATA_DEFAULT"], "") {
-			if val, ok := r.TableColumnDefaultValRule[rowCol["COLUMN_NAME"]]; ok {
-				dataDefault = val
-			} else {
-				return tableColumns, fmt.Errorf("oracle table [%s.%s] column [%s] default value isn'r.exist", r.SourceSchemaName, r.SourceTableName, rowCol["COLUMN_NAME"])
-			}
+		if val, ok := r.TableColumnDefaultValRule[rowCol["COLUMN_NAME"]]; ok {
+			dataDefault = val
 		} else {
-			dataDefault = rowCol["DATA_DEFAULT"]
+			return tableColumns, fmt.Errorf("oracle table [%s.%s] column [%s] default value isn't exist", r.SourceSchemaName, r.SourceTableName, rowCol["COLUMN_NAME"])
 		}
 
 		if nullable == "NULL" {
@@ -830,7 +826,7 @@ func (r *Rule) String() string {
 	return string(jsonStr)
 }
 
-func LoadColumnDefaultValueRule(defaultValue string, defaultValueMapSlice []meta.BuildinColumnDefaultval) string {
+func LoadColumnDefaultValueRule(columnName, defaultValue string, defaultValueColumnMapSlice []meta.BuildinColumnDefaultval, defaultValueGlobalMapSlice []meta.BuildinGlobalDefaultval) string {
 	// 额外处理 Oracle 默认值 ('6') 或者 (5) 或者 ('xsddd') 等包含小括号的默认值，而非 '(xxxx)' 之类的默认值
 	// Oracle 对于同类型 ('xxx') 或者 (xxx) 内部会自动处理，所以 O2M/O2T 需要处理成 'xxx' 或者 xxx
 	if strings.HasPrefix(defaultValue, "(") && strings.HasSuffix(defaultValue, ")") {
@@ -838,11 +834,20 @@ func LoadColumnDefaultValueRule(defaultValue string, defaultValueMapSlice []meta
 		defaultValue = strings.TrimRight(defaultValue, ")")
 	}
 
-	if len(defaultValueMapSlice) == 0 {
+	if len(defaultValueColumnMapSlice) == 0 && len(defaultValueGlobalMapSlice) == 0 {
 		return defaultValue
 	}
 
-	for _, dv := range defaultValueMapSlice {
+	// 默认值优先级: 字段级别默认值 > 全局级别默认值
+	if len(defaultValueColumnMapSlice) > 0 {
+		for _, dv := range defaultValueColumnMapSlice {
+			if strings.EqualFold(columnName, dv.ColumnNameS) && strings.EqualFold(strings.TrimSpace(dv.DefaultValueS), strings.TrimSpace(defaultValue)) {
+				return dv.DefaultValueT
+			}
+		}
+	}
+
+	for _, dv := range defaultValueGlobalMapSlice {
 		if strings.EqualFold(strings.TrimSpace(dv.DefaultValueS), strings.TrimSpace(defaultValue)) && dv.DefaultValueT != "" {
 			return dv.DefaultValueT
 		}

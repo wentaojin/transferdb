@@ -116,7 +116,10 @@ $ ./transferdb --config config.toml --mode reverseM2O
 表 [schema_datatype_rule] 用于库级别自定义转换规则，库级别优先级高于内置规则
 表 [table_datatype_rule]  用于表级别自定义转换规则，表级别优先级高于库级别、高于内置规则
 表 [column_datatype_rule] 用于字段级别自定义转换规则，字段级别优先级高于表级别、高于库级别、高于内置规则
-表 [buildin_column_defaultval] 用于字段默认值自定义转换规则，优先级适用于全局
+表 [buildin_global_defaultval] 用于字段默认值自定义转换规则，优先级适用于全局，注意：自定义默认值是字符 character 数据时需要带有单引号
+表 [buildin_column_defaultval] 用于字段默认值自定义转换规则，优先级适用于表级别字段，注意：自定义默认值字符 character 数据时需要带有单引号
+insert into buildin_column_defaultval (db_type_s,db_type_t,schema_name_s,table_name_s,column_name_s,default_value_s,default_value_t) values('oracle','mysql','marvin','reverse_tims01','v1','''marvin01''','''marvin02''');
+
 
 6、表结构检查(独立于表结构转换，可单独运行，校验规则使用内置规则，[输出示例](example/check_${sourcedb}.sql)
 $ ./transferdb --config config.toml --mode prepare

@@ -113,6 +113,7 @@ func (m *Meta) MigrateTables() (err error) {
 		new(FullSyncMeta),
 		new(IncrSyncMeta),
 		new(ErrorLogDetail),
+		new(BuildinGlobalDefaultval),
 		new(BuildinColumnDefaultval),
 		new(BuildinObjectCompatible),
 		new(BuildinDatatypeRule),
@@ -121,11 +122,11 @@ func (m *Meta) MigrateTables() (err error) {
 }
 
 func (m *Meta) InitDefaultValue(ctx context.Context) error {
-	err := NewBuildinColumnDefaultvalModel(m).InitO2MBuildinColumnDefaultValue(ctx)
+	err := NewBuildinGlobalDefaultvalModel(m).InitO2MBuildinGlobalDefaultValue(ctx)
 	if err != nil {
 		return err
 	}
-	err = NewBuildinColumnDefaultvalModel(m).InitM2OBuildinColumnDefaultValue(ctx)
+	err = NewBuildinGlobalDefaultvalModel(m).InitM2OBuildinGlobalDefaultValue(ctx)
 	if err != nil {
 		return err
 	}

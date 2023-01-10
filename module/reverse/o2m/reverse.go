@@ -178,7 +178,7 @@ func (r *Reverse) NewReverse() error {
 	if err != nil {
 		return err
 	}
-	zap.L().Warn("get rules",
+	zap.L().Warn("get all rules",
 		zap.String("schema", r.Cfg.OracleConfig.SchemaName),
 		zap.String("cost", time.Now().Sub(ruleTime).String()))
 

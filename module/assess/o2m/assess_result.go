@@ -360,7 +360,7 @@ func AssessOracleSchemaIndexTypeCompatible(schemaName []string, oracle *oracle.O
 	}, nil
 }
 
-func AssessOracleSchemaDefaultValue(schemaName []string, oracle *oracle.Oracle, defaultValueMap map[string]meta.BuildinColumnDefaultval) ([]SchemaDefaultValueCompatibles, ReportSummary, error) {
+func AssessOracleSchemaDefaultValue(schemaName []string, oracle *oracle.Oracle, defaultValueMap map[string]meta.BuildinGlobalDefaultval) ([]SchemaDefaultValueCompatibles, ReportSummary, error) {
 
 	dataDefaults, err := oracle.GetOracleSchemaColumnDataDefaultCounts(schemaName)
 	if err != nil {

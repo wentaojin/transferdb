@@ -76,13 +76,9 @@ func GenOracleTableColumnMeta(ctx context.Context, metaDB *meta.Meta, sourceSche
 		return columnMeta, fmt.Errorf(`oracle table column meta generate failed, column [%v] json: [%v]`, columnName, columnINFO.String())
 	}
 
-	if columnINFO.DataDefault != "" {
-		dataDefault, err = ChangeTableColumnDefaultValue(ctx, metaDB, columnINFO.DataDefault)
-		if err != nil {
-			return columnMeta, err
-		}
-	} else {
-		dataDefault = columnINFO.DataDefault
+	dataDefault, err = ChangeTableColumnDefaultValue(ctx, metaDB, sourceSchema, sourceTableName, columnName, columnINFO.DataDefault)
+	if err != nil {
+		return columnMeta, err
 	}
 
 	columnType, err := ChangeTableColumnType(ctx, metaDB, sourceSchema, sourceTableName, columnName, columnINFO)
@@ -242,29 +238,49 @@ func ChangeTableColumnType(ctx context.Context, metaDB *meta.Meta, sourceSchema,
 	}
 }
 
-func ChangeTableColumnDefaultValue(ctx context.Context, metaDB *meta.Meta, dataDefault string) (string, error) {
+func ChangeTableColumnDefaultValue(ctx context.Context, metaDB *meta.Meta, sourceSchema, sourceTableName, columnName, dataDefault string) (string, error) {
 	// 处理 oracle 默认值 ('xxx') 或者 (xxx)
 	if strings.HasPrefix(dataDefault, "(") && strings.HasSuffix(dataDefault, ")") {
 		dataDefault = strings.TrimLeft(dataDefault, "(")
 		dataDefault = strings.TrimRight(dataDefault, ")")
 	}
 
-	defaultValueMapSlice, err := meta.NewBuildinColumnDefaultvalModel(metaDB).DetailColumnDefaultVal(ctx, &meta.BuildinColumnDefaultval{
+	columnDefaultValueMapSlice, err := meta.NewBuildinColumnDefaultvalModel(metaDB).DetailColumnDefaultVal(ctx, &meta.BuildinColumnDefaultval{
+		DBTypeS:     common.TaskDBOracle,
+		DBTypeT:     common.TaskDBMySQL,
+		SchemaNameS: sourceSchema,
+		TableNameS:  sourceTableName,
+		ColumnNameS: columnName,
+	})
+	if err != nil {
+		return dataDefault, err
+	}
+
+	globalDefaultValueMapSlice, err := meta.NewBuildinGlobalDefaultvalModel(metaDB).DetailGlobalDefaultVal(ctx, &meta.BuildinGlobalDefaultval{
 		DBTypeS: common.TaskDBOracle,
 		DBTypeT: common.TaskDBMySQL,
 	})
 	if err != nil {
 		return dataDefault, err
 	}
-	return loadColumnDefaultValueRule(dataDefault, defaultValueMapSlice), nil
+
+	return loadColumnDefaultValueRule(columnName, dataDefault, columnDefaultValueMapSlice, globalDefaultValueMapSlice), nil
 }
 
-func loadColumnDefaultValueRule(defaultValue string, defaultValueMapSlice []meta.BuildinColumnDefaultval) string {
-	if len(defaultValueMapSlice) == 0 {
+func loadColumnDefaultValueRule(columnName, defaultValue string, columnDefaultValueMapSlice []meta.BuildinColumnDefaultval, globalDefaultValueMapSlice []meta.BuildinGlobalDefaultval) string {
+	if len(columnDefaultValueMapSlice) == 0 && len(globalDefaultValueMapSlice) == 0 {
 		return defaultValue
 	}
 
-	for _, dv := range defaultValueMapSlice {
+	if len(columnDefaultValueMapSlice) > 0 {
+		for _, dv := range columnDefaultValueMapSlice {
+			if strings.EqualFold(columnName, dv.ColumnNameS) && strings.EqualFold(strings.TrimSpace(dv.DefaultValueS), strings.TrimSpace(defaultValue)) {
+				return dv.DefaultValueT
+			}
+		}
+	}
+
+	for _, dv := range globalDefaultValueMapSlice {
 		if strings.EqualFold(strings.TrimSpace(dv.DefaultValueS), strings.TrimSpace(defaultValue)) && dv.DefaultValueT != "" {
 			return dv.DefaultValueT
 		}
