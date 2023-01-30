@@ -111,56 +111,9 @@ func (r *Reverse) NewReverse() error {
 	}
 
 	// 筛选过滤可能不支持的表类型
-	partitionTables, err := filterOraclePartitionTable(r.Cfg, r.Oracle, exporters)
+	partitionTables, temporaryTables, clusteredTables, materializedView, exporterTables, err := FilterOracleCompatibleTable(r.Cfg, r.Oracle, exporters)
 	if err != nil {
-		return fmt.Errorf("error on filter r.Oracle partition table: %v", err)
-	}
-	temporaryTables, err := filterOracleTemporaryTable(r.Cfg, r.Oracle, exporters)
-	if err != nil {
-		return fmt.Errorf("error on filter r.Oracle temporary table: %v", err)
-
-	}
-	clusteredTables, err := filterOracleClusteredTable(r.Cfg, r.Oracle, exporters)
-	if err != nil {
-		return fmt.Errorf("error on filter r.Oracle clustered table: %v", err)
-
-	}
-	materializedView, err := filterOracleMaterializedView(r.Cfg, r.Oracle, exporters)
-	if err != nil {
-		return fmt.Errorf("error on filter r.Oracle materialized view: %v", err)
-
-	}
-
-	if len(partitionTables) != 0 {
-		zap.L().Warn("partition tables",
-			zap.String("schema", r.Cfg.OracleConfig.SchemaName),
-			zap.String("partition table list", fmt.Sprintf("%v", partitionTables)),
-			zap.String("suggest", "if necessary, please manually convert and process the tables in the above list"))
-	}
-	if len(temporaryTables) != 0 {
-		zap.L().Warn("temporary tables",
-			zap.String("schema", r.Cfg.OracleConfig.SchemaName),
-			zap.String("temporary table list", fmt.Sprintf("%v", temporaryTables)),
-			zap.String("suggest", "if necessary, please manually process the tables in the above list"))
-	}
-	if len(clusteredTables) != 0 {
-		zap.L().Warn("clustered tables",
-			zap.String("schema", r.Cfg.OracleConfig.SchemaName),
-			zap.String("clustered table list", fmt.Sprintf("%v", clusteredTables)),
-			zap.String("suggest", "if necessary, please manually process the tables in the above list"))
-	}
-
-	var exporterTables []string
-	if len(materializedView) != 0 {
-		zap.L().Warn("materialized views",
-			zap.String("schema", r.Cfg.OracleConfig.SchemaName),
-			zap.String("materialized view list", fmt.Sprintf("%v", materializedView)),
-			zap.String("suggest", "if necessary, please manually process the tables in the above list"))
-
-		// 排除物化视图
-		exporterTables = common.FilterDifferenceStringItems(exporters, materializedView)
-	} else {
-		exporterTables = exporters
+		return err
 	}
 
 	// 获取规则

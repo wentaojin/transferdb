@@ -31,20 +31,20 @@ import (
 
 func NewO2MIncr(ctx context.Context, cfg *config.Config, oracle *oracle.Oracle, mysql *mysql.MySQL, metaDB *meta.Meta) *Migrate {
 	return &Migrate{
-		ctx:    ctx,
-		cfg:    cfg,
-		oracle: oracle,
-		mysql:  mysql,
-		metaDB: metaDB,
+		Ctx:    ctx,
+		Cfg:    cfg,
+		Oracle: oracle,
+		Mysql:  mysql,
+		MetaDB: metaDB,
 	}
 }
 
 func (r *Migrate) NewIncr() error {
-	zap.L().Info("oracle to mysql increment sync table data start", zap.String("schema", r.cfg.OracleConfig.SchemaName))
+	zap.L().Info("oracle to mysql increment sync table data start", zap.String("schema", r.Cfg.OracleConfig.SchemaName))
 
 	// 判断上游 Oracle 数据库版本
 	// 需要 oracle 11g 及以上
-	oraDBVersion, err := r.oracle.GetOracleDBVersion()
+	oraDBVersion, err := r.Oracle.GetOracleDBVersion()
 	if err != nil {
 		return err
 	}
@@ -53,20 +53,20 @@ func (r *Migrate) NewIncr() error {
 	}
 
 	// 获取配置文件待同步表列表
-	exporters, err := filterCFGTable(r.cfg, r.oracle)
+	exporters, err := filterCFGTable(r.Cfg, r.Oracle)
 	if err != nil {
 		return err
 	}
 
 	// 判断 error_log_detail 是否存在错误记录，是否可进行 ALL
-	errTotals, err := meta.NewErrorLogDetailModel(r.metaDB).CountsErrorLogBySchema(r.ctx, &meta.ErrorLogDetail{
+	errTotals, err := meta.NewErrorLogDetailModel(r.MetaDB).CountsErrorLogBySchema(r.Ctx, &meta.ErrorLogDetail{
 		DBTypeS:     common.TaskDBOracle,
 		DBTypeT:     common.TaskDBMySQL,
-		SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+		SchemaNameS: common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
 		RunMode:     common.AllO2MMode,
 	})
 	if errTotals > 0 || err != nil {
-		return fmt.Errorf("incr schema [%s] table mode [%s] task failed: %v, table [error_log_detail] exist failed error, please clear and rerunning", strings.ToUpper(r.cfg.OracleConfig.SchemaName), common.CompareO2MMode, err)
+		return fmt.Errorf("incr schema [%s] table mode [%s] task failed: %v, table [error_log_detail] exist failed error, please clear and rerunning", strings.ToUpper(r.Cfg.OracleConfig.SchemaName), common.CompareO2MMode, err)
 	}
 
 	// 全量数据导出导入，初始化全量元数据表以及导入完成初始化增量元数据表
@@ -74,10 +74,10 @@ func (r *Migrate) NewIncr() error {
 		existTableList, isNotExistTableList []string
 	)
 	for _, tbl := range exporters {
-		counts, err := meta.NewIncrSyncMetaModel(r.metaDB).CountsIncrSyncMetaBySchemaTable(r.ctx, &meta.IncrSyncMeta{
+		counts, err := meta.NewIncrSyncMetaModel(r.MetaDB).CountsIncrSyncMetaBySchemaTable(r.Ctx, &meta.IncrSyncMeta{
 			DBTypeS:     common.TaskDBOracle,
 			DBTypeT:     common.TaskDBMySQL,
-			SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+			SchemaNameS: common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
 			TableNameS:  tbl,
 		})
 		if err != nil {
@@ -99,10 +99,10 @@ func (r *Migrate) NewIncr() error {
 			// 根据 wait_sync_meta 数据记录判断表全量是否完成
 			var panicTables []string
 			for _, t := range exporters {
-				waitSyncMetas, err := meta.NewWaitSyncMetaModel(r.metaDB).DetailWaitSyncMetaBySchemaTableSCN(r.ctx, &meta.WaitSyncMeta{
+				waitSyncMetas, err := meta.NewWaitSyncMetaModel(r.MetaDB).DetailWaitSyncMetaBySchemaTableSCN(r.Ctx, &meta.WaitSyncMeta{
 					DBTypeS:     common.TaskDBOracle,
 					DBTypeT:     common.TaskDBMySQL,
-					SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+					SchemaNameS: common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
 					TableNameS:  common.StringUPPER(t),
 					Mode:        common.AllO2MMode,
 				})
@@ -140,10 +140,10 @@ func (r *Migrate) NewIncr() error {
 
 		// 全量任务结束，写入增量源数据表起始 SCN 号
 		//根据配置文件生成同步表元数据 [incr_sync_meta]
-		tableMetas, err := meta.NewWaitSyncMetaModel(r.metaDB).DetailWaitSyncMetaBySchema(r.ctx, &meta.WaitSyncMeta{
+		tableMetas, err := meta.NewWaitSyncMetaModel(r.MetaDB).DetailWaitSyncMetaBySchema(r.Ctx, &meta.WaitSyncMeta{
 			DBTypeS:     common.TaskDBOracle,
 			DBTypeT:     common.TaskDBMySQL,
-			SchemaNameS: r.cfg.OracleConfig.SchemaName,
+			SchemaNameS: r.Cfg.OracleConfig.SchemaName,
 			Mode:        common.AllO2MMode})
 		if err != nil {
 			return err
@@ -172,7 +172,7 @@ func (r *Migrate) NewIncr() error {
 					GlobalScnS:  table.FullGlobalSCN,
 					SchemaNameS: common.StringUPPER(table.SchemaNameS),
 					TableNameS:  common.StringUPPER(table.TableNameS),
-					SchemaNameT: common.StringUPPER(r.cfg.MySQLConfig.SchemaName),
+					SchemaNameT: common.StringUPPER(r.Cfg.MySQLConfig.SchemaName),
 					TableNameT:  common.StringUPPER(targetTableName),
 					TableScnS:   table.FullGlobalSCN,
 					IsPartition: table.IsPartition,
@@ -227,10 +227,10 @@ func (r *Migrate) syncTableIncrRecord() error {
 			zap.Uint64("logfile end scn", logFileEndSCN))
 
 		// 获取增量元数据表内所需同步表信息
-		incrSyncMetas, err := meta.NewIncrSyncMetaModel(r.metaDB).DetailIncrSyncMetaBySchema(r.ctx, &meta.IncrSyncMeta{
+		incrSyncMetas, err := meta.NewIncrSyncMetaModel(r.MetaDB).DetailIncrSyncMetaBySchema(r.Ctx, &meta.IncrSyncMeta{
 			DBTypeS:     common.TaskDBOracle,
 			DBTypeT:     common.TaskDBMySQL,
-			SchemaNameS: r.cfg.OracleConfig.SchemaName,
+			SchemaNameS: r.Cfg.OracleConfig.SchemaName,
 		})
 		if err != nil {
 			return err
@@ -250,31 +250,31 @@ func (r *Migrate) syncTableIncrRecord() error {
 		}
 
 		// 获取 logminer query 起始最小 SCN
-		minSourceTableSCN, err := meta.NewIncrSyncMetaModel(r.metaDB).GetIncrSyncMetaMinTableScnSBySchema(r.ctx, &meta.IncrSyncMeta{
+		minSourceTableSCN, err := meta.NewIncrSyncMetaModel(r.MetaDB).GetIncrSyncMetaMinTableScnSBySchema(r.Ctx, &meta.IncrSyncMeta{
 			DBTypeS:     common.TaskDBOracle,
 			DBTypeT:     common.TaskDBMySQL,
-			SchemaNameS: r.cfg.OracleConfig.SchemaName})
+			SchemaNameS: r.Cfg.OracleConfig.SchemaName})
 		if err != nil {
 			return err
 		}
 
 		// logminer 运行
-		if err = r.oracle.AddOracleLogminerlogFile(log["LOG_FILE"]); err != nil {
+		if err = r.Oracle.AddOracleLogminerlogFile(log["LOG_FILE"]); err != nil {
 			return err
 		}
 
-		if err = r.oracle.StartOracleLogminerStoredProcedure(log["FIRST_CHANGE"]); err != nil {
+		if err = r.Oracle.StartOracleLogminerStoredProcedure(log["FIRST_CHANGE"]); err != nil {
 			return err
 		}
 
 		// 捕获数据
-		rowsResult, err := getOracleIncrRecord(r.ctx, r.oracle,
-			common.StringUPPER(r.cfg.OracleConfig.SchemaName),
-			common.StringUPPER(r.cfg.MySQLConfig.SchemaName),
+		rowsResult, err := getOracleIncrRecord(r.Ctx, r.Oracle,
+			common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
+			common.StringUPPER(r.Cfg.MySQLConfig.SchemaName),
 			common.StringArrayToCapitalChar(syncSourceTables),
 			tableNameRule,
 			strconv.FormatUint(minSourceTableSCN, 10),
-			r.cfg.AllConfig.LogminerQueryTimeout)
+			r.Cfg.AllConfig.LogminerQueryTimeout)
 		if err != nil {
 			return err
 		}
@@ -284,18 +284,18 @@ func (r *Migrate) syncTableIncrRecord() error {
 			zap.Int("row counts", len(rowsResult)))
 
 		// logminer 关闭
-		if err = r.oracle.EndOracleLogminerStoredProcedure(); err != nil {
+		if err = r.Oracle.EndOracleLogminerStoredProcedure(); err != nil {
 			return err
 		}
 
 		// 获取 Oracle 所有 REDO 列表
-		redoLogList, err := r.oracle.GetOracleALLRedoLogFile()
+		redoLogList, err := r.Oracle.GetOracleALLRedoLogFile()
 		if err != nil {
 			return err
 		}
 
 		//获取当前 CURRENT REDO LOG 信息
-		currentRedoLogFirstChange, currentRedoLogMaxSCN, currentRedoLogFileName, err := r.oracle.GetOracleCurrentRedoMaxSCN()
+		currentRedoLogFirstChange, currentRedoLogMaxSCN, currentRedoLogFileName, err := r.Oracle.GetOracleCurrentRedoMaxSCN()
 		if err != nil {
 			return err
 		}
@@ -314,7 +314,7 @@ func (r *Migrate) syncTableIncrRecord() error {
 						rowsResult,
 						syncSourceTables,
 						transferTableMetaMap,
-						r.cfg.AllConfig.FilterThreads,
+						r.Cfg.AllConfig.FilterThreads,
 						common.MigrateCurrentResetFlag,
 					)
 					if err != nil {
@@ -327,7 +327,7 @@ func (r *Migrate) syncTableIncrRecord() error {
 						rowsResult,
 						syncSourceTables,
 						transferTableMetaMap,
-						r.cfg.AllConfig.FilterThreads,
+						r.Cfg.AllConfig.FilterThreads,
 						0,
 					)
 					if err != nil {
@@ -337,15 +337,15 @@ func (r *Migrate) syncTableIncrRecord() error {
 
 				if len(logminerContentMap) > 0 {
 					// 数据应用
-					if err := applyOracleIncrRecord(r.metaDB, r.mysql, r.cfg, logminerContentMap); err != nil {
+					if err := applyOracleIncrRecord(r.MetaDB, r.Mysql, r.Cfg, logminerContentMap); err != nil {
 						return err
 					}
 					if logFileStartSCN == currentRedoLogFirstChange && log["LOG_FILE"] == currentRedoLogFileName {
 						// 当前所有日志文件内容应用完毕，判断是否直接更新 GLOBAL_SCN 至当前重做日志文件起始 SCN
-						err = meta.NewCommonModel(r.metaDB).UpdateIncrSyncMetaSCNByCurrentRedo(r.ctx,
+						err = meta.NewCommonModel(r.MetaDB).UpdateIncrSyncMetaSCNByCurrentRedo(r.Ctx,
 							common.TaskDBOracle,
 							common.TaskDBMySQL,
-							r.cfg.OracleConfig.SchemaName,
+							r.Cfg.OracleConfig.SchemaName,
 							currentRedoLogMaxSCN,
 							logFileStartSCN,
 							logFileEndSCN)
@@ -354,10 +354,10 @@ func (r *Migrate) syncTableIncrRecord() error {
 						}
 					} else {
 						// 当前所有日志文件内容应用完毕，直接更新 GLOBAL_SCN 至日志文件结束 SCN
-						err = meta.NewCommonModel(r.metaDB).UpdateIncrSyncMetaSCNByNonCurrentRedo(r.ctx,
+						err = meta.NewCommonModel(r.MetaDB).UpdateIncrSyncMetaSCNByNonCurrentRedo(r.Ctx,
 							common.TaskDBOracle,
 							common.TaskDBMySQL,
-							r.cfg.OracleConfig.SchemaName,
+							r.Cfg.OracleConfig.SchemaName,
 							currentRedoLogMaxSCN,
 							logFileStartSCN,
 							logFileEndSCN,
@@ -376,7 +376,7 @@ func (r *Migrate) syncTableIncrRecord() error {
 				rowsResult,
 				syncSourceTables,
 				transferTableMetaMap,
-				r.cfg.AllConfig.FilterThreads,
+				r.Cfg.AllConfig.FilterThreads,
 				0,
 			)
 			if err != nil {
@@ -384,14 +384,14 @@ func (r *Migrate) syncTableIncrRecord() error {
 			}
 			if len(logminerContentMap) > 0 {
 				// 数据应用
-				if err := applyOracleIncrRecord(r.metaDB, r.mysql, r.cfg, logminerContentMap); err != nil {
+				if err := applyOracleIncrRecord(r.MetaDB, r.Mysql, r.Cfg, logminerContentMap); err != nil {
 					return err
 				}
 				// 当前所有日志文件内容应用完毕，直接更新 GLOBAL_SCN 至日志文件结束 SCN
-				err = meta.NewCommonModel(r.metaDB).UpdateIncrSyncMetaSCNByArchivedLog(r.ctx,
+				err = meta.NewCommonModel(r.MetaDB).UpdateIncrSyncMetaSCNByArchivedLog(r.Ctx,
 					common.TaskDBOracle,
 					common.TaskDBMySQL,
-					r.cfg.OracleConfig.SchemaName,
+					r.Cfg.OracleConfig.SchemaName,
 					logFileEndSCN,
 					syncSourceTables)
 				if err != nil {
@@ -407,10 +407,10 @@ func (r *Migrate) syncTableIncrRecord() error {
 		if common.IsContainString(redoLogList, log["LOG_FILE"]) {
 			if logFileStartSCN == currentRedoLogFirstChange && log["LOG_FILE"] == currentRedoLogFileName {
 				// 当前所有日志文件内容应用完毕，判断是否直接更新 GLOBAL_SCN 至当前重做日志文件起始 SCN
-				err = meta.NewCommonModel(r.metaDB).UpdateIncrSyncMetaSCNByCurrentRedo(r.ctx,
+				err = meta.NewCommonModel(r.MetaDB).UpdateIncrSyncMetaSCNByCurrentRedo(r.Ctx,
 					common.TaskDBOracle,
 					common.TaskDBMySQL,
-					r.cfg.OracleConfig.SchemaName,
+					r.Cfg.OracleConfig.SchemaName,
 					currentRedoLogMaxSCN,
 					logFileStartSCN,
 					logFileEndSCN)
@@ -419,10 +419,10 @@ func (r *Migrate) syncTableIncrRecord() error {
 				}
 			} else {
 				// 当前所有日志文件内容应用完毕，判断是否更新 GLOBAL_SCN 至日志文件结束 SCN
-				err = meta.NewCommonModel(r.metaDB).UpdateIncrSyncMetaSCNByNonCurrentRedo(r.ctx,
+				err = meta.NewCommonModel(r.MetaDB).UpdateIncrSyncMetaSCNByNonCurrentRedo(r.Ctx,
 					common.TaskDBOracle,
 					common.TaskDBMySQL,
-					r.cfg.OracleConfig.SchemaName,
+					r.Cfg.OracleConfig.SchemaName,
 					currentRedoLogMaxSCN,
 					logFileStartSCN,
 					logFileEndSCN,
@@ -433,10 +433,10 @@ func (r *Migrate) syncTableIncrRecord() error {
 			}
 		} else {
 			// 当前所有日志文件内容应用完毕，直接更新 GLOBAL_SCN 至日志文件结束 SCN
-			err = meta.NewCommonModel(r.metaDB).UpdateIncrSyncMetaSCNByArchivedLog(r.ctx,
+			err = meta.NewCommonModel(r.MetaDB).UpdateIncrSyncMetaSCNByArchivedLog(r.Ctx,
 				common.TaskDBOracle,
 				common.TaskDBMySQL,
-				r.cfg.OracleConfig.SchemaName,
+				r.Cfg.OracleConfig.SchemaName,
 				logFileEndSCN,
 				syncSourceTables)
 			if err != nil {
@@ -453,10 +453,10 @@ func (r *Migrate) getTableIncrRecordLogfile() ([]map[string]string, error) {
 	var logFiles []map[string]string
 
 	// 获取增量表起始最小 SCN 号
-	globalSCN, err := meta.NewIncrSyncMetaModel(r.metaDB).GetIncrSyncMetaMinGlobalScnSBySchema(r.ctx, &meta.IncrSyncMeta{
+	globalSCN, err := meta.NewIncrSyncMetaModel(r.MetaDB).GetIncrSyncMetaMinGlobalScnSBySchema(r.Ctx, &meta.IncrSyncMeta{
 		DBTypeS:     common.TaskDBOracle,
 		DBTypeT:     common.TaskDBMySQL,
-		SchemaNameS: r.cfg.OracleConfig.SchemaName,
+		SchemaNameS: r.Cfg.OracleConfig.SchemaName,
 	})
 	if err != nil {
 		return logFiles, err
@@ -465,12 +465,12 @@ func (r *Migrate) getTableIncrRecordLogfile() ([]map[string]string, error) {
 
 	// 判断数据是在 archived log Or redo log
 	// 如果 redoSCN 等于 0，说明数据在归档日志
-	redoScn, err := r.oracle.GetOracleRedoLogSCN(strGlobalSCN)
+	redoScn, err := r.Oracle.GetOracleRedoLogSCN(strGlobalSCN)
 	if err != nil {
 		return logFiles, err
 	}
 
-	archivedScn, err := r.oracle.GetOracleArchivedLogSCN(strGlobalSCN)
+	archivedScn, err := r.Oracle.GetOracleArchivedLogSCN(strGlobalSCN)
 	if err != nil {
 		return logFiles, err
 	}
@@ -478,13 +478,13 @@ func (r *Migrate) getTableIncrRecordLogfile() ([]map[string]string, error) {
 	// 获取所需挖掘的日志文件
 	if redoScn == 0 {
 		strArchivedSCN := strconv.FormatUint(archivedScn, 10)
-		logFiles, err = r.oracle.GetOracleArchivedLogFile(strArchivedSCN)
+		logFiles, err = r.Oracle.GetOracleArchivedLogFile(strArchivedSCN)
 		if err != nil {
 			return logFiles, err
 		}
 	} else {
 		strRedoCN := strconv.FormatUint(redoScn, 10)
-		logFiles, err = r.oracle.GetOracleRedoLogFile(strRedoCN)
+		logFiles, err = r.Oracle.GetOracleRedoLogFile(strRedoCN)
 		if err != nil {
 			return logFiles, err
 		}

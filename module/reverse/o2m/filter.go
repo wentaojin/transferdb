@@ -99,6 +99,61 @@ func filterCFGTable(cfg *config.Config, oracle *oracle.Oracle) ([]string, error)
 	return exporterTableSlice, nil
 }
 
+func FilterOracleCompatibleTable(cfg *config.Config, oracle *oracle.Oracle, exporters []string) ([]string, []string, []string, []string, []string, error) {
+	partitionTables, err := filterOraclePartitionTable(cfg, oracle, exporters)
+	if err != nil {
+		return []string{}, []string{}, []string{}, []string{}, []string{}, fmt.Errorf("error on filter r.Oracle partition table: %v", err)
+	}
+	temporaryTables, err := filterOracleTemporaryTable(cfg, oracle, exporters)
+	if err != nil {
+		return []string{}, []string{}, []string{}, []string{}, []string{}, fmt.Errorf("error on filter r.Oracle temporary table: %v", err)
+
+	}
+	clusteredTables, err := filterOracleClusteredTable(cfg, oracle, exporters)
+	if err != nil {
+		return []string{}, []string{}, []string{}, []string{}, []string{}, fmt.Errorf("error on filter r.Oracle clustered table: %v", err)
+
+	}
+	materializedView, err := filterOracleMaterializedView(cfg, oracle, exporters)
+	if err != nil {
+		return []string{}, []string{}, []string{}, []string{}, []string{}, fmt.Errorf("error on filter r.Oracle materialized view: %v", err)
+
+	}
+
+	if len(partitionTables) != 0 {
+		zap.L().Warn("partition tables",
+			zap.String("schema", cfg.OracleConfig.SchemaName),
+			zap.String("partition table list", fmt.Sprintf("%v", partitionTables)),
+			zap.String("suggest", "if necessary, please manually convert and process the tables in the above list"))
+	}
+	if len(temporaryTables) != 0 {
+		zap.L().Warn("temporary tables",
+			zap.String("schema", cfg.OracleConfig.SchemaName),
+			zap.String("temporary table list", fmt.Sprintf("%v", temporaryTables)),
+			zap.String("suggest", "if necessary, please manually process the tables in the above list"))
+	}
+	if len(clusteredTables) != 0 {
+		zap.L().Warn("clustered tables",
+			zap.String("schema", cfg.OracleConfig.SchemaName),
+			zap.String("clustered table list", fmt.Sprintf("%v", clusteredTables)),
+			zap.String("suggest", "if necessary, please manually process the tables in the above list"))
+	}
+
+	var exporterTables []string
+	if len(materializedView) != 0 {
+		zap.L().Warn("materialized views",
+			zap.String("schema", cfg.OracleConfig.SchemaName),
+			zap.String("materialized view list", fmt.Sprintf("%v", materializedView)),
+			zap.String("suggest", "if necessary, please manually process the tables in the above list"))
+
+		// 排除物化视图
+		exporterTables = common.FilterDifferenceStringItems(exporters, materializedView)
+	} else {
+		exporterTables = exporters
+	}
+	return partitionTables, temporaryTables, clusteredTables, materializedView, exporterTables, nil
+}
+
 func filterOraclePartitionTable(cfg *config.Config, oracle *oracle.Oracle, exporters []string) ([]string, error) {
 	tables, err := oracle.GetOracleSchemaPartitionTable(common.StringUPPER(cfg.OracleConfig.SchemaName))
 	if err != nil {

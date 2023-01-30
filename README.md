@@ -7,7 +7,7 @@ Features
 - ORACLE -> MySQL/TiDB 数据库表结构定义转换，支持库、表、列级别以及默认值自定义
 - ORACLE -> MySQL/TiDB 数据库表索引、非空约束、外键约束、检查约束、主键约束、唯一约束转换
 - ORACLE -> MySQL/TiDB 数据库表结构对比
-- ORACLE 数据库对象信息收集评估
+- ORACLE -> MySQL/TiDB 数据库对象信息收集评估
 - ORACLE -> MySQL/TiDB 数据库逻辑数据迁移
 - ORACLE -> MySQL/TiDB 数据库CSV数据迁移
 - ORACLE -> MySQL/TiDB 数据库数据校验

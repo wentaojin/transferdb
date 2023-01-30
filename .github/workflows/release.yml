@@ -1,0 +1,63 @@
+name: Release
+on:
+  push:
+    tags:
+      - v*
+
+jobs:
+  releaser:
+    name: Create Release
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+    steps:
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: ${{ github.ref }}
+          draft: false
+          prerelease: false
+
+  builder:
+    name: Build TransferDB
+    needs: releaser
+    runs-on: ubuntu-latest
+    default:
+      run:
+        working-directory: transferdb
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+      - name: Run Xgo Build Binary
+        uses: crazy-max/ghaction-xgo@v2
+        with:
+          xgo_version: latest
+          go_version: 1.19
+          dest: dist
+          prefix: transferdb
+          targets: linux/amd64,linux/arm64,darwin/arm64,darwin/amd64,windows/amd64
+          v: true
+          x: true
+          race: false
+          ldflags: -s -w
+          buildmode: default
+          trimpath: true
+          working_dir: transferdb
+      - name: Package Xgo Binary
+        working-directory: .
+        run: |
+          tar -zcvf transferdb-platform-bin.tar.gz -C transferdb/dist *
+      - name: Upload Assets
+          id: upload-release-asset
+          uses: actions/upload-release-asset@v1
+          env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          with:
+            upload_url: ${{ needs.releaser.outputs.upload_url }}
+            asset_path: transferdb-platform-bin.tar.gz
+            asset_name: transferdb-platform-bin.tar.gz
+            asset_content_type: application/gzip
