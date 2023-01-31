@@ -47,6 +47,13 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
+      - name: Setup Golang
+        uses: actions/setup-go@v3
+        with:
+          go-version: "1.19"
+          cache: true
+        run: |
+          go version
       - name: Gen Go Ldflags
         id: genLdflags
         run: |
@@ -58,23 +65,13 @@ jobs:
           LDFLAGS="-s -w ${COMMIT} ${BUILDTS} ${GITHASH} ${GITREF}"
           echo "ldflags=${LDFLAGS}" >> $GITHUB_ENV
       - name: Run Xgo Build Binary
-        uses: crazy-max/ghaction-xgo@v2
-        with:
-          xgo_version: v2.4.0
-          go_version: 1.19
-          dest: bin
-          prefix: transferdb
-          targets: linux/amd64,linux/arm64,darwin/arm64,darwin/amd64,windows/amd64
-          v: true
-          x: true
-          race: false
-          ldflags: ${{ env.ldflags }}
-          buildmode: default
-          working_dir: ${{ github.workspace }}
-          trimpath: true
+        run: |
+          docker pull techknowlogick/xgo:latest
+          go install src.techknowlogick.com/xgo@latest
+          xgo -v -x -targets=linux/amd64,linux/arm64,darwin/arm64,darwin/amd64,windows/amd64 -ldflags=${{ env.ldflags }} -out=transferdb -dest=bin -buildmode=default .
       - name: Package Xgo Binary
         run: |
-          cp  ${{ github.workspace }}/example/config.toml ${{ github.workspace }}/bin
+          cp  ./example/config.toml ./bin
           tar -zcvf transferdb-platform-bin.tar.gz bin/*
       - name: Upload Assets
         id: upload-release-asset
