@@ -27,7 +27,7 @@ jobs:
         id: create_release
         uses: softprops/action-gh-release@v1
         with:
-          name: Release ${{ github.ref }}
+          name: ${{ github.ref_name }}
           tag_name: ${{ github.ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
           body: |
@@ -46,30 +46,30 @@ jobs:
         run: |
           CODEREPO="github/${{ github.repository }}"
           COMMIT="-X \"${CODEREPO}/config.Version=`git describe --always --no-match --tags --dirty="-dev"`\""
-          BUILDTS="-X \"${CODEREPO}/config.BuildTS=`TZ=CST+8 date -u '+%Y-%m-%d %H:%M:%S'`\""
+          BUILDTS="-X \"${CODEREPO}/config.BuildTS=`TZ=CST-8 date '+%Y-%m-%d %H:%M:%S'`\""
           GITHASH="-X \"${CODEREPO}/config.GitHash=`git rev-parse HEAD`\""
-          GITREF="-X \"${CODEREPO}/config.GitBranch=`git rev-parse --abbrev-ref HEAD`\""
+          GITREF="-X \"${CODEREPO}/config.GitBranch=`git branch --show-current`\""
           LDFLAGS="-s -w ${COMMIT} ${BUILDTS} ${GITHASH} ${GITREF}"
-          echo "::set-output name=ldflags::${LDFLAGS}"
+          echo "ldflags=${LDFLAGS}" >> $GITHUB_ENV
       - name: Run Xgo Build Binary
         uses: crazy-max/ghaction-xgo@v2
         with:
           xgo_version: latest
           go_version: 1.19
-          dest: dist
+          dest: bin
           prefix: transferdb
           targets: linux/amd64,linux/arm64,darwin/arm64,darwin/amd64,windows/amd64
           v: true
           x: true
           race: false
-          ldflags: ${{ steps.genLdflags.outputs.ldflags }}
+          ldflags: ${{ env.ldflags }}
           buildmode: default
           trimpath: true
       - name: Package Xgo Binary
         working-directory: .
         run: |
-          cp  ./example/config.toml transferdb/dist/
-          tar -zcvf transferdb-platform-bin.tar.gz -C transferdb/dist *
+          cp  ./example/config.toml ./bin
+          tar -zcvf transferdb-platform-bin.tar.gz -C ./bin
       - name: Upload Assets
         id: upload-release-asset
         uses: actions/upload-release-asset@v1
