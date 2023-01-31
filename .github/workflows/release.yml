@@ -38,9 +38,6 @@ jobs:
     name: Build TransferDB
     needs: releaser
     runs-on: ubuntu-latest
-    default:
-      run:
-        working-directory: transferdb
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
@@ -55,7 +52,6 @@ jobs:
           LDFLAGS="-s -w ${COMMIT} ${BUILDTS} ${GITHASH} ${GITREF}"
           echo "::set-output name=ldflags::${LDFLAGS}"
       - name: Run Xgo Build Binary
-        needs: genLdflags
         uses: crazy-max/ghaction-xgo@v2
         with:
           xgo_version: latest
@@ -66,7 +62,7 @@ jobs:
           v: true
           x: true
           race: false
-          ldflags: ${{ needs.genLdflags.outputs.ldflags }}
+          ldflags: ${{ steps.genLdflags.outputs.ldflags }}
           buildmode: default
           trimpath: true
       - name: Package Xgo Binary
