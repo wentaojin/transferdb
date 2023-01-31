@@ -60,7 +60,7 @@ jobs:
       - name: Run Xgo Build Binary
         uses: crazy-max/ghaction-xgo@v2
         with:
-          xgo_version: latest
+          xgo_version: v2.4.0
           go_version: 1.19
           dest: bin
           prefix: transferdb
@@ -75,7 +75,7 @@ jobs:
       - name: Package Xgo Binary
         run: |
           cp  ${{ github.workspace }}/example/config.toml ${{ github.workspace }}/bin
-          tar -zcvf transferdb-platform-bin.tar.gz ${{ github.workspace }}/bin/*
+          tar -zcvf transferdb-platform-bin.tar.gz bin/*
       - name: Upload Assets
         id: upload-release-asset
         uses: actions/upload-release-asset@v1
