@@ -55,6 +55,9 @@ jobs:
       - name: Golang Version
         run: |
           go version
+          go env
+          echo ${GOPATH}
+          echo ${GOROOT}
       - name: Gen Go Ldflags
         id: genLdflags
         run: |
@@ -69,7 +72,7 @@ jobs:
         run: |
           docker pull techknowlogick/xgo:latest
           go install src.techknowlogick.com/xgo@latest
-          xgo -v -x -targets=linux/amd64,linux/arm64,darwin/arm64,darwin/amd64,windows/amd64 -ldflags='${{ env.ldflags }}' -out=transferdb -dest=bin -buildmode=default .
+          xgo -v -x -targets=linux/amd64,linux/arm64,darwin/arm64,darwin/amd64,windows/amd64 -ldflags='${{ env.ldflags }}' -out=transferdb -dest=bin -buildmode=default ${{ github.workspace }}
       - name: Package Xgo Binary
         run: |
           cp  ./example/config.toml ./bin
