@@ -93,7 +93,8 @@ jobs:
       - name: Package Xgo Binary
         run: |
           cd ${{ github.workspace }}
-          pwd
+          ls -lnrt
+          sudo chmod -R 777 bin
           cp example/config.toml bin/
           tar -zcvf transferdb-platform-bin.tar.gz bin/*
       - name: Upload Assets
