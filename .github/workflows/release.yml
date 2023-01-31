@@ -25,11 +25,6 @@ jobs:
         with:
           fetch-depth: 1
           path: ${{ env.GOPATH }}/src/github.com/${{ github.repository }}
-      - name: Setup Golang
-        uses: actions/setup-go@v3
-        with:
-          go-version: '1.19'
-          cache: true
       - name: View Golang
         run: |
           go version
@@ -66,11 +61,6 @@ jobs:
         with:
           fetch-depth: 1
           path: ${{ env.GOPATH }}/src/github.com/${{ github.repository }}
-      - name: Setup Golang
-        uses: actions/setup-go@v3
-        with:
-          go-version: '1.19'
-          cache: true
       - name: View Golang
         run: |
           go version
