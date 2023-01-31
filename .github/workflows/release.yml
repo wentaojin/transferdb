@@ -52,6 +52,7 @@ jobs:
         with:
           go-version: "1.19"
           cache: true
+      - name: Golang Version
         run: |
           go version
       - name: Gen Go Ldflags
