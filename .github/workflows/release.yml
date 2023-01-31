@@ -75,6 +75,10 @@ jobs:
         run: |
           go version
           go env
+      - name: Install Golang
+        run: |
+          cd ${{ github.workspace }}
+          go mod tidy
       - name: Gen Go Ldflags
         id: genLdflags
         run: |
