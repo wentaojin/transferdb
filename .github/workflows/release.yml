@@ -92,7 +92,9 @@ jobs:
           xgo -v -x -ldflags='${{ env.ldflags }}' -buildmode=default -dest bin -go go-1.19.x -out=transferdb -targets=linux/amd64,linux/arm64,darwin/arm64,darwin/amd64,windows/amd64 ${{ github.workspace }}/cmd/main.go
       - name: Package Xgo Binary
         run: |
-          cp ./example/config.toml bin
+          cd ${{ github.workspace }}
+          pwd
+          cp example/config.toml bin/
           tar -zcvf transferdb-platform-bin.tar.gz bin/*
       - name: Upload Assets
         id: upload-release-asset
