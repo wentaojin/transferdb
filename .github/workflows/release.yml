@@ -13,6 +13,9 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       upload_url: ${{ steps.create_release.outputs.upload_url }}
+    defaults:
+      run:
+        working-directory: ${{ github.workspace }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
@@ -38,6 +41,9 @@ jobs:
     name: Build TransferDB
     needs: releaser
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ github.workspace }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
@@ -48,7 +54,7 @@ jobs:
           COMMIT="-X \"${CODEREPO}/config.Version=`git describe --always --no-match --tags --dirty="-dev"`\""
           BUILDTS="-X \"${CODEREPO}/config.BuildTS=`TZ=CST-8 date '+%Y-%m-%d %H:%M:%S'`\""
           GITHASH="-X \"${CODEREPO}/config.GitHash=`git rev-parse HEAD`\""
-          GITREF="-X \"${CODEREPO}/config.GitBranch=`git branch | grep -e "^*" | cut -d' ' -f 2`\""
+          GITREF="-X \"${CODEREPO}/config.GitBranch=`git rev-parse --abbrev-ref HEAD`\""
           LDFLAGS="-s -w ${COMMIT} ${BUILDTS} ${GITHASH} ${GITREF}"
           echo "ldflags=${LDFLAGS}" >> $GITHUB_ENV
       - name: Run Xgo Build Binary
@@ -64,12 +70,13 @@ jobs:
           race: false
           ldflags: ${{ env.ldflags }}
           buildmode: default
+          working_dir: ${{ github.workspace }}
           trimpath: true
       - name: Package Xgo Binary
-        working-directory: .
         run: |
-          cp  example/config.toml bin/
-          tar -zcvf transferdb-platform-bin.tar.gz bin/*
+          mkdir bin
+          cp  example/config.toml bin
+          tar -zcvf transferdb-platform-bin.tar.gz ${{ github.workspace }}/bin/*
       - name: Upload Assets
         id: upload-release-asset
         uses: actions/upload-release-asset@v1
