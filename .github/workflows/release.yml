@@ -74,8 +74,7 @@ jobs:
           trimpath: true
       - name: Package Xgo Binary
         run: |
-          mkdir bin
-          cp  example/config.toml bin
+          cp  ${{ github.workspace }}/example/config.toml ${{ github.workspace }}/bin
           tar -zcvf transferdb-platform-bin.tar.gz ${{ github.workspace }}/bin/*
       - name: Upload Assets
         id: upload-release-asset
