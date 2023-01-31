@@ -46,15 +46,15 @@ jobs:
         working-directory: ${{ github.workspace }}
     steps:
       - name: Setup Golang Env
-          shell: bash
-          run: |
-            echo "::set-env name=GOPATH::${{ github.workspace }}/go"
-            echo "::add-path::${{ github.workspace }}/go/bin"
+        shell: bash
+        run: |
+          echo "::set-env name=GOPATH::${{ github.workspace }}/go"
+          echo "::add-path::${{ github.workspace }}/go/bin"
       - name: Setup Golang
-          uses: actions/setup-go@v3
-          with:
-            go-version: "1.19"
-            cache: true
+        uses: actions/setup-go@v3
+        with:
+          go-version: "1.19"
+          cache: true
       - name: View Golang
         run: |
           go version
