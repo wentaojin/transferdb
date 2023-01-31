@@ -18,18 +18,17 @@ jobs:
       GOBIN: ${{ github.workspace }}/go/bin
     defaults:
       run:
-        working-directory: ${{ env.GOPATH }}/src/github.com/${{ github.repository }}
+        working-directory: ${{ github.workspace }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
         with:
           fetch-depth: 1
-          path: ${{ env.GOPATH }}/src/github.com/${{ github.repository }}
+          path: ${{ github.workspace }}
       - name: Setup Golang
         uses: actions/setup-go@v3
         with:
           go-version: '1.19'
-          go-version-file: '${{ env.GOPATH }}/src/github.com/${{ github.repository }}/go.mod'
           cache: true
       - name: View Golang
         run: |
@@ -60,18 +59,17 @@ jobs:
       GOBIN: ${{ github.workspace }}/go/bin
     defaults:
       run:
-        working-directory: ${{ env.GOPATH }}/src/github.com/${{ github.repository }}
+        working-directory: ${{ github.workspace }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
         with:
           fetch-depth: 1
-          path: ${{ env.GOPATH }}/src/github.com/${{ github.repository }}
+          path: ${{ github.workspace }}
       - name: Setup Golang
         uses: actions/setup-go@v3
         with:
           go-version: '1.19'
-          go-version-file: '${{ env.GOPATH }}/src/github.com/${{ github.repository }}/go.mod'
           cache: true
       - name: View Golang
         run: |
@@ -80,7 +78,7 @@ jobs:
       - name: Run tests
         shell: bash
         run: |
-          cd ${{ env.GOPATH }}/src/github.com/${{ github.repository }}
+          cd ${{ github.workspace }}
           go test -v -covermode=count
       - name: Gen Go Ldflags
         id: genLdflags
@@ -106,7 +104,7 @@ jobs:
           ldflags: ${{ env.ldflags }}
           buildmode: default
           trimpath: true
-          working_dir: ${{ env.GOPATH }}/src/github.com/${{ github.repository }}
+          working_dir: ${{ github.workspace }}
       - name: Package Xgo Binary
         run: |
           cp ./example/config.toml bin
