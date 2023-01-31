@@ -89,7 +89,7 @@ jobs:
         run: |
           go install src.techknowlogick.com/xgo@latest
           cd ${{ github.workspace }}
-          xgo -v -x -ldflags='${{ env.ldflags }}' -buildmode=default -dest bin -go go-1.19 -out=transferdb -targets=linux/amd64,linux/arm64,darwin/arm64,darwin/amd64,windows/amd64 .
+          xgo -v -x -ldflags='${{ env.ldflags }}' -buildmode=default -dest bin -go go-1.19.x -out=transferdb -targets=linux/amd64,linux/arm64,darwin/arm64,darwin/amd64,windows/amd64 .
       - name: Package Xgo Binary
         run: |
           cp ./example/config.toml bin
