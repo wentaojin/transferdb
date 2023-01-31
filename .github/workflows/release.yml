@@ -4,6 +4,9 @@ on:
     tags:
       - v*
 
+permissions:
+  contents: write
+
 jobs:
   releaser:
     name: Create Release
@@ -11,17 +14,26 @@ jobs:
     outputs:
       upload_url: ${{ steps.create_release.outputs.upload_url }}
     steps:
-      - name: Create Release
+      - name: Checkout Code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Update Changelog
+        id: Changelog
+        uses: Bullrich/generate-release-changelog@master
+        env:
+          REPO: ${{ github.repository }}
+      - name: Softprops Create Release
         id: create_release
         uses: softprops/action-gh-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          name: Release ${{ github.ref }}
           tag_name: ${{ github.ref }}
-          release_name: ${{ github.ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          body: |
+            ${{ steps.Changelog.outputs.changelog }}
           draft: false
           prerelease: false
-
   builder:
     name: Build TransferDB
     needs: releaser
@@ -32,7 +44,18 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
+      - name: Gen Go Ldflags
+        id: genLdflags
+        run: |
+          CODEREPO="github/${{ github.repository }}"
+          COMMIT="-X \"${CODEREPO}/config.Version=`git describe --always --no-match --tags --dirty="-dev"`\""
+          BUILDTS="-X \"${CODEREPO}/config.BuildTS=`TZ=CST+8 date -u '+%Y-%m-%d %H:%M:%S'`\""
+          GITHASH="-X \"${CODEREPO}/config.GitHash=`git rev-parse HEAD`\""
+          GITREF="-X \"${CODEREPO}/config.GitBranch=`git rev-parse --abbrev-ref HEAD`\""
+          LDFLAGS="-s -w ${COMMIT} ${BUILDTS} ${GITHASH} ${GITREF}"
+          echo "::set-output name=ldflags::${LDFLAGS}"
       - name: Run Xgo Build Binary
+        needs: genLdflags
         uses: crazy-max/ghaction-xgo@v2
         with:
           xgo_version: latest
@@ -43,21 +66,21 @@ jobs:
           v: true
           x: true
           race: false
-          ldflags: -s -w
+          ldflags: ${{ needs.genLdflags.outputs.ldflags }}
           buildmode: default
           trimpath: true
-          working_dir: transferdb
       - name: Package Xgo Binary
         working-directory: .
         run: |
+          cp  ./example/config.toml transferdb/dist/
           tar -zcvf transferdb-platform-bin.tar.gz -C transferdb/dist *
       - name: Upload Assets
-          id: upload-release-asset
-          uses: actions/upload-release-asset@v1
-          env:
-            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          with:
-            upload_url: ${{ needs.releaser.outputs.upload_url }}
-            asset_path: transferdb-platform-bin.tar.gz
-            asset_name: transferdb-platform-bin.tar.gz
-            asset_content_type: application/gzip
+        id: upload-release-asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.releaser.outputs.upload_url }}
+          asset_path: transferdb-platform-bin.tar.gz
+          asset_name: transferdb-platform-bin.tar.gz
+          asset_content_type: application/gzip
