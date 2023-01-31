@@ -98,7 +98,7 @@ jobs:
           race: false
           ldflags: ${{ env.ldflags }}
           buildmode: default
-          trimpath: true
+          trimpath: false
           working_dir: ${{ github.workspace }}
       - name: Package Xgo Binary
         run: |
