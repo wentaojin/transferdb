@@ -14,17 +14,22 @@ jobs:
     outputs:
       upload_url: ${{ steps.create_release.outputs.upload_url }}
     env:
-      GOPATH: ${{ github.workspace }}
-      GOBIN: ${{ github.workspace }}/bin
+      GOPATH: ${{ github.workspace }}/go
+      GOBIN: ${{ github.workspace }}/go/bin
     defaults:
       run:
-        working-directory: ${{ env.GOPATH }}/src/github.com/${{ github.repository }}
+        working-directory: ${{ github.workspace }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
         with:
           fetch-depth: 1
-          path: ${{ env.GOPATH }}/src/github.com/${{ github.repository }}
+          path: ${{ github.workspace }}
+      - name: Setup Golang
+        uses: actions/setup-go@v3
+        with:
+          go-version: '1.19'
+          cache: true
       - name: View Golang
         run: |
           go version
@@ -50,17 +55,22 @@ jobs:
     needs: releaser
     runs-on: ubuntu-latest
     env:
-      GOPATH: ${{ github.workspace }}
-      GOBIN: ${{ github.workspace }}/bin
+      GOPATH: ${{ github.workspace }}/go
+      GOBIN: ${{ github.workspace }}/go/bin
     defaults:
       run:
-        working-directory: ${{ env.GOPATH }}/src/github.com/${{ github.repository }}
+        working-directory: ${{ github.workspace }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
         with:
           fetch-depth: 1
-          path: ${{ env.GOPATH }}/src/github.com/${{ github.repository }}
+          path: ${{ github.workspace }}
+      - name: Setup Golang
+        uses: actions/setup-go@v3
+        with:
+          go-version: '1.19'
+          cache: true
       - name: View Golang
         run: |
           go version
@@ -76,20 +86,10 @@ jobs:
           LDFLAGS="-s -w ${COMMIT} ${BUILDTS} ${GITHASH} ${GITREF}"
           echo "ldflags=${LDFLAGS}" >> $GITHUB_ENV
       - name: Run Xgo Build Binary
-        uses: crazy-max/ghaction-xgo@v2
-        with:
-          xgo_version: latest
-          go_version: 1.19
-          dest: bin
-          prefix: transferdb
-          targets: linux/amd64,linux/arm64,darwin/arm64,darwin/amd64,windows/amd64
-          v: true
-          x: true
-          race: false
-          ldflags: ${{ env.ldflags }}
-          buildmode: default
-          trimpath: false
-          working_dir: ${{ env.GOPATH }}/src/github.com/${{ github.repository }}
+        run: |
+          go install src.techknowlogick.com/xgo@latest
+          cd ${{ github.workspace }}
+          xgo -v -x -ldflags='${{ env.ldflags }}' -buildmode=default -dest bin -go go-1.19 -out=transferdb -targets=linux/amd64,linux/arm64,darwin/arm64,darwin/amd64,windows/amd64 .
       - name: Package Xgo Binary
         run: |
           cp ./example/config.toml bin
