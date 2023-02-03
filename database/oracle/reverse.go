@@ -658,3 +658,11 @@ func (o *Oracle) GetOracleExtendedMode() (bool, error) {
 	}
 	return false, nil
 }
+
+func (o *Oracle) WriteOracleTable(sql string) error {
+	_, err := o.OracleDB.ExecContext(o.Ctx, sql)
+	if err != nil {
+		return fmt.Errorf("source schema table sql [%v] write failed: %v", sql, err)
+	}
+	return nil
+}

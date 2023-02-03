@@ -28,15 +28,17 @@ import (
 // 程序配置文件
 type Config struct {
 	*flag.FlagSet `json:"-"`
-	AppConfig     AppConfig    `toml:"app" json:"app"`
-	FullConfig    FullConfig   `toml:"full" json:"full"`
-	CSVConfig     CSVConfig    `toml:"csv" json:"csv"`
-	AllConfig     AllConfig    `toml:"all" json:"all"`
-	OracleConfig  OracleConfig `toml:"oracle" json:"oracle"`
-	MySQLConfig   MySQLConfig  `toml:"mysql" json:"mysql"`
-	LogConfig     LogConfig    `toml:"log" json:"log"`
-	DiffConfig    DiffConfig   `toml:"diff" json:"diff"`
-	ConfigFile    string       `json:"config-file"`
+	AppConfig     AppConfig     `toml:"app" json:"app"`
+	ReverseConfig ReverseConfig `toml:"reverse" json:"reverse"`
+	CheckConfig   CheckConfig   `toml:"check" json:"check"`
+	FullConfig    FullConfig    `toml:"full" json:"full"`
+	CSVConfig     CSVConfig     `toml:"csv" json:"csv"`
+	AllConfig     AllConfig     `toml:"all" json:"all"`
+	OracleConfig  OracleConfig  `toml:"oracle" json:"oracle"`
+	MySQLConfig   MySQLConfig   `toml:"mysql" json:"mysql"`
+	LogConfig     LogConfig     `toml:"log" json:"log"`
+	DiffConfig    DiffConfig    `toml:"diff" json:"diff"`
+	ConfigFile    string        `json:"config-file"`
 	PrintVersion  bool
 	Mode          string `json:"mode"`
 }
@@ -44,7 +46,6 @@ type Config struct {
 type AppConfig struct {
 	InsertBatchSize  int    `toml:"insert-batch-size" json:"insert-batch-size"`
 	SlowlogThreshold int    `toml:"slowlog-threshold" json:"slowlog-threshold"`
-	Threads          int    `toml:"threads" json:"threads"`
 	PprofPort        string `toml:"pprof-port" json:"pprof-port"`
 }
 
@@ -54,8 +55,20 @@ type DiffConfig struct {
 	OnlyCheckRows     bool          `toml:"only-check-rows" json:"only-check-rows"`
 	EnableCheckpoint  bool          `toml:"enable-checkpoint" json:"enable-checkpoint"`
 	IgnoreStructCheck bool          `toml:"ignore-struct-check" json:"ignore-struct-check"`
-	FixSqlFile        string        `toml:"fix-sql-file" json:"fix-sql-file"`
+	FixSqlDir         string        `toml:"fix-sql-dir" json:"fix-sql-dir"`
 	TableConfig       []TableConfig `toml:"table-config" json:"table-config"`
+}
+
+type ReverseConfig struct {
+	ReverseThreads       int    `toml:"reverse-threads" json:"reverse-threads"`
+	DirectWrite          bool   `toml:"direct-write" json:"direct-write"`
+	ReverseDDLDir        string `toml:"reverse-ddl-dir" json:"reverse-ddl-dir"`
+	ReverseCompatibleDir string `toml:"reverse-compatible-dir" json:"reverse-compatible-dir"`
+}
+
+type CheckConfig struct {
+	CheckThreads int    `toml:"check-threads" json:"check-threads"`
+	CheckSQLDir  string `toml:"check-sql-dir" json:"check-sql-dir"`
 }
 
 type TableConfig struct {

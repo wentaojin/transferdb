@@ -150,7 +150,7 @@ func GenReverseTableTask(r *Reverse, tableNameRule map[string]string, tableColum
 
 	g1.Go(func() error {
 		g2 := &errgroup.Group{}
-		g2.SetLimit(r.Cfg.AppConfig.Threads)
+		g2.SetLimit(r.Cfg.ReverseConfig.ReverseThreads)
 		for _, exporter := range exporters {
 			t := exporter
 			g2.Go(func() error {
@@ -317,14 +317,14 @@ func (t *Table) String() string {
 	return string(jsonStr)
 }
 
-func GenCreateSchema(f *reverse.File, sourceSchema, targetSchema, nlsComp string) error {
+func GenCreateSchema(w *reverse.Write, sourceSchema, targetSchema, nlsComp string, directWrite bool) error {
 	startTime := time.Now()
 	var (
 		sqlRev          strings.Builder
 		schemaCollation string
 	)
 
-	oraDBVersion, err := f.Oracle.GetOracleDBVersion()
+	oraDBVersion, err := w.Oracle.GetOracleDBVersion()
 	if err != nil {
 		return err
 	}
@@ -334,7 +334,7 @@ func GenCreateSchema(f *reverse.File, sourceSchema, targetSchema, nlsComp string
 		oraCollation = true
 	}
 	if oraCollation {
-		schemaCollation, err = f.Oracle.GetOracleSchemaCollation(sourceSchema)
+		schemaCollation, err = w.Oracle.GetOracleSchemaCollation(sourceSchema)
 		if err != nil {
 			return err
 		}
@@ -363,8 +363,15 @@ func GenCreateSchema(f *reverse.File, sourceSchema, targetSchema, nlsComp string
 		sqlRev.WriteString(fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s DEFAULT CHARACTER SET %s COLLATE %s;\n\n", common.StringUPPER(targetSchema), strings.ToLower(common.MySQLCharacterSet), common.OracleCollationMap[common.StringUPPER(nlsComp)]))
 	}
 
-	if _, err = f.RWriteString(sqlRev.String()); err != nil {
-		return err
+	if directWrite {
+		err = w.RWriteDB(sqlRev.String())
+		if err != nil {
+			return err
+		}
+	} else {
+		if _, err = w.RWriteFile(sqlRev.String()); err != nil {
+			return err
+		}
 	}
 	endTime := time.Now()
 	zap.L().Info("output oracle to mysql schema create sql",
@@ -374,7 +381,7 @@ func GenCreateSchema(f *reverse.File, sourceSchema, targetSchema, nlsComp string
 	return nil
 }
 
-func GenCompatibilityTable(f *reverse.File, sourceSchema string, partitionTables, temporaryTables, clusteredTables []string, materializedViews []string) error {
+func GenCompatibilityTable(f *reverse.Write, sourceSchema string, partitionTables, temporaryTables, clusteredTables []string, materializedViews []string) error {
 	startTime := time.Now()
 	// 兼容提示
 	if len(partitionTables) > 0 || len(temporaryTables) > 0 || len(clusteredTables) > 0 || len(materializedViews) > 0 {
@@ -410,7 +417,7 @@ func GenCompatibilityTable(f *reverse.File, sourceSchema string, partitionTables
 		sqlComp.WriteString(t.Render() + "\n")
 		sqlComp.WriteString("*/\n")
 
-		if _, err := f.CWriteString(sqlComp.String()); err != nil {
+		if _, err := f.CWriteFile(sqlComp.String()); err != nil {
 			return err
 		}
 
@@ -432,7 +439,7 @@ func GenCompatibilityTable(f *reverse.File, sourceSchema string, partitionTables
 		mviewComp.WriteString(t.Render() + "\n")
 		mviewComp.WriteString("*/\n")
 
-		if _, err := f.CWriteString(mviewComp.String()); err != nil {
+		if _, err := f.CWriteFile(mviewComp.String()); err != nil {
 			return err
 		}
 	}

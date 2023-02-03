@@ -43,7 +43,7 @@ type DDL struct {
 	TableCompatibleDDL []string `json:"table_compatible_ddl"`
 }
 
-func (d *DDL) File(f *reverse.File) error {
+func (d *DDL) Write(w *reverse.Write) error {
 	var (
 		tableDDL      string
 		checkKeyDDL   []string
@@ -156,12 +156,18 @@ func (d *DDL) File(f *reverse.File) error {
 
 		// 文件写入
 		if sqlRev.String() != "" {
-			if _, err := f.RWriteString(sqlRev.String()); err != nil {
-				return err
+			if w.DirectWrite {
+				if err := w.RWriteDB(sqlRev.String()); err != nil {
+					return err
+				}
+			} else {
+				if _, err := w.RWriteFile(sqlRev.String()); err != nil {
+					return err
+				}
 			}
 		}
 		if sqlComp.String() != "" {
-			if _, err := f.CWriteString(sqlComp.String()); err != nil {
+			if _, err := w.CWriteFile(sqlComp.String()); err != nil {
 				return err
 			}
 		}
@@ -187,12 +193,18 @@ func (d *DDL) File(f *reverse.File) error {
 	}
 	// 文件写入
 	if sqlRev.String() != "" {
-		if _, err := f.RWriteString(sqlRev.String()); err != nil {
-			return err
+		if w.DirectWrite {
+			if err := w.RWriteDB(sqlRev.String()); err != nil {
+				return err
+			}
+		} else {
+			if _, err := w.RWriteFile(sqlRev.String()); err != nil {
+				return err
+			}
 		}
 	}
 	if sqlComp.String() != "" {
-		if _, err := f.CWriteString(sqlComp.String()); err != nil {
+		if _, err := w.CWriteFile(sqlComp.String()); err != nil {
 			return err
 		}
 	}

@@ -26,7 +26,6 @@ import (
 	"github.com/wentaojin/transferdb/module/check"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -179,12 +178,12 @@ func (r *O2M) NewCheck() error {
 		nlsSort, nlsComp, oracleTableCollation, oracleSchemaCollation, oracleDBCollation,
 		r.cfg.MySQLConfig.DBType, r.oracle, r.mysql, tableNameRuleMap, exporters)
 
-	pwdDir, err := os.Getwd()
+	err = common.PathExist(r.cfg.CheckConfig.CheckSQLDir)
 	if err != nil {
 		return err
 	}
 
-	checkFile := filepath.Join(pwdDir, fmt.Sprintf("check_%s.sql", r.cfg.OracleConfig.SchemaName))
+	checkFile := filepath.Join(r.cfg.CheckConfig.CheckSQLDir, fmt.Sprintf("check_%s.sql", r.cfg.OracleConfig.SchemaName))
 
 	// file writer
 	f, err := check.NewWriter(checkFile)
@@ -193,7 +192,7 @@ func (r *O2M) NewCheck() error {
 	}
 
 	g := &errgroup.Group{}
-	g.SetLimit(r.cfg.AppConfig.Threads)
+	g.SetLimit(r.cfg.CheckConfig.CheckThreads)
 
 	for _, task := range tasks {
 		t := task
@@ -234,7 +233,7 @@ func (r *O2M) NewCheck() error {
 	}
 
 	endTime := time.Now()
-	zap.L().Info("check", zap.String("output", filepath.Join(pwdDir, fmt.Sprintf("check_%s.sql", r.cfg.OracleConfig.SchemaName))))
+	zap.L().Info("check", zap.String("output", filepath.Join(r.cfg.CheckConfig.CheckSQLDir, fmt.Sprintf("check_%s.sql", r.cfg.OracleConfig.SchemaName))))
 	if checkError == 0 {
 		zap.L().Info("check table oracle to mysql finished",
 			zap.Int("table totals", len(exporters)),

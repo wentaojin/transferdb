@@ -729,7 +729,7 @@ func (c *Check) Writer(f *check.File) error {
 	}
 	// diff 记录不为空
 	if builder.String() != "" {
-		if _, err := f.CWriteString(builder.String()); err != nil {
+		if _, err := f.CWriteFile(builder.String()); err != nil {
 			return err
 		}
 	}

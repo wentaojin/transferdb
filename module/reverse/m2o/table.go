@@ -183,7 +183,7 @@ func GenReverseTableTask(r *Reverse, tableNameRule map[string]string, tableColum
 
 	g1.Go(func() error {
 		g2 := &errgroup.Group{}
-		g2.SetLimit(r.cfg.AppConfig.Threads)
+		g2.SetLimit(r.cfg.ReverseConfig.ReverseThreads)
 
 		for _, t := range exporters {
 			ts := t
@@ -373,7 +373,7 @@ func (t *Table) String() string {
 	return string(jsonStr)
 }
 
-func GenCreateSchema(f *reverse.File, sourceSchema, targetSchema string) error {
+func GenCreateSchema(w *reverse.Write, sourceSchema, targetSchema string, directWrite bool) error {
 	startTime := time.Now()
 	var (
 		sqlRev strings.Builder
@@ -392,8 +392,14 @@ func GenCreateSchema(f *reverse.File, sourceSchema, targetSchema string) error {
 
 	sqlRev.WriteString(fmt.Sprintf("CREATE USER %s IDENTIFIED BY %s;\n\n", common.StringUPPER(targetSchema), common.StringUPPER(targetSchema)))
 
-	if _, err := f.RWriteString(sqlRev.String()); err != nil {
-		return err
+	if directWrite {
+		if err := w.RWriteDB(sqlRev.String()); err != nil {
+			return err
+		}
+	} else {
+		if _, err := w.RWriteFile(sqlRev.String()); err != nil {
+			return err
+		}
 	}
 	endTime := time.Now()
 	zap.L().Info("output mysql to oracle schema create sql",
@@ -403,7 +409,7 @@ func GenCreateSchema(f *reverse.File, sourceSchema, targetSchema string) error {
 	return nil
 }
 
-func GenCompatibilityTable(f *reverse.File, sourceSchema string, errCompatibility map[string][]map[string]string, viewTables []string) error {
+func GenCompatibilityTable(w *reverse.Write, sourceSchema string, errCompatibility map[string][]map[string]string, viewTables []string) error {
 	startTime := time.Now()
 	// 兼容提示
 	if len(errCompatibility) > 0 {
@@ -431,7 +437,7 @@ func GenCompatibilityTable(f *reverse.File, sourceSchema string, errCompatibilit
 			sqlComp.WriteString(t.Render() + "\n")
 			sqlComp.WriteString("*/\n")
 
-			if _, err := f.CWriteString(sqlComp.String()); err != nil {
+			if _, err := w.CWriteFile(sqlComp.String()); err != nil {
 				return err
 			}
 		}
@@ -454,7 +460,7 @@ func GenCompatibilityTable(f *reverse.File, sourceSchema string, errCompatibilit
 		sqlComp.WriteString(t.Render() + "\n")
 		sqlComp.WriteString("*/\n")
 
-		if _, err := f.CWriteString(sqlComp.String()); err != nil {
+		if _, err := w.CWriteFile(sqlComp.String()); err != nil {
 			return err
 		}
 	}

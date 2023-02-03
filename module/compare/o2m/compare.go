@@ -26,7 +26,6 @@ import (
 	"github.com/wentaojin/transferdb/module/compare"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -326,12 +325,12 @@ func (r *O2M) NewCompare() error {
 	waitTableTasks := NewWaitCompareTableTask(r.ctx, r.cfg, waitSyncTables, oracleCollation, r.mysql, r.oracle, tableNameRuleMap)
 
 	// 数据对比
-	pwdDir, err := os.Getwd()
+	err = common.PathExist(r.cfg.DiffConfig.FixSqlDir)
 	if err != nil {
 		return err
 	}
 
-	checkFile := filepath.Join(pwdDir, r.cfg.DiffConfig.FixSqlFile)
+	checkFile := filepath.Join(r.cfg.DiffConfig.FixSqlDir, fmt.Sprintf("compare_%s.sql", r.cfg.OracleConfig.SchemaName))
 
 	// file writer
 	f, err := compare.NewWriter(checkFile)
@@ -379,7 +378,7 @@ func (r *O2M) NewCompare() error {
 	}
 
 	endTime := time.Now()
-	zap.L().Info("diff", zap.String("fix sql file output", filepath.Join(pwdDir, r.cfg.DiffConfig.FixSqlFile)))
+	zap.L().Info("diff", zap.String("fix sql file output", checkFile))
 	if errTotals == 0 {
 		zap.L().Info("diff table oracle to mysql finished",
 			zap.Int("table totals", len(exporters)),

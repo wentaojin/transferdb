@@ -22,10 +22,29 @@
 insert-batch-size = 100
 # 是否开启更新元数据 meta-schema 库表慢日志，单位毫秒
 slowlog-threshold = 1024
-# 任务并发 -- 只用于 reverse/check 模式阶段
-threads = 256
 # pprof 端口
 pprof-port = ":9696"
+
+[reverse]
+# 任务表并发
+reverse-threads = 256
+# 是否直接写下游
+# 设置 true 代表表结构转换之后直接往下游执行，设置 false 代表表结构转换之后写本地文件
+direct-write = false
+# 当 direct-write 设置 true，参数不生效
+# 当 direct-write 设置 false，参数生效，表结构转换写本地文件目录
+# 文件输出命名格式: reverse_${source_schema}.sql
+reverse-ddl-dir = "/tmp"
+# 忽略 direct-write 参数，关于数据库不兼容性的内容统一以文件形式输出
+# 文件输出命名格式: compatible_${source_schema}.sql
+reverse-compatible-dir = "/tmp"
+
+[check]
+# 任务表并发
+check-threads = 256
+# 差异修复文件输出目录
+# 文件输出命名格式: check_${source_schema}.sql
+check-sql-dir = "/tmp"
 
 [diff]
 chunk-size = 50000
@@ -38,8 +57,8 @@ only-check-rows = false
 enable-checkpoint = true
 # 忽略表结构、collation 以及 character 检查，数据校验是否校验表结构，以上游表结构为准
 ignore-struct-check = true
-# 差异修复 SQL 文件, ONLY 用于下游数据库变更修复
-fix-sql-file = "fix.sql"
+# 差异修复 SQL 文件输出目录, ONLY 用于下游数据库变更修复
+fix-sql-dir = "/tmp"
 
 # diff 某些表单独配置 -> 源端表
 #[[table-config]]
@@ -125,7 +144,7 @@ ora-arch = "noncdb"
 # 2、Non-CDB 架构需要具备 logminer 权限用户
 username = "c##ggadmin"
 password = "ggadmin"
-host = "10.2.13.3"
+host = "10.2.103.31"
 port = 1521
 service-name = "orclpdb1"
 # oracle instance client dir -> only linux
@@ -146,7 +165,7 @@ schema-name = "marvin"
 # 源端迁移任务表（只用于 prepare/reverse/check/all/full 阶段，assess 阶段不适用，assess 只适用于 schema 级别）
 # include-table 和 exclude-table 不能同时配置，两者只能配置一个,如果两个都没配置则 Schema 内表全迁移
 # include-table 和 exclude-table 支持正则表达式以及通配符（tab_*/tab*）
-include-table = ["xmltb"]
+include-table = []
 exclude-table = []
 
 # 只用于 prepare/reverse/check/all/full 阶段，assess 阶段不适用
@@ -156,7 +175,7 @@ db-type = "tidb"
 # 目标端连接串
 username = "root"
 password = ""
-host = "10.2.3.32"
+host = "10.2.103.30"
 port = 5000
 # mysql 链接参数
 connect-params = "charset=utf8mb4&multiStatements=true&parseTime=True&loc=Local"

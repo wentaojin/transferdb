@@ -38,7 +38,7 @@ func NewWriter(checkFile string) (*File, error) {
 	return f, nil
 }
 
-func (f *File) CWriteString(s string) (nn int, err error) {
+func (f *File) CWriteFile(s string) (nn int, err error) {
 	f.Mutex.Lock()
 	defer f.Mutex.Unlock()
 	return f.CWriter.WriteString(s)

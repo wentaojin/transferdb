@@ -26,7 +26,6 @@ import (
 	"github.com/wentaojin/transferdb/module/reverse"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -124,7 +123,7 @@ func (r *Reverse) NewReverse() error {
 		TargetSchemaName: common.StringUPPER(r.Cfg.MySQLConfig.SchemaName),
 		SourceTables:     exporterTables,
 		OracleCollation:  oracleCollation,
-		Threads:          r.Cfg.AppConfig.Threads,
+		Threads:          r.Cfg.ReverseConfig.ReverseThreads,
 		Oracle:           r.Oracle,
 		MetaDB:           r.MetaDB,
 	})
@@ -141,23 +140,26 @@ func (r *Reverse) NewReverse() error {
 		return err
 	}
 
-	pwdDir, err := os.Getwd()
+	err = common.PathExist(r.Cfg.ReverseConfig.ReverseDDLDir)
 	if err != nil {
 		return err
 	}
-
-	reverseFile := filepath.Join(pwdDir, fmt.Sprintf("reverse_%s.sql", r.Cfg.OracleConfig.SchemaName))
-	compFile := filepath.Join(pwdDir, fmt.Sprintf("compatibility_%s.sql", r.Cfg.OracleConfig.SchemaName))
+	err = common.PathExist(r.Cfg.ReverseConfig.ReverseCompatibleDir)
+	if err != nil {
+		return err
+	}
+	reverseFile := filepath.Join(r.Cfg.ReverseConfig.ReverseDDLDir, fmt.Sprintf("reverse_%s.sql", r.Cfg.OracleConfig.SchemaName))
+	compFile := filepath.Join(r.Cfg.ReverseConfig.ReverseCompatibleDir, fmt.Sprintf("compatibility_%s.sql", r.Cfg.OracleConfig.SchemaName))
 
 	// file writer
-	f, err := reverse.NewWriter(reverseFile, compFile, r.Mysql, r.Oracle)
+	f, err := reverse.NewWriter(reverseFile, compFile, common.ReverseO2MMode, r.Cfg.ReverseConfig.DirectWrite, r.Mysql, r.Oracle)
 	if err != nil {
 		return err
 	}
 
 	// schema create
 	err = GenCreateSchema(f,
-		common.StringUPPER(r.Cfg.OracleConfig.SchemaName), common.StringUPPER(r.Cfg.MySQLConfig.SchemaName), nlsComp)
+		common.StringUPPER(r.Cfg.OracleConfig.SchemaName), common.StringUPPER(r.Cfg.MySQLConfig.SchemaName), nlsComp, r.Cfg.ReverseConfig.DirectWrite)
 	if err != nil {
 		return err
 	}
@@ -170,7 +172,7 @@ func (r *Reverse) NewReverse() error {
 
 	// 表转换
 	g := &errgroup.Group{}
-	g.SetLimit(r.Cfg.AppConfig.Threads)
+	g.SetLimit(r.Cfg.ReverseConfig.ReverseThreads)
 
 	for _, table := range tables {
 		t := table
@@ -267,9 +269,11 @@ func (r *Reverse) NewReverse() error {
 	}
 
 	endTime := time.Now()
-	zap.L().Info("reverse", zap.String("create table and index output", filepath.Join(pwdDir,
-		fmt.Sprintf("reverse_%s.sql", r.Cfg.OracleConfig.SchemaName))))
-	zap.L().Info("compatibility", zap.String("maybe exist compatibility output", filepath.Join(pwdDir,
+	if !r.Cfg.ReverseConfig.DirectWrite {
+		zap.L().Info("reverse", zap.String("create table and index output", filepath.Join(r.Cfg.ReverseConfig.ReverseCompatibleDir,
+			fmt.Sprintf("reverse_%s.sql", r.Cfg.OracleConfig.SchemaName))))
+	}
+	zap.L().Info("compatibility", zap.String("maybe exist compatibility output", filepath.Join(r.Cfg.ReverseConfig.ReverseCompatibleDir,
 		fmt.Sprintf("compatibility_%s.sql", r.Cfg.OracleConfig.SchemaName))))
 	if errTotals == 0 {
 		zap.L().Info("reverse table oracle to mysql finished",

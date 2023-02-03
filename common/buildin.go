@@ -221,7 +221,7 @@ const (
 
 	BuildInMySQLDatatypeBlob       = "BLOB"
 	BuildInMySQLDatatypeChar       = "CHAR"
-	BuildInMySQLDatatypeLongBlob   = "LONGBlOB"
+	BuildInMySQLDatatypeLongBlob   = "LONGBLOB"
 	BuildInMySQLDatatypeLongText   = "LONGTEXT"
 	BuildInMySQLDatatypeMediumBlob = "MEDIUMBLOB"
 	BuildInMySQLDatatypeMediumText = "MEDIUMTEXT"

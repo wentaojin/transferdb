@@ -53,7 +53,7 @@ type Generator interface {
 }
 
 type Writer interface {
-	File(f *File) error
+	Write(w *Write) error
 }
 
 type Reverser interface {
