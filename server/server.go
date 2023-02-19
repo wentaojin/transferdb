@@ -18,183 +18,60 @@ package server
 import (
 	"context"
 	"fmt"
-	"github.com/wentaojin/transferdb/database/meta"
-	"github.com/wentaojin/transferdb/module/assess"
-	assessO2M "github.com/wentaojin/transferdb/module/assess/o2m"
-	"github.com/wentaojin/transferdb/module/check"
-	"github.com/wentaojin/transferdb/module/check/o2m"
-	"github.com/wentaojin/transferdb/module/compare"
-	compareO2M "github.com/wentaojin/transferdb/module/compare/o2m"
-	"github.com/wentaojin/transferdb/module/csv"
-	csvO2M "github.com/wentaojin/transferdb/module/csv/o2m"
-	"github.com/wentaojin/transferdb/module/migrate"
-	migrateO2M "github.com/wentaojin/transferdb/module/migrate/o2m"
-	"github.com/wentaojin/transferdb/module/prepare"
-	"github.com/wentaojin/transferdb/module/reverse"
-	reverseM2O "github.com/wentaojin/transferdb/module/reverse/m2o"
-	reverseO2M "github.com/wentaojin/transferdb/module/reverse/o2m"
-
+	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/config"
-	"github.com/wentaojin/transferdb/database/mysql"
-	"github.com/wentaojin/transferdb/database/oracle"
+	"github.com/wentaojin/transferdb/module/prepare"
 	"strings"
 )
 
 // 程序运行
 func Run(ctx context.Context, cfg *config.Config) error {
-	switch strings.ToLower(strings.TrimSpace(cfg.Mode)) {
-	case "prepare":
+	switch strings.ToUpper(strings.TrimSpace(cfg.TaskMode)) {
+	case common.TaskModePrepare:
 		// 表结构转换 - only prepare 阶段
-		err := prepare.TPrepare(ctx, cfg)
+		err := prepare.IPrepare(ctx, cfg)
 		if err != nil {
 			return err
 		}
-	case "assess":
+	case common.TaskModeAssess:
 		// 收集评估改造成本
-		metaDB, err := meta.NewMetaDBEngine(ctx, cfg.MySQLConfig, cfg.AppConfig.SlowlogThreshold)
+		err := IAssess(ctx, cfg)
 		if err != nil {
 			return err
 		}
-		oracleDB, err := oracle.NewOracleDBEngine(ctx, cfg.OracleConfig)
-		if err != nil {
-			return err
-		}
-		err = assess.TAssess(assessO2M.NewAssess(ctx, cfg, metaDB, oracleDB))
-		if err != nil {
-			return err
-		}
-	case "reverseo2m":
+	case common.TaskModeReverse:
 		// 表结构转换 - reverse 阶段
-		// O2M
-		metaDB, err := meta.NewMetaDBEngine(ctx, cfg.MySQLConfig, cfg.AppConfig.SlowlogThreshold)
+		err := IReverse(ctx, cfg)
 		if err != nil {
 			return err
 		}
-		oracleDB, err := oracle.NewOracleDBEngine(ctx, cfg.OracleConfig)
-		if err != nil {
-			return err
-		}
-		mysqlDB, err := mysql.NewMySQLDBEngine(ctx, cfg.MySQLConfig)
-		if err != nil {
-			return err
-		}
-
-		err = reverse.IReverse(reverseO2M.NewO2MReverse(
-			ctx, cfg, mysqlDB, oracleDB, metaDB))
-		if err != nil {
-			return err
-		}
-	case "reversem2o":
-		// 表结构转换 - reverse 阶段
-		// M2O
-		metaDB, err := meta.NewMetaDBEngine(ctx, cfg.MySQLConfig, cfg.AppConfig.SlowlogThreshold)
-		if err != nil {
-			return err
-		}
-		oracleDB, err := oracle.NewOracleDBEngine(ctx, cfg.OracleConfig)
-		if err != nil {
-			return err
-		}
-		mysqlDB, err := mysql.NewMySQLDBEngine(ctx, cfg.MySQLConfig)
-		if err != nil {
-			return err
-		}
-
-		err = reverse.IReverse(reverseM2O.NewM2OReverse(ctx, cfg,
-			mysqlDB, oracleDB, metaDB))
-		if err != nil {
-			return err
-		}
-	case "check":
+	case common.TaskModeCheck:
 		// 表结构校验 - 上下游
-		metaDB, err := meta.NewMetaDBEngine(ctx, cfg.MySQLConfig, cfg.AppConfig.SlowlogThreshold)
+		err := ICheck(ctx, cfg)
 		if err != nil {
 			return err
 		}
-		oracleDB, err := oracle.NewOracleDBEngine(ctx, cfg.OracleConfig)
-		if err != nil {
-			return err
-		}
-		mysqlDB, err := mysql.NewMySQLDBEngine(ctx, cfg.MySQLConfig)
-		if err != nil {
-			return err
-		}
-
-		err = check.ICheck(o2m.NewO2MCheck(ctx, cfg,
-			oracleDB, mysqlDB, metaDB))
-		if err != nil {
-			return err
-		}
-	case "compare":
+	case common.TaskModeCompare:
 		// 数据校验 - 以上游为准
-		metaDB, err := meta.NewMetaDBEngine(ctx, cfg.MySQLConfig, cfg.AppConfig.SlowlogThreshold)
+		err := ICompare(ctx, cfg)
 		if err != nil {
 			return err
 		}
-		oracleDB, err := oracle.NewOracleDBEngine(ctx, cfg.OracleConfig)
-		if err != nil {
-			return err
-		}
-		mysqlDB, err := mysql.NewMySQLDBEngine(ctx, cfg.MySQLConfig)
-		if err != nil {
-			return err
-		}
-		err = compare.ICompare(compareO2M.NewO2MCompare(ctx, cfg, oracleDB, mysqlDB, metaDB))
-		if err != nil {
-			return err
-		}
-	case "csv":
+	case common.TaskModeCSV:
 		// csv 全量数据导出
-		metaDB, err := meta.NewMetaDBEngine(ctx, cfg.MySQLConfig, cfg.AppConfig.SlowlogThreshold)
+		err := ICSVer(ctx, cfg)
 		if err != nil {
 			return err
 		}
-		oracleDB, err := oracle.NewOracleDBEngine(ctx, cfg.OracleConfig)
-		if err != nil {
-			return err
-		}
-		mysqlDB, err := mysql.NewMySQLDBEngine(ctx, cfg.MySQLConfig)
-		if err != nil {
-			return err
-		}
-		err = csv.ICSVer(csvO2M.NewO2MCSVer(ctx, cfg,
-			oracleDB, mysqlDB, metaDB))
-		if err != nil {
-			return err
-		}
-	case "full":
+	case common.TaskModeFull:
 		// 全量数据 ETL 非一致性（基于某个时间点，而是直接基于现有 SCN）抽取，离线环境提供与原库一致性
-		metaDB, err := meta.NewMetaDBEngine(ctx, cfg.MySQLConfig, cfg.AppConfig.SlowlogThreshold)
+		err := IMigrateFull(ctx, cfg)
 		if err != nil {
 			return err
 		}
-		oracleDB, err := oracle.NewOracleDBEngine(ctx, cfg.OracleConfig)
-		if err != nil {
-			return err
-		}
-		mysqlDB, err := mysql.NewMySQLDBEngine(ctx, cfg.MySQLConfig)
-		if err != nil {
-			return err
-		}
-		err = migrate.IMigrateFull(migrateO2M.NewO2MFuller(ctx, cfg, oracleDB, mysqlDB, metaDB))
-		if err != nil {
-			return err
-		}
-	case "all":
+	case common.TaskModeAll:
 		// 全量 + 增量数据同步阶段 - logminer
-		metaDB, err := meta.NewMetaDBEngine(ctx, cfg.MySQLConfig, cfg.AppConfig.SlowlogThreshold)
-		if err != nil {
-			return err
-		}
-		oracleDB, err := oracle.NewOracleDBEngine(ctx, cfg.OracleConfig)
-		if err != nil {
-			return err
-		}
-		mysqlDB, err := mysql.NewMySQLDBEngine(ctx, cfg.MySQLConfig)
-		if err != nil {
-			return err
-		}
-		err = migrate.IMigrateIncr(migrateO2M.NewO2MIncr(ctx, cfg, oracleDB, mysqlDB, metaDB))
+		err := IMigrateIncr(ctx, cfg)
 		if err != nil {
 			return err
 		}

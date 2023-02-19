@@ -65,11 +65,11 @@ func (ro *ReportSummary) String() string {
 /*
 Oracle Database Overview
 */
-func GetAssessDatabaseOverviewResult(ctx context.Context, metaDB *meta.Meta, oracle *oracle.Oracle, reportName, reportUser string) (*ReportOverview, ReportSummary, error) {
+func GetAssessDatabaseOverviewResult(ctx context.Context, metaDB *meta.Meta, oracle *oracle.Oracle, reportName, reportUser, dbTypeS, dbTypeT string) (*ReportOverview, ReportSummary, error) {
 	// 获取自定义兼容性内容
 	compatibles, err := meta.NewBuildinObjectCompatibleModel(metaDB).BatchQueryObjAssessCompatible(ctx, &meta.BuildinObjectCompatible{
-		DBTypeS: common.TaskDBOracle,
-		DBTypeT: common.TaskDBMySQL,
+		DBTypeS: dbTypeS,
+		DBTypeT: dbTypeT,
 	})
 	if err != nil {
 		return nil, ReportSummary{}, err

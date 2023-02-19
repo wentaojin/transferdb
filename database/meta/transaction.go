@@ -30,6 +30,89 @@ func NewCommonModel(m *Meta) *Transaction {
 	return &Transaction{Meta: m}
 }
 
+func (rw *Transaction) CreateErrorDetailAndUpdateWaitSyncMetaTaskStatus(ctx context.Context, errLogDetail *ErrorLogDetail, waitSyncMeta *WaitSyncMeta) error {
+	txn := rw.DB(ctx).Begin()
+	err := txn.Create(errLogDetail).Error
+	if err != nil {
+		return fmt.Errorf("create table [check_error_detail] reocrd by transaction failed: %v", err)
+	}
+	err = txn.Model(&WaitSyncMeta{}).
+		Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND table_name_s = ? AND task_mode = ?",
+			common.StringUPPER(waitSyncMeta.DBTypeS),
+			common.StringUPPER(waitSyncMeta.DBTypeT),
+			common.StringUPPER(waitSyncMeta.SchemaNameS),
+			common.StringUPPER(waitSyncMeta.TableNameS),
+			waitSyncMeta.TaskMode).
+		Updates(map[string]interface{}{
+			"TaskStatus": waitSyncMeta.TaskStatus,
+		}).Error
+	if err != nil {
+		return fmt.Errorf("update table [wait_sync_meta] reocrd by transaction failed: %v", err)
+	}
+	txn.Commit()
+	return nil
+}
+
+func (rw *Transaction) DeleteTableDataCompareMetaAndUpdateWaitSyncMeta(ctx context.Context, deleteS *DataCompareMeta, updateS *WaitSyncMeta) error {
+	txn := rw.DB(ctx).Begin()
+	if err := txn.Model(DataCompareMeta{}).
+		Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND table_name_s = ? AND task_mode = ?",
+			common.StringUPPER(deleteS.DBTypeS),
+			common.StringUPPER(deleteS.DBTypeT),
+			common.StringUPPER(deleteS.SchemaNameS),
+			common.StringUPPER(deleteS.TableNameS),
+			deleteS.TaskMode).
+		Delete(&DataCompareMeta{}).Error; err != nil {
+		return fmt.Errorf("delete table [data_compare_meta] record failed: %v", err)
+	}
+	if err := txn.Model(WaitSyncMeta{}).
+		Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND table_name_s = ? AND task_mode = ?",
+			common.StringUPPER(updateS.DBTypeS),
+			common.StringUPPER(updateS.DBTypeT),
+			common.StringUPPER(updateS.SchemaNameS),
+			common.StringUPPER(updateS.TableNameS),
+			updateS.TaskMode).
+		Updates(map[string]interface{}{
+			"TaskStatus":       updateS.TaskStatus,
+			"ChunkSuccessNums": updateS.ChunkSuccessNums,
+			"ChunkFailedNums":  updateS.ChunkFailedNums,
+		}).Error; err != nil {
+		return fmt.Errorf("delete table [wait_sync_meta] record failed: %v", err)
+	}
+	txn.Commit()
+	return nil
+}
+
+func (rw *Transaction) DeleteTableFullSyncMetaAndUpdateWaitSyncMeta(ctx context.Context, deleteS *FullSyncMeta, updateS *WaitSyncMeta) error {
+	txn := rw.DB(ctx).Begin()
+	if err := txn.Model(FullSyncMeta{}).
+		Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND table_name_s = ? AND task_mode = ?",
+			common.StringUPPER(deleteS.DBTypeS),
+			common.StringUPPER(deleteS.DBTypeT),
+			common.StringUPPER(deleteS.SchemaNameS),
+			common.StringUPPER(deleteS.TableNameS),
+			deleteS.TaskMode).
+		Delete(&FullSyncMeta{}).Error; err != nil {
+		return fmt.Errorf("delete table [full_sync_meta] record failed: %v", err)
+	}
+	if err := txn.Model(WaitSyncMeta{}).
+		Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND table_name_s = ? AND task_mode = ?",
+			common.StringUPPER(updateS.DBTypeS),
+			common.StringUPPER(updateS.DBTypeT),
+			common.StringUPPER(updateS.SchemaNameS),
+			common.StringUPPER(updateS.TableNameS),
+			updateS.TaskMode).
+		Updates(map[string]interface{}{
+			"TaskStatus":       updateS.TaskStatus,
+			"ChunkSuccessNums": updateS.ChunkSuccessNums,
+			"ChunkFailedNums":  updateS.ChunkFailedNums,
+		}).Error; err != nil {
+		return fmt.Errorf("delete table [wait_sync_meta] record failed: %v", err)
+	}
+	txn.Commit()
+	return nil
+}
+
 func (rw *Transaction) CreateDataCompareMetaAndUpdateWaitSyncMeta(ctx context.Context, dataDiffMeta *DataCompareMeta, waitSyncMeta *WaitSyncMeta) error {
 	txn := rw.DB(ctx).Begin()
 	err := txn.Create(dataDiffMeta).Error
@@ -37,16 +120,45 @@ func (rw *Transaction) CreateDataCompareMetaAndUpdateWaitSyncMeta(ctx context.Co
 		return fmt.Errorf("create table [data_compare_meta] reocrd by transaction failed: %v", err)
 	}
 	err = txn.Model(&WaitSyncMeta{}).
-		Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND table_name_s = ? AND mode = ?",
+		Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND table_name_s = ? AND task_mode = ?",
 			common.StringUPPER(waitSyncMeta.DBTypeS),
 			common.StringUPPER(waitSyncMeta.DBTypeT),
 			common.StringUPPER(waitSyncMeta.SchemaNameS),
 			common.StringUPPER(waitSyncMeta.TableNameS),
-			waitSyncMeta.Mode).
+			waitSyncMeta.TaskMode).
 		Updates(map[string]interface{}{
-			"FullGlobalSCN":  waitSyncMeta.FullGlobalSCN,
-			"FullSplitTimes": waitSyncMeta.FullSplitTimes,
-			"IsPartition":    waitSyncMeta.IsPartition,
+			"GlobalScnS":       waitSyncMeta.GlobalScnS,
+			"ChunkTotalNums":   waitSyncMeta.ChunkTotalNums,
+			"ChunkSuccessNums": waitSyncMeta.ChunkSuccessNums,
+			"ChunkFailedNums":  waitSyncMeta.ChunkFailedNums,
+			"IsPartition":      waitSyncMeta.IsPartition,
+		}).Error
+	if err != nil {
+		return fmt.Errorf("update table [wait_sync_meta] reocrd by transaction failed: %v", err)
+	}
+	txn.Commit()
+	return nil
+}
+
+func (rw *Transaction) BatchCreateDataCompareMetaAndUpdateWaitSyncMeta(ctx context.Context, dataDiffMeta []DataCompareMeta, batchSize int, waitSyncMeta *WaitSyncMeta) error {
+	txn := rw.DB(ctx).Begin()
+	err := txn.CreateInBatches(dataDiffMeta, batchSize).Error
+	if err != nil {
+		return fmt.Errorf("create table [data_compare_meta] reocrd by transaction failed: %v", err)
+	}
+	err = txn.Model(&WaitSyncMeta{}).
+		Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND table_name_s = ? AND task_mode = ?",
+			common.StringUPPER(waitSyncMeta.DBTypeS),
+			common.StringUPPER(waitSyncMeta.DBTypeT),
+			common.StringUPPER(waitSyncMeta.SchemaNameS),
+			common.StringUPPER(waitSyncMeta.TableNameS),
+			waitSyncMeta.TaskMode).
+		Updates(map[string]interface{}{
+			"GlobalScnS":       waitSyncMeta.GlobalScnS,
+			"ChunkTotalNums":   waitSyncMeta.ChunkTotalNums,
+			"ChunkSuccessNums": waitSyncMeta.ChunkSuccessNums,
+			"ChunkFailedNums":  waitSyncMeta.ChunkFailedNums,
+			"IsPartition":      waitSyncMeta.IsPartition,
 		}).Error
 	if err != nil {
 		return fmt.Errorf("update table [wait_sync_meta] reocrd by transaction failed: %v", err)
@@ -62,16 +174,45 @@ func (rw *Transaction) CreateFullSyncMetaAndUpdateWaitSyncMeta(ctx context.Conte
 		return fmt.Errorf("create table [full_sync_meta] reocrd by transaction failed: %v", err)
 	}
 	err = txn.Model(&WaitSyncMeta{}).
-		Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND table_name_s = ? AND mode = ?",
+		Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND table_name_s = ? AND task_mode = ?",
 			common.StringUPPER(waitSyncMeta.DBTypeS),
 			common.StringUPPER(waitSyncMeta.DBTypeT),
 			common.StringUPPER(waitSyncMeta.SchemaNameS),
 			common.StringUPPER(waitSyncMeta.TableNameS),
-			waitSyncMeta.Mode).
+			waitSyncMeta.TaskMode).
 		Updates(map[string]interface{}{
-			"FullGlobalSCN":  waitSyncMeta.FullGlobalSCN,
-			"FullSplitTimes": waitSyncMeta.FullSplitTimes,
-			"IsPartition":    waitSyncMeta.IsPartition,
+			"GlobalScnS":       waitSyncMeta.GlobalScnS,
+			"ChunkTotalNums":   waitSyncMeta.ChunkTotalNums,
+			"ChunkSuccessNums": waitSyncMeta.ChunkSuccessNums,
+			"ChunkFailedNums":  waitSyncMeta.ChunkFailedNums,
+			"IsPartition":      waitSyncMeta.IsPartition,
+		}).Error
+	if err != nil {
+		return fmt.Errorf("update table [wait_sync_meta] reocrd by transaction failed: %v", err)
+	}
+	txn.Commit()
+	return nil
+}
+
+func (rw *Transaction) BatchCreateFullSyncMetaAndUpdateWaitSyncMeta(ctx context.Context, dataDiffMeta []FullSyncMeta, batchSize int, waitSyncMeta *WaitSyncMeta) error {
+	txn := rw.DB(ctx).Begin()
+	err := txn.CreateInBatches(dataDiffMeta, batchSize).Error
+	if err != nil {
+		return fmt.Errorf("create table [full_sync_meta] reocrd by transaction failed: %v", err)
+	}
+	err = txn.Model(&WaitSyncMeta{}).
+		Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND table_name_s = ? AND task_mode = ?",
+			common.StringUPPER(waitSyncMeta.DBTypeS),
+			common.StringUPPER(waitSyncMeta.DBTypeT),
+			common.StringUPPER(waitSyncMeta.SchemaNameS),
+			common.StringUPPER(waitSyncMeta.TableNameS),
+			waitSyncMeta.TaskMode).
+		Updates(map[string]interface{}{
+			"GlobalScnS":       waitSyncMeta.GlobalScnS,
+			"ChunkTotalNums":   waitSyncMeta.ChunkTotalNums,
+			"ChunkSuccessNums": waitSyncMeta.ChunkSuccessNums,
+			"ChunkFailedNums":  waitSyncMeta.ChunkFailedNums,
+			"IsPartition":      waitSyncMeta.IsPartition,
 		}).Error
 	if err != nil {
 		return fmt.Errorf("update table [wait_sync_meta] reocrd by transaction failed: %v", err)
@@ -92,12 +233,12 @@ func (rw *Transaction) DeleteIncrSyncMetaAndWaitSyncMeta(ctx context.Context, in
 			return fmt.Errorf("delete table [incr_sync_meta] record by transaction failed: %v", err)
 		}
 
-		if err := tx.Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND table_name_s = ? and mode = ?",
+		if err := tx.Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND table_name_s = ? AND task_mode = ?",
 			common.StringUPPER(waitSyncMeta.DBTypeS),
 			common.StringUPPER(waitSyncMeta.DBTypeT),
 			common.StringUPPER(waitSyncMeta.SchemaNameS),
 			common.StringUPPER(waitSyncMeta.TableNameS),
-			waitSyncMeta.Mode).
+			waitSyncMeta.TaskMode).
 			Delete(&WaitSyncMeta{}).Error; err != nil {
 			return fmt.Errorf("delete table [wait_sync_meta] record by transaction failed: %v", err)
 		}

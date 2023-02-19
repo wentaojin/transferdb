@@ -16,7 +16,9 @@ limitations under the License.
 package o2m
 
 import (
+	"encoding/json"
 	"github.com/wentaojin/transferdb/common"
+	"github.com/wentaojin/transferdb/database/meta"
 	"github.com/wentaojin/transferdb/database/mysql"
 	"github.com/wentaojin/transferdb/database/oracle"
 )
@@ -34,32 +36,32 @@ type Task struct {
 	SourceTableCollation  string `json:"source_table_collation"`
 	SourceSchemaCollation string `json:"source_schema_collation"`
 
-	Oracle *oracle.Oracle
-	MySQL  *mysql.MySQL
+	Oracle *oracle.Oracle `json:"-"`
+	MySQL  *mysql.MySQL   `json:"-"`
 }
 
 func GenCheckTaskTable(sourceSchemaName, targetSchemaName, sourceDBCharacterSet, nlsSort, nlsComp string,
 	sourceTableCollation map[string]string, sourceSchemaCollation string,
-	sourceDBCollation bool, targetDBType string, oracle *oracle.Oracle, mysql *mysql.MySQL, tableNameRule map[string]string, exporters []string) []*Task {
+	sourceDBCollation bool, targetDBType string, oracle *oracle.Oracle, mysql *mysql.MySQL, tableNameRule map[string]string, waitSyncMetas []meta.WaitSyncMeta) []*Task {
 	var tasks []*Task
-	for _, t := range exporters {
+	for _, t := range waitSyncMetas {
 		// 库名、表名规则
 		var targetTableName string
-		if val, ok := tableNameRule[common.StringUPPER(t)]; ok {
+		if val, ok := tableNameRule[common.StringUPPER(t.TableNameS)]; ok {
 			targetTableName = val
 		} else {
-			targetTableName = common.StringUPPER(t)
+			targetTableName = common.StringUPPER(t.TableNameS)
 		}
 		tasks = append(tasks, &Task{
 			SourceSchemaName:      sourceSchemaName,
 			TargetSchemaName:      targetSchemaName,
-			SourceTableName:       t,
+			SourceTableName:       t.TableNameS,
 			TargetTableName:       targetTableName,
 			SourceDBCharacterSet:  sourceDBCharacterSet,
 			SourceDBNLSSort:       nlsSort,
 			SourceDBNLSComp:       nlsComp,
 			SourceDBCollation:     sourceDBCollation,
-			SourceTableCollation:  sourceTableCollation[t],
+			SourceTableCollation:  sourceTableCollation[t.TableNameS],
 			SourceSchemaCollation: sourceSchemaCollation,
 			TargetDBType:          targetDBType,
 			Oracle:                oracle,
@@ -83,4 +85,9 @@ func (t *Task) GenMySQLTable() (*Table, string, error) {
 		return info, version, err
 	}
 	return info, version, nil
+}
+
+func (t *Task) String() string {
+	marshal, _ := json.Marshal(t)
+	return string(marshal)
 }

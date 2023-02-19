@@ -19,43 +19,46 @@ import "time"
 
 // MySQL 连接配置
 const (
-	MysqlMaxIdleConn     = 512
-	MysqlMaxConn         = 1024
-	MysqlConnMaxLifeTime = 300 * time.Second
-	MysqlConnMaxIdleTime = 200 * time.Second
+	MySQLMaxIdleConn     = 512
+	MySQLMaxConn         = 1024
+	MySQLConnMaxLifeTime = 300 * time.Second
+	MySQLConnMaxIdleTime = 200 * time.Second
 )
 
-// 任务并发通道 CHANNEL Size
-const BufferSize = 1024
+// 任务并发通道 Channle Size
+const ChannelBufferSize = 1024
 
 // 任务模式
 const (
-	ReverseO2MMode = "ReverseO2M"
-	ReverseM2OMode = "ReverseM2O"
-	CheckO2MMode   = "CheckO2M"
-	CompareO2MMode = "CompareO2M"
-	CSVO2MMode     = "CsvO2M"
-	FullO2MMode    = "FullO2M"
-	AllO2MMode     = "AllO2M"
+	TaskModePrepare = "PREPARE"
+	TaskModeAssess  = "ASSESS"
+	TaskModeReverse = "REVERSE"
+	TaskModeCheck   = "CHECK"
+	TaskModeCompare = "COMPARE"
+	TaskModeCSV     = "CSV"
+	TaskModeFull    = "FULL"
+	TaskModeAll     = "ALL"
 )
 
-// 任务DB
+// 任务状态
 const (
-	TaskDBOracle = "ORACLE"
-	TaskDBTiDB   = "TIDB"
-	TaskDBMySQL  = "MYSQL"
+	TaskStatusWaiting = "WAITING"
+	TaskStatusRunning = "RUNNING"
+	TaskStatusSuccess = "SUCCESS"
+	TaskStatusFailed  = "FAILED"
 )
 
-// 任务类型
+// 任务初始值
 const (
-	TaskTypeConfig        = "CONFIG"
-	TaskTypeDatabase      = "DATABASE"
-	TaskTypeObjectAssess  = "OBJECT_ASSESS"
-	TaskTypeObjectReverse = "OBJECT_REVERSE"
-	TaskTypeObjectCheck   = "OBJECT_CHECK"
+	// 值 0 代表源端表未进行初始化 -> 适用于 full/csv/all 模式
+	TaskTableDefaultSourceGlobalSCN = 0
+	// 值 -1 代表源端表未进行 chunk 切分 -> 适用于 full/csv/all 模式
+	TaskTableDefaultSplitChunkNums = -1
+)
 
-	TaskTypeDataCompare     = "DATA_COMPARE"
-	TaskTypeDataSQLMigrate  = "DATA_SQL_MIGRATE"
-	TaskTypeDataIncrMigrate = "DATA_INCR_MIGRATE"
-	TaskTypeDataCSVMigrate  = "DATA_CSV_MIGRATE"
+// 任务 DB 类型
+const (
+	DatabaseTypeOracle = "ORACLE"
+	DatabaseTypeTiDB   = "TIDB"
+	DatabaseTypeMySQL  = "MYSQL"
 )

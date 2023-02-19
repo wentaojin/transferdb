@@ -26,19 +26,22 @@ import (
 
 // 全量同步元数据表
 type FullSyncMeta struct {
-	ID          uint   `gorm:"primary_key;autoIncrement;comment:'自增编号'" json:"id"`
-	DBTypeS     string `gorm:"type:varchar(15);index:idx_dbtype_st_map,unique;index:idx_schema_mode;comment:'源数据库类型'" json:"db_type_s"`
-	DBTypeT     string `gorm:"type:varchar(15);index:idx_dbtype_st_map,unique;index:idx_schema_mode;comment:'目标数据库类型'" json:"db_type_t"`
-	SchemaNameS string `gorm:"type:varchar(15);not null;index:idx_dbtype_st_map,unique;index:idx_schema_mode;comment:'源端 schema'" json:"schema_name_s"`
-	TableNameS  string `gorm:"type:varchar(30);not null;index:idx_dbtype_st_map,unique;comment:'源端表名'" json:"table_name_s"`
-	SchemaNameT string `gorm:"type:varchar(15);not null;comment:'目标端 schema'" json:"schema_name_t"`
-	TableNameT  string `gorm:"type:varchar(30);not null;comment:'目标端表名'" json:"table_name_t"`
-	GlobalScnS  uint64 `gorm:"comment:'源端全局 SCN'" json:"global_scn_s"`
-	ColumnInfoS string `gorm:"type:text;comment:'源端查询字段信息'" json:"column_info_s"`
-	RowidInfoS  string `gorm:"type:varchar(300);not null;index:idx_dbtype_st_map,unique;comment:'表 rowid 切分信息'" json:"rowid_info_s"`
-	Mode        string `gorm:"not null;index:idx_dbtype_st_map,unique;index:idx_schema_mode;comment:'同步模式'" json:"mode"`
-	IsPartition string `gorm:"comment:'是否是分区表'" json:"is_partition"` // 同步转换统一转换成非分区表，此处只做标志
-	CSVFile     string `gorm:"type:varchar(300);comment:'csv 文件名'" json:"csv_file"`
+	ID            uint   `gorm:"primary_key;autoIncrement;comment:'自增编号'" json:"id"`
+	DBTypeS       string `gorm:"type:varchar(15);index:idx_dbtype_st_map,unique;index:idx_schema_mode;comment:'源数据库类型'" json:"db_type_s"`
+	DBTypeT       string `gorm:"type:varchar(15);index:idx_dbtype_st_map,unique;index:idx_schema_mode;comment:'目标数据库类型'" json:"db_type_t"`
+	SchemaNameS   string `gorm:"type:varchar(15);not null;index:idx_dbtype_st_map,unique;index:idx_schema_mode;comment:'源端 schema'" json:"schema_name_s"`
+	TableNameS    string `gorm:"type:varchar(30);not null;index:idx_dbtype_st_map,unique;comment:'源端表名'" json:"table_name_s"`
+	SchemaNameT   string `gorm:"type:varchar(15);not null;comment:'目标端 schema'" json:"schema_name_t"`
+	TableNameT    string `gorm:"type:varchar(30);not null;comment:'目标端表名'" json:"table_name_t"`
+	GlobalScnS    uint64 `gorm:"comment:'源端全局 SCN'" json:"global_scn_s"`
+	ColumnDetailS string `gorm:"type:text;comment:'源端查询字段信息'" json:"column_detail_s"`
+	ChunkDetailS  string `gorm:"type:varchar(300);not null;index:idx_dbtype_st_map,unique;comment:'表 chunk 切分信息'" json:"chunk_detail_s"`
+	TaskMode      string `gorm:"not null;index:idx_dbtype_st_map,unique;index:idx_schema_mode;comment:'任务模式'" json:"task_mode"`
+	TaskStatus    string `gorm:"not null;comment:'任务 chunk 状态'" json:"task_status"`
+	CSVFile       string `gorm:"type:varchar(300);comment:'csv 文件名'" json:"csv_file"`
+	IsPartition   string `gorm:"comment:'是否是分区表'" json:"is_partition"` // 同步转换统一转换成非分区表，此处只做标志
+	InfoDetail    string `gorm:"not null;comment:'信息详情'" json:"info_detail"`
+	ErrorDetail   string `gorm:"not null;comment:'错误详情'" json:"error_detail"`
 	*BaseModel
 }
 
@@ -63,33 +66,15 @@ func (rw *FullSyncMeta) DeleteFullSyncMetaBySchemaSyncMode(ctx context.Context, 
 	if err != nil {
 		return err
 	}
-	err = rw.DB(ctx).Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND mode = ?",
+	err = rw.DB(ctx).Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND task_mode = ?",
 		common.StringUPPER(deleteS.DBTypeS),
 		common.StringUPPER(deleteS.DBTypeT),
 		common.StringUPPER(deleteS.SchemaNameS),
-		deleteS.Mode).Delete(&WaitSyncMeta{}).Error
+		deleteS.TaskMode).Delete(&WaitSyncMeta{}).Error
 	if err != nil {
 		return fmt.Errorf("delete table [%s] reocrd failed: %v", table, err)
 	}
 	return nil
-}
-
-func (rw *FullSyncMeta) DistinctFullSyncMetaByTableNameS(ctx context.Context, detailS *FullSyncMeta) ([]string, error) {
-	var tableNames []string
-	table, err := rw.ParseSchemaTable()
-	if err != nil {
-		return tableNames, err
-	}
-	if err = rw.DB(ctx).Model(&FullSyncMeta{}).
-		Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ? ",
-			common.StringUPPER(detailS.DBTypeS),
-			common.StringUPPER(detailS.DBTypeT),
-			common.StringUPPER(detailS.SchemaNameS)).
-		Distinct().
-		Pluck("table_name_s", &tableNames).Error; err != nil {
-		return tableNames, fmt.Errorf("distinct table [%s] column [table_name_s] failed: %v", table, err)
-	}
-	return tableNames, nil
 }
 
 func (rw *FullSyncMeta) DetailFullSyncMeta(ctx context.Context, detailS *FullSyncMeta) ([]FullSyncMeta, error) {
@@ -104,21 +89,18 @@ func (rw *FullSyncMeta) DetailFullSyncMeta(ctx context.Context, detailS *FullSyn
 	return dsMetas, nil
 }
 
-// 清理并更新同步任务元数据表
-// 1、全量每成功同步一张表记录，再清理记录
-// 2、更新同步数据表元信息
 func (rw *FullSyncMeta) DeleteFullSyncMetaBySchemaTableRowid(ctx context.Context, deleteS *FullSyncMeta) error {
 	table, err := rw.ParseSchemaTable()
 	if err != nil {
 		return err
 	}
-	err = rw.DB(ctx).Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND table_name_s = ? AND mode = ?  AND UPPER(rowid_info_s) = ?",
+	err = rw.DB(ctx).Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND table_name_s = ? AND task_mode = ?  AND UPPER(chunk_detail_s) = ?",
 		common.StringUPPER(deleteS.DBTypeS),
 		common.StringUPPER(deleteS.DBTypeT),
 		common.StringUPPER(deleteS.SchemaNameS),
 		common.StringUPPER(deleteS.TableNameS),
-		deleteS.Mode,
-		common.StringUPPER(deleteS.RowidInfoS)).Delete(&FullSyncMeta{}).Error
+		deleteS.TaskMode,
+		common.StringUPPER(deleteS.ChunkDetailS)).Delete(&FullSyncMeta{}).Error
 	if err != nil {
 		return fmt.Errorf("delete table [%s] reocrd failed: %v", table, err)
 	}
@@ -137,6 +119,84 @@ func (rw *FullSyncMeta) BatchCreateFullSyncMeta(ctx context.Context, createS []F
 		return fmt.Errorf("batch create table [%s] record failed: %v", table, err)
 	}
 	return nil
+}
+
+func (rw *FullSyncMeta) DistinctFullSyncMetaTableNameSByTaskStatus(ctx context.Context, detailS *FullSyncMeta) ([]string, error) {
+	var tableNames []string
+	table, err := rw.ParseSchemaTable()
+	if err != nil {
+		return tableNames, err
+	}
+	if err := rw.DB(ctx).Model(&FullSyncMeta{}).
+		Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND task_mode = ? AND task_status = ?",
+			common.StringUPPER(detailS.DBTypeS),
+			common.StringUPPER(detailS.DBTypeT),
+			common.StringUPPER(detailS.SchemaNameS),
+			common.StringUPPER(detailS.TaskMode),
+			common.StringUPPER(detailS.TaskStatus)).
+		Distinct().
+		Pluck("table_name_s", &tableNames).Error; err != nil {
+		return tableNames, fmt.Errorf("distinct table [%s] column [table_name_s] failed: %v", table, err)
+	}
+	return tableNames, nil
+}
+
+func (rw *FullSyncMeta) UpdateFullSyncMeta(ctx context.Context, deleteS *FullSyncMeta, updates map[string]interface{}) error {
+	table, err := rw.ParseSchemaTable()
+	if err != nil {
+		return err
+	}
+	if err = rw.DB(ctx).Model(FullSyncMeta{}).
+		Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND table_name_s = ? AND task_mode = ? AND chunk_detail_s = ?",
+			common.StringUPPER(deleteS.DBTypeS),
+			common.StringUPPER(deleteS.DBTypeT),
+			common.StringUPPER(deleteS.SchemaNameS),
+			common.StringUPPER(deleteS.TableNameS),
+			common.StringUPPER(deleteS.TaskMode),
+			deleteS.ChunkDetailS).
+		Updates(updates).Error; err != nil {
+		return fmt.Errorf("update table [%s] record failed: %v", table, err)
+	}
+	return nil
+}
+
+func (rw *FullSyncMeta) CountsErrorFullSyncMeta(ctx context.Context, dataErr *FullSyncMeta) (int64, error) {
+	var countsErr int64
+	table, err := rw.ParseSchemaTable()
+	if err != nil {
+		return countsErr, err
+	}
+	if err := rw.DB(ctx).Model(&FullSyncMeta{}).
+		Where(`db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND table_name_s = ? AND task_mode = ? AND task_status = ?`,
+			common.StringUPPER(dataErr.DBTypeS),
+			common.StringUPPER(dataErr.DBTypeT),
+			common.StringUPPER(dataErr.SchemaNameS),
+			common.StringUPPER(dataErr.TableNameS),
+			common.StringUPPER(dataErr.TaskMode),
+			dataErr.TaskStatus).
+		Count(&countsErr).Error; err != nil {
+		return countsErr, fmt.Errorf("get table [%s] counts failed: %v", table, err)
+	}
+	return countsErr, nil
+}
+
+func (rw *FullSyncMeta) CountsFullSyncMetaByTaskTable(ctx context.Context, dataErr *FullSyncMeta) (int64, error) {
+	var countsErr int64
+	table, err := rw.ParseSchemaTable()
+	if err != nil {
+		return countsErr, err
+	}
+	if err := rw.DB(ctx).Model(&FullSyncMeta{}).
+		Where(`db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND table_name_s = ? AND task_mode = ?`,
+			common.StringUPPER(dataErr.DBTypeS),
+			common.StringUPPER(dataErr.DBTypeT),
+			common.StringUPPER(dataErr.SchemaNameS),
+			common.StringUPPER(dataErr.TableNameS),
+			common.StringUPPER(dataErr.TaskMode)).
+		Count(&countsErr).Error; err != nil {
+		return countsErr, fmt.Errorf("get table [%s] counts failed: %v", table, err)
+	}
+	return countsErr, nil
 }
 
 func (rw *FullSyncMeta) String() string {

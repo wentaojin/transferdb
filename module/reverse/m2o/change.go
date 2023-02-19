@@ -30,6 +30,8 @@ import (
 
 type Change struct {
 	Ctx              context.Context `json:"-"`
+	DBTypeS          string          `json:"db_type_s"`
+	DBTypeT          string          `json:"db_type_t"`
 	SourceSchemaName string          `json:"source_schema_name"`
 	TargetSchemaName string          `json:"target_schema_name"`
 	SourceTables     []string        `json:"source_tables"`
@@ -44,8 +46,8 @@ func (r *Change) ChangeTableName() (map[string]string, error) {
 	customTableNameRule := make(map[string]string)
 	// 获取表名自定义规则
 	tableNameRules, err := meta.NewTableNameRuleModel(r.MetaDB).DetailTableNameRule(r.Ctx, &meta.TableNameRule{
-		DBTypeS:     common.TaskDBMySQL,
-		DBTypeT:     common.TaskDBOracle,
+		DBTypeS:     r.DBTypeS,
+		DBTypeT:     r.DBTypeT,
 		SchemaNameS: r.SourceSchemaName,
 		SchemaNameT: r.TargetSchemaName,
 	})
@@ -60,8 +62,8 @@ func (r *Change) ChangeTableName() (map[string]string, error) {
 	}
 
 	wg := &sync.WaitGroup{}
-	tableChS := make(chan string, common.BufferSize)
-	tableChT := make(chan string, common.BufferSize)
+	tableChS := make(chan string, common.ChannelBufferSize)
+	tableChT := make(chan string, common.ChannelBufferSize)
 	done := make(chan struct{})
 
 	go func(done func()) {
@@ -112,8 +114,8 @@ func (r *Change) ChangeTableColumnDatatype() (map[string]map[string]string, erro
 
 	// 获取内置映射规则
 	buildinDatatypeNames, err := meta.NewBuildinDatatypeRuleModel(r.MetaDB).BatchQueryBuildinDatatype(r.Ctx, &meta.BuildinDatatypeRule{
-		DBTypeS: common.TaskDBMySQL,
-		DBTypeT: common.TaskDBOracle,
+		DBTypeS: r.DBTypeS,
+		DBTypeT: r.DBTypeT,
 	})
 	if err != nil {
 		return tableColumnDatatypeMap, err
@@ -121,8 +123,8 @@ func (r *Change) ChangeTableColumnDatatype() (map[string]map[string]string, erro
 
 	// 获取自定义 schema 级别数据类型映射规则
 	schemaDataTypeMapSlice, err := meta.NewSchemaDatatypeRuleModel(r.MetaDB).DetailSchemaRule(r.Ctx, &meta.SchemaDatatypeRule{
-		DBTypeS:     common.TaskDBMySQL,
-		DBTypeT:     common.TaskDBOracle,
+		DBTypeS:     r.DBTypeS,
+		DBTypeT:     r.DBTypeT,
 		SchemaNameS: r.SourceSchemaName,
 	})
 	if err != nil {
@@ -131,8 +133,8 @@ func (r *Change) ChangeTableColumnDatatype() (map[string]map[string]string, erro
 
 	// 获取自定义 table 级别数据类型映射规则
 	tableDataTypeMapSlice, err := meta.NewTableDatatypeRuleModel(r.MetaDB).DetailTableRule(r.Ctx, &meta.TableDatatypeRule{
-		DBTypeS:     common.TaskDBMySQL,
-		DBTypeT:     common.TaskDBOracle,
+		DBTypeS:     r.DBTypeS,
+		DBTypeT:     r.DBTypeT,
 		SchemaNameS: r.SourceSchemaName,
 	})
 	if err != nil {
@@ -141,8 +143,8 @@ func (r *Change) ChangeTableColumnDatatype() (map[string]map[string]string, erro
 
 	// 获取自定义 column 映射规则
 	columnDataTypeMapSlice, err := meta.NewColumnDatatypeRuleModel(r.MetaDB).DetailColumnRule(r.Ctx, &meta.ColumnDatatypeRule{
-		DBTypeS:     common.TaskDBMySQL,
-		DBTypeT:     common.TaskDBOracle,
+		DBTypeS:     r.DBTypeS,
+		DBTypeT:     r.DBTypeT,
 		SchemaNameS: r.SourceSchemaName,
 	})
 	if err != nil {
@@ -152,7 +154,7 @@ func (r *Change) ChangeTableColumnDatatype() (map[string]map[string]string, erro
 	wg := &errgroup.Group{}
 	wg.SetLimit(r.Threads)
 
-	tableColumnChan := make(chan map[string]map[string]string, common.BufferSize)
+	tableColumnChan := make(chan map[string]map[string]string, common.ChannelBufferSize)
 	done := make(chan struct{})
 
 	go func(done func()) {
@@ -243,8 +245,8 @@ func (r *Change) ChangeTableColumnDefaultValue() (map[string]map[string]string, 
 	tableDefaultValMap := make(map[string]map[string]string)
 	// 获取内置字段默认值映射规则 -> global
 	globalDefaultValueMapSlice, err := meta.NewBuildinGlobalDefaultvalModel(r.MetaDB).DetailGlobalDefaultVal(r.Ctx, &meta.BuildinGlobalDefaultval{
-		DBTypeS: common.TaskDBMySQL,
-		DBTypeT: common.TaskDBOracle,
+		DBTypeS: r.DBTypeS,
+		DBTypeT: r.DBTypeT,
 	})
 	if err != nil {
 		return tableDefaultValMap, err
@@ -252,8 +254,8 @@ func (r *Change) ChangeTableColumnDefaultValue() (map[string]map[string]string, 
 
 	// 获取自定义字段默认值映射规则 -> column
 	columnDefaultValueMapSlice, err := meta.NewBuildinColumnDefaultvalModel(r.MetaDB).DetailColumnDefaultVal(r.Ctx, &meta.BuildinColumnDefaultval{
-		DBTypeS:     common.TaskDBOracle,
-		DBTypeT:     common.TaskDBMySQL,
+		DBTypeS:     r.DBTypeS,
+		DBTypeT:     r.DBTypeT,
 		SchemaNameS: r.SourceSchemaName,
 	})
 	if err != nil {
@@ -268,7 +270,7 @@ func (r *Change) ChangeTableColumnDefaultValue() (map[string]map[string]string, 
 	wg := &errgroup.Group{}
 	wg.SetLimit(r.Threads)
 
-	columnDefaultChan := make(chan map[string]map[string]string, common.BufferSize)
+	columnDefaultChan := make(chan map[string]map[string]string, common.ChannelBufferSize)
 	done := make(chan struct{})
 
 	go func(done func()) {

@@ -28,9 +28,9 @@ type Applier interface {
 }
 
 type Fuller interface {
-	NewFuller() error
+	Full() error
 }
 
 type Increr interface {
-	NewIncr() error
+	Incr() error
 }

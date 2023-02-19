@@ -27,7 +27,7 @@ import (
 /*
 Oracle 表字段映射转换 -> Check 阶段
 */
-func GenOracleTableColumnMeta(ctx context.Context, metaDB *meta.Meta, sourceSchema, sourceTableName, columnName string, columnINFO Column) (string, error) {
+func GenOracleTableColumnMeta(ctx context.Context, metaDB *meta.Meta, dbTypeS, dbTypeT, sourceSchema, sourceTableName, columnName string, columnINFO Column) (string, error) {
 	var (
 		nullable        string
 		dataDefault     string
@@ -76,12 +76,12 @@ func GenOracleTableColumnMeta(ctx context.Context, metaDB *meta.Meta, sourceSche
 		return columnMeta, fmt.Errorf(`oracle table column meta generate failed, column [%v] json: [%v]`, columnName, columnINFO.String())
 	}
 
-	dataDefault, err = ChangeTableColumnDefaultValue(ctx, metaDB, sourceSchema, sourceTableName, columnName, columnINFO.DataDefault)
+	dataDefault, err = ChangeTableColumnDefaultValue(ctx, metaDB, sourceSchema, dbTypeS, dbTypeT, sourceTableName, columnName, columnINFO.DataDefault)
 	if err != nil {
 		return columnMeta, err
 	}
 
-	columnType, err := ChangeTableColumnType(ctx, metaDB, sourceSchema, sourceTableName, columnName, columnINFO)
+	columnType, err := ChangeTableColumnType(ctx, metaDB, sourceSchema, dbTypeS, dbTypeT, sourceTableName, columnName, columnINFO)
 	if err != nil {
 		return "", err
 	}
@@ -150,12 +150,12 @@ func GenOracleTableColumnMeta(ctx context.Context, metaDB *meta.Meta, sourceSche
 // 数据库查询获取自定义表结构转换规则
 // 加载数据类型转换规则【处理字段级别、表级别、库级别数据类型映射规则】
 // 数据类型转换规则判断，未设置自定义规则，默认采用内置默认字段类型转换
-func ChangeTableColumnType(ctx context.Context, metaDB *meta.Meta, sourceSchema, sourceTableName, columnName string, columnINFO Column) (string, error) {
+func ChangeTableColumnType(ctx context.Context, metaDB *meta.Meta, dbTypeS, dbTypeT, sourceSchema, sourceTableName, columnName string, columnINFO Column) (string, error) {
 	var columnType string
 	// 获取内置映射规则
 	buildinDatatypeNames, err := meta.NewBuildinDatatypeRuleModel(metaDB).BatchQueryBuildinDatatype(ctx, &meta.BuildinDatatypeRule{
-		DBTypeS: common.TaskDBOracle,
-		DBTypeT: common.TaskDBMySQL,
+		DBTypeS: dbTypeS,
+		DBTypeT: dbTypeT,
 	})
 	if err != nil {
 		return columnType, err
@@ -183,8 +183,8 @@ func ChangeTableColumnType(ctx context.Context, metaDB *meta.Meta, sourceSchema,
 	}
 	// 获取自定义映射规则
 	columnDataTypeMapSlice, err := meta.NewColumnDatatypeRuleModel(metaDB).DetailColumnRule(ctx, &meta.ColumnDatatypeRule{
-		DBTypeS:     common.TaskDBOracle,
-		DBTypeT:     common.TaskDBMySQL,
+		DBTypeS:     dbTypeS,
+		DBTypeT:     dbTypeT,
 		SchemaNameS: sourceSchema,
 		TableNameS:  sourceTableName,
 		ColumnNameS: columnName,
@@ -194,8 +194,8 @@ func ChangeTableColumnType(ctx context.Context, metaDB *meta.Meta, sourceSchema,
 	}
 
 	tableDataTypeMapSlice, err := meta.NewTableDatatypeRuleModel(metaDB).DetailTableRule(ctx, &meta.TableDatatypeRule{
-		DBTypeS:     common.TaskDBOracle,
-		DBTypeT:     common.TaskDBMySQL,
+		DBTypeS:     dbTypeS,
+		DBTypeT:     dbTypeT,
 		SchemaNameS: sourceSchema,
 		TableNameS:  sourceTableName,
 	})
@@ -204,8 +204,8 @@ func ChangeTableColumnType(ctx context.Context, metaDB *meta.Meta, sourceSchema,
 	}
 
 	schemaDataTypeMapSlice, err := meta.NewSchemaDatatypeRuleModel(metaDB).DetailSchemaRule(ctx, &meta.SchemaDatatypeRule{
-		DBTypeS:     common.TaskDBOracle,
-		DBTypeT:     common.TaskDBMySQL,
+		DBTypeS:     dbTypeS,
+		DBTypeT:     dbTypeT,
 		SchemaNameS: sourceSchema,
 	})
 	if err != nil {
@@ -238,7 +238,7 @@ func ChangeTableColumnType(ctx context.Context, metaDB *meta.Meta, sourceSchema,
 	}
 }
 
-func ChangeTableColumnDefaultValue(ctx context.Context, metaDB *meta.Meta, sourceSchema, sourceTableName, columnName, dataDefault string) (string, error) {
+func ChangeTableColumnDefaultValue(ctx context.Context, metaDB *meta.Meta, dbTypeS, dbTypeT, sourceSchema, sourceTableName, columnName, dataDefault string) (string, error) {
 	// 处理 oracle 默认值 ('xxx') 或者 (xxx)
 	if strings.HasPrefix(dataDefault, "(") && strings.HasSuffix(dataDefault, ")") {
 		dataDefault = strings.TrimLeft(dataDefault, "(")
@@ -246,8 +246,8 @@ func ChangeTableColumnDefaultValue(ctx context.Context, metaDB *meta.Meta, sourc
 	}
 
 	columnDefaultValueMapSlice, err := meta.NewBuildinColumnDefaultvalModel(metaDB).DetailColumnDefaultVal(ctx, &meta.BuildinColumnDefaultval{
-		DBTypeS:     common.TaskDBOracle,
-		DBTypeT:     common.TaskDBMySQL,
+		DBTypeS:     dbTypeS,
+		DBTypeT:     dbTypeT,
 		SchemaNameS: sourceSchema,
 		TableNameS:  sourceTableName,
 		ColumnNameS: columnName,
@@ -257,8 +257,8 @@ func ChangeTableColumnDefaultValue(ctx context.Context, metaDB *meta.Meta, sourc
 	}
 
 	globalDefaultValueMapSlice, err := meta.NewBuildinGlobalDefaultvalModel(metaDB).DetailGlobalDefaultVal(ctx, &meta.BuildinGlobalDefaultval{
-		DBTypeS: common.TaskDBOracle,
-		DBTypeT: common.TaskDBMySQL,
+		DBTypeS: dbTypeS,
+		DBTypeT: dbTypeT,
 	})
 	if err != nil {
 		return dataDefault, err

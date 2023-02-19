@@ -34,5 +34,5 @@ type Writer interface {
 }
 
 type Reporter interface {
-	NewCheck() error
+	Check() error
 }

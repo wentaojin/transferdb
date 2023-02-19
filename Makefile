@@ -37,10 +37,10 @@ prepare: gotool
 	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode prepare
 
 reverseO2M: gotool
-	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode reverseo2m
+	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode reverse -source oracle -target mysql
 
 reverseM2O: gotool
-	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode reversem2o
+	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode reverse -source mysql -target oracle
 
 check: gotool
 	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode check

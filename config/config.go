@@ -19,7 +19,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/wentaojin/transferdb/errors"
+	"github.com/wentaojin/transferdb/common"
 	"os"
 
 	"github.com/BurntSushi/toml"
@@ -37,10 +37,12 @@ type Config struct {
 	OracleConfig  OracleConfig  `toml:"oracle" json:"oracle"`
 	MySQLConfig   MySQLConfig   `toml:"mysql" json:"mysql"`
 	LogConfig     LogConfig     `toml:"log" json:"log"`
-	DiffConfig    DiffConfig    `toml:"diff" json:"diff"`
+	DiffConfig    DiffConfig    `toml:"compare" json:"compare"`
 	ConfigFile    string        `json:"config-file"`
 	PrintVersion  bool
-	Mode          string `json:"mode"`
+	TaskMode      string `json:"task-mode"`
+	DBTypeS       string `json:"db-type-s"`
+	DBTypeT       string `json:"db-type-t"`
 }
 
 type AppConfig struct {
@@ -60,10 +62,10 @@ type DiffConfig struct {
 }
 
 type ReverseConfig struct {
-	ReverseThreads       int    `toml:"reverse-threads" json:"reverse-threads"`
-	DirectWrite          bool   `toml:"direct-write" json:"direct-write"`
-	ReverseDDLDir        string `toml:"reverse-ddl-dir" json:"reverse-ddl-dir"`
-	ReverseCompatibleDir string `toml:"reverse-compatible-dir" json:"reverse-compatible-dir"`
+	ReverseThreads   int    `toml:"reverse-threads" json:"reverse-threads"`
+	DirectWrite      bool   `toml:"direct-write" json:"direct-write"`
+	DDLReverseDir    string `toml:"ddl-reverse-dir" json:"ddl-reverse-dir"`
+	DDLCompatibleDir string `toml:"ddl-compatible-dir" json:"ddl-compatible-dir"`
 }
 
 type CheckConfig struct {
@@ -157,13 +159,14 @@ func NewConfig() *Config {
 	}
 	fs.BoolVar(&cfg.PrintVersion, "V", false, "print version information and exit")
 	fs.StringVar(&cfg.ConfigFile, "config", "./config.toml", "path to the configuration file")
-	fs.StringVar(&cfg.Mode, "mode", "", "specify the program running mode: [prepare assess reverseO2M reverseM2O full csv all check diff]")
-
+	fs.StringVar(&cfg.TaskMode, "mode", "", "specify the program running mode: [prepare assess reverse full csv all check compare]")
+	fs.StringVar(&cfg.DBTypeS, "source", "oracle", "specify the source db type")
+	fs.StringVar(&cfg.DBTypeT, "target", "mysql", "specify the target db type")
 	return cfg
 }
 
-func (cfg *Config) Parse(args []string) error {
-	err := cfg.FlagSet.Parse(args)
+func (c *Config) Parse(args []string) error {
+	err := c.FlagSet.Parse(args)
 	switch err {
 	case nil:
 	case flag.ErrHelp:
@@ -172,18 +175,21 @@ func (cfg *Config) Parse(args []string) error {
 		os.Exit(2)
 	}
 
-	if cfg.PrintVersion {
+	if c.PrintVersion {
 		fmt.Println(GetRawVersionInfo())
 		os.Exit(0)
 	}
 
-	if cfg.ConfigFile != "" {
-		if err = cfg.configFromFile(cfg.ConfigFile); err != nil {
+	if c.ConfigFile != "" {
+		if err = c.configFromFile(c.ConfigFile); err != nil {
 			return err
 		}
 	} else {
-		return errors.NewMSError(errors.TRANSFERDB, errors.DOMAIN_CONFIG, fmt.Errorf("no config file"))
+		return fmt.Errorf("no config file")
 	}
+
+	c.AdjustConfig()
+
 	return nil
 }
 
@@ -193,6 +199,14 @@ func (c *Config) configFromFile(file string) error {
 		return fmt.Errorf("failed decode toml config file %s: %v", file, err)
 	}
 	return nil
+}
+
+func (c *Config) AdjustConfig() {
+	c.DBTypeS = common.StringUPPER(c.DBTypeS)
+	c.DBTypeT = common.StringUPPER(c.DBTypeT)
+	c.TaskMode = common.StringUPPER(c.TaskMode)
+	c.OracleConfig.SchemaName = common.StringUPPER(c.OracleConfig.SchemaName)
+	c.MySQLConfig.SchemaName = common.StringUPPER(c.MySQLConfig.SchemaName)
 }
 
 func (c *Config) String() string {

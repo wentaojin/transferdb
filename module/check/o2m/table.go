@@ -375,7 +375,7 @@ func NewMySQLTableINFO(schemaName, tableName, targetDBType string, mysql *mysql.
 
 	// 是否 TiDB 版本
 	isTiDB := false
-	if strings.ToUpper(targetDBType) == common.TaskDBTiDB {
+	if strings.EqualFold(targetDBType, common.DatabaseTypeTiDB) {
 		isTiDB = true
 	}
 

@@ -23,7 +23,7 @@ import (
 	"time"
 )
 
-func TPrepare(ctx context.Context, cfg *config.Config) error {
+func IPrepare(ctx context.Context, cfg *config.Config) error {
 	startTime := time.Now()
 	zap.L().Info("prepare tansferdb env start")
 	metaDB, err := meta.NewMetaDBEngine(ctx, cfg.MySQLConfig, cfg.AppConfig.SlowlogThreshold)

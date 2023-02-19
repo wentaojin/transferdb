@@ -16,5 +16,5 @@ limitations under the License.
 package csv
 
 type CSVer interface {
-	NewCSVer() error
+	CSV() error
 }

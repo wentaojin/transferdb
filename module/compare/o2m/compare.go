@@ -39,14 +39,26 @@ type O2M struct {
 	metaDB *meta.Meta
 }
 
-func NewO2MCompare(ctx context.Context, cfg *config.Config, oracle *oracle.Oracle, mysql *mysql.MySQL, metaDB *meta.Meta) *O2M {
+func NewCompare(ctx context.Context, cfg *config.Config) (*O2M, error) {
+	oracleDB, err := oracle.NewOracleDBEngine(ctx, cfg.OracleConfig)
+	if err != nil {
+		return nil, err
+	}
+	mysqlDB, err := mysql.NewMySQLDBEngine(ctx, cfg.MySQLConfig)
+	if err != nil {
+		return nil, err
+	}
+	metaDB, err := meta.NewMetaDBEngine(ctx, cfg.MySQLConfig, cfg.AppConfig.SlowlogThreshold)
+	if err != nil {
+		return nil, err
+	}
 	return &O2M{
 		ctx:    ctx,
 		cfg:    cfg,
-		oracle: oracle,
-		mysql:  mysql,
+		oracle: oracleDB,
+		mysql:  mysqlDB,
 		metaDB: metaDB,
-	}
+	}, nil
 }
 
 func (r *O2M) NewCompare() error {
@@ -76,40 +88,73 @@ func (r *O2M) NewCompare() error {
 		return nil
 	}
 
-	// 判断 error_log_detail 是否存在错误记录，是否可进行 compare
-	errTotals, err := meta.NewErrorLogDetailModel(r.metaDB).CountsErrorLogBySchema(r.ctx, &meta.ErrorLogDetail{
-		DBTypeS:     common.TaskDBOracle,
-		DBTypeT:     common.TaskDBMySQL,
+	// 清理非当前任务 SUCCESS 表元数据记录 wait_sync_meta (用于统计 SUCCESS 准备)
+	// 例如：当前任务表 A/B，之前任务表 A/C (SUCCESS)，清理元数据 C，对于表 A 任务 Skip 忽略处理，除非手工清理表 A
+	tablesByMeta, err := meta.NewWaitSyncMetaModel(r.metaDB).DetailWaitSyncMetaSuccessTables(r.ctx, &meta.WaitSyncMeta{
+		DBTypeS:     r.cfg.DBTypeS,
+		DBTypeT:     r.cfg.DBTypeT,
 		SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
-		RunMode:     common.CompareO2MMode,
+		TaskMode:    r.cfg.TaskMode,
+		TaskStatus:  common.TaskStatusSuccess,
+	})
+	if err != nil {
+		return err
+	}
+
+	clearTables := common.FilterDifferenceStringItems(tablesByMeta, exporters)
+	interTables := common.FilterIntersectionStringItems(tablesByMeta, exporters)
+	if len(clearTables) > 0 {
+		err = meta.NewWaitSyncMetaModel(r.metaDB).DeleteWaitSyncMetaSuccessTables(r.ctx, &meta.WaitSyncMeta{
+			DBTypeS:     r.cfg.DBTypeS,
+			DBTypeT:     r.cfg.DBTypeT,
+			SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+			TaskMode:    r.cfg.TaskMode,
+			TaskStatus:  common.TaskStatusSuccess,
+		}, clearTables)
+		if err != nil {
+			return err
+		}
+	}
+	zap.L().Warn("non-task table clear",
+		zap.Strings("clear tables", clearTables),
+		zap.Strings("intersection tables", interTables),
+		zap.Int("clear totals", len(clearTables)),
+		zap.Int("intersection total", len(interTables)))
+
+	// 判断 [wait_sync_meta] 是否存在错误记录，是否可进行 COMPARE
+	errTotals, err := meta.NewWaitSyncMetaModel(r.metaDB).CountsErrWaitSyncMetaBySchema(r.ctx, &meta.WaitSyncMeta{
+		DBTypeS:     r.cfg.DBTypeS,
+		DBTypeT:     r.cfg.DBTypeT,
+		SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+		TaskMode:    r.cfg.TaskMode,
+		TaskStatus:  common.TaskStatusFailed,
 	})
 	if errTotals > 0 || err != nil {
-		return fmt.Errorf("compare schema [%s] table mode [%s] task failed: %v, table [error_log_detail] exist failed error, please clear and rerunning", strings.ToUpper(r.cfg.OracleConfig.SchemaName), common.CompareO2MMode, err)
+		return fmt.Errorf(`compare schema [%s] mode [%s] table task failed: %v, meta table [wait_sync_meta] exist failed error, please firstly check log and deal, secondly clear or update meta table [wait_sync_meta] column [task_status] table status WAITING (Need UPPER), thirdly clear meta table [data_compare_meta] error table record, finally rerunning`, strings.ToUpper(r.cfg.OracleConfig.SchemaName), r.cfg.TaskMode, err)
 	}
 
 	// 判断并记录待同步表列表
 	for _, tableName := range exporters {
 		waitSyncMetas, err := meta.NewWaitSyncMetaModel(r.metaDB).DetailWaitSyncMeta(r.ctx, &meta.WaitSyncMeta{
-			DBTypeS:     common.TaskDBOracle,
-			DBTypeT:     common.TaskDBMySQL,
+			DBTypeS:     r.cfg.DBTypeS,
+			DBTypeT:     r.cfg.DBTypeT,
 			SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 			TableNameS:  tableName,
-			Mode:        common.CompareO2MMode,
+			TaskMode:    r.cfg.TaskMode,
 		})
 		if err != nil {
 			return err
 		}
 		if len(waitSyncMetas) == 0 {
-			// 初始同步表全量任务为 -1 表示未进行全量初始化，初始化完成会变更
-			// 全量同步完成，增量阶段，值预期都是 0
 			err = meta.NewWaitSyncMetaModel(r.metaDB).CreateWaitSyncMeta(r.ctx, &meta.WaitSyncMeta{
-				DBTypeS:        common.TaskDBOracle,
-				DBTypeT:        common.TaskDBMySQL,
+				DBTypeS:        r.cfg.DBTypeS,
+				DBTypeT:        r.cfg.DBTypeT,
 				SchemaNameS:    common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 				TableNameS:     common.StringUPPER(tableName),
-				Mode:           common.CompareO2MMode,
-				FullGlobalSCN:  0,
-				FullSplitTimes: -1,
+				TaskMode:       r.cfg.TaskMode,
+				TaskStatus:     common.TaskStatusWaiting,
+				GlobalScnS:     common.TaskTableDefaultSourceGlobalSCN,
+				ChunkTotalNums: common.TaskTableDefaultSplitChunkNums,
 			})
 			if err != nil {
 				return err
@@ -126,11 +171,11 @@ func (r *O2M) NewCompare() error {
 
 		for _, tableName := range exporters {
 			err = meta.NewWaitSyncMetaModel(r.metaDB).DeleteWaitSyncMeta(r.ctx, &meta.WaitSyncMeta{
-				DBTypeS:     common.TaskDBOracle,
-				DBTypeT:     common.TaskDBMySQL,
+				DBTypeS:     r.cfg.DBTypeS,
+				DBTypeT:     r.cfg.DBTypeT,
 				SchemaNameS: r.cfg.OracleConfig.SchemaName,
 				TableNameS:  tableName,
-				Mode:        common.CompareO2MMode,
+				TaskMode:    r.cfg.TaskMode,
 			})
 			if err != nil {
 				return err
@@ -138,26 +183,24 @@ func (r *O2M) NewCompare() error {
 
 			// 判断并记录待同步表列表
 			waitSyncMetas, err := meta.NewWaitSyncMetaModel(r.metaDB).DetailWaitSyncMeta(r.ctx, &meta.WaitSyncMeta{
-				DBTypeS:     common.TaskDBOracle,
-				DBTypeT:     common.TaskDBMySQL,
+				DBTypeS:     r.cfg.DBTypeS,
+				DBTypeT:     r.cfg.DBTypeT,
 				SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 				TableNameS:  tableName,
-				Mode:        common.CompareO2MMode,
+				TaskMode:    r.cfg.TaskMode,
 			})
 			if err != nil {
 				return err
 			}
 			if len(waitSyncMetas) == 0 {
-				// 初始同步表全量任务为 -1 表示未进行全量初始化，初始化完成会变更
-				// 全量同步完成，增量阶段，值预期都是 0
 				err = meta.NewWaitSyncMetaModel(r.metaDB).CreateWaitSyncMeta(r.ctx, &meta.WaitSyncMeta{
-					DBTypeS:        common.TaskDBOracle,
-					DBTypeT:        common.TaskDBMySQL,
+					DBTypeS:        r.cfg.DBTypeS,
+					DBTypeT:        r.cfg.DBTypeT,
 					SchemaNameS:    common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 					TableNameS:     common.StringUPPER(tableName),
-					Mode:           common.CompareO2MMode,
-					FullGlobalSCN:  0,
-					FullSplitTimes: -1,
+					TaskStatus:     common.TaskStatusWaiting,
+					GlobalScnS:     common.TaskTableDefaultSourceGlobalSCN,
+					ChunkTotalNums: common.TaskTableDefaultSplitChunkNums,
 				})
 				if err != nil {
 					return err
@@ -173,12 +216,13 @@ func (r *O2M) NewCompare() error {
 	)
 
 	waitSyncDetails, err := meta.NewWaitSyncMetaModel(r.metaDB).DetailWaitSyncMeta(r.ctx, &meta.WaitSyncMeta{
-		DBTypeS:        common.TaskDBOracle,
-		DBTypeT:        common.TaskDBMySQL,
+		DBTypeS:        r.cfg.DBTypeS,
+		DBTypeT:        r.cfg.DBTypeT,
 		SchemaNameS:    common.StringUPPER(r.cfg.OracleConfig.SchemaName),
-		Mode:           common.CompareO2MMode,
-		FullGlobalSCN:  0,
-		FullSplitTimes: -1,
+		TaskMode:       r.cfg.TaskMode,
+		TaskStatus:     common.TaskStatusWaiting,
+		GlobalScnS:     common.TaskTableDefaultSourceGlobalSCN,
+		ChunkTotalNums: common.TaskTableDefaultSplitChunkNums,
 	})
 	if err != nil {
 		return err
@@ -190,58 +234,69 @@ func (r *O2M) NewCompare() error {
 		}
 	}
 
+	// 判断未同步完成的表列表能否断点续传
 	var (
 		partSyncTableMetas []meta.WaitSyncMeta
 		partSyncTables     []string
+		panicTblFullSlice  []string
 	)
-	partSyncDetails, err := meta.NewWaitSyncMetaModel(r.metaDB).BatchQueryWaitSyncMeta(r.ctx, &meta.WaitSyncMeta{
-		DBTypeS:     common.TaskDBOracle,
-		DBTypeT:     common.TaskDBMySQL,
+	partSyncDetails, err := meta.NewWaitSyncMetaModel(r.metaDB).QueryWaitSyncMetaByPartTask(r.ctx, &meta.WaitSyncMeta{
+		DBTypeS:     r.cfg.DBTypeS,
+		DBTypeT:     r.cfg.DBTypeT,
 		SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
-		Mode:        common.CompareO2MMode,
+		TaskMode:    r.cfg.TaskMode,
+		TaskStatus:  common.TaskStatusRunning,
 	})
 	if err != nil {
 		return err
 	}
 	partSyncTableMetas = partSyncDetails
 	if len(partSyncTableMetas) > 0 {
-		for _, table := range partSyncTableMetas {
-			partSyncTables = append(partSyncTables, common.StringUPPER(table.TableNameS))
+		for _, t := range partSyncTableMetas {
+			partSyncTables = append(partSyncTables, common.StringUPPER(t.TableNameS))
 		}
 	}
 
-	if len(waitSyncTableMetas) == 0 && len(partSyncTableMetas) == 0 {
+	waitCompareChunkTables, err := meta.NewDataCompareMetaModel(r.metaDB).DistinctDataCompareMetaTableNameSByTaskStatus(r.ctx, &meta.DataCompareMeta{
+		DBTypeS:     r.cfg.DBTypeS,
+		DBTypeT:     r.cfg.DBTypeT,
+		SchemaNameS: r.cfg.OracleConfig.SchemaName,
+		TaskMode:    r.cfg.TaskMode,
+		TaskStatus:  common.TaskStatusWaiting,
+	})
+	if err != nil {
+		return err
+	}
+
+	for _, partSyncTable := range partSyncDetails {
+		if !common.IsContainString(waitCompareChunkTables, partSyncTable.TableNameS) {
+			panicTblFullSlice = append(panicTblFullSlice, partSyncTable.TableNameS)
+		} else {
+			counts, err := meta.NewDataCompareMetaModel(r.metaDB).CountsDataCompareMetaByTaskTable(r.ctx, &meta.DataCompareMeta{
+				DBTypeS:     r.cfg.DBTypeS,
+				DBTypeT:     r.cfg.DBTypeT,
+				SchemaNameS: r.cfg.OracleConfig.SchemaName,
+				TableNameS:  partSyncTable.TableNameS,
+				TaskMode:    r.cfg.TaskMode,
+			})
+			if err != nil {
+				return err
+			}
+			if counts != partSyncTable.ChunkTotalNums {
+				panicTblFullSlice = append(panicTblFullSlice, partSyncTable.TableNameS)
+			}
+		}
+	}
+
+	if (len(panicTblFullSlice) != 0) || (len(partSyncDetails) != len(waitCompareChunkTables)) {
 		endTime := time.Now()
-		zap.L().Info("all oracle table data diff finished",
-			zap.String("schema", r.cfg.OracleConfig.SchemaName),
-			zap.String("cost", endTime.Sub(startTime).String()))
-		return nil
-	}
-
-	// 判断未同步完成的表列表能否断点续传
-	var panicTblFullSlice []string
-
-	for _, partSyncMeta := range partSyncTableMetas {
-		tableNameArray, err2 := meta.NewDataCompareMetaModel(r.metaDB).DistinctDataCompareMetaTableNameS(r.ctx, &meta.DataCompareMeta{
-			DBTypeS:     common.TaskDBOracle,
-			DBTypeT:     common.TaskDBMySQL,
-			SchemaNameS: r.cfg.OracleConfig.SchemaName})
-		if err2 != nil {
-			return err2
-		}
-
-		if !common.IsContainString(tableNameArray, partSyncMeta.TableNameS) {
-			panicTblFullSlice = append(panicTblFullSlice, partSyncMeta.TableNameS)
-		}
-	}
-
-	if len(panicTblFullSlice) != 0 {
-		endTime := time.Now()
-		zap.L().Error("all oracle table data diff error",
+		zap.L().Error("all oracle table data compare error",
 			zap.String("schema", r.cfg.OracleConfig.SchemaName),
 			zap.String("cost", endTime.Sub(startTime).String()),
+			zap.Int("part sync tables", len(partSyncDetails)),
+			zap.Int("wait compare chunk tables", len(waitCompareChunkTables)),
 			zap.Strings("panic tables", panicTblFullSlice))
-		return fmt.Errorf("checkpoint isn't consistent, please reruning [enable-checkpoint = fase]")
+		return fmt.Errorf("checkpoint isn't consistent, can't be resume, please reruning [enable-checkpoint = fase]")
 	}
 
 	// ORACLE 环境信息
@@ -305,8 +360,8 @@ func (r *O2M) NewCompare() error {
 	// compare 任务列表
 	// 获取表名自定义规则
 	tableNameRules, err := meta.NewTableNameRuleModel(r.metaDB).DetailTableNameRule(r.ctx, &meta.TableNameRule{
-		DBTypeS:     common.TaskDBOracle,
-		DBTypeT:     common.TaskDBMySQL,
+		DBTypeS:     r.cfg.DBTypeS,
+		DBTypeT:     r.cfg.DBTypeT,
 		SchemaNameS: r.cfg.OracleConfig.SchemaName,
 		SchemaNameT: r.cfg.MySQLConfig.SchemaName,
 	})
@@ -341,7 +396,7 @@ func (r *O2M) NewCompare() error {
 	// 优先存在断点的表校验
 	// partTableTask -> waitTableTasks
 	if len(partTableTasks) > 0 {
-		err = PreTableStructCheck(r.ctx, r.cfg, r.oracle, r.mysql, r.metaDB, partSyncTables)
+		err = PreTableStructCheck(r.ctx, r.cfg, r.metaDB, partSyncTables)
 		if err != nil {
 			return err
 		}
@@ -351,7 +406,7 @@ func (r *O2M) NewCompare() error {
 		}
 	}
 	if len(waitTableTasks) > 0 {
-		err = PreTableStructCheck(r.ctx, r.cfg, r.oracle, r.mysql, r.metaDB, partSyncTables)
+		err = PreTableStructCheck(r.ctx, r.cfg, r.metaDB, partSyncTables)
 		if err != nil {
 			return err
 		}
@@ -366,32 +421,42 @@ func (r *O2M) NewCompare() error {
 		return err
 	}
 
-	// 错误核对
-	errTotals, err = meta.NewErrorLogDetailModel(r.metaDB).CountsErrorLogBySchema(r.ctx, &meta.ErrorLogDetail{
-		DBTypeS:     common.TaskDBOracle,
-		DBTypeT:     common.TaskDBMySQL,
+	// 任务详情
+	succTotals, err := meta.NewWaitSyncMetaModel(r.metaDB).DetailWaitSyncMeta(r.ctx, &meta.WaitSyncMeta{
+		DBTypeS:     r.cfg.DBTypeS,
+		DBTypeT:     r.cfg.DBTypeT,
 		SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
-		RunMode:     common.CompareO2MMode,
+		TaskMode:    r.cfg.TaskMode,
+		TaskStatus:  common.TaskStatusSuccess,
+	})
+	if err != nil {
+		return err
+	}
+	failedTotals, err := meta.NewWaitSyncMetaModel(r.metaDB).DetailWaitSyncMeta(r.ctx, &meta.WaitSyncMeta{
+		DBTypeS:     r.cfg.DBTypeS,
+		DBTypeT:     r.cfg.DBTypeT,
+		SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+		TaskMode:    r.cfg.TaskMode,
+		TaskStatus:  common.TaskStatusFailed,
 	})
 	if err != nil {
 		return err
 	}
 
-	endTime := time.Now()
-	zap.L().Info("diff", zap.String("fix sql file output", checkFile))
-	if errTotals == 0 {
-		zap.L().Info("diff table oracle to mysql finished",
+	zap.L().Info("compare", zap.String("fix sql file output", checkFile))
+	if len(failedTotals) == 0 {
+		zap.L().Info("compare table oracle to mysql finished",
 			zap.Int("table totals", len(exporters)),
-			zap.Int("table success", len(exporters)),
-			zap.Int("table failed", int(errTotals)),
-			zap.String("cost", endTime.Sub(startTime).String()))
+			zap.Int("table success", len(succTotals)),
+			zap.Int("table failed", len(failedTotals)),
+			zap.String("cost", time.Now().Sub(startTime).String()))
 	} else {
-		zap.L().Warn("diff table oracle to mysql finished",
+		zap.L().Warn("compare table oracle to mysql finished",
 			zap.Int("table totals", len(exporters)),
-			zap.Int("table success", len(exporters)-int(errTotals)),
-			zap.Int("table failed", int(errTotals)),
-			zap.String("failed tips", "failed detail, please see table [error_log_detail]"),
-			zap.String("cost", endTime.Sub(startTime).String()))
+			zap.Int("table success", len(succTotals)),
+			zap.Int("table failed", len(failedTotals)),
+			zap.String("failed tips", "failed detail, please see table [data_compare_meta]"),
+			zap.String("cost", time.Now().Sub(startTime).String()))
 	}
 	return nil
 }
@@ -400,13 +465,27 @@ func (r *O2M) comparePartTableTasks(f *compare.File, partTableTasks []*Task) err
 	for _, task := range partTableTasks {
 		// 获取对比记录
 		diffStartTime := time.Now()
-		compareMetas, err := meta.NewDataCompareMetaModel(r.metaDB).DetailDataCompareMeta(r.ctx, &meta.DataCompareMeta{
-			DBTypeS:     common.TaskDBOracle,
-			DBTypeT:     common.TaskDBMySQL,
+
+		err := meta.NewWaitSyncMetaModel(r.metaDB).UpdateWaitSyncMeta(r.ctx, &meta.WaitSyncMeta{
+			DBTypeS:     r.cfg.DBTypeS,
+			DBTypeT:     r.cfg.DBTypeT,
 			SchemaNameS: r.cfg.OracleConfig.SchemaName,
 			TableNameS:  task.sourceTableName,
-			SchemaNameT: r.cfg.MySQLConfig.SchemaName,
-			TableNameT:  task.targetTableName,
+			TaskMode:    r.cfg.TaskMode,
+		}, map[string]interface{}{
+			"TaskStatus": common.TaskStatusRunning,
+		})
+		if err != nil {
+			return err
+		}
+
+		compareMetas, err := meta.NewDataCompareMetaModel(r.metaDB).DetailDataCompareMeta(r.ctx, &meta.DataCompareMeta{
+			DBTypeS:     r.cfg.DBTypeS,
+			DBTypeT:     r.cfg.DBTypeT,
+			SchemaNameS: r.cfg.OracleConfig.SchemaName,
+			TableNameS:  task.sourceTableName,
+			TaskMode:    r.cfg.TaskMode,
+			TaskStatus:  common.TaskStatusWaiting,
 		})
 		if err != nil {
 			return err
@@ -417,106 +496,144 @@ func (r *O2M) comparePartTableTasks(f *compare.File, partTableTasks []*Task) err
 		g1 := &errgroup.Group{}
 		g1.SetLimit(r.cfg.DiffConfig.DiffThreads)
 
-		for _, compareMeta := range compareMetas.([]meta.DataCompareMeta) {
+		for _, compareMeta := range compareMetas {
 			newReport := NewReport(compareMeta, r.mysql, r.oracle, r.cfg.DiffConfig.OnlyCheckRows)
 			g1.Go(func() error {
 				// 数据对比报告
-				if err = IReport(newReport, f); err != nil {
-					err = meta.NewErrorLogDetailModel(r.metaDB).CreateErrorLog(r.ctx, &meta.ErrorLogDetail{
-						DBTypeS:     common.TaskDBOracle,
-						DBTypeT:     common.TaskDBMySQL,
+				report, err := IReport(newReport)
+				if err != nil {
+					// error skip, continue
+					if err = meta.NewDataCompareMetaModel(r.metaDB).UpdateDataCompareMeta(r.ctx, &meta.DataCompareMeta{
+						DBTypeS:     newReport.DataCompareMeta.DBTypeS,
+						DBTypeT:     newReport.DataCompareMeta.DBTypeT,
 						SchemaNameS: newReport.DataCompareMeta.SchemaNameS,
 						TableNameS:  newReport.DataCompareMeta.TableNameS,
-						RunMode:     common.CompareO2MMode,
-						RunStatus:   "Failed",
-						InfoDetail:  newReport.String(),
-						ErrorDetail: err.Error(),
-					})
-					if err != nil {
-						return fmt.Errorf("write meta table [error_log_detail] records failed, error: %v", err)
+						TaskMode:    newReport.DataCompareMeta.TaskMode,
+						WhereRange:  newReport.DataCompareMeta.WhereRange,
+					}, map[string]interface{}{
+						"TaskStatus":  common.TaskStatusFailed,
+						"InfoDetail":  newReport.String(),
+						"ErrorDetail": err.Error(),
+					}); err != nil {
+						return err
 					}
-					// continue
-				}
 
-				// 清理元数据记录
-				errCounts, err := meta.NewErrorLogDetailModel(r.metaDB).CountsErrorLogBySchemaTable(r.ctx, &meta.ErrorLogDetail{
-					DBTypeS:     common.TaskDBOracle,
-					DBTypeT:     common.TaskDBMySQL,
-					SchemaNameS: newReport.DataCompareMeta.SchemaNameS,
-					TableNameS:  newReport.DataCompareMeta.TableNameS,
-					RunMode:     common.CompareO2MMode,
-				})
-				if err != nil {
-					return fmt.Errorf("get meta table [error_log_detail] counts failed, error: %v", err)
-				}
-				// 若存在错误，skip 清理
-				if errCounts >= 1 {
 					return nil
 				}
 
-				err = meta.NewDataCompareMetaModel(r.metaDB).DeleteDataCompareMeta(r.ctx, &meta.DataCompareMeta{
-					DBTypeS:     common.TaskDBOracle,
-					DBTypeT:     common.TaskDBMySQL,
+				// 数据对比是否不一致
+				if !strings.EqualFold(report, "") {
+					var errMsg error
+					errMsg = fmt.Errorf("schema table data chunk isn't euqal")
+
+					if _, err := f.CWriteString(report); err != nil {
+						errMsg = fmt.Errorf("fix sql file write failed: %v", err.Error())
+					}
+					// error skip, continue
+					if err = meta.NewDataCompareMetaModel(r.metaDB).UpdateDataCompareMeta(r.ctx, &meta.DataCompareMeta{
+						DBTypeS:     newReport.DataCompareMeta.DBTypeS,
+						DBTypeT:     newReport.DataCompareMeta.DBTypeT,
+						SchemaNameS: newReport.DataCompareMeta.SchemaNameS,
+						TableNameS:  newReport.DataCompareMeta.TableNameS,
+						TaskMode:    newReport.DataCompareMeta.TaskMode,
+						WhereRange:  newReport.DataCompareMeta.WhereRange,
+					}, map[string]interface{}{
+						"TaskStatus":  common.TaskStatusFailed,
+						"InfoDetail":  newReport.String(),
+						"ErrorDetail": errMsg.Error(),
+					}); err != nil {
+						return err
+					}
+
+					return nil
+				}
+
+				err = meta.NewDataCompareMetaModel(r.metaDB).UpdateDataCompareMeta(r.ctx, &meta.DataCompareMeta{
+					DBTypeS:     newReport.DataCompareMeta.DBTypeS,
+					DBTypeT:     newReport.DataCompareMeta.DBTypeT,
 					SchemaNameS: newReport.DataCompareMeta.SchemaNameS,
 					TableNameS:  newReport.DataCompareMeta.TableNameS,
+					TaskMode:    newReport.DataCompareMeta.TaskMode,
 					WhereRange:  newReport.DataCompareMeta.WhereRange,
+				}, map[string]interface{}{
+					"TaskStatus": common.TaskStatusSuccess,
 				})
 				if err != nil {
 					return err
 				}
-				zap.L().Info("delete mysql [data_diff_meta] meta",
-					zap.String("table", newReport.String()),
-					zap.String("status", "success"))
 				return nil
 			})
 		}
 
-		if err := g1.Wait(); err != nil {
-			zap.L().Error("diff table oracle to mysql failed",
+		if err = g1.Wait(); err != nil {
+			return fmt.Errorf("compare table task failed, update table [data_compare_meta] failed: %v", err)
+		}
+
+		// 清理元数据记录
+		// 更新 wait_sync_meta 记录
+		totalErrs, err := meta.NewDataCompareMetaModel(r.metaDB).CountsErrorDataCompareMeta(r.ctx, &meta.DataCompareMeta{
+			DBTypeS:     r.cfg.DBTypeS,
+			DBTypeT:     r.cfg.DBTypeT,
+			SchemaNameS: r.cfg.OracleConfig.SchemaName,
+			TableNameS:  task.sourceTableName,
+			TaskMode:    r.cfg.TaskMode,
+			TaskStatus:  common.TaskStatusFailed,
+		})
+		if err != nil {
+			return fmt.Errorf("get meta table [data_compare_meta] counts failed, error: %v", err)
+		}
+
+		// 不存在错误，清理 data_compare_meta 记录, 更新 wait_sync_meta 记录
+		if totalErrs == 0 {
+			err = meta.NewCommonModel(r.metaDB).DeleteTableDataCompareMetaAndUpdateWaitSyncMeta(r.ctx,
+				&meta.DataCompareMeta{
+					DBTypeS:     r.cfg.DBTypeS,
+					DBTypeT:     r.cfg.DBTypeT,
+					SchemaNameS: r.cfg.OracleConfig.SchemaName,
+					TableNameS:  task.sourceTableName,
+					TaskMode:    r.cfg.TaskMode,
+				}, &meta.WaitSyncMeta{
+					DBTypeS:          r.cfg.DBTypeS,
+					DBTypeT:          r.cfg.DBTypeT,
+					SchemaNameS:      r.cfg.OracleConfig.SchemaName,
+					TableNameS:       task.sourceTableName,
+					TaskMode:         r.cfg.TaskMode,
+					TaskStatus:       common.TaskStatusSuccess,
+					ChunkSuccessNums: int64(len(compareMetas)),
+					ChunkFailedNums:  0,
+				})
+			if err != nil {
+				return err
+			}
+			zap.L().Info("diff single table oracle to mysql finished",
 				zap.String("schema", r.cfg.OracleConfig.SchemaName),
 				zap.String("table", task.sourceTableName),
-				zap.Error(fmt.Errorf("diff table task failed, detail see [error_log_detail], please rerunning")))
-			// 忽略错误 continue
+				zap.String("cost", time.Now().Sub(diffStartTime).String()))
+			// 继续
 			continue
 		}
 
-		// 更新 wait_sync_meta 记录
-		errCounts, err := meta.NewErrorLogDetailModel(r.metaDB).CountsErrorLogBySchemaTable(r.ctx, &meta.ErrorLogDetail{
-			DBTypeS:     common.TaskDBOracle,
-			DBTypeT:     common.TaskDBMySQL,
+		// 若存在错误，修改表状态，skip 清理，统一忽略，最后显示
+		err = meta.NewWaitSyncMetaModel(r.metaDB).UpdateWaitSyncMeta(r.ctx, &meta.WaitSyncMeta{
+			DBTypeS:     r.cfg.DBTypeS,
+			DBTypeT:     r.cfg.DBTypeT,
 			SchemaNameS: r.cfg.OracleConfig.SchemaName,
 			TableNameS:  task.sourceTableName,
-			RunMode:     common.CompareO2MMode,
-		})
-		if err != nil {
-			return fmt.Errorf("get meta table [error_log_detail] counts failed, error: %v", err)
-		}
-		// 若存在错误，skip 清理，统一忽略，最后显示
-		if errCounts >= 1 {
-			zap.L().Warn("update mysql [wait_sync_meta] meta",
-				zap.String("schema", r.cfg.OracleConfig.SchemaName),
-				zap.String("table", task.sourceTableName),
-				zap.String("mode", common.CompareO2MMode),
-				zap.String("updated", "skip"))
-			return nil
-		}
-
-		err = meta.NewWaitSyncMetaModel(r.metaDB).ModifyWaitSyncMetaColumnFullSplitTimesZero(r.ctx, &meta.WaitSyncMeta{
-			DBTypeS:        common.TaskDBOracle,
-			DBTypeT:        common.TaskDBMySQL,
-			SchemaNameS:    r.cfg.OracleConfig.SchemaName,
-			TableNameS:     task.sourceTableName,
-			Mode:           common.CompareO2MMode,
-			FullSplitTimes: 0,
+			TaskMode:    r.cfg.TaskMode,
+		}, map[string]interface{}{
+			"TaskStatus":       common.TaskStatusFailed,
+			"ChunkSuccessNums": int64(len(compareMetas)) - totalErrs,
+			"ChunkFailedNums":  totalErrs,
 		})
 		if err != nil {
 			return err
 		}
-		diffEndTime := time.Now()
-		zap.L().Info("diff single table oracle to mysql finished",
+		zap.L().Warn("update mysql [wait_sync_meta] meta",
 			zap.String("schema", r.cfg.OracleConfig.SchemaName),
 			zap.String("table", task.sourceTableName),
-			zap.String("cost", diffEndTime.Sub(diffStartTime).String()))
+			zap.String("mode", r.cfg.TaskMode),
+			zap.String("updated", "table check exist error, skip"),
+			zap.String("cost", time.Now().Sub(diffStartTime).String()))
 	}
 	return nil
 }
@@ -543,7 +660,7 @@ func (r *O2M) compareWaitTableTasks(f *compare.File, waitTableTasks []*Task) err
 		}
 		chunks = append(chunks, NewChunk(r.ctx, r.cfg, r.oracle, r.mysql, r.metaDB,
 			cid, globalSCN, task.sourceTableName, task.targetTableName, isPartition, sourceColumnInfo, targetColumnInfo,
-			whereColumn, common.CompareO2MMode))
+			whereColumn))
 	}
 
 	// chunk split

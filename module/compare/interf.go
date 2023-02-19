@@ -30,9 +30,9 @@ type Reporter interface {
 	GenDBQuery() (oracleQuery string, mysqlQuery string)
 	CheckOracleRows(oracleQuery string) (int64, error)
 	CheckMySQLRows(mysqlQuery string) (int64, error)
-	ReportCheckRows(f *File) error
-	ReportCheckCRC32(f *File) error
-	Report(f *File) error
+	ReportCheckRows() (string, error)
+	ReportCheckCRC32() (string, error)
+	Report() (string, error)
 }
 
 type Comparer interface {

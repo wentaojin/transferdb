@@ -40,18 +40,29 @@ type O2M struct {
 	metaDB *meta.Meta
 }
 
-func NewO2MCSVer(ctx context.Context, cfg *config.Config,
-	oracle *oracle.Oracle, mysql *mysql.MySQL, metaDB *meta.Meta) *O2M {
+func NewCSVer(ctx context.Context, cfg *config.Config) (*O2M, error) {
+	oracleDB, err := oracle.NewOracleDBEngine(ctx, cfg.OracleConfig)
+	if err != nil {
+		return nil, err
+	}
+	mysqlDB, err := mysql.NewMySQLDBEngine(ctx, cfg.MySQLConfig)
+	if err != nil {
+		return nil, err
+	}
+	metaDB, err := meta.NewMetaDBEngine(ctx, cfg.MySQLConfig, cfg.AppConfig.SlowlogThreshold)
+	if err != nil {
+		return nil, err
+	}
 	return &O2M{
 		ctx:    ctx,
 		cfg:    cfg,
-		oracle: oracle,
-		mysql:  mysql,
+		oracle: oracleDB,
+		mysql:  mysqlDB,
 		metaDB: metaDB,
-	}
+	}, nil
 }
 
-func (r *O2M) NewCSVer() error {
+func (r *O2M) CSV() error {
 	startTime := time.Now()
 	zap.L().Info("source schema full table data csv start",
 		zap.String("schema", r.cfg.OracleConfig.SchemaName))
@@ -76,42 +87,73 @@ func (r *O2M) NewCSVer() error {
 		return err
 	}
 
-	// 判断 error_log_detail 是否存在错误记录，是否可进行 CSV
-	errTotals, err := meta.NewErrorLogDetailModel(r.metaDB).CountsErrorLogBySchema(r.ctx, &meta.ErrorLogDetail{
-		DBTypeS:     common.TaskDBOracle,
-		DBTypeT:     common.TaskDBMySQL,
+	// 清理非当前任务 SUCCESS 表元数据记录 wait_sync_meta (用于统计 SUCCESS 准备)
+	// 例如：当前任务表 A/B，之前任务表 A/C (SUCCESS)，清理元数据 C，对于表 A 任务 Skip 忽略处理，除非手工清理表 A
+	tablesByMeta, err := meta.NewWaitSyncMetaModel(r.metaDB).DetailWaitSyncMetaSuccessTables(r.ctx, &meta.WaitSyncMeta{
+		DBTypeS:     r.cfg.DBTypeS,
+		DBTypeT:     r.cfg.DBTypeT,
 		SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
-		RunMode:     common.CSVO2MMode,
+		TaskMode:    r.cfg.TaskMode,
+		TaskStatus:  common.TaskStatusSuccess,
+	})
+	if err != nil {
+		return err
+	}
+
+	clearTables := common.FilterDifferenceStringItems(tablesByMeta, exporters)
+	interTables := common.FilterIntersectionStringItems(tablesByMeta, exporters)
+	if len(clearTables) > 0 {
+		err = meta.NewWaitSyncMetaModel(r.metaDB).DeleteWaitSyncMetaSuccessTables(r.ctx, &meta.WaitSyncMeta{
+			DBTypeS:     r.cfg.DBTypeS,
+			DBTypeT:     r.cfg.DBTypeT,
+			SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+			TaskMode:    r.cfg.TaskMode,
+			TaskStatus:  common.TaskStatusSuccess,
+		}, clearTables)
+		if err != nil {
+			return err
+		}
+	}
+	zap.L().Warn("non-task table clear",
+		zap.Strings("clear tables", clearTables),
+		zap.Strings("intersection tables", interTables),
+		zap.Int("clear totals", len(clearTables)),
+		zap.Int("intersection total", len(interTables)))
+
+	// 判断 [wait_sync_meta] 是否存在错误记录，是否可进行 CSV
+	errTotals, err := meta.NewWaitSyncMetaModel(r.metaDB).CountsErrWaitSyncMetaBySchema(r.ctx, &meta.WaitSyncMeta{
+		DBTypeS:     r.cfg.DBTypeS,
+		DBTypeT:     r.cfg.DBTypeT,
+		SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+		TaskMode:    r.cfg.TaskMode,
+		TaskStatus:  common.TaskStatusFailed,
 	})
 	if errTotals > 0 || err != nil {
-		return fmt.Errorf("csv schema [%s] table mode [%s] task failed: %v, table [error_log_detail] exist failed error, please clear and rerunning", strings.ToUpper(r.cfg.OracleConfig.SchemaName), common.CompareO2MMode, err)
+		return fmt.Errorf(`csv schema [%s] mode [%s] table task failed: %v, meta table [wait_sync_meta] exist failed error, please firstly check log and deal, secondly clear or update meta table [wait_sync_meta] column [task_status] table status WAITING (Need UPPER), thirdly clear meta table [full_sync_meta] error table record, finally rerunning`, strings.ToUpper(r.cfg.OracleConfig.SchemaName), r.cfg.TaskMode, err)
 	}
 
 	// 判断并记录待同步表列表
 	for _, tableName := range exporters {
 		waitSyncMetas, err := meta.NewWaitSyncMetaModel(r.metaDB).DetailWaitSyncMeta(r.ctx, &meta.WaitSyncMeta{
-			DBTypeS:     common.TaskDBOracle,
-			DBTypeT:     common.TaskDBMySQL,
+			DBTypeS:     r.cfg.DBTypeS,
+			DBTypeT:     r.cfg.DBTypeT,
 			SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
-			TableNameS:  tableName,
-			Mode:        common.CSVO2MMode,
+			TableNameS:  common.StringUPPER(tableName),
+			TaskMode:    r.cfg.TaskMode,
 		})
 		if err != nil {
 			return err
 		}
-		// 初始同步表全量任务为 -1 表示未进行全量初始化，初始化完成会变更
-		// 全量同步完成，增量阶段，值预期都是 0
 		if len(waitSyncMetas) == 0 {
-			// 初始同步表全量任务为 -1 表示未进行全量初始化，初始化完成会变更
-			// 全量同步完成，增量阶段，值预期都是 0
 			err = meta.NewWaitSyncMetaModel(r.metaDB).CreateWaitSyncMeta(r.ctx, &meta.WaitSyncMeta{
-				DBTypeS:        common.TaskDBOracle,
-				DBTypeT:        common.TaskDBMySQL,
+				DBTypeS:        r.cfg.DBTypeS,
+				DBTypeT:        r.cfg.DBTypeT,
 				SchemaNameS:    common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 				TableNameS:     common.StringUPPER(tableName),
-				Mode:           common.CSVO2MMode,
-				FullGlobalSCN:  0,
-				FullSplitTimes: -1,
+				TaskMode:       r.cfg.TaskMode,
+				TaskStatus:     common.TaskStatusWaiting,
+				GlobalScnS:     common.TaskTableDefaultSourceGlobalSCN,
+				ChunkTotalNums: common.TaskTableDefaultSplitChunkNums,
 			})
 			if err != nil {
 				return err
@@ -124,10 +166,10 @@ func (r *O2M) NewCSVer() error {
 	//  - 若不想断点恢复或者重新调整 batch 数，设置 enable-checkpoint false,清理元数据表 [wait_sync_meta],重新运行全量任务
 	if !r.cfg.CSVConfig.EnableCheckpoint {
 		err = meta.NewFullSyncMetaModel(r.metaDB).DeleteFullSyncMetaBySchemaSyncMode(r.ctx, &meta.FullSyncMeta{
-			DBTypeS:     common.TaskDBOracle,
-			DBTypeT:     common.TaskDBMySQL,
-			SchemaNameS: r.cfg.OracleConfig.SchemaName,
-			Mode:        common.CSVO2MMode,
+			DBTypeS:     r.cfg.DBTypeS,
+			DBTypeT:     r.cfg.DBTypeT,
+			SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+			TaskMode:    r.cfg.TaskMode,
 		})
 		if err != nil {
 			return err
@@ -135,11 +177,11 @@ func (r *O2M) NewCSVer() error {
 
 		for _, tableName := range exporters {
 			err = meta.NewWaitSyncMetaModel(r.metaDB).DeleteWaitSyncMeta(r.ctx, &meta.WaitSyncMeta{
-				DBTypeS:     common.TaskDBOracle,
-				DBTypeT:     common.TaskDBMySQL,
-				SchemaNameS: r.cfg.OracleConfig.SchemaName,
+				DBTypeS:     r.cfg.DBTypeS,
+				DBTypeT:     r.cfg.DBTypeT,
+				SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 				TableNameS:  tableName,
-				Mode:        common.CSVO2MMode,
+				TaskMode:    r.cfg.TaskMode,
 			})
 			if err != nil {
 				return err
@@ -147,26 +189,24 @@ func (r *O2M) NewCSVer() error {
 
 			// 判断并记录待同步表列表
 			waitSyncMetas, err := meta.NewWaitSyncMetaModel(r.metaDB).DetailWaitSyncMeta(r.ctx, &meta.WaitSyncMeta{
-				DBTypeS:     common.TaskDBOracle,
-				DBTypeT:     common.TaskDBMySQL,
+				DBTypeS:     r.cfg.DBTypeS,
+				DBTypeT:     r.cfg.DBTypeT,
 				SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 				TableNameS:  tableName,
-				Mode:        common.CSVO2MMode,
+				TaskMode:    r.cfg.TaskMode,
 			})
 			if err != nil {
 				return err
 			}
 			if len(waitSyncMetas) == 0 {
-				// 初始同步表全量任务为 -1 表示未进行全量初始化，初始化完成会变更
-				// 全量同步完成，增量阶段，值预期都是 0
 				err = meta.NewWaitSyncMetaModel(r.metaDB).CreateWaitSyncMeta(r.ctx, &meta.WaitSyncMeta{
-					DBTypeS:        common.TaskDBOracle,
-					DBTypeT:        common.TaskDBMySQL,
+					DBTypeS:        r.cfg.DBTypeS,
+					DBTypeT:        r.cfg.DBTypeT,
 					SchemaNameS:    common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 					TableNameS:     common.StringUPPER(tableName),
-					Mode:           common.CSVO2MMode,
-					FullGlobalSCN:  0,
-					FullSplitTimes: -1,
+					TaskMode:       r.cfg.TaskMode,
+					GlobalScnS:     common.TaskTableDefaultSourceGlobalSCN,
+					ChunkTotalNums: common.TaskTableDefaultSplitChunkNums,
 				})
 				if err != nil {
 					return err
@@ -182,12 +222,13 @@ func (r *O2M) NewCSVer() error {
 	)
 
 	waitSyncDetails, err := meta.NewWaitSyncMetaModel(r.metaDB).DetailWaitSyncMeta(r.ctx, &meta.WaitSyncMeta{
-		DBTypeS:        common.TaskDBOracle,
-		DBTypeT:        common.TaskDBMySQL,
+		DBTypeS:        r.cfg.DBTypeS,
+		DBTypeT:        r.cfg.DBTypeT,
 		SchemaNameS:    common.StringUPPER(r.cfg.OracleConfig.SchemaName),
-		Mode:           common.CSVO2MMode,
-		FullGlobalSCN:  0,
-		FullSplitTimes: -1,
+		TaskMode:       r.cfg.TaskMode,
+		TaskStatus:     common.TaskStatusWaiting,
+		GlobalScnS:     common.TaskTableDefaultSourceGlobalSCN,
+		ChunkTotalNums: common.TaskTableDefaultSplitChunkNums,
 	})
 	if err != nil {
 		return err
@@ -199,58 +240,67 @@ func (r *O2M) NewCSVer() error {
 		}
 	}
 
+	// 判断未同步完成的表列表能否断点续传
 	var (
-		partSyncTableMetas []meta.WaitSyncMeta
-		partSyncTables     []string
+		partSyncTables    []string
+		panicTblFullSlice []string
 	)
-	partSyncDetails, err := meta.NewWaitSyncMetaModel(r.metaDB).BatchQueryWaitSyncMeta(r.ctx, &meta.WaitSyncMeta{
-		DBTypeS:     common.TaskDBOracle,
-		DBTypeT:     common.TaskDBMySQL,
+	partSyncDetails, err := meta.NewWaitSyncMetaModel(r.metaDB).QueryWaitSyncMetaByPartTask(r.ctx, &meta.WaitSyncMeta{
+		DBTypeS:     r.cfg.DBTypeS,
+		DBTypeT:     r.cfg.DBTypeT,
 		SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
-		Mode:        common.CSVO2MMode,
+		TaskMode:    r.cfg.TaskMode,
+		TaskStatus:  common.TaskStatusRunning,
 	})
 	if err != nil {
 		return err
 	}
-	partSyncTableMetas = partSyncDetails
-	if len(partSyncTableMetas) > 0 {
-		for _, table := range partSyncTableMetas {
-			partSyncTables = append(partSyncTables, common.StringUPPER(table.TableNameS))
+	if len(partSyncDetails) > 0 {
+		for _, t := range partSyncDetails {
+			partSyncTables = append(partSyncTables, common.StringUPPER(t.TableNameS))
 		}
 	}
 
-	if len(waitSyncTableMetas) == 0 && len(partSyncTableMetas) == 0 {
+	waitCsvChunkTables, err := meta.NewFullSyncMetaModel(r.metaDB).DistinctFullSyncMetaTableNameSByTaskStatus(r.ctx, &meta.FullSyncMeta{
+		DBTypeS:     r.cfg.DBTypeS,
+		DBTypeT:     r.cfg.DBTypeT,
+		SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+		TaskMode:    r.cfg.TaskMode,
+		TaskStatus:  common.TaskStatusWaiting,
+	})
+	if err != nil {
+		return err
+	}
+
+	for _, partSyncTable := range partSyncDetails {
+		if !common.IsContainString(waitCsvChunkTables, partSyncTable.TableNameS) {
+			panicTblFullSlice = append(panicTblFullSlice, partSyncTable.TableNameS)
+		} else {
+			counts, err := meta.NewFullSyncMetaModel(r.metaDB).CountsFullSyncMetaByTaskTable(r.ctx, &meta.FullSyncMeta{
+				DBTypeS:     r.cfg.DBTypeS,
+				DBTypeT:     r.cfg.DBTypeT,
+				SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+				TableNameS:  partSyncTable.TableNameS,
+				TaskMode:    r.cfg.TaskMode,
+			})
+			if err != nil {
+				return err
+			}
+			if counts != partSyncTable.ChunkTotalNums {
+				panicTblFullSlice = append(panicTblFullSlice, partSyncTable.TableNameS)
+			}
+		}
+	}
+
+	if (len(panicTblFullSlice) != 0) || (len(partSyncTables) != len(waitCsvChunkTables)) {
 		endTime := time.Now()
-		zap.L().Info("all full table data csv finished",
-			zap.String("schema", r.cfg.OracleConfig.SchemaName),
-			zap.String("cost", endTime.Sub(startTime).String()))
-		return nil
-	}
-
-	// 判断未同步完成的表列表能否断点续传
-	var panicTblFullSlice []string
-
-	for _, partSyncMeta := range partSyncTableMetas {
-		tableNameArray, err2 := meta.NewFullSyncMetaModel(r.metaDB).DistinctFullSyncMetaByTableNameS(r.ctx, &meta.FullSyncMeta{
-			DBTypeS:     common.TaskDBOracle,
-			DBTypeT:     common.TaskDBMySQL,
-			SchemaNameS: r.cfg.OracleConfig.SchemaName})
-		if err2 != nil {
-			return err2
-		}
-
-		if !common.IsContainString(tableNameArray, partSyncMeta.TableNameS) {
-			panicTblFullSlice = append(panicTblFullSlice, partSyncMeta.TableNameS)
-		}
-	}
-
-	if len(panicTblFullSlice) != 0 {
-		endTime := time.Now()
-		zap.L().Error("all full table data loader error",
+		zap.L().Error("all oracle table data csv error",
 			zap.String("schema", r.cfg.OracleConfig.SchemaName),
 			zap.String("cost", endTime.Sub(startTime).String()),
+			zap.Int("part sync tables", len(partSyncTables)),
+			zap.Int("wait sync csv chunk tables", len(waitCsvChunkTables)),
 			zap.Strings("panic tables", panicTblFullSlice))
-		return fmt.Errorf("checkpoint isn't consistent, please reruning [enable-checkpoint = fase]")
+		return fmt.Errorf("checkpoint isn't consistent, can't be resume, please reruning [enable-checkpoint = fase]")
 	}
 
 	// 数据 CSV
@@ -265,8 +315,8 @@ func (r *O2M) NewCSVer() error {
 	if len(waitSyncTables) > 0 {
 		// 获取表名自定义规则
 		tableNameRules, err := meta.NewTableNameRuleModel(r.metaDB).DetailTableNameRule(r.ctx, &meta.TableNameRule{
-			DBTypeS:     common.TaskDBOracle,
-			DBTypeT:     common.TaskDBMySQL,
+			DBTypeS:     r.cfg.DBTypeS,
+			DBTypeT:     r.cfg.DBTypeT,
 			SchemaNameS: r.cfg.OracleConfig.SchemaName,
 			SchemaNameT: r.cfg.MySQLConfig.SchemaName,
 		})
@@ -286,18 +336,41 @@ func (r *O2M) NewCSVer() error {
 		}
 	}
 
-	endTime := time.Now()
+	// 任务详情
+	succTotals, err := meta.NewWaitSyncMetaModel(r.metaDB).DetailWaitSyncMeta(r.ctx, &meta.WaitSyncMeta{
+		DBTypeS:     r.cfg.DBTypeS,
+		DBTypeT:     r.cfg.DBTypeT,
+		SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+		TaskMode:    r.cfg.TaskMode,
+		TaskStatus:  common.TaskStatusSuccess,
+	})
+	if err != nil {
+		return err
+	}
+	failedTotals, err := meta.NewWaitSyncMetaModel(r.metaDB).DetailWaitSyncMeta(r.ctx, &meta.WaitSyncMeta{
+		DBTypeS:     r.cfg.DBTypeS,
+		DBTypeT:     r.cfg.DBTypeT,
+		SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+		TaskMode:    r.cfg.TaskMode,
+		TaskStatus:  common.TaskStatusFailed,
+	})
+	if err != nil {
+		return err
+	}
+
 	zap.L().Info("source schema all table data csv finished",
 		zap.String("schema", r.cfg.OracleConfig.SchemaName),
-		zap.String("cost", endTime.Sub(startTime).String()))
+		zap.Int("table totals", len(exporters)),
+		zap.Int("table success", len(succTotals)),
+		zap.Int("table failed", len(failedTotals)),
+		zap.String("output", r.cfg.CSVConfig.OutputDir),
+		zap.String("log detail", "if exist table failed, please see meta table [wait/full_sync_meta]"),
+		zap.String("cost", time.Now().Sub(startTime).String()))
 	return nil
 }
 
 func (r *O2M) csvPartSyncTable(csvPartTables []string) error {
 	startTime := time.Now()
-	zap.L().Info("source schema csv sync start",
-		zap.String("schema", r.cfg.OracleConfig.SchemaName))
-
 	oracleDBCharacterSet, err := r.oracle.GetOracleDBCharacterSet()
 	if err != nil {
 		return err
@@ -306,20 +379,34 @@ func (r *O2M) csvPartSyncTable(csvPartTables []string) error {
 	g := &errgroup.Group{}
 	g.SetLimit(r.cfg.CSVConfig.TableThreads)
 
-	for _, table := range csvPartTables {
-		t := table
+	for _, tbl := range csvPartTables {
+		t := tbl
 		g.Go(func() error {
 			taskTime := time.Now()
 			zap.L().Info("source schema table csv data start",
 				zap.String("schema", r.cfg.OracleConfig.SchemaName),
 				zap.String("table", t))
 
+			err = meta.NewWaitSyncMetaModel(r.metaDB).UpdateWaitSyncMeta(r.ctx, &meta.WaitSyncMeta{
+				DBTypeS:     r.cfg.DBTypeS,
+				DBTypeT:     r.cfg.DBTypeT,
+				SchemaNameS: r.cfg.OracleConfig.SchemaName,
+				TableNameS:  common.StringUPPER(t),
+				TaskMode:    r.cfg.TaskMode,
+			}, map[string]interface{}{
+				"TaskStatus": common.TaskStatusRunning,
+			})
+			if err != nil {
+				return err
+			}
+
 			fullMetas, err := meta.NewFullSyncMetaModel(r.metaDB).DetailFullSyncMeta(r.ctx, &meta.FullSyncMeta{
-				DBTypeS:     common.TaskDBOracle,
-				DBTypeT:     common.TaskDBMySQL,
+				DBTypeS:     r.cfg.DBTypeS,
+				DBTypeT:     r.cfg.DBTypeT,
 				SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 				TableNameS:  common.StringUPPER(t),
-				Mode:        common.CSVO2MMode,
+				TaskMode:    r.cfg.TaskMode,
+				TaskStatus:  common.TaskStatusWaiting,
 			})
 			if err != nil {
 				return err
@@ -332,7 +419,7 @@ func (r *O2M) csvPartSyncTable(csvPartTables []string) error {
 				m := fullSyncMeta
 				g1.Go(func() error {
 					querySQL := common.StringsBuilder(
-						`SELECT `, m.ColumnInfoS, ` FROM `, m.SchemaNameS, `.`, m.TableNameS, ` WHERE `, m.RowidInfoS)
+						`SELECT `, m.ColumnDetailS, ` FROM `, m.SchemaNameS, `.`, m.TableNameS, ` WHERE `, m.ChunkDetailS)
 
 					// 抽取 Oracle 数据
 					var (
@@ -342,68 +429,157 @@ func (r *O2M) csvPartSyncTable(csvPartTables []string) error {
 					)
 					rowsResult, err = r.oracle.OracleDB.QueryContext(r.ctx, querySQL)
 					if err != nil {
-						return fmt.Errorf("get oracle schema table [%v] record by rowid sql falied: %v", m.String(), err)
+						// record error, skip error
+						if errf := meta.NewFullSyncMetaModel(r.metaDB).UpdateFullSyncMeta(r.ctx, &meta.FullSyncMeta{
+							DBTypeS:      m.DBTypeS,
+							DBTypeT:      m.DBTypeT,
+							SchemaNameS:  m.SchemaNameS,
+							TableNameS:   m.TableNameS,
+							TaskMode:     m.TaskMode,
+							ChunkDetailS: m.ChunkDetailS,
+						}, map[string]interface{}{
+							"TaskStatus":  common.TaskStatusFailed,
+							"InfoDetail":  m.String(),
+							"ErrorDetail": err.Error(),
+						}); errf != nil {
+							return fmt.Errorf("get oracle schema table [%v] record by rowid sql falied: %v", m.String(), errf)
+						}
+
+						return nil
 					}
 
 					columnFields, err = rowsResult.Columns()
 					if err != nil {
-						return fmt.Errorf("get oracle schema table [%v] rows.Columns failed: %v", m.String(), err)
+						// record error, skip error
+						if errf := meta.NewFullSyncMetaModel(r.metaDB).UpdateFullSyncMeta(r.ctx, &meta.FullSyncMeta{
+							DBTypeS:      m.DBTypeS,
+							DBTypeT:      m.DBTypeT,
+							SchemaNameS:  m.SchemaNameS,
+							TableNameS:   m.TableNameS,
+							TaskMode:     m.TaskMode,
+							ChunkDetailS: m.ChunkDetailS,
+						}, map[string]interface{}{
+							"TaskStatus":  common.TaskStatusFailed,
+							"InfoDetail":  m.String(),
+							"ErrorDetail": err.Error(),
+						}); errf != nil {
+							return fmt.Errorf("get oracle schema table [%v] rows.Columns failed: %v", m.String(), errf)
+						}
+
+						return nil
 					}
 
 					// 数据输出
-					err = NewWriter(m.SchemaNameS,
+					errW := NewWriter(m.SchemaNameS,
 						m.TableNameS,
 						oracleDBCharacterSet, querySQL, m.CSVFile, columnFields,
 						r.cfg.CSVConfig, rowsResult).WriteFile()
-					if err != nil {
-						return fmt.Errorf("get oracle schema table [%v] write file failed: %v", m.String(), err)
+					if errW != nil {
+						if errf := meta.NewFullSyncMetaModel(r.metaDB).UpdateFullSyncMeta(r.ctx, &meta.FullSyncMeta{
+							DBTypeS:      m.DBTypeS,
+							DBTypeT:      m.DBTypeT,
+							SchemaNameS:  m.SchemaNameS,
+							TableNameS:   m.TableNameS,
+							TaskMode:     m.TaskMode,
+							ChunkDetailS: m.ChunkDetailS,
+						}, map[string]interface{}{
+							"TaskStatus":  common.TaskStatusFailed,
+							"InfoDetail":  m.String(),
+							"ErrorDetail": errW.Error(),
+						}); errf != nil {
+							return fmt.Errorf("get oracle schema table [%v] write file failed: %v", m.String(), errf)
+						}
+					} else {
+						if errf := meta.NewFullSyncMetaModel(r.metaDB).UpdateFullSyncMeta(r.ctx, &meta.FullSyncMeta{
+							DBTypeS:      m.DBTypeS,
+							DBTypeT:      m.DBTypeT,
+							SchemaNameS:  m.SchemaNameS,
+							TableNameS:   m.TableNameS,
+							TaskMode:     m.TaskMode,
+							ChunkDetailS: m.ChunkDetailS,
+						}, map[string]interface{}{
+							"TaskStatus": common.TaskStatusSuccess,
+						}); errf != nil {
+							return errf
+						}
 					}
-
-					// 清理记录
-					err = meta.NewFullSyncMetaModel(r.metaDB).DeleteFullSyncMetaBySchemaTableRowid(
-						r.ctx, &meta.FullSyncMeta{
-							DBTypeS:     common.TaskDBOracle,
-							DBTypeT:     common.TaskDBMySQL,
-							SchemaNameS: m.SchemaNameS,
-							TableNameS:  m.TableNameS,
-							RowidInfoS:  m.RowidInfoS,
-							Mode:        common.CSVO2MMode,
-						})
-					if err != nil {
-						return err
-					}
-
 					return nil
 				})
 			}
 
-			if err := g1.Wait(); err != nil {
+			if err = g1.Wait(); err != nil {
 				return err
 			}
 
-			// 更新表级别记录
-			err = meta.NewWaitSyncMetaModel(r.metaDB).ModifyWaitSyncMetaColumnFullSplitTimesZero(r.ctx, &meta.WaitSyncMeta{
-				DBTypeS:        common.TaskDBOracle,
-				DBTypeT:        common.TaskDBMySQL,
-				SchemaNameS:    common.StringUPPER(r.cfg.OracleConfig.SchemaName),
-				TableNameS:     common.StringUPPER(t),
-				Mode:           common.CSVO2MMode,
-				FullSplitTimes: 0,
+			// 清理元数据记录
+			// 更新 wait_sync_meta 记录
+			totalErrs, err := meta.NewFullSyncMetaModel(r.metaDB).CountsErrorFullSyncMeta(r.ctx, &meta.FullSyncMeta{
+				DBTypeS:     r.cfg.DBTypeS,
+				DBTypeT:     r.cfg.DBTypeT,
+				SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+				TableNameS:  common.StringUPPER(t),
+				TaskMode:    r.cfg.TaskMode,
+				TaskStatus:  common.TaskStatusFailed,
 			})
 			if err != nil {
-				return err
+				return fmt.Errorf("get meta table [full_sync_meta] counts failed, error: %v", err)
 			}
 
-			zap.L().Info("source schema table csv data finished",
-				zap.String("schema", r.cfg.OracleConfig.SchemaName),
-				zap.String("table", t),
-				zap.String("cost", time.Now().Sub(taskTime).String()))
+			// 不存在错误，清理 full_sync_meta 记录, 更新 wait_sync_meta 记录
+			if totalErrs == 0 {
+				err = meta.NewCommonModel(r.metaDB).DeleteTableFullSyncMetaAndUpdateWaitSyncMeta(r.ctx,
+					&meta.FullSyncMeta{
+						DBTypeS:     r.cfg.DBTypeS,
+						DBTypeT:     r.cfg.DBTypeT,
+						SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+						TableNameS:  common.StringUPPER(t),
+						TaskMode:    r.cfg.TaskMode,
+					}, &meta.WaitSyncMeta{
+						DBTypeS:          r.cfg.DBTypeS,
+						DBTypeT:          r.cfg.DBTypeT,
+						SchemaNameS:      common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+						TableNameS:       common.StringUPPER(t),
+						TaskMode:         r.cfg.TaskMode,
+						TaskStatus:       common.TaskStatusSuccess,
+						ChunkSuccessNums: int64(len(fullMetas)),
+						ChunkFailedNums:  0,
+					})
+				if err != nil {
+					return err
+				}
+				zap.L().Info("csv single table oracle to mysql finished",
+					zap.String("schema", r.cfg.OracleConfig.SchemaName),
+					zap.String("table", common.StringUPPER(t)),
+					zap.String("cost", time.Now().Sub(taskTime).String()))
+			} else {
+				// 若存在错误，修改表状态，skip 清理，统一忽略，最后显示
+				err = meta.NewWaitSyncMetaModel(r.metaDB).UpdateWaitSyncMeta(r.ctx, &meta.WaitSyncMeta{
+					DBTypeS:     r.cfg.DBTypeS,
+					DBTypeT:     r.cfg.DBTypeT,
+					SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+					TableNameS:  common.StringUPPER(t),
+					TaskMode:    r.cfg.TaskMode,
+				}, map[string]interface{}{
+					"TaskStatus":       common.TaskStatusFailed,
+					"ChunkSuccessNums": int64(len(fullMetas)) - totalErrs,
+					"ChunkFailedNums":  totalErrs,
+				})
+				if err != nil {
+					return err
+				}
+				zap.L().Warn("update mysql [wait_sync_meta] meta",
+					zap.String("schema", r.cfg.OracleConfig.SchemaName),
+					zap.String("table", common.StringUPPER(t)),
+					zap.String("mode", r.cfg.TaskMode),
+					zap.String("updated", "csv table exist error, skip"),
+					zap.String("cost", time.Now().Sub(startTime).String()))
+			}
 			return nil
 		})
 	}
 
-	if err := g.Wait(); err != nil {
-		return fmt.Errorf("sync oracle table rows by checkpoint failed: %v", err)
+	if err = g.Wait(); err != nil {
+		return err
 	}
 
 	zap.L().Info("source schema csv data sync finished",
@@ -440,8 +616,8 @@ func (r *O2M) initWaitSyncTableRowID(csvWaitTables []string, tableNameRule map[s
 	g := &errgroup.Group{}
 	g.SetLimit(r.cfg.CSVConfig.TaskThreads)
 
-	for idx, table := range csvWaitTables {
-		t := table
+	for idx, tbl := range csvWaitTables {
+		t := tbl
 		workerID := idx
 		g.Go(func() error {
 			startTime := time.Now()
@@ -486,30 +662,33 @@ func (r *O2M) initWaitSyncTableRowID(csvWaitTables []string, tableNameRule map[s
 					zap.Int("statistics rows", tableRowsByStatistics))
 
 				err = meta.NewCommonModel(r.metaDB).CreateFullSyncMetaAndUpdateWaitSyncMeta(r.ctx, &meta.FullSyncMeta{
-					DBTypeS:     common.TaskDBOracle,
-					DBTypeT:     common.TaskDBMySQL,
-					SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
-					TableNameS:  common.StringUPPER(t),
-					SchemaNameT: common.StringUPPER(r.cfg.MySQLConfig.SchemaName),
-					TableNameT:  common.StringUPPER(targetTableName),
-					GlobalScnS:  globalSCN,
-					ColumnInfoS: sourceColumnInfo,
-					RowidInfoS:  "1 = 1",
-					Mode:        common.CSVO2MMode,
-					IsPartition: isPartition,
+					DBTypeS:       r.cfg.DBTypeS,
+					DBTypeT:       r.cfg.DBTypeT,
+					SchemaNameS:   common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+					TableNameS:    common.StringUPPER(t),
+					SchemaNameT:   common.StringUPPER(r.cfg.MySQLConfig.SchemaName),
+					TableNameT:    common.StringUPPER(targetTableName),
+					GlobalScnS:    globalSCN,
+					ColumnDetailS: sourceColumnInfo,
+					ChunkDetailS:  "1 = 1",
+					TaskMode:      r.cfg.TaskMode,
+					TaskStatus:    common.TaskStatusWaiting,
+					IsPartition:   isPartition,
 					CSVFile: filepath.Join(r.cfg.CSVConfig.OutputDir,
 						common.StringUPPER(r.cfg.OracleConfig.SchemaName), common.StringUPPER(t),
 						common.StringsBuilder(common.StringUPPER(r.cfg.MySQLConfig.SchemaName),
 							`.`, common.StringUPPER(targetTableName), `.0.csv`)),
 				}, &meta.WaitSyncMeta{
-					DBTypeS:        common.TaskDBOracle,
-					DBTypeT:        common.TaskDBMySQL,
-					SchemaNameS:    common.StringUPPER(r.cfg.OracleConfig.SchemaName),
-					TableNameS:     common.StringUPPER(t),
-					Mode:           common.CSVO2MMode,
-					FullGlobalSCN:  globalSCN,
-					FullSplitTimes: 1,
-					IsPartition:    isPartition,
+					DBTypeS:          r.cfg.DBTypeS,
+					DBTypeT:          r.cfg.DBTypeT,
+					SchemaNameS:      common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+					TableNameS:       common.StringUPPER(t),
+					TaskMode:         r.cfg.TaskMode,
+					GlobalScnS:       globalSCN,
+					ChunkTotalNums:   1,
+					ChunkSuccessNums: 0,
+					ChunkFailedNums:  0,
+					IsPartition:      isPartition,
 				})
 				if err != nil {
 					return err
@@ -547,30 +726,33 @@ func (r *O2M) initWaitSyncTableRowID(csvWaitTables []string, tableNameRule map[s
 					zap.Int("rowids rows", len(chunkRes)))
 
 				err = meta.NewCommonModel(r.metaDB).CreateFullSyncMetaAndUpdateWaitSyncMeta(r.ctx, &meta.FullSyncMeta{
-					DBTypeS:     common.TaskDBOracle,
-					DBTypeT:     common.TaskDBMySQL,
-					SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
-					TableNameS:  common.StringUPPER(t),
-					SchemaNameT: common.StringUPPER(r.cfg.MySQLConfig.SchemaName),
-					TableNameT:  common.StringUPPER(targetTableName),
-					GlobalScnS:  globalSCN,
-					ColumnInfoS: sourceColumnInfo,
-					RowidInfoS:  "1 = 1",
-					Mode:        common.CSVO2MMode,
-					IsPartition: isPartition,
+					DBTypeS:       r.cfg.DBTypeS,
+					DBTypeT:       r.cfg.DBTypeT,
+					SchemaNameS:   common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+					TableNameS:    common.StringUPPER(t),
+					SchemaNameT:   common.StringUPPER(r.cfg.MySQLConfig.SchemaName),
+					TableNameT:    common.StringUPPER(targetTableName),
+					GlobalScnS:    globalSCN,
+					ColumnDetailS: sourceColumnInfo,
+					ChunkDetailS:  "1 = 1",
+					TaskMode:      r.cfg.TaskMode,
+					TaskStatus:    common.TaskStatusWaiting,
+					IsPartition:   isPartition,
 					CSVFile: filepath.Join(r.cfg.CSVConfig.OutputDir,
 						common.StringUPPER(r.cfg.OracleConfig.SchemaName), common.StringUPPER(t),
 						common.StringsBuilder(common.StringUPPER(r.cfg.MySQLConfig.SchemaName),
 							`.`, common.StringUPPER(targetTableName), `.0.csv`)),
 				}, &meta.WaitSyncMeta{
-					DBTypeS:        common.TaskDBOracle,
-					DBTypeT:        common.TaskDBMySQL,
-					SchemaNameS:    common.StringUPPER(r.cfg.OracleConfig.SchemaName),
-					TableNameS:     common.StringUPPER(t),
-					Mode:           common.CSVO2MMode,
-					FullGlobalSCN:  globalSCN,
-					FullSplitTimes: 1,
-					IsPartition:    isPartition,
+					DBTypeS:          r.cfg.DBTypeS,
+					DBTypeT:          r.cfg.DBTypeT,
+					SchemaNameS:      common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+					TableNameS:       common.StringUPPER(t),
+					TaskMode:         r.cfg.TaskMode,
+					GlobalScnS:       globalSCN,
+					ChunkTotalNums:   1,
+					ChunkSuccessNums: 0,
+					ChunkFailedNums:  0,
+					IsPartition:      isPartition,
 				})
 				if err != nil {
 					return err
@@ -588,38 +770,36 @@ func (r *O2M) initWaitSyncTableRowID(csvWaitTables []string, tableNameRule map[s
 						common.StringUPPER(targetTableName), `.`, strconv.Itoa(i), `.csv`))
 
 				fullMetas = append(fullMetas, meta.FullSyncMeta{
-					DBTypeS:     common.TaskDBOracle,
-					DBTypeT:     common.TaskDBMySQL,
-					SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
-					TableNameS:  common.StringUPPER(t),
-					SchemaNameT: common.StringUPPER(r.cfg.MySQLConfig.SchemaName),
-					TableNameT:  common.StringUPPER(targetTableName),
-					GlobalScnS:  globalSCN,
-					ColumnInfoS: sourceColumnInfo,
-					RowidInfoS:  res["CMD"],
-					Mode:        common.CSVO2MMode,
-					IsPartition: isPartition,
-					CSVFile:     csvFile,
+					DBTypeS:       r.cfg.DBTypeS,
+					DBTypeT:       r.cfg.DBTypeT,
+					SchemaNameS:   common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+					TableNameS:    common.StringUPPER(t),
+					SchemaNameT:   common.StringUPPER(r.cfg.MySQLConfig.SchemaName),
+					TableNameT:    common.StringUPPER(targetTableName),
+					GlobalScnS:    globalSCN,
+					ColumnDetailS: sourceColumnInfo,
+					ChunkDetailS:  res["CMD"],
+					TaskMode:      r.cfg.TaskMode,
+					TaskStatus:    common.TaskStatusWaiting,
+					IsPartition:   isPartition,
+					CSVFile:       csvFile,
 				})
 			}
 
 			// 元数据库信息 batch 写入
-			err = meta.NewFullSyncMetaModel(r.metaDB).BatchCreateFullSyncMeta(r.ctx, fullMetas, r.cfg.AppConfig.InsertBatchSize)
-			if err != nil {
-				return err
-			}
-
-			// 更新 wait_sync_meta
-			err = meta.NewWaitSyncMetaModel(r.metaDB).UpdateWaitSyncMeta(r.ctx, &meta.WaitSyncMeta{
-				DBTypeS:        common.TaskDBOracle,
-				DBTypeT:        common.TaskDBMySQL,
-				SchemaNameS:    common.StringUPPER(r.cfg.OracleConfig.SchemaName),
-				TableNameS:     common.StringUPPER(t),
-				Mode:           common.CSVO2MMode,
-				FullGlobalSCN:  globalSCN,
-				FullSplitTimes: len(chunkRes),
-				IsPartition:    isPartition,
-			})
+			err = meta.NewCommonModel(r.metaDB).BatchCreateFullSyncMetaAndUpdateWaitSyncMeta(r.ctx,
+				fullMetas, r.cfg.AppConfig.InsertBatchSize, &meta.WaitSyncMeta{
+					DBTypeS:          r.cfg.DBTypeS,
+					DBTypeT:          r.cfg.DBTypeT,
+					SchemaNameS:      common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+					TableNameS:       common.StringUPPER(t),
+					TaskMode:         r.cfg.TaskMode,
+					GlobalScnS:       globalSCN,
+					ChunkTotalNums:   int64(len(chunkRes)),
+					ChunkSuccessNums: 0,
+					ChunkFailedNums:  0,
+					IsPartition:      isPartition,
+				})
 			if err != nil {
 				return err
 			}

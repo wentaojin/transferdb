@@ -13,14 +13,32 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package check
+package server
 
-import "github.com/wentaojin/transferdb/errors"
+import (
+	"context"
+	"github.com/wentaojin/transferdb/common"
+	"github.com/wentaojin/transferdb/config"
+	"github.com/wentaojin/transferdb/module/check"
+	"github.com/wentaojin/transferdb/module/check/o2m"
+	"strings"
+)
 
-func ICheck(r Reporter) error {
-	err := r.NewCheck()
+func ICheck(ctx context.Context, cfg *config.Config) error {
+	var (
+		r   check.Reporter
+		err error
+	)
+	switch {
+	case strings.EqualFold(cfg.DBTypeS, common.DatabaseTypeOracle) && strings.EqualFold(cfg.DBTypeT, common.DatabaseTypeMySQL):
+		r, err = o2m.NewCheck(ctx, cfg)
+		if err != nil {
+			return err
+		}
+	}
+	err = r.Check()
 	if err != nil {
-		return errors.NewMSError(errors.TRANSFERDB, errors.DOMAIN_CHECK, err)
+		return err
 	}
 	return nil
 }

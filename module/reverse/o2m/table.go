@@ -134,7 +134,7 @@ func GenReverseTableTask(r *Reverse, tableNameRule map[string]string, tableColum
 
 	var dbVersion string
 
-	if common.StringUPPER(common.StringUPPER(r.Cfg.MySQLConfig.DBType)) == common.TaskDBTiDB {
+	if strings.EqualFold(r.Cfg.MySQLConfig.DBType, common.DatabaseTypeTiDB) {
 		dbVersion = mysqlVersion
 	} else {
 		if strings.Contains(mysqlVersion, common.MySQLVersionDelimiter) {
@@ -146,7 +146,7 @@ func GenReverseTableTask(r *Reverse, tableNameRule map[string]string, tableColum
 
 	startTime = time.Now()
 	g1 := &errgroup.Group{}
-	tableChan := make(chan *Table, common.BufferSize)
+	tableChan := make(chan *Table, common.ChannelBufferSize)
 
 	g1.Go(func() error {
 		g2 := &errgroup.Group{}

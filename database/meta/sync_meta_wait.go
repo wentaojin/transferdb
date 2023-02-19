@@ -24,15 +24,18 @@ import (
 
 // 同步元数据表
 type WaitSyncMeta struct {
-	ID             uint   `gorm:"primary_key;autoIncrement;comment:'自增编号'" json:"id"`
-	DBTypeS        string `gorm:"type:varchar(15);index:idx_dbtype_st_map,unique;comment:'源数据库类型'" json:"db_type_s"`
-	DBTypeT        string `gorm:"type:varchar(15);index:idx_dbtype_st_map,unique;comment:'目标数据库类型'" json:"db_type_t"`
-	SchemaNameS    string `gorm:"not null;index:idx_dbtype_st_map,unique;comment:'源端 schema'" json:"schema_name_s"`
-	TableNameS     string `gorm:"not null;index:idx_dbtype_st_map,unique;comment:'源端表名'" json:"table_name_s"`
-	Mode           string `gorm:"not null;index:idx_dbtype_st_map,unique;comment:'同步模式'" json:"mode"`
-	FullGlobalSCN  uint64 `gorm:"comment:'全量任务 full_sync_meta 全局 SCN'" json:"full_global_scn"`
-	FullSplitTimes int    `gorm:"comment:'全量任务 full_sync_meta 切分 SQL 次数'" json:"full_split_times"`
-	IsPartition    string `gorm:"comment:'是否是分区表'" json:"is_partition"` // 同步转换统一转换成非分区表，此处只做标志
+	ID               uint   `gorm:"primary_key;autoIncrement;comment:'自增编号'" json:"id"`
+	DBTypeS          string `gorm:"type:varchar(15);index:idx_dbtype_st_map,unique;comment:'源数据库类型'" json:"db_type_s"`
+	DBTypeT          string `gorm:"type:varchar(15);index:idx_dbtype_st_map,unique;comment:'目标数据库类型'" json:"db_type_t"`
+	SchemaNameS      string `gorm:"not null;index:idx_dbtype_st_map,unique;comment:'源端 schema'" json:"schema_name_s"`
+	TableNameS       string `gorm:"not null;index:idx_dbtype_st_map,unique;comment:'源端表名'" json:"table_name_s"`
+	TaskMode         string `gorm:"not null;index:idx_dbtype_st_map,unique;comment:'任务模式'" json:"task_mode"`
+	TaskStatus       string `gorm:"not null;comment:'任务状态'" json:"task_status"`
+	GlobalScnS       uint64 `gorm:"comment:'全量任务 full_sync_meta 全局 SCN'" json:"global_scn_s"`
+	ChunkTotalNums   int64  `gorm:"comment:'全量任务 full_sync_meta 任务切分 chunk 数'" json:"chunk_total_nums"`
+	ChunkSuccessNums int64  `gorm:"comment:'全量任务 full_sync_meta 执行成功 chunk 数'" json:"chunk_success_nums"`
+	ChunkFailedNums  int64  `gorm:"comment:'全量任务 full_sync_meta 执行失败 chunk 数'" json:"chunk_failed_nums"`
+	IsPartition      string `gorm:"comment:'是否是分区表'" json:"is_partition"` // 同步转换统一转换成非分区表，此处只做标志
 	*BaseModel
 }
 
@@ -61,7 +64,6 @@ func (rw *WaitSyncMeta) CreateWaitSyncMeta(ctx context.Context, createS *WaitSyn
 	return nil
 }
 
-// Detail returns wait sync meta records
 func (rw *WaitSyncMeta) DetailWaitSyncMeta(ctx context.Context, detailS *WaitSyncMeta) ([]WaitSyncMeta, error) {
 	var dsMetas []WaitSyncMeta
 	table, err := rw.ParseSchemaTable()
@@ -74,19 +76,36 @@ func (rw *WaitSyncMeta) DetailWaitSyncMeta(ctx context.Context, detailS *WaitSyn
 	return dsMetas, nil
 }
 
-// Query returns part sync meta records
-func (rw *WaitSyncMeta) BatchQueryWaitSyncMeta(ctx context.Context, queryS *WaitSyncMeta) ([]WaitSyncMeta, error) {
+func (rw *WaitSyncMeta) DetailWaitSyncMetaSuccessTables(ctx context.Context, detailS *WaitSyncMeta) ([]string, error) {
+	var dsMetas []string
+	table, err := rw.ParseSchemaTable()
+	if err != nil {
+		return dsMetas, err
+	}
+	if err = rw.DB(ctx).Model(&WaitSyncMeta{}).Select(`table_name_s`).Where(`db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND task_mode = ? AND task_status = ?`,
+		detailS.DBTypeS,
+		detailS.DBTypeT,
+		detailS.SchemaNameS,
+		detailS.TaskMode,
+		detailS.TaskStatus).Scan(&dsMetas).Error; err != nil {
+		return dsMetas, fmt.Errorf("detail success table [%s] record failed: %v", table, err)
+	}
+	return dsMetas, nil
+}
+
+func (rw *WaitSyncMeta) QueryWaitSyncMetaByPartTask(ctx context.Context, queryS *WaitSyncMeta) ([]WaitSyncMeta, error) {
 	var dsMetas []WaitSyncMeta
 	table, err := rw.ParseSchemaTable()
 	if err != nil {
 		return dsMetas, err
 	}
-	if err := rw.DB(ctx).Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND full_global_scn > 0 AND full_split_times > 0 AND mode = ?",
+	if err = rw.DB(ctx).Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND global_scn_s > 0 AND task_mode = ? AND task_status = ?",
 		common.StringUPPER(queryS.DBTypeS),
 		common.StringUPPER(queryS.DBTypeT),
 		common.StringUPPER(queryS.SchemaNameS),
-		queryS.Mode).Find(&dsMetas).Error; err != nil {
-		return dsMetas, fmt.Errorf("batch query table [%s] record failed: %v", table, err)
+		queryS.TaskMode,
+		queryS.TaskStatus).Find(&dsMetas).Error; err != nil {
+		return dsMetas, fmt.Errorf("query table [%s] record failed: %v", table, err)
 	}
 	return dsMetas, nil
 }
@@ -96,60 +115,72 @@ func (rw *WaitSyncMeta) DeleteWaitSyncMeta(ctx context.Context, deleteS *WaitSyn
 	if err != nil {
 		return err
 	}
-	err = rw.DB(ctx).Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND table_name_s = ? AND mode = ?",
+	err = rw.DB(ctx).Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND table_name_s = ? AND task_mode = ?",
 		common.StringUPPER(deleteS.DBTypeS),
 		common.StringUPPER(deleteS.DBTypeT),
 		common.StringUPPER(deleteS.SchemaNameS),
 		common.StringUPPER(deleteS.TableNameS),
-		deleteS.Mode).Delete(&WaitSyncMeta{}).Error
+		deleteS.TaskMode).Delete(&WaitSyncMeta{}).Error
 	if err != nil {
 		return fmt.Errorf("delete table [%s] reocrd failed: %v", table, err)
 	}
 	return nil
 }
 
-func (rw *WaitSyncMeta) UpdateWaitSyncMeta(ctx context.Context, detailS *WaitSyncMeta) error {
+func (rw *WaitSyncMeta) DeleteWaitSyncMetaSuccessTables(ctx context.Context, deleteS *WaitSyncMeta, tables []string) error {
+	table, err := rw.ParseSchemaTable()
+	if err != nil {
+		return err
+	}
+	err = rw.DB(ctx).Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND task_mode = ? AND task_status = ? AND AND table_name_s IN (?)",
+		common.StringUPPER(deleteS.DBTypeS),
+		common.StringUPPER(deleteS.DBTypeT),
+		common.StringUPPER(deleteS.SchemaNameS),
+		deleteS.TaskMode,
+		deleteS.TaskStatus,
+		tables).Delete(&WaitSyncMeta{}).Error
+	if err != nil {
+		return fmt.Errorf("delete table [%s] reocrd failed: %v", table, err)
+	}
+	return nil
+}
+
+func (rw *WaitSyncMeta) UpdateWaitSyncMeta(ctx context.Context, detailS *WaitSyncMeta, updates map[string]interface{}) error {
 	table, err := rw.ParseSchemaTable()
 	if err != nil {
 		return err
 	}
 	err = rw.DB(ctx).Model(&WaitSyncMeta{}).
-		Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND table_name_s = ? AND mode = ?",
+		Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND table_name_s = ? AND task_mode = ?",
 			common.StringUPPER(detailS.DBTypeS),
 			common.StringUPPER(detailS.DBTypeT),
 			common.StringUPPER(detailS.SchemaNameS),
 			common.StringUPPER(detailS.TableNameS),
-			detailS.Mode).
-		Updates(map[string]interface{}{
-			"FullGlobalSCN":  detailS.FullGlobalSCN,
-			"FullSplitTimes": detailS.FullSplitTimes,
-			"IsPartition":    detailS.IsPartition,
-		}).Error
+			detailS.TaskMode).
+		Updates(updates).Error
 	if err != nil {
 		return fmt.Errorf("update table [%s] record failed: %v", table, err)
 	}
 	return nil
 }
 
-func (rw *WaitSyncMeta) ModifyWaitSyncMetaColumnFullSplitTimesZero(ctx context.Context, detailS *WaitSyncMeta) error {
+func (rw *WaitSyncMeta) CountsErrWaitSyncMetaBySchema(ctx context.Context, dataErr *WaitSyncMeta) (int64, error) {
+	var countsErr int64
 	table, err := rw.ParseSchemaTable()
 	if err != nil {
-		return err
+		return countsErr, err
 	}
-	err = rw.DB(ctx).Model(&WaitSyncMeta{}).
-		Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND table_name_s = ? AND mode = ?",
-			common.StringUPPER(detailS.DBTypeS),
-			common.StringUPPER(detailS.DBTypeT),
-			common.StringUPPER(detailS.SchemaNameS),
-			common.StringUPPER(detailS.TableNameS),
-			detailS.Mode).
-		Updates(map[string]interface{}{
-			"FullSplitTimes": detailS.FullSplitTimes,
-		}).Error
-	if err != nil {
-		return fmt.Errorf("modify table [%s] column [full_split_times] failed: %v", table, err)
+	if err := rw.DB(ctx).Model(&WaitSyncMeta{}).
+		Where(`db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND task_mode = ? AND task_status = ?`,
+			common.StringUPPER(dataErr.DBTypeS),
+			common.StringUPPER(dataErr.DBTypeT),
+			common.StringUPPER(dataErr.SchemaNameS),
+			common.StringUPPER(dataErr.TaskMode),
+			common.StringUPPER(dataErr.TaskStatus)).
+		Count(&countsErr).Error; err != nil {
+		return countsErr, fmt.Errorf("get table [%s] counts failed: %v", table, err)
 	}
-	return nil
+	return countsErr, nil
 }
 
 func (rw *WaitSyncMeta) DetailWaitSyncMetaBySchemaTableSCN(ctx context.Context, detailS *WaitSyncMeta) ([]WaitSyncMeta, error) {
@@ -158,12 +189,13 @@ func (rw *WaitSyncMeta) DetailWaitSyncMetaBySchemaTableSCN(ctx context.Context, 
 	if err != nil {
 		return dsMetas, err
 	}
-	if err = rw.DB(ctx).Where(`db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND table_name_s = ? AND full_global_scn > 0 AND full_split_times = 0 and mode = ?`,
+	if err = rw.DB(ctx).Where(`db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND table_name_s = ? AND global_scn_s > 0 AND task_mode = ? AND task_status = ?`,
 		common.StringUPPER(detailS.DBTypeS),
 		common.StringUPPER(detailS.DBTypeT),
 		common.StringUPPER(detailS.SchemaNameS),
 		common.StringUPPER(detailS.TableNameS),
-		detailS.Mode).Find(&dsMetas).Error; err != nil {
+		detailS.TaskMode,
+		detailS.TaskStatus).Find(&dsMetas).Error; err != nil {
 		return dsMetas, fmt.Errorf("detail table [%s] record by schema_table_scn failed: %v", table, err)
 	}
 
@@ -176,10 +208,12 @@ func (rw *WaitSyncMeta) DetailWaitSyncMetaBySchema(ctx context.Context, detailS 
 	if err != nil {
 		return tableMetas, err
 	}
-	if err = rw.DB(ctx).Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND full_global_scn > 0 AND full_split_times = 0 AND mode = ?",
+	if err = rw.DB(ctx).Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND global_scn_s > 0 AND task_mode = ? AND task_status = ?",
 		common.StringUPPER(detailS.DBTypeS),
 		common.StringUPPER(detailS.DBTypeT),
-		common.StringUPPER(detailS.SchemaNameS), detailS.Mode).Find(&tableMetas).Error; err != nil {
+		common.StringUPPER(detailS.SchemaNameS),
+		detailS.TaskMode,
+		detailS.TaskStatus).Find(&tableMetas).Error; err != nil {
 		return tableMetas, fmt.Errorf("detail table [%s] record by schema_scn failed: %v", table, err)
 	}
 	return tableMetas, nil

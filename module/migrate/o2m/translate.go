@@ -145,7 +145,7 @@ func GenMySQLPrepareBindVarStmt(columns, bindVarBatch int) string {
 
 // Oracle SQL 转换
 // ORACLE 数据库同步需要开附加日志且表需要捕获字段列日志，Logminer 内容 UPDATE/DELETE/INSERT 语句会带所有字段信息
-func translateAndAddOracleIncrRecord(metaDB *meta.Meta, mysql *mysql.MySQL, sourceSchema, sourceTable string, logminers []logminer, taskQueue chan IncrTask) error {
+func translateAndAddOracleIncrRecord(dbTypeS, dbTypeT, taskMode, sourceSchema, sourceTable string, metaDB *meta.Meta, mysql *mysql.MySQL, logminers []logminer, taskQueue chan IncrTask) error {
 
 	startTime := time.Now()
 	zap.L().Info("oracle table increment log apply start",
@@ -189,6 +189,9 @@ func translateAndAddOracleIncrRecord(metaDB *meta.Meta, mysql *mysql.MySQL, sour
 		// 注册任务到 Job 队列
 		lp := IncrTask{
 			Ctx:            mysql.Ctx,
+			DBTypeS:        dbTypeS,
+			DBTypeT:        dbTypeT,
+			TaskMode:       taskMode,
 			MetaDB:         metaDB,
 			MySQL:          mysql,
 			GlobalSCN:      rows.SCN, // 更新元数据 GLOBAL_SCN 至当前消费的 SCN 号

@@ -25,7 +25,6 @@ import (
 	"github.com/wentaojin/transferdb/database/meta"
 	"github.com/wentaojin/transferdb/database/mysql"
 	"github.com/wentaojin/transferdb/database/oracle"
-	"github.com/wentaojin/transferdb/module/compare"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	"strings"
@@ -57,17 +56,17 @@ func NewReport(dataCompareMeta meta.DataCompareMeta, mysql *mysql.MySQL, oracle 
 func (r *Report) GenDBQuery() (oracleQuery string, mysqlQuery string) {
 	if r.DataCompareMeta.WhereColumn == "" {
 		oracleQuery = common.StringsBuilder(
-			"SELECT ", r.DataCompareMeta.ColumnInfoS, " FROM ", r.DataCompareMeta.SchemaNameS, ".", r.DataCompareMeta.TableNameS, " WHERE ", r.DataCompareMeta.WhereRange)
+			"SELECT ", r.DataCompareMeta.ColumnDetailS, " FROM ", r.DataCompareMeta.SchemaNameS, ".", r.DataCompareMeta.TableNameS, " WHERE ", r.DataCompareMeta.WhereRange)
 
 		mysqlQuery = common.StringsBuilder(
-			"SELECT ", r.DataCompareMeta.ColumnInfoT, " FROM ", r.DataCompareMeta.SchemaNameT, ".", r.DataCompareMeta.TableNameT, " WHERE ", r.DataCompareMeta.WhereRange)
+			"SELECT ", r.DataCompareMeta.ColumnDetailT, " FROM ", r.DataCompareMeta.SchemaNameT, ".", r.DataCompareMeta.TableNameT, " WHERE ", r.DataCompareMeta.WhereRange)
 	} else {
 		oracleQuery = common.StringsBuilder(
-			"SELECT ", r.DataCompareMeta.ColumnInfoS, " FROM ", r.DataCompareMeta.SchemaNameS, ".", r.DataCompareMeta.TableNameS, " WHERE ", r.DataCompareMeta.WhereRange,
+			"SELECT ", r.DataCompareMeta.ColumnDetailS, " FROM ", r.DataCompareMeta.SchemaNameS, ".", r.DataCompareMeta.TableNameS, " WHERE ", r.DataCompareMeta.WhereRange,
 			" ORDER BY ", r.DataCompareMeta.WhereColumn, " DESC")
 
 		mysqlQuery = common.StringsBuilder(
-			"SELECT ", r.DataCompareMeta.ColumnInfoT, " FROM ", r.DataCompareMeta.SchemaNameT, ".", r.DataCompareMeta.TableNameT, " WHERE ", r.DataCompareMeta.WhereRange, " ORDER BY ", r.DataCompareMeta.WhereColumn, " DESC")
+			"SELECT ", r.DataCompareMeta.ColumnDetailT, " FROM ", r.DataCompareMeta.SchemaNameT, ".", r.DataCompareMeta.TableNameT, " WHERE ", r.DataCompareMeta.WhereRange, " ORDER BY ", r.DataCompareMeta.WhereColumn, " DESC")
 	}
 	return
 }
@@ -88,7 +87,7 @@ func (r *Report) CheckMySQLRows(mysqlQuery string) (int64, error) {
 	return rows, nil
 }
 
-func (r *Report) ReportCheckRows(f *compare.File) error {
+func (r *Report) ReportCheckRows() (string, error) {
 	oracleQuery, mysqlQuery := r.GenDBQuery()
 	g1 := &errgroup.Group{}
 	g2 := &errgroup.Group{}
@@ -114,10 +113,10 @@ func (r *Report) ReportCheckRows(f *compare.File) error {
 	})
 
 	if err := g1.Wait(); err != nil {
-		return err
+		return "", err
 	}
 	if err := g2.Wait(); err != nil {
-		return err
+		return "", err
 	}
 
 	oracleRows := <-oracleRowsChan
@@ -133,7 +132,7 @@ func (r *Report) ReportCheckRows(f *compare.File) error {
 			zap.Int64("mysql rows count", mysqlRows),
 			zap.String("oracle sql", oracleQuery),
 			zap.String("mysql sql", mysqlQuery))
-		return nil
+		return "", nil
 	}
 
 	zap.L().Info("oracle table chunk diff isn't equal",
@@ -163,14 +162,10 @@ func (r *Report) ReportCheckRows(f *compare.File) error {
 
 	fixSQLStr := fmt.Sprintf("/* \n\toracle and mysql table range [%s] data rows aren't equal\n", r.DataCompareMeta.WhereRange) + sw.Render() + "\n*/\n"
 
-	if _, err := f.CWriteString(fixSQLStr); err != nil {
-		return fmt.Errorf("fix sql file write [only-check-rows = true] failed: %v", err.Error())
-	}
-
-	return nil
+	return fixSQLStr, nil
 }
 
-func (r *Report) ReportCheckCRC32(f *compare.File) error {
+func (r *Report) ReportCheckCRC32() (string, error) {
 	errORA := &errgroup.Group{}
 	errMySQL := &errgroup.Group{}
 	oraChan := make(chan DBSummary, 1)
@@ -205,10 +200,10 @@ func (r *Report) ReportCheckCRC32(f *compare.File) error {
 	})
 
 	if err := errORA.Wait(); err != nil {
-		return err
+		return "", err
 	}
 	if err := errMySQL.Wait(); err != nil {
-		return err
+		return "", err
 	}
 
 	oraReport := <-oraChan
@@ -225,7 +220,7 @@ func (r *Report) ReportCheckCRC32(f *compare.File) error {
 			zap.Uint32("mysql crc32 values", mysqlReport.Crc32Val),
 			zap.String("oracle sql", oracleQuery),
 			zap.String("mysql sql", mysqlQuery))
-		return nil
+		return "", nil
 	}
 
 	zap.L().Info("oracle table chunk diff isn't equal",
@@ -271,8 +266,7 @@ func (r *Report) ReportCheckCRC32(f *compare.File) error {
 			// 计算字段列个数
 			colValues := strings.Split(t, ",")
 			if len(mysqlReport.Columns) != len(colValues) {
-				return fmt.Errorf("mysql schema [%s] table [%s] column counts [%d] isn't match values counts [%d]",
-					r.DataCompareMeta.SchemaNameT, r.DataCompareMeta.TableNameS, len(mysqlReport.Columns), len(colValues))
+				return "", fmt.Errorf("mysql schema [%s] table [%s] column counts [%d] isn't match values counts [%d]", r.DataCompareMeta.SchemaNameT, r.DataCompareMeta.TableNameS, len(mysqlReport.Columns), len(colValues))
 			}
 			for i := 0; i < len(mysqlReport.Columns); i++ {
 				whereCond = append(whereCond, common.StringsBuilder(mysqlReport.Columns[i], "=", colValues[i]))
@@ -306,21 +300,14 @@ func (r *Report) ReportCheckCRC32(f *compare.File) error {
 			fixSQL.WriteString(fmt.Sprintf("%v;\n", common.StringsBuilder(insertPrefix, s, ")")))
 		}
 	}
-
-	// 文件写入
-	if fixSQL.String() != "" {
-		if _, err := f.CWriteString(fixSQL.String()); err != nil {
-			return fmt.Errorf("fix sql file write [only-check-rows = false] failed: %v", err.Error())
-		}
-	}
-	return nil
+	return fixSQL.String(), nil
 }
 
-func (r *Report) Report(f *compare.File) error {
+func (r *Report) Report() (string, error) {
 	if r.OnlyCheckRows {
-		return r.ReportCheckRows(f)
+		return r.ReportCheckRows()
 	}
-	return r.ReportCheckCRC32(f)
+	return r.ReportCheckCRC32()
 }
 
 func (r *Report) String() string {

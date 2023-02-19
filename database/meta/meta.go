@@ -20,7 +20,6 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/wentaojin/transferdb/config"
-	"github.com/wentaojin/transferdb/errors"
 	"github.com/wentaojin/transferdb/logger"
 	"go.uber.org/zap"
 	"gorm.io/driver/mysql"
@@ -39,22 +38,22 @@ func NewMetaDBEngine(ctx context.Context, mysqlCfg config.MySQLConfig, slowThres
 
 	mysqlDB, err := sql.Open("mysql", dsn)
 	if err != nil {
-		return &Meta{}, errors.NewMSError(errors.TRANSFERDB, errors.DOMAIN_DB, fmt.Errorf("error on open general database connection [%v]: %v", mysqlCfg.MetaSchema, err))
+		return &Meta{}, fmt.Errorf("error on open general database connection [%v]: %v", mysqlCfg.MetaSchema, err)
 	}
 
 	createSchema := fmt.Sprintf(`CREATE DATABASE IF NOT EXISTS %s`, mysqlCfg.MetaSchema)
 	_, err = mysqlDB.ExecContext(ctx, createSchema)
 	if err != nil {
-		return &Meta{}, errors.NewMSError(errors.TRANSFERDB, errors.DOMAIN_DB, fmt.Errorf("error on exec meta database sql [%v]: %v", createSchema, err))
+		return &Meta{}, fmt.Errorf("error on exec meta database sql [%v]: %v", createSchema, err)
 	}
 	createSchema = fmt.Sprintf(`CREATE DATABASE IF NOT EXISTS %s`, mysqlCfg.SchemaName)
 	_, err = mysqlDB.ExecContext(ctx, createSchema)
 	if err != nil {
-		return &Meta{}, errors.NewMSError(errors.TRANSFERDB, errors.DOMAIN_DB, fmt.Errorf("error on exec target database sql [%v]: %v", createSchema, err))
+		return &Meta{}, fmt.Errorf("error on exec target database sql [%v]: %v", createSchema, err)
 	}
 	err = mysqlDB.Close()
 	if err != nil {
-		return &Meta{}, errors.NewMSError(errors.TRANSFERDB, errors.DOMAIN_DB, fmt.Errorf("error on close general database sql [%v]: %v", createSchema, err))
+		return &Meta{}, fmt.Errorf("error on close general database sql [%v]: %v", createSchema, err)
 	}
 
 	// 初始化 MetaDB
@@ -77,7 +76,7 @@ func NewMetaDBEngine(ctx context.Context, mysqlCfg config.MySQLConfig, slowThres
 	})
 
 	if err != nil {
-		return nil, errors.NewMSError(errors.TRANSFERDB, errors.DOMAIN_DB, fmt.Errorf("error on open meta database connection: %v", err))
+		return nil, fmt.Errorf("error on open meta database connection: %v", err)
 	}
 
 	return &Meta{GormDB: gormDB}, nil
@@ -149,7 +148,7 @@ func (m *Meta) migrateStream(models ...interface{}) (err error) {
 	for _, model := range models {
 		err = m.GormDB.AutoMigrate(model)
 		if err != nil {
-			return errors.NewMSError(errors.TRANSFERDB, errors.DOMAIN_DB, fmt.Errorf("error on migrate stream: %v", err))
+			return fmt.Errorf("error on migrate stream: %v", err)
 		}
 	}
 	return nil

@@ -26,9 +26,6 @@ import (
 	"github.com/wentaojin/transferdb/module/check"
 	"github.com/wentaojin/transferdb/module/check/o2m"
 	"go.uber.org/zap"
-	"io"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 )
@@ -89,56 +86,40 @@ func NewWaitCompareTableTask(ctx context.Context, cfg *config.Config, compareTab
 	return tasks
 }
 
-func PreTableStructCheck(ctx context.Context, cfg *config.Config, oracledb *oracle.Oracle, mysqldb *mysql.MySQL, metaDB *meta.Meta, exporters []string) error {
+func PreTableStructCheck(ctx context.Context, cfg *config.Config, metaDB *meta.Meta, exporters []string) error {
 	// 表结构检查
 	if !cfg.DiffConfig.IgnoreStructCheck {
 		startTime := time.Now()
-		oraCfg := cfg.OracleConfig
-		oraCfg.IncludeTable = exporters
-		err := check.ICheck(o2m.NewO2MCheck(ctx,
-			&config.Config{
-				AppConfig:    cfg.AppConfig,
-				OracleConfig: oraCfg,
-				MySQLConfig:  cfg.MySQLConfig,
-			},
-			oracledb,
-			mysqldb,
-			metaDB))
+		cfg.OracleConfig.IncludeTable = exporters
+
+		var (
+			r   check.Reporter
+			err error
+		)
+		switch {
+		case strings.EqualFold(cfg.DBTypeS, common.DatabaseTypeOracle) && strings.EqualFold(cfg.DBTypeT, common.DatabaseTypeMySQL):
+			r, err = o2m.NewCheck(ctx, cfg)
+			if err != nil {
+				return err
+			}
+		}
+		err = r.Check()
 		if err != nil {
 			return err
 		}
 		errTotals, err := meta.NewErrorLogDetailModel(metaDB).CountsErrorLogBySchema(ctx, &meta.ErrorLogDetail{
-			DBTypeS:     common.TaskDBOracle,
-			DBTypeT:     common.TaskDBMySQL,
+			DBTypeS:     cfg.DBTypeS,
+			DBTypeT:     cfg.DBTypeT,
 			SchemaNameS: common.StringUPPER(cfg.OracleConfig.SchemaName),
-			RunMode:     common.CheckO2MMode,
+			TaskMode:    cfg.TaskMode,
 		})
 
 		if errTotals != 0 || err != nil {
-			return fmt.Errorf("compare schema [%s] mode [%s] table task failed: %v, please check log, error: %v", strings.ToUpper(cfg.OracleConfig.SchemaName), common.CheckO2MMode, err)
+			return fmt.Errorf("compare schema [%s] mode [%s] table structure task failed: %v, please check log, error: %v", strings.ToUpper(cfg.OracleConfig.SchemaName), cfg.TaskMode, err)
 		}
-		pwdDir, err := os.Getwd()
-		if err != nil {
-			return err
-		}
-
-		checkFile := filepath.Join(pwdDir, fmt.Sprintf("check_%s.sql", cfg.OracleConfig.SchemaName))
-		file, err := os.Open(checkFile)
-		if err != nil {
-			return err
-		}
-		defer file.Close()
-
-		fd, err := io.ReadAll(file)
-		if err != nil {
-			return err
-		}
-		if string(fd) != "" {
-			return fmt.Errorf("oracle and mysql table struct isn't equal, please check fixed file [%s]", checkFile)
-		}
-
 		endTime := time.Now()
 		zap.L().Info("pre check schema oracle to mysql finished",
+			zap.String("table structure check", "equal"),
 			zap.String("schema", strings.ToUpper(cfg.OracleConfig.SchemaName)),
 			zap.String("cost", endTime.Sub(startTime).String()))
 	}

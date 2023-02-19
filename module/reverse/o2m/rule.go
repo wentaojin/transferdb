@@ -227,7 +227,7 @@ func (r *Rule) GenTableSuffix() (string, error) {
 		}
 	}
 	// table-option 表后缀可选项
-	if strings.EqualFold(r.TargetDBType, common.TaskDBMySQL) || r.TargetTableOption == "" {
+	if strings.EqualFold(r.TargetDBType, common.DatabaseTypeMySQL) || r.TargetTableOption == "" {
 		zap.L().Warn("reverse oracle table suffix",
 			zap.String("table", r.String()),
 			zap.String("table-option", "table-option is null, would be disabled"))

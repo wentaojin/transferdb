@@ -29,8 +29,10 @@ import (
 	"time"
 )
 
-type Check struct {
+type Diff struct {
 	Ctx             context.Context
+	DBTypeS         string     `json:"db_type_s"`
+	DBTypeT         string     `json:"db_type_t"`
 	OracleTableINFO *Table     `json:"oracle_table_info"`
 	MySQLTableINFO  *Table     `json:"mysql_table_info"`
 	MySQLDBVersion  string     `json:"mysqldb_version"`
@@ -38,9 +40,11 @@ type Check struct {
 	MetaDB          *meta.Meta `json:"-"`
 }
 
-func NewChecker(ctx context.Context, oracleTableInfo, mysqlTableInfo *Table, mysqlDBVersion, targetDBType string, metaDB *meta.Meta) *Check {
-	return &Check{
+func NewChecker(ctx context.Context, oracleTableInfo, mysqlTableInfo *Table, dbTypeS, dbTypeT, mysqlDBVersion, targetDBType string, metaDB *meta.Meta) *Diff {
+	return &Diff{
 		Ctx:             ctx,
+		DBTypeS:         dbTypeS,
+		DBTypeT:         dbTypeT,
 		OracleTableINFO: oracleTableInfo,
 		MySQLTableINFO:  mysqlTableInfo,
 		MySQLDBVersion:  mysqlDBVersion,
@@ -55,7 +59,7 @@ func NewChecker(ctx context.Context, oracleTableInfo, mysqlTableInfo *Table, mys
 // 2、忽略上下游不同索引名、约束名对比，只对比下游是否存在同等约束下同等字段是否存在
 // 3、分区只对比分区类型、分区键、分区表达式等，不对比具体每个分区下的情况
 
-func (c *Check) CheckPartitionTableType() string {
+func (c *Diff) CheckPartitionTableType() string {
 	// 表类型检查 - only 分区表
 	zap.L().Info("check table",
 		zap.String("table partition type check", fmt.Sprintf("%s.%s", c.OracleTableINFO.SchemaName, c.OracleTableINFO.TableName)))
@@ -82,7 +86,7 @@ func (c *Check) CheckPartitionTableType() string {
 
 }
 
-func (c *Check) CheckTableComment() string {
+func (c *Diff) CheckTableComment() string {
 	// 表注释检查
 	zap.L().Info("check table",
 		zap.String("table comment check", fmt.Sprintf("%s.%s", c.OracleTableINFO.SchemaName, c.OracleTableINFO.TableName)))
@@ -106,7 +110,7 @@ func (c *Check) CheckTableComment() string {
 	return builder.String()
 }
 
-func (c *Check) CheckTableCharacterSetAndCollation() string {
+func (c *Diff) CheckTableCharacterSetAndCollation() string {
 	// 表级别字符集以及排序规则检查
 	zap.L().Info("check table",
 		zap.String("table character set and collation check", fmt.Sprintf("%s.%s", c.OracleTableINFO.SchemaName, c.OracleTableINFO.TableName)))
@@ -157,7 +161,7 @@ func (c *Check) CheckTableCharacterSetAndCollation() string {
 	return builder.String()
 }
 
-func (c *Check) CheckColumnCharacterSetAndCollation() string {
+func (c *Diff) CheckColumnCharacterSetAndCollation() string {
 	// 1、表字段级别字符集以及排序规则校验 -> 基于原表字段类型以及字符集、排序规则
 	// 2、下游表字段数检查多了
 	zap.L().Info("check table",
@@ -261,7 +265,7 @@ func (c *Check) CheckColumnCharacterSetAndCollation() string {
 	return builder.String()
 }
 
-func (c *Check) CheckColumnCounts() (string, error) {
+func (c *Diff) CheckColumnCounts() (string, error) {
 	// 上游表字段数检查
 	zap.L().Info("check table",
 		zap.String("oracle table column counts check", fmt.Sprintf("%s.%s", c.OracleTableINFO.SchemaName, c.OracleTableINFO.TableName)))
@@ -289,7 +293,7 @@ func (c *Check) CheckColumnCounts() (string, error) {
 				columnMeta string
 				err        error
 			)
-			columnMeta, err = GenOracleTableColumnMeta(c.Ctx, c.MetaDB, c.OracleTableINFO.SchemaName, c.OracleTableINFO.TableName, oracleColName, oracleColInfo)
+			columnMeta, err = GenOracleTableColumnMeta(c.Ctx, c.MetaDB, c.DBTypeS, c.DBTypeT, c.OracleTableINFO.SchemaName, c.OracleTableINFO.TableName, oracleColName, oracleColInfo)
 			if err != nil {
 				return columnMeta, err
 			}
@@ -317,7 +321,7 @@ func (c *Check) CheckColumnCounts() (string, error) {
 	return builder.String(), nil
 }
 
-func (c *Check) CheckPrimaryAndUniqueKey() (string, error) {
+func (c *Diff) CheckPrimaryAndUniqueKey() (string, error) {
 	// 表主键/唯一约束检查
 	zap.L().Info("check table",
 		zap.String("table pk and uk constraint check", fmt.Sprintf("%s.%s", c.OracleTableINFO.SchemaName, c.OracleTableINFO.TableName)),
@@ -361,9 +365,9 @@ func (c *Check) CheckPrimaryAndUniqueKey() (string, error) {
 	return builder.String(), nil
 }
 
-func (c *Check) CheckForeignKey() (string, error) {
+func (c *Diff) CheckForeignKey() (string, error) {
 	isTiDB := false
-	if strings.ToUpper(c.MySQLDBType) == common.TaskDBTiDB {
+	if strings.EqualFold(c.MySQLDBType, common.DatabaseTypeTiDB) {
 		isTiDB = true
 	}
 	var builder strings.Builder
@@ -403,9 +407,9 @@ func (c *Check) CheckForeignKey() (string, error) {
 	return builder.String(), nil
 }
 
-func (c *Check) CheckCheckKey() (string, error) {
+func (c *Diff) CheckCheckKey() (string, error) {
 	isTiDB := false
-	if strings.ToUpper(c.MySQLDBType) == common.TaskDBTiDB {
+	if strings.EqualFold(c.MySQLDBType, common.DatabaseTypeTiDB) {
 		isTiDB = true
 	}
 	var builder strings.Builder
@@ -452,7 +456,7 @@ func (c *Check) CheckCheckKey() (string, error) {
 	return builder.String(), nil
 }
 
-func (c *Check) CheckIndex() (string, error) {
+func (c *Diff) CheckIndex() (string, error) {
 	// 索引检查
 	zap.L().Info("check table",
 		zap.String("table indexes check", fmt.Sprintf("%s.%s", c.OracleTableINFO.SchemaName, c.OracleTableINFO.TableName)),
@@ -557,7 +561,7 @@ func (c *Check) CheckIndex() (string, error) {
 	return builder.String(), nil
 }
 
-func (c *Check) CheckPartitionTable() (string, error) {
+func (c *Diff) CheckPartitionTable() (string, error) {
 	// 分区表检查
 	var builder strings.Builder
 	if c.MySQLTableINFO.IsPartition && c.OracleTableINFO.IsPartition {
@@ -599,7 +603,7 @@ func (c *Check) CheckPartitionTable() (string, error) {
 	return builder.String(), nil
 }
 
-func (c *Check) CheckColumn() (string, error) {
+func (c *Diff) CheckColumn() (string, error) {
 	// 表字段检查
 	// 注释格式化
 	zap.L().Info("check table",
@@ -658,7 +662,7 @@ func (c *Check) CheckColumn() (string, error) {
 	return builder.String(), nil
 }
 
-func (c *Check) Writer(f *check.File) error {
+func (c *Diff) Writer(f *check.File) error {
 	startTime := time.Now()
 	zap.L().Info("check table start",
 		zap.String("oracle table", fmt.Sprintf("%s.%s", c.OracleTableINFO.SchemaName, c.OracleTableINFO.TableName)),
@@ -743,7 +747,7 @@ func (c *Check) Writer(f *check.File) error {
 	return nil
 }
 
-func (c *Check) String() string {
+func (c *Diff) String() string {
 	jsonStr, _ := json.Marshal(c)
 	return string(jsonStr)
 }

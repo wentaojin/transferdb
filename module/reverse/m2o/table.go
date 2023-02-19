@@ -179,7 +179,7 @@ func GenReverseTableTask(r *Reverse, tableNameRule map[string]string, tableColum
 	}
 
 	g1 := &errgroup.Group{}
-	tableChan := make(chan *Table, common.BufferSize)
+	tableChan := make(chan *Table, common.ChannelBufferSize)
 
 	g1.Go(func() error {
 		g2 := &errgroup.Group{}
@@ -258,7 +258,7 @@ func (t *Table) GetTableForeignKey() ([]map[string]string, error) {
 }
 
 func (t *Table) GetTableCheckKey() ([]map[string]string, error) {
-	if strings.EqualFold(t.MySQLDBType, common.TaskDBTiDB) {
+	if strings.EqualFold(t.MySQLDBType, common.DatabaseTypeTiDB) {
 		return nil, nil
 	}
 	mysqlVersion, err := t.MySQL.GetMySQLDBVersion()

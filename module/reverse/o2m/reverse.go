@@ -39,17 +39,29 @@ type Reverse struct {
 	MetaDB *meta.Meta
 }
 
-func NewO2MReverse(ctx context.Context, cfg *config.Config, mysql *mysql.MySQL, oracle *oracle.Oracle, metaDB *meta.Meta) *Reverse {
+func NewReverse(ctx context.Context, cfg *config.Config) (*Reverse, error) {
+	oracleDB, err := oracle.NewOracleDBEngine(ctx, cfg.OracleConfig)
+	if err != nil {
+		return nil, err
+	}
+	mysqlDB, err := mysql.NewMySQLDBEngine(ctx, cfg.MySQLConfig)
+	if err != nil {
+		return nil, err
+	}
+	metaDB, err := meta.NewMetaDBEngine(ctx, cfg.MySQLConfig, cfg.AppConfig.SlowlogThreshold)
+	if err != nil {
+		return nil, err
+	}
 	return &Reverse{
 		Ctx:    ctx,
 		Cfg:    cfg,
-		Mysql:  mysql,
-		Oracle: oracle,
+		Mysql:  mysqlDB,
+		Oracle: oracleDB,
 		MetaDB: metaDB,
-	}
+	}, nil
 }
 
-func (r *Reverse) NewReverse() error {
+func (r *Reverse) Reverse() error {
 	startTime := time.Now()
 	zap.L().Info("reverse table r.Oracle to mysql start",
 		zap.String("schema", r.Cfg.OracleConfig.SchemaName))
@@ -68,13 +80,13 @@ func (r *Reverse) NewReverse() error {
 
 	// 判断 error_log_detail 是否存在错误记录，是否可进行 reverse
 	errTotals, err := meta.NewErrorLogDetailModel(r.MetaDB).CountsErrorLogBySchema(r.Ctx, &meta.ErrorLogDetail{
-		DBTypeS:     common.TaskDBOracle,
-		DBTypeT:     common.TaskDBMySQL,
+		DBTypeS:     r.Cfg.DBTypeS,
+		DBTypeT:     r.Cfg.DBTypeT,
 		SchemaNameS: common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
-		RunMode:     common.ReverseO2MMode,
+		TaskMode:    r.Cfg.TaskMode,
 	})
 	if errTotals > 0 || err != nil {
-		return fmt.Errorf("reverse schema [%s] table mode [%s] task failed: %v, table [error_log_detail] exist failed error, please clear and rerunning", r.Cfg.OracleConfig.SchemaName, common.ReverseO2MMode, err)
+		return fmt.Errorf("reverse schema [%s] table mode [%s] task failed: %v, table [error_log_detail] exist failed error, please clear and rerunning", r.Cfg.OracleConfig.SchemaName, r.Cfg.TaskMode, err)
 	}
 
 	// 获取 oracle 数据库字符排序规则
@@ -119,6 +131,8 @@ func (r *Reverse) NewReverse() error {
 	ruleTime := time.Now()
 	tableNameRuleMap, tableColumnRuleMap, tableDefaultRuleMap, err := IChanger(&Change{
 		Ctx:              r.Ctx,
+		DBTypeS:          r.Cfg.DBTypeS,
+		DBTypeT:          r.Cfg.DBTypeT,
 		SourceSchemaName: common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
 		TargetSchemaName: common.StringUPPER(r.Cfg.MySQLConfig.SchemaName),
 		SourceTables:     exporterTables,
@@ -140,19 +154,8 @@ func (r *Reverse) NewReverse() error {
 		return err
 	}
 
-	err = common.PathExist(r.Cfg.ReverseConfig.ReverseDDLDir)
-	if err != nil {
-		return err
-	}
-	err = common.PathExist(r.Cfg.ReverseConfig.ReverseCompatibleDir)
-	if err != nil {
-		return err
-	}
-	reverseFile := filepath.Join(r.Cfg.ReverseConfig.ReverseDDLDir, fmt.Sprintf("reverse_%s.sql", r.Cfg.OracleConfig.SchemaName))
-	compFile := filepath.Join(r.Cfg.ReverseConfig.ReverseCompatibleDir, fmt.Sprintf("compatibility_%s.sql", r.Cfg.OracleConfig.SchemaName))
-
 	// file writer
-	f, err := reverse.NewWriter(reverseFile, compFile, common.ReverseO2MMode, r.Cfg.ReverseConfig.DirectWrite, r.Mysql, r.Oracle)
+	f, err := reverse.NewWriter(r.Cfg, r.Mysql, r.Oracle)
 	if err != nil {
 		return err
 	}
@@ -180,12 +183,14 @@ func (r *Reverse) NewReverse() error {
 			rule, err := IReader(t)
 			if err != nil {
 				if err = meta.NewErrorLogDetailModel(r.MetaDB).CreateErrorLog(r.Ctx, &meta.ErrorLogDetail{
-					DBTypeS:     common.TaskDBOracle,
-					DBTypeT:     common.TaskDBMySQL,
+					DBTypeS:     r.Cfg.DBTypeS,
+					DBTypeT:     r.Cfg.DBTypeT,
 					SchemaNameS: t.SourceSchemaName,
 					TableNameS:  t.SourceTableName,
-					RunMode:     common.ReverseO2MMode,
-					RunStatus:   "Failed",
+					SchemaNameT: t.TargetSchemaName,
+					TableNameT:  t.TargetTableName,
+					TaskMode:    r.Cfg.TaskMode,
+					TaskStatus:  "Failed",
 					InfoDetail:  t.String(),
 					ErrorDetail: err.Error(),
 				}); err != nil {
@@ -202,12 +207,14 @@ func (r *Reverse) NewReverse() error {
 			ddl, err := IReverse(rule)
 			if err != nil {
 				if err = meta.NewErrorLogDetailModel(r.MetaDB).CreateErrorLog(r.Ctx, &meta.ErrorLogDetail{
-					DBTypeS:     common.TaskDBOracle,
-					DBTypeT:     common.TaskDBMySQL,
+					DBTypeS:     r.Cfg.DBTypeS,
+					DBTypeT:     r.Cfg.DBTypeT,
 					SchemaNameS: t.SourceSchemaName,
 					TableNameS:  t.SourceTableName,
-					RunMode:     common.ReverseO2MMode,
-					RunStatus:   "Failed",
+					SchemaNameT: t.TargetSchemaName,
+					TableNameT:  t.TargetTableName,
+					TaskMode:    r.Cfg.TaskMode,
+					TaskStatus:  "Failed",
 					InfoDetail:  t.String(),
 					ErrorDetail: err.Error(),
 				}); err != nil {
@@ -225,12 +232,14 @@ func (r *Reverse) NewReverse() error {
 			err = IWriter(f, ddl)
 			if err != nil {
 				if err = meta.NewErrorLogDetailModel(r.MetaDB).CreateErrorLog(r.Ctx, &meta.ErrorLogDetail{
-					DBTypeS:     common.TaskDBOracle,
-					DBTypeT:     common.TaskDBMySQL,
+					DBTypeS:     r.Cfg.DBTypeS,
+					DBTypeT:     r.Cfg.DBTypeT,
 					SchemaNameS: t.SourceSchemaName,
 					TableNameS:  t.SourceTableName,
-					RunMode:     common.ReverseO2MMode,
-					RunStatus:   "Failed",
+					SchemaNameT: t.TargetSchemaName,
+					TableNameT:  t.TargetTableName,
+					TaskMode:    r.Cfg.TaskMode,
+					TaskStatus:  "Failed",
 					InfoDetail:  t.String(),
 					ErrorDetail: err.Error(),
 				}); err != nil {
@@ -259,10 +268,10 @@ func (r *Reverse) NewReverse() error {
 	}
 
 	errTotals, err = meta.NewErrorLogDetailModel(r.MetaDB).CountsErrorLogBySchema(r.Ctx, &meta.ErrorLogDetail{
-		DBTypeS:     common.TaskDBOracle,
-		DBTypeT:     common.TaskDBMySQL,
+		DBTypeS:     r.Cfg.DBTypeS,
+		DBTypeT:     r.Cfg.DBTypeT,
 		SchemaNameS: common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
-		RunMode:     common.ReverseO2MMode,
+		TaskMode:    r.Cfg.TaskMode,
 	})
 	if err != nil {
 		return err
@@ -270,10 +279,10 @@ func (r *Reverse) NewReverse() error {
 
 	endTime := time.Now()
 	if !r.Cfg.ReverseConfig.DirectWrite {
-		zap.L().Info("reverse", zap.String("create table and index output", filepath.Join(r.Cfg.ReverseConfig.ReverseCompatibleDir,
+		zap.L().Info("reverse", zap.String("create table and index output", filepath.Join(r.Cfg.ReverseConfig.DDLReverseDir,
 			fmt.Sprintf("reverse_%s.sql", r.Cfg.OracleConfig.SchemaName))))
 	}
-	zap.L().Info("compatibility", zap.String("maybe exist compatibility output", filepath.Join(r.Cfg.ReverseConfig.ReverseCompatibleDir,
+	zap.L().Info("compatibility", zap.String("maybe exist compatibility output", filepath.Join(r.Cfg.ReverseConfig.DDLCompatibleDir,
 		fmt.Sprintf("compatibility_%s.sql", r.Cfg.OracleConfig.SchemaName))))
 	if errTotals == 0 {
 		zap.L().Info("reverse table oracle to mysql finished",

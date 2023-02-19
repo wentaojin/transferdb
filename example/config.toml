@@ -34,19 +34,19 @@ direct-write = false
 # 当 direct-write 设置 true，参数不生效
 # 当 direct-write 设置 false，参数生效，表结构转换写本地文件目录
 # 文件输出命名格式: reverse_${source_schema}.sql
-reverse-ddl-dir = "/tmp"
+ddl-reverse-dir = "/users/marvin/gostore/transferdb/data"
 # 忽略 direct-write 参数，关于数据库不兼容性的内容统一以文件形式输出
 # 文件输出命名格式: compatible_${source_schema}.sql
-reverse-compatible-dir = "/tmp"
+ddl-compatible-dir = "/users/marvin/gostore/transferdb/data"
 
 [check]
 # 任务表并发
 check-threads = 256
 # 差异修复文件输出目录
 # 文件输出命名格式: check_${source_schema}.sql
-check-sql-dir = "/tmp"
+check-sql-dir = "/users/marvin/gostore/transferdb/data"
 
-[diff]
+[compare]
 chunk-size = 50000
 # 检查数据并发数
 diff-threads = 128
@@ -58,7 +58,7 @@ enable-checkpoint = true
 # 忽略表结构、collation 以及 character 检查，数据校验是否校验表结构，以上游表结构为准
 ignore-struct-check = true
 # 差异修复 SQL 文件输出目录, ONLY 用于下游数据库变更修复
-fix-sql-dir = "/tmp"
+fix-sql-dir = "/users/marvin/gostore/transferdb/data"
 
 # diff 某些表单独配置 -> 源端表
 #[[table-config]]
@@ -89,8 +89,8 @@ charset = "utf8"
 # 4、建议是 insert-batch-size 整数倍
 rows = 100000
 # 数据文件输出目录, 所有表数据输出文件目录，需要磁盘空间充足
-# 目录格式：/tmp/${target_dbname}/${table_name}
-output-dir = "/tmp"
+# 目录格式：/data/${target_dbname}/${table_name}
+output-dir = "/users/marvin/gostore/transferdb/data"
 # 用于初始化表任务并发数【写下游 meta 数据库】
 task-threads = 128
 # 表导出导入并发数，同时处理多少张上游表，可动态变更
@@ -144,7 +144,7 @@ ora-arch = "noncdb"
 # 2、Non-CDB 架构需要具备 logminer 权限用户
 username = "c##ggadmin"
 password = "ggadmin"
-host = "10.2.103.31"
+host = "10.21.13.31"
 port = 1521
 service-name = "orclpdb1"
 # oracle instance client dir -> only linux
@@ -175,7 +175,7 @@ db-type = "tidb"
 # 目标端连接串
 username = "root"
 password = ""
-host = "10.2.103.30"
+host = "10.21.113.30"
 port = 5000
 # mysql 链接参数
 connect-params = "charset=utf8mb4&multiStatements=true&parseTime=True&loc=Local"

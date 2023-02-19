@@ -84,15 +84,15 @@ func (rw *BuildinGlobalDefaultval) InitO2MBuildinGlobalDefaultValue(ctx context.
 	var buildinColumDefaultvals []*BuildinGlobalDefaultval
 
 	buildinColumDefaultvals = append(buildinColumDefaultvals, &BuildinGlobalDefaultval{
-		DBTypeS:       common.TaskDBOracle,
-		DBTypeT:       common.TaskDBMySQL,
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeMySQL,
 		DefaultValueS: common.BuildInOracleColumnDefaultValueSysdate,
 		DefaultValueT: common.BuildInOracleO2MColumnDefaultValueMap[common.BuildInOracleColumnDefaultValueSysdate],
 	})
 
 	buildinColumDefaultvals = append(buildinColumDefaultvals, &BuildinGlobalDefaultval{
-		DBTypeS:       common.TaskDBOracle,
-		DBTypeT:       common.TaskDBMySQL,
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeMySQL,
 		DefaultValueS: common.BuildInOracleColumnDefaultValueSYSGUID,
 		DefaultValueT: common.BuildInOracleO2MColumnDefaultValueMap[common.BuildInOracleColumnDefaultValueSYSGUID],
 	})
@@ -110,8 +110,8 @@ func (rw *BuildinGlobalDefaultval) InitM2OBuildinGlobalDefaultValue(ctx context.
 	var buildinColumDefaultvals []*BuildinGlobalDefaultval
 
 	buildinColumDefaultvals = append(buildinColumDefaultvals, &BuildinGlobalDefaultval{
-		DBTypeS:       common.TaskDBMySQL,
-		DBTypeT:       common.TaskDBOracle,
+		DBTypeS:       common.DatabaseTypeMySQL,
+		DBTypeT:       common.DatabaseTypeOracle,
 		DefaultValueS: common.BuildInMySQLColumnDefaultValueCurrentTimestamp,
 		DefaultValueT: common.BuildInMySQLM2OColumnDefaultValueMap[common.BuildInMySQLColumnDefaultValueCurrentTimestamp],
 	})

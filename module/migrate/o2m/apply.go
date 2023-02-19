@@ -31,6 +31,9 @@ import (
 
 type IncrTask struct {
 	Ctx            context.Context `json:"-"`
+	DBTypeS        string          `json:"db_type_s"`
+	DBTypeT        string          `json:"db_type_t"`
+	TaskMode       string          `json:"task_mode"`
 	GlobalSCN      uint64          `json:"global_scn"`
 	SourceTableSCN uint64          `json:"source_table_scn"`
 	SourceSchema   string          `json:"source_schema"`
@@ -79,10 +82,13 @@ func applyOracleIncrRecord(metaDB *meta.Meta, mysqlDB *mysql.MySQL, cfg *config.
 						}
 					}()
 					if err := translateAndAddOracleIncrRecord(
-						metaDB,
-						mysql,
+						cfg.DBTypeS,
+						cfg.DBTypeT,
+						cfg.TaskMode,
 						sourceSchema,
 						sourceTable,
+						metaDB,
+						mysql,
 						rowsResult, taskQueue); err != nil {
 						return
 					}
@@ -128,8 +134,8 @@ func (p *IncrTask) IncrApply() error {
 			return fmt.Errorf("single increment table [%s] data oracle redo [%v] insert mysql [%v] transaction commit falied: %v", p.SourceTable, p.OracleRedo, p.MySQLRedo, err)
 		}
 	} else {
-		for _, sql := range p.MySQLRedo {
-			_, err := p.MySQL.MySQLDB.ExecContext(p.Ctx, sql)
+		for _, s := range p.MySQLRedo {
+			_, err := p.MySQL.MySQLDB.ExecContext(p.Ctx, s)
 			if err != nil {
 				return fmt.Errorf("single increment table [%s] data oracle redo [%v] insert mysql [%v] exec falied: %v", p.SourceTable, p.OracleRedo, p.MySQLRedo, err)
 			}
@@ -139,14 +145,16 @@ func (p *IncrTask) IncrApply() error {
 	// 如果同步中断，数据同步使用会以 global_scn_s 为准，也就是会进行重复消费
 	if p.Operation == common.MigrateOperationDropTable {
 		err := meta.NewCommonModel(p.MetaDB).DeleteIncrSyncMetaAndWaitSyncMeta(p.Ctx, &meta.IncrSyncMeta{
-			DBTypeS:     common.TaskDBOracle,
-			DBTypeT:     common.TaskDBMySQL,
+			DBTypeS:     p.DBTypeS,
+			DBTypeT:     p.DBTypeT,
 			SchemaNameS: p.SourceSchema,
 			TableNameS:  p.SourceTable,
 		}, &meta.WaitSyncMeta{
+			DBTypeS:     p.DBTypeS,
+			DBTypeT:     p.DBTypeT,
 			SchemaNameS: p.SourceSchema,
 			TableNameS:  p.SourceTable,
-			Mode:        common.AllO2MMode,
+			TaskMode:    p.TaskMode,
 		})
 		if err != nil {
 			zap.L().Error("update table increment scn record failed",
@@ -156,8 +164,8 @@ func (p *IncrTask) IncrApply() error {
 		}
 	} else {
 		err := meta.NewIncrSyncMetaModel(p.MetaDB).UpdateIncrSyncMeta(p.Ctx, &meta.IncrSyncMeta{
-			DBTypeS:     common.TaskDBOracle,
-			DBTypeT:     common.TaskDBMySQL,
+			DBTypeS:     p.DBTypeS,
+			DBTypeT:     p.DBTypeT,
 			SchemaNameS: p.SourceSchema,
 			TableNameS:  p.SourceTable,
 			GlobalScnS:  p.GlobalSCN,

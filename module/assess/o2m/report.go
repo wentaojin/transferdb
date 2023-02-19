@@ -36,14 +36,14 @@ type Report struct {
 	*ReportRelated
 }
 
-func GetAssessDatabaseReport(ctx context.Context, metaDB *meta.Meta, oracle *oracle.Oracle, schemaName []string, reportName, reportUser string) (*Report, error) {
+func GetAssessDatabaseReport(ctx context.Context, metaDB *meta.Meta, oracle *oracle.Oracle, schemaName []string, reportName, reportUser, dbTypeS, dbTypeT string) (*Report, error) {
 	assessTotal := 0
 	compatibleS := 0
 	incompatibleS := 0
 	convertibleS := 0
 	inconvertibleS := 0
 
-	dbOverview, overviewS, err := GetAssessDatabaseOverviewResult(ctx, metaDB, oracle, reportName, reportUser)
+	dbOverview, overviewS, err := GetAssessDatabaseOverviewResult(ctx, metaDB, oracle, reportName, reportUser, dbTypeS, dbTypeT)
 	if err != nil {
 		return nil, err
 	}

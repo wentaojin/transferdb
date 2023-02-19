@@ -296,8 +296,8 @@ func (m *MySQL) GetMySQLTableIndex(schemaName, tableName string, targetDBTye str
 		return nil, err
 	}
 
-	if strings.EqualFold(targetDBTye, common.TaskDBTiDB) {
-		if strings.Contains(common.StringUPPER(mysqlVersion), common.TaskDBTiDB) {
+	if strings.EqualFold(targetDBTye, common.DatabaseTypeTiDB) {
+		if strings.Contains(common.StringUPPER(mysqlVersion), common.DatabaseTypeTiDB) {
 			query = fmt.Sprintf(`SELECT 
 		INDEX_NAME,
 		INDEX_TYPE,
@@ -362,8 +362,8 @@ func (m *MySQL) GetMySQLTableNormalIndex(schemaName, tableName string, targetDBT
 		return nil, err
 	}
 
-	if strings.EqualFold(targetDBTye, common.TaskDBTiDB) {
-		if strings.Contains(common.StringUPPER(mysqlVersion), common.TaskDBTiDB) {
+	if strings.EqualFold(targetDBTye, common.DatabaseTypeTiDB) {
+		if strings.Contains(common.StringUPPER(mysqlVersion), common.DatabaseTypeTiDB) {
 			query = fmt.Sprintf(`SELECT 
 		INDEX_NAME,
 		INDEX_TYPE,

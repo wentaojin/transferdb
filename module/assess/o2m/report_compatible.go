@@ -194,8 +194,8 @@ func GetAssessDatabaseCompatibleResult(ctx context.Context, metaDB *meta.Meta, o
 
 	// 获取自定义兼容性内容
 	compatibles, err := meta.NewBuildinObjectCompatibleModel(metaDB).BatchQueryObjAssessCompatible(ctx, &meta.BuildinObjectCompatible{
-		DBTypeS: common.TaskDBOracle,
-		DBTypeT: common.TaskDBMySQL,
+		DBTypeS: common.DatabaseTypeOracle,
+		DBTypeT: common.DatabaseTypeMySQL,
 	})
 	if err != nil {
 		return nil, nil, err
@@ -207,8 +207,8 @@ func GetAssessDatabaseCompatibleResult(ctx context.Context, metaDB *meta.Meta, o
 
 	// 获取自定义数据类型
 	buildDatatypeRules, err := meta.NewBuildinDatatypeRuleModel(metaDB).BatchQueryBuildinDatatype(ctx, &meta.BuildinDatatypeRule{
-		DBTypeS: common.TaskDBOracle,
-		DBTypeT: common.TaskDBMySQL,
+		DBTypeS: common.DatabaseTypeOracle,
+		DBTypeT: common.DatabaseTypeMySQL,
 	})
 	if err != nil {
 		return nil, nil, err
@@ -220,8 +220,8 @@ func GetAssessDatabaseCompatibleResult(ctx context.Context, metaDB *meta.Meta, o
 
 	// 获取自定义默认值内容
 	defaultValues, err := meta.NewBuildinGlobalDefaultvalModel(metaDB).DetailGlobalDefaultVal(ctx, &meta.BuildinGlobalDefaultval{
-		DBTypeS: common.TaskDBOracle,
-		DBTypeT: common.TaskDBMySQL})
+		DBTypeS: common.DatabaseTypeOracle,
+		DBTypeT: common.DatabaseTypeMySQL})
 	if err != nil {
 		return nil, nil, err
 	}

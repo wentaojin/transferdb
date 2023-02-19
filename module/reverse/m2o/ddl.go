@@ -144,7 +144,7 @@ func (d *DDL) Write(w *reverse.Write) error {
 
 	// 文件写入
 	if sqlRev.String() != "" {
-		if w.DirectWrite {
+		if w.Cfg.ReverseConfig.DirectWrite {
 			err := w.RWriteDB(sqlRev.String())
 			if err != nil {
 				return err

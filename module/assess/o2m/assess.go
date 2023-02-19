@@ -36,13 +36,21 @@ type Assess struct {
 	oracle *oracle.Oracle
 }
 
-func NewAssess(ctx context.Context, cfg *config.Config, metaDB *meta.Meta, oracle *oracle.Oracle) *Assess {
+func NewAssess(ctx context.Context, cfg *config.Config) (*Assess, error) {
+	oracleDB, err := oracle.NewOracleDBEngine(ctx, cfg.OracleConfig)
+	if err != nil {
+		return nil, err
+	}
+	metaDB, err := meta.NewMetaDBEngine(ctx, cfg.MySQLConfig, cfg.AppConfig.SlowlogThreshold)
+	if err != nil {
+		return nil, err
+	}
 	return &Assess{
 		ctx:    ctx,
 		cfg:    cfg,
 		metaDB: metaDB,
-		oracle: oracle,
-	}
+		oracle: oracleDB,
+	}, nil
 }
 
 func (r *Assess) Assess() error {
@@ -140,7 +148,7 @@ func (r *Assess) Assess() error {
 
 	// 评估
 	beginTime := time.Now()
-	report, err := GetAssessDatabaseReport(r.ctx, r.metaDB, r.oracle, usernameArray, fileName, common.StringUPPER(r.cfg.OracleConfig.Username))
+	report, err := GetAssessDatabaseReport(r.ctx, r.metaDB, r.oracle, usernameArray, fileName, common.StringUPPER(r.cfg.OracleConfig.Username), r.cfg.DBTypeS, r.cfg.DBTypeT)
 	if err != nil {
 		return err
 	}

@@ -19,24 +19,27 @@ import (
 	"context"
 	"fmt"
 	"github.com/wentaojin/transferdb/common"
-	"github.com/wentaojin/transferdb/errors"
 	"gorm.io/gorm"
 )
 
 // 数据校验元数据表
 type DataCompareMeta struct {
-	ID          uint   `gorm:"primary_key;autoIncrement;comment:'自增编号'" json:"id"`
-	DBTypeS     string `gorm:"type:varchar(15);index:idx_dbtype_st_obj,unique;comment:'源数据库类型'" json:"db_type_s"`
-	DBTypeT     string `gorm:"type:varchar(15);index:idx_dbtype_st_obj,unique;comment:'目标数据库类型'" json:"db_type_t"`
-	SchemaNameS string `gorm:"not null;index:idx_dbtype_st_obj,unique;comment:'源端 schema'" json:"schema_name_s"`
-	TableNameS  string `gorm:"not null;index:idx_dbtype_st_obj,unique;comment:'源端表名'" json:"table_name_s"`
-	ColumnInfoS string `gorm:"type:text;comment:'源端查询字段信息'" json:"column_info_s"`
-	SchemaNameT string `gorm:"not null;comment:'目标端 schema'" json:"schema_name_t"`
-	TableNameT  string `gorm:"not null;comment:'目标端表名'" json:"table_name_t"`
-	ColumnInfoT string `gorm:"type:text;comment:'目标端查询字段信息'" json:"column_info_t"`
-	WhereColumn string `gorm:"comment:'查询类型字段列'" json:"where_column"`
-	WhereRange  string `gorm:"not null;index:idx_dbtype_st_obj,unique;comment:'查询 where 条件'" json:"where_range"`
-	IsPartition string `gorm:"comment:'是否是分区表'" json:"is_partition"` // 同步转换统一转换成非分区表，此处只做标志
+	ID            uint   `gorm:"primary_key;autoIncrement;comment:'自增编号'" json:"id"`
+	DBTypeS       string `gorm:"type:varchar(15);index:idx_dbtype_st_obj,unique;comment:'源数据库类型'" json:"db_type_s"`
+	DBTypeT       string `gorm:"type:varchar(15);index:idx_dbtype_st_obj,unique;comment:'目标数据库类型'" json:"db_type_t"`
+	SchemaNameS   string `gorm:"not null;index:idx_dbtype_st_obj,unique;comment:'源端 schema'" json:"schema_name_s"`
+	TableNameS    string `gorm:"not null;index:idx_dbtype_st_obj,unique;comment:'源端表名'" json:"table_name_s"`
+	ColumnDetailS string `gorm:"type:text;comment:'源端查询字段信息'" json:"column_detail_s"`
+	SchemaNameT   string `gorm:"not null;comment:'目标端 schema'" json:"schema_name_t"`
+	TableNameT    string `gorm:"not null;comment:'目标端表名'" json:"table_name_t"`
+	ColumnDetailT string `gorm:"type:text;comment:'目标端查询字段信息'" json:"column_detail_t"`
+	WhereColumn   string `gorm:"comment:'查询类型字段列'" json:"where_column"`
+	WhereRange    string `gorm:"not null;index:idx_dbtype_st_obj,unique;comment:'查询 where 条件'" json:"where_range"`
+	TaskMode      string `gorm:"not null;index:idx_dbtype_st_obj,unique;comment:'任务模式'" json:"task_mode"`
+	TaskStatus    string `gorm:"not null;comment:'数据对比状态,only waiting,success,failed'" json:"task_status"`
+	IsPartition   string `gorm:"comment:'是否是分区表'" json:"is_partition"` // 同步转换统一转换成非分区表，此处只做标志
+	InfoDetail    string `gorm:"not null;comment:'信息详情'" json:"info_detail"`
+	ErrorDetail   string `gorm:"not null;comment:'错误详情'" json:"error_detail"`
 	*BaseModel
 }
 
@@ -68,19 +71,15 @@ func (rw *DataCompareMeta) CreateDataCompareMeta(ctx context.Context, createS *D
 	return nil
 }
 
-func (rw *DataCompareMeta) DetailDataCompareMeta(ctx context.Context, detailS *DataCompareMeta) (interface{}, error) {
+func (rw *DataCompareMeta) DetailDataCompareMeta(ctx context.Context, detailS *DataCompareMeta) ([]DataCompareMeta, error) {
 	var dsMetas []DataCompareMeta
 	table, err := rw.ParseSchemaTable()
 	if err != nil {
 		return dsMetas, err
 	}
-	if err = rw.DB(ctx).Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND table_name_s = ? AND schema_name_t = ? AND table_name_t = ?",
-		common.StringUPPER(detailS.DBTypeS), common.StringUPPER(detailS.DBTypeT),
-		common.StringUPPER(detailS.SchemaNameS), common.StringUPPER(detailS.TableNameS),
-		common.StringUPPER(detailS.SchemaNameT), common.StringUPPER(detailS.TableNameT)).Find(&dsMetas).Error; err != nil {
+	if err = rw.DB(ctx).Where(detailS).Find(&dsMetas).Error; err != nil {
 		return dsMetas, fmt.Errorf("detail table [%s] record failed: %v", table, err)
 	}
-
 	return dsMetas, nil
 }
 
@@ -95,24 +94,6 @@ func (rw *DataCompareMeta) BatchCreateDataCompareMeta(ctx context.Context, creat
 	return nil
 }
 
-func (rw *DataCompareMeta) DistinctDataCompareMetaTableNameS(ctx context.Context, detailS *DataCompareMeta) ([]string, error) {
-	var tableNames []string
-	table, err := rw.ParseSchemaTable()
-	if err != nil {
-		return tableNames, err
-	}
-	if err := rw.DB(ctx).Model(&DataCompareMeta{}).
-		Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ?",
-			common.StringUPPER(detailS.DBTypeS),
-			common.StringUPPER(detailS.DBTypeT),
-			common.StringUPPER(detailS.SchemaNameS)).
-		Distinct().
-		Pluck("table_name_s", &tableNames).Error; err != nil {
-		return tableNames, errors.NewMSError(errors.TRANSFERDB, errors.DOMAIN_DB, fmt.Errorf("distinct table [%s] column [table_name_s] failed: %v", table, err))
-	}
-	return tableNames, nil
-}
-
 func (rw *DataCompareMeta) TruncateDataCompareMeta(ctx context.Context) error {
 	table, err := rw.ParseSchemaTable()
 	if err != nil {
@@ -125,20 +106,80 @@ func (rw *DataCompareMeta) TruncateDataCompareMeta(ctx context.Context) error {
 	return nil
 }
 
-func (rw *DataCompareMeta) DeleteDataCompareMeta(ctx context.Context, deleteS *DataCompareMeta) error {
+func (rw *DataCompareMeta) UpdateDataCompareMeta(ctx context.Context, deleteS *DataCompareMeta, updates map[string]interface{}) error {
 	table, err := rw.ParseSchemaTable()
 	if err != nil {
 		return err
 	}
 	if err = rw.DB(ctx).Model(DataCompareMeta{}).
-		Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND table_name_s = ? AND where_range = ?",
+		Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND table_name_s = ? AND task_mode = ? AND where_range = ?",
 			common.StringUPPER(deleteS.DBTypeS),
 			common.StringUPPER(deleteS.DBTypeT),
 			common.StringUPPER(deleteS.SchemaNameS),
 			common.StringUPPER(deleteS.TableNameS),
+			common.StringUPPER(deleteS.TaskMode),
 			deleteS.WhereRange).
-		Delete(&DataCompareMeta{}).Error; err != nil {
-		return fmt.Errorf("delete table [%s] record failed: %v", table, err)
+		Updates(updates).Error; err != nil {
+		return fmt.Errorf("update table [%s] record failed: %v", table, err)
 	}
 	return nil
+}
+
+func (rw *DataCompareMeta) CountsErrorDataCompareMeta(ctx context.Context, dataErr *DataCompareMeta) (int64, error) {
+	var countsErr int64
+	table, err := rw.ParseSchemaTable()
+	if err != nil {
+		return countsErr, err
+	}
+	if err := rw.DB(ctx).Model(&DataCompareMeta{}).
+		Where(`db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND table_name_s = ? AND task_mode = ? AND task_status = ?`,
+			common.StringUPPER(dataErr.DBTypeS),
+			common.StringUPPER(dataErr.DBTypeT),
+			common.StringUPPER(dataErr.SchemaNameS),
+			common.StringUPPER(dataErr.TableNameS),
+			common.StringUPPER(dataErr.TaskMode),
+			dataErr.TaskStatus).
+		Count(&countsErr).Error; err != nil {
+		return countsErr, fmt.Errorf("get table [%s] counts failed: %v", table, err)
+	}
+	return countsErr, nil
+}
+
+func (rw *DataCompareMeta) CountsDataCompareMetaByTaskTable(ctx context.Context, dataErr *DataCompareMeta) (int64, error) {
+	var countsErr int64
+	table, err := rw.ParseSchemaTable()
+	if err != nil {
+		return countsErr, err
+	}
+	if err := rw.DB(ctx).Model(&DataCompareMeta{}).
+		Where(`db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND table_name_s = ? AND task_mode = ?`,
+			common.StringUPPER(dataErr.DBTypeS),
+			common.StringUPPER(dataErr.DBTypeT),
+			common.StringUPPER(dataErr.SchemaNameS),
+			common.StringUPPER(dataErr.TableNameS),
+			common.StringUPPER(dataErr.TaskMode)).
+		Count(&countsErr).Error; err != nil {
+		return countsErr, fmt.Errorf("get table [%s] counts failed: %v", table, err)
+	}
+	return countsErr, nil
+}
+
+func (rw *DataCompareMeta) DistinctDataCompareMetaTableNameSByTaskStatus(ctx context.Context, detailS *DataCompareMeta) ([]string, error) {
+	var tableNames []string
+	table, err := rw.ParseSchemaTable()
+	if err != nil {
+		return tableNames, err
+	}
+	if err := rw.DB(ctx).Model(&DataCompareMeta{}).
+		Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND task_mode = ? AND task_status = ?",
+			common.StringUPPER(detailS.DBTypeS),
+			common.StringUPPER(detailS.DBTypeT),
+			common.StringUPPER(detailS.SchemaNameS),
+			common.StringUPPER(detailS.TaskMode),
+			common.StringUPPER(detailS.TaskStatus)).
+		Distinct().
+		Pluck("table_name_s", &tableNames).Error; err != nil {
+		return tableNames, fmt.Errorf("distinct table [%s] column [table_name_s] failed: %v", table, err)
+	}
+	return tableNames, nil
 }

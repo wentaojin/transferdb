@@ -126,7 +126,7 @@ func (d *DDL) Write(w *reverse.Write) error {
 	}
 
 	// 外键约束、检查约束
-	if d.TargetDBType != common.TaskDBTiDB {
+	if d.TargetDBType != common.DatabaseTypeTiDB {
 		if len(foreignKeyDDL) > 0 {
 			for _, sql := range foreignKeyDDL {
 				sqlRev.WriteString(sql + "\n")
@@ -156,7 +156,7 @@ func (d *DDL) Write(w *reverse.Write) error {
 
 		// 文件写入
 		if sqlRev.String() != "" {
-			if w.DirectWrite {
+			if w.Cfg.ReverseConfig.DirectWrite {
 				if err := w.RWriteDB(sqlRev.String()); err != nil {
 					return err
 				}
@@ -193,7 +193,7 @@ func (d *DDL) Write(w *reverse.Write) error {
 	}
 	// 文件写入
 	if sqlRev.String() != "" {
-		if w.DirectWrite {
+		if w.Cfg.ReverseConfig.DirectWrite {
 			if err := w.RWriteDB(sqlRev.String()); err != nil {
 				return err
 			}

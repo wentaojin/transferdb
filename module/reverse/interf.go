@@ -57,5 +57,5 @@ type Writer interface {
 }
 
 type Reverser interface {
-	NewReverse() error
+	Reverse() error
 }

@@ -13,18 +13,30 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package migrate
+package server
 
-func IMigrateFull(f Fuller) error {
-	err := f.NewFuller()
-	if err != nil {
-		return err
+import (
+	"context"
+	"github.com/wentaojin/transferdb/common"
+	"github.com/wentaojin/transferdb/config"
+	"github.com/wentaojin/transferdb/module/compare"
+	"github.com/wentaojin/transferdb/module/compare/o2m"
+	"strings"
+)
+
+func ICompare(ctx context.Context, cfg *config.Config) error {
+	var (
+		c   compare.Comparer
+		err error
+	)
+	switch {
+	case strings.EqualFold(cfg.DBTypeS, common.DatabaseTypeOracle) && strings.EqualFold(cfg.DBTypeT, common.DatabaseTypeMySQL):
+		c, err = o2m.NewCompare(ctx, cfg)
+		if err != nil {
+			return err
+		}
 	}
-	return nil
-}
-
-func IMigrateIncr(f Increr) error {
-	err := f.NewIncr()
+	err = c.NewCompare()
 	if err != nil {
 		return err
 	}

@@ -13,14 +13,32 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package reverse
+package server
 
-import "github.com/wentaojin/transferdb/errors"
+import (
+	"context"
+	"github.com/wentaojin/transferdb/common"
+	"github.com/wentaojin/transferdb/config"
+	"github.com/wentaojin/transferdb/module/csv"
+	"github.com/wentaojin/transferdb/module/csv/o2m"
+	"strings"
+)
 
-func IReverse(r Reverser) error {
-	err := r.NewReverse()
-	if err != nil {
-		return errors.NewMSError(errors.TRANSFERDB, errors.DOMAIN_REVERSE, err)
+func ICSVer(ctx context.Context, cfg *config.Config) error {
+	var (
+		c   csv.CSVer
+		err error
+	)
+	switch {
+	case strings.EqualFold(cfg.DBTypeS, common.DatabaseTypeOracle) && strings.EqualFold(cfg.DBTypeT, common.DatabaseTypeMySQL):
+		c, err = o2m.NewCSVer(ctx, cfg)
+		if err != nil {
+			return err
+		}
 	}
-	return nil
+	err = c.CSV()
+	if err != nil {
+		return err
+	}
+	return err
 }

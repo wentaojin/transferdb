@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/config"
-	"github.com/wentaojin/transferdb/errors"
 )
 
 type MySQL struct {
@@ -35,16 +34,16 @@ func NewMySQLDBEngine(ctx context.Context, mysqlCfg config.MySQLConfig) (*MySQL,
 
 	mysqlDB, err := sql.Open("mysql", dsn)
 	if err != nil {
-		return nil, errors.NewMSError(errors.TRANSFERDB, errors.DOMAIN_DB, fmt.Errorf("error on open mysql database connection [%v]: %v", mysqlCfg.SchemaName, err))
+		return nil, fmt.Errorf("error on open mysql database connection [%v]: %v", mysqlCfg.SchemaName, err)
 	}
 
-	mysqlDB.SetMaxIdleConns(common.MysqlMaxIdleConn)
-	mysqlDB.SetMaxOpenConns(common.MysqlMaxConn)
-	mysqlDB.SetConnMaxLifetime(common.MysqlConnMaxLifeTime)
-	mysqlDB.SetConnMaxIdleTime(common.MysqlConnMaxIdleTime)
+	mysqlDB.SetMaxIdleConns(common.MySQLMaxIdleConn)
+	mysqlDB.SetMaxOpenConns(common.MySQLMaxConn)
+	mysqlDB.SetConnMaxLifetime(common.MySQLConnMaxLifeTime)
+	mysqlDB.SetConnMaxIdleTime(common.MySQLConnMaxIdleTime)
 
 	if err = mysqlDB.Ping(); err != nil {
-		return nil, errors.NewMSError(errors.TRANSFERDB, errors.DOMAIN_DB, fmt.Errorf("error on ping mysql database connection [%v]: %v", mysqlCfg.SchemaName, err))
+		return nil, fmt.Errorf("error on ping mysql database connection [%v]: %v", mysqlCfg.SchemaName, err)
 	}
 
 	return &MySQL{

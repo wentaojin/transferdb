@@ -25,10 +25,10 @@ func IChunker(c compare.Chunker) error {
 	return nil
 }
 
-func IReport(r compare.Reporter, f *compare.File) error {
-	err := r.Report(f)
+func IReport(r compare.Reporter) (string, error) {
+	resp, err := r.Report()
 	if err != nil {
-		return err
+		return resp, err
 	}
-	return nil
+	return resp, nil
 }
