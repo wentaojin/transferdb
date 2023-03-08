@@ -206,6 +206,7 @@ func (r *Migrate) Full() error {
 					SchemaNameS:    common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
 					TableNameS:     common.StringUPPER(tableName),
 					TaskMode:       r.Cfg.TaskMode,
+					TaskStatus:     common.TaskStatusWaiting,
 					GlobalScnS:     common.TaskTableDefaultSourceGlobalSCN,
 					ChunkTotalNums: common.TaskTableDefaultSplitChunkNums,
 				})

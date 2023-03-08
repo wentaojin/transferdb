@@ -205,6 +205,7 @@ func (r *O2M) CSV() error {
 					SchemaNameS:    common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 					TableNameS:     common.StringUPPER(tableName),
 					TaskMode:       r.cfg.TaskMode,
+					TaskStatus:     common.TaskStatusWaiting,
 					GlobalScnS:     common.TaskTableDefaultSourceGlobalSCN,
 					ChunkTotalNums: common.TaskTableDefaultSplitChunkNums,
 				})

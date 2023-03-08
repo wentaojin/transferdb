@@ -118,7 +118,7 @@ table-threads = 4
 sql-threads = 32
 # 每 sql-threads 线程写下游并发数，可动态变更
 apply-threads = 64
-# 关于全量断点恢复
+# 关于全量断点恢复(ALL/FULL)
 #   - 若想断点恢复，设置 enable-checkpoint = true,首次一旦运行则 chunk-size 数不能调整，
 #   - 若不想断点恢复或者重新调整 chunk-size 数，设置 enable-checkpoint = false,重新运行全量任务
 #   - 无法断点续传期间，则需要设置 enable-checkpoint = false 重新导入导出
