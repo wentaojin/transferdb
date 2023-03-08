@@ -604,5 +604,549 @@ func (rw *BuildinObjectCompatible) InitO2MBuildinObjectCompatible(ctx context.Co
 		IsConvertible: common.AssessNoConvertible,
 	})
 
-	return rw.DB(ctx).Clauses(clause.Insert{Modifier: "IGNORE"}).CreateInBatches(buildinObjComps, 20).Error
+	return rw.DB(ctx).Clauses(clause.Insert{Modifier: "IGNORE"}).Create(buildinObjComps).Error
+}
+
+func (rw *BuildinObjectCompatible) InitO2TBuildinObjectCompatible(ctx context.Context) error {
+	var buildinObjComps []*BuildinObjectCompatible
+	/*
+		O2T Build-IN Compatible Rule
+	*/
+	// oracle character set
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleCharacterSetAL32UTF8,
+		IsCompatible:  common.AssessYesCompatible,
+		IsConvertible: common.AssessYesConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleCharacterSetZHS16GBK,
+		IsCompatible:  common.AssessYesCompatible,
+		IsConvertible: common.AssessYesConvertible,
+	})
+	// oracle table type
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleTableTypeHeap,
+		IsCompatible:  common.AssessYesCompatible,
+		IsConvertible: common.AssessYesConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleTableTypeClustered,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessYesConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleTableTypeTemporary,
+		IsCompatible:  common.AssessYesCompatible,
+		IsConvertible: common.AssessYesConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleTableTypePartition,
+		IsCompatible:  common.AssessYesCompatible,
+		IsConvertible: common.AssessYesConvertible,
+	})
+	// oracle constraint type
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleConstraintTypePrimary,
+		IsCompatible:  common.AssessYesCompatible,
+		IsConvertible: common.AssessYesConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleConstraintTypeUnique,
+		IsCompatible:  common.AssessYesCompatible,
+		IsConvertible: common.AssessYesConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleConstraintTypeCheck,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessYesConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleConstraintTypeForeign,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessYesConvertible,
+	})
+	// oracle index type
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleIndexTypeNormal,
+		IsCompatible:  common.AssessYesCompatible,
+		IsConvertible: common.AssessYesConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleIndexTypeFunctionBasedNormal,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessYesConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleIndexTypeBitmap,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleIndexTypeFunctionBasedBitmap,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleIndexTypeDomain,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	// oracle view type
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleViewTypeView,
+		IsCompatible:  common.AssessYesCompatible,
+		IsConvertible: common.AssessYesConvertible,
+	})
+	// oracle code type
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleCodeTypeMaterializedView,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleCodeTypeCluster,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleCodeTypeConsumerGroup,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleCodeTypeContext,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleCodeTypeDestination,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleCodeTypeDirectory,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleCodeTypeEdition,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleCodeTypeEvaluationContext,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleCodeTypeFunction,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleCodeTypeIndexPartition,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleCodeTypeIndexType,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleCodeTypeJavaClass,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleCodeTypeJavaData,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleCodeTypeJavaResource,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleCodeTypeJavaSource,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleCodeTypeJob,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleCodeTypeJobClass,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleCodeTypeLibrary,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleCodeTypeLob,
+		IsCompatible:  common.AssessYesCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleCodeTypeLobPartition,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleCodeTypeLockdownProfile,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleCodeTypeOperator,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleCodeTypePackage,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleCodeTypePackageBody,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleCodeTypeProcedure,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleCodeTypeProgram,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleCodeTypeQueue,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleCodeTypeResourcePlan,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleCodeTypeRule,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleCodeTypeRuleSet,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleCodeTypeSchedule,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleCodeTypeSchedulerGroup,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleCodeTypeSequence,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleCodeTypeTrigger,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleCodeTypeType,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleCodeTypeTypeBody,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleCodeTypeUndefined,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleCodeTypeUnifiedAuditPolicy,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleCodeTypeWindow,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleCodeTypeXMLSchema,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleCodeTypeDatabaseLink,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleCodeTypeSynonym,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+
+	// oracle partitions/subpartition type
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOraclePartitionTypeRange,
+		IsCompatible:  common.AssessYesCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOraclePartitionTypeList,
+		IsCompatible:  common.AssessYesCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOraclePartitionTypeHash,
+		IsCompatible:  common.AssessYesCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOraclePartitionTypeSystem,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOraclePartitionTypeReference,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOraclePartitionTypeReference,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOraclePartitionTypeComposite,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOraclePartitionTypeInterval,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOraclePartitionTypeRangeHash,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOraclePartitionTypeRangeList,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOraclePartitionTypeRangeRange,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOraclePartitionTypeListHash,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOraclePartitionTypeListHash,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOraclePartitionTypeListList,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOraclePartitionTypeListRange,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+
+	// oracle temporary type
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleTemporaryTypeSession,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+	buildinObjComps = append(buildinObjComps, &BuildinObjectCompatible{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		ObjectNameS:   common.BuildInOracleTemporaryTypeTransaction,
+		IsCompatible:  common.AssessNoCompatible,
+		IsConvertible: common.AssessNoConvertible,
+	})
+
+	return rw.DB(ctx).Clauses(clause.Insert{Modifier: "IGNORE"}).Create(buildinObjComps).Error
 }

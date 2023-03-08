@@ -80,7 +80,7 @@ func (rw *BuildinGlobalDefaultval) RowsAffected(ctx context.Context, defaultVal 
 	return rw.DB(ctx).Where(defaultVal).Find(&u).RowsAffected
 }
 
-func (rw *BuildinGlobalDefaultval) InitO2MBuildinGlobalDefaultValue(ctx context.Context) error {
+func (rw *BuildinGlobalDefaultval) InitO2MTBuildinGlobalDefaultValue(ctx context.Context) error {
 	var buildinColumDefaultvals []*BuildinGlobalDefaultval
 
 	buildinColumDefaultvals = append(buildinColumDefaultvals, &BuildinGlobalDefaultval{
@@ -97,16 +97,30 @@ func (rw *BuildinGlobalDefaultval) InitO2MBuildinGlobalDefaultValue(ctx context.
 		DefaultValueT: common.BuildInOracleO2MColumnDefaultValueMap[common.BuildInOracleColumnDefaultValueSYSGUID],
 	})
 
+	buildinColumDefaultvals = append(buildinColumDefaultvals, &BuildinGlobalDefaultval{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		DefaultValueS: common.BuildInOracleColumnDefaultValueSysdate,
+		DefaultValueT: common.BuildInOracleO2MColumnDefaultValueMap[common.BuildInOracleColumnDefaultValueSysdate],
+	})
+
+	buildinColumDefaultvals = append(buildinColumDefaultvals, &BuildinGlobalDefaultval{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		DefaultValueS: common.BuildInOracleColumnDefaultValueSYSGUID,
+		DefaultValueT: common.BuildInOracleO2MColumnDefaultValueMap[common.BuildInOracleColumnDefaultValueSYSGUID],
+	})
+
 	return rw.DB(ctx).Clauses(clause.OnConflict{
 		Columns: []clause.Column{
 			{Name: "source_default_value"},
 			{Name: "reverse_mode"},
 		},
 		DoNothing: true,
-	}).CreateInBatches(buildinColumDefaultvals, 2).Error
+	}).Create(buildinColumDefaultvals).Error
 }
 
-func (rw *BuildinGlobalDefaultval) InitM2OBuildinGlobalDefaultValue(ctx context.Context) error {
+func (rw *BuildinGlobalDefaultval) InitMT2OBuildinGlobalDefaultValue(ctx context.Context) error {
 	var buildinColumDefaultvals []*BuildinGlobalDefaultval
 
 	buildinColumDefaultvals = append(buildinColumDefaultvals, &BuildinGlobalDefaultval{
@@ -115,5 +129,11 @@ func (rw *BuildinGlobalDefaultval) InitM2OBuildinGlobalDefaultValue(ctx context.
 		DefaultValueS: common.BuildInMySQLColumnDefaultValueCurrentTimestamp,
 		DefaultValueT: common.BuildInMySQLM2OColumnDefaultValueMap[common.BuildInMySQLColumnDefaultValueCurrentTimestamp],
 	})
-	return rw.DB(ctx).Clauses(clause.Insert{Modifier: "IGNORE"}).CreateInBatches(buildinColumDefaultvals, 1).Error
+	buildinColumDefaultvals = append(buildinColumDefaultvals, &BuildinGlobalDefaultval{
+		DBTypeS:       common.DatabaseTypeTiDB,
+		DBTypeT:       common.DatabaseTypeOracle,
+		DefaultValueS: common.BuildInMySQLColumnDefaultValueCurrentTimestamp,
+		DefaultValueT: common.BuildInMySQLM2OColumnDefaultValueMap[common.BuildInMySQLColumnDefaultValueCurrentTimestamp],
+	})
+	return rw.DB(ctx).Clauses(clause.Insert{Modifier: "IGNORE"}).Create(buildinColumDefaultvals).Error
 }

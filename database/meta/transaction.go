@@ -140,13 +140,15 @@ func (rw *Transaction) CreateDataCompareMetaAndUpdateWaitSyncMeta(ctx context.Co
 	return nil
 }
 
-func (rw *Transaction) BatchCreateDataCompareMetaAndUpdateWaitSyncMeta(ctx context.Context, dataDiffMeta []DataCompareMeta, batchSize int, waitSyncMeta *WaitSyncMeta) error {
-	txn := rw.DB(ctx).Begin()
-	err := txn.CreateInBatches(dataDiffMeta, batchSize).Error
-	if err != nil {
-		return fmt.Errorf("create table [data_compare_meta] reocrd by transaction failed: %v", err)
+func (rw *Transaction) BatchCreateDataCompareMetaAndUpdateWaitSyncMeta(ctx context.Context, dataMeta []DataCompareMeta, batchSize int, waitSyncMeta *WaitSyncMeta) error {
+	for _, data := range ArrayStructGroupsOf(dataMeta, int64(batchSize)) {
+		err := rw.DB(ctx).Create(data).Error
+		if err != nil {
+			return fmt.Errorf("batch create table [data_compare_meta] reocrd by transaction failed: %v", err)
+		}
 	}
-	err = txn.Model(&WaitSyncMeta{}).
+
+	err := rw.DB(ctx).Model(&WaitSyncMeta{}).
 		Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND table_name_s = ? AND task_mode = ?",
 			common.StringUPPER(waitSyncMeta.DBTypeS),
 			common.StringUPPER(waitSyncMeta.DBTypeT),
@@ -163,7 +165,6 @@ func (rw *Transaction) BatchCreateDataCompareMetaAndUpdateWaitSyncMeta(ctx conte
 	if err != nil {
 		return fmt.Errorf("update table [wait_sync_meta] reocrd by transaction failed: %v", err)
 	}
-	txn.Commit()
 	return nil
 }
 
@@ -194,13 +195,14 @@ func (rw *Transaction) CreateFullSyncMetaAndUpdateWaitSyncMeta(ctx context.Conte
 	return nil
 }
 
-func (rw *Transaction) BatchCreateFullSyncMetaAndUpdateWaitSyncMeta(ctx context.Context, dataDiffMeta []FullSyncMeta, batchSize int, waitSyncMeta *WaitSyncMeta) error {
-	txn := rw.DB(ctx).Begin()
-	err := txn.CreateInBatches(dataDiffMeta, batchSize).Error
-	if err != nil {
-		return fmt.Errorf("create table [full_sync_meta] reocrd by transaction failed: %v", err)
+func (rw *Transaction) BatchCreateFullSyncMetaAndUpdateWaitSyncMeta(ctx context.Context, dataMeta []FullSyncMeta, batchSize int, waitSyncMeta *WaitSyncMeta) error {
+	for _, data := range ArrayStructGroupsOf(dataMeta, int64(batchSize)) {
+		err := rw.DB(ctx).Create(data).Error
+		if err != nil {
+			return fmt.Errorf("batch create table [full_sync_meta] reocrd by transaction failed: %v", err)
+		}
 	}
-	err = txn.Model(&WaitSyncMeta{}).
+	err := rw.DB(ctx).Model(&WaitSyncMeta{}).
 		Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND table_name_s = ? AND task_mode = ?",
 			common.StringUPPER(waitSyncMeta.DBTypeS),
 			common.StringUPPER(waitSyncMeta.DBTypeT),
@@ -217,7 +219,6 @@ func (rw *Transaction) BatchCreateFullSyncMetaAndUpdateWaitSyncMeta(ctx context.
 	if err != nil {
 		return fmt.Errorf("update table [wait_sync_meta] reocrd by transaction failed: %v", err)
 	}
-	txn.Commit()
 	return nil
 }
 

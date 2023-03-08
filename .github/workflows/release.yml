@@ -34,20 +34,19 @@ jobs:
         run: |
           go version
           go env
-      - name: Update Changelog
-        id: Changelog
-        uses: Bullrich/generate-release-changelog@master
+      - name: Build Changelog
+        id: github_changelog
+        uses: mikepenz/release-changelog-builder-action@v3
         env:
-          REPO: ${{ github.repository }}
-      - name: Softprops Create Release
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create Release
         id: create_release
         uses: softprops/action-gh-release@v1
         with:
           name: ${{ github.ref_name }}
           tag_name: ${{ github.ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
-          body: |
-            ${{ steps.Changelog.outputs.changelog }}
+          body: ${{steps.github_changelog.outputs.changelog}}
           draft: false
           prerelease: false
   builder:
@@ -83,7 +82,7 @@ jobs:
           BUILDTS="-X \"${CODEREPO}/config.BuildTS=`TZ=CST-8 date '+%Y-%m-%d %H:%M:%S'`\""
           GITHASH="-X \"${CODEREPO}/config.GitHash=`git rev-parse HEAD`\""
           GITREF="-X \"${CODEREPO}/config.GitBranch=`git rev-parse --abbrev-ref HEAD`\""
-          LDFLAGS="-s -w ${COMMIT} ${BUILDTS} ${GITHASH} ${GITREF}"
+          LDFLAGS="-w -s ${COMMIT} ${BUILDTS} ${GITHASH} ${GITREF}"
           echo "ldflags=${LDFLAGS}" >> $GITHUB_ENV
       - name: Run Xgo Build Binary
         run: |

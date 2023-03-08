@@ -116,11 +116,11 @@ func (m *Meta) MigrateTables() (err error) {
 }
 
 func (m *Meta) InitDefaultValue(ctx context.Context) error {
-	err := NewBuildinGlobalDefaultvalModel(m).InitO2MBuildinGlobalDefaultValue(ctx)
+	err := NewBuildinGlobalDefaultvalModel(m).InitO2MTBuildinGlobalDefaultValue(ctx)
 	if err != nil {
 		return err
 	}
-	err = NewBuildinGlobalDefaultvalModel(m).InitM2OBuildinGlobalDefaultValue(ctx)
+	err = NewBuildinGlobalDefaultvalModel(m).InitMT2OBuildinGlobalDefaultValue(ctx)
 	if err != nil {
 		return err
 	}
@@ -128,11 +128,23 @@ func (m *Meta) InitDefaultValue(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	err = NewBuildinObjectCompatibleModel(m).InitO2TBuildinObjectCompatible(ctx)
+	if err != nil {
+		return err
+	}
 	err = NewBuildinDatatypeRuleModel(m).InitO2MBuildinDatatypeRule(ctx)
 	if err != nil {
 		return err
 	}
+	err = NewBuildinDatatypeRuleModel(m).InitO2TBuildinDatatypeRule(ctx)
+	if err != nil {
+		return err
+	}
 	err = NewBuildinDatatypeRuleModel(m).InitM2OBuildinDatatypeRule(ctx)
+	if err != nil {
+		return err
+	}
+	err = NewBuildinDatatypeRuleModel(m).InitT2OBuildinDatatypeRule(ctx)
 	if err != nil {
 		return err
 	}
@@ -147,4 +159,33 @@ func (m *Meta) migrateStream(models ...interface{}) (err error) {
 		}
 	}
 	return nil
+}
+
+func ArrayStructGroupsOf[T any](fsm []T, num int64) [][]T {
+	max := int64(len(fsm))
+	//判断数组大小是否小于等于指定分割大小的值，是则把原数组放入二维数组返回
+	if max <= num {
+		return [][]T{fsm}
+	}
+	//获取应该数组分割为多少份
+	var quantity int64
+	if max%num == 0 {
+		quantity = max / num
+	} else {
+		quantity = (max / num) + 1
+	}
+	//声明分割好的二维数组
+	var segments = make([][]T, 0)
+	//声明分割数组的截止下标
+	var start, end, i int64
+	for i = 1; i <= quantity; i++ {
+		end = i * num
+		if i != quantity {
+			segments = append(segments, fsm[start:end])
+		} else {
+			segments = append(segments, fsm[start:])
+		}
+		start = i * num
+	}
+	return segments
 }
