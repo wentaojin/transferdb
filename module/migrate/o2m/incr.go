@@ -38,7 +38,7 @@ func NewIncr(ctx context.Context, cfg *config.Config) (*Migrate, error) {
 	if err != nil {
 		return nil, err
 	}
-	metaDB, err := meta.NewMetaDBEngine(ctx, cfg.MySQLConfig, cfg.AppConfig.SlowlogThreshold)
+	metaDB, err := meta.NewMetaDBEngine(ctx, cfg.MetaConfig, cfg.AppConfig.SlowlogThreshold)
 	if err != nil {
 		return nil, err
 	}

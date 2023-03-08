@@ -25,11 +25,11 @@ import (
 // 上下游数据表名字映射规则
 type TableNameRule struct {
 	ID          uint   `gorm:"primary_key;autoIncrement;comment:'自增编号'" json:"id"`
-	DBTypeS     string `gorm:"type:varchar(15);index:idx_dbtype_st_map,unique;index:idx_dbtype_st_table,unique;comment:'源数据库类型'" json:"db_type_s"`
-	DBTypeT     string `gorm:"type:varchar(15);index:idx_dbtype_st_map,unique;index:idx_dbtype_st_table,unique;comment:'目标数据库类型'" json:"db_type_t"`
-	SchemaNameS string `gorm:"not null;index:idx_dbtype_st_map,unique;index:idx_dbtype_st_table,unique;comment:'源端库 schema'" json:"schema_name_s"`
-	TableNameS  string `gorm:"not null;index:idx_dbtype_st_map,unique;index:idx_dbtype_st_table,unique;comment:'源端表名'" json:"table_name_s"`
-	SchemaNameT string `gorm:"not null;index:idx_dbtype_st_map,unique;comment:'目标库 schema'" json:"schema_name_t"`
+	DBTypeS     string `gorm:"type:varchar(30);index:idx_dbtype_st_map,unique;index:idx_dbtype_st_table,unique;comment:'源数据库类型'" json:"db_type_s"`
+	DBTypeT     string `gorm:"type:varchar(30);index:idx_dbtype_st_map,unique;index:idx_dbtype_st_table,unique;comment:'目标数据库类型'" json:"db_type_t"`
+	SchemaNameS string `gorm:"type:varchar(100);not null;index:idx_dbtype_st_map,unique;index:idx_dbtype_st_table,unique;comment:'源端库 schema'" json:"schema_name_s"`
+	TableNameS  string `gorm:"type:varchar(100);not null;index:idx_dbtype_st_map,unique;index:idx_dbtype_st_table,unique;comment:'源端表名'" json:"table_name_s"`
+	SchemaNameT string `gorm:"type:varchar(100);not null;index:idx_dbtype_st_map,unique;comment:'目标库 schema'" json:"schema_name_t"`
 	TableNameT  string `gorm:"not null;comment:'目标表名'" json:"table_name_t"`
 	*BaseModel
 }

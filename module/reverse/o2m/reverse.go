@@ -48,9 +48,16 @@ func NewReverse(ctx context.Context, cfg *config.Config) (*Reverse, error) {
 	if err != nil {
 		return nil, err
 	}
-	metaDB, err := meta.NewMetaDBEngine(ctx, cfg.MySQLConfig, cfg.AppConfig.SlowlogThreshold)
+	metaDB, err := meta.NewMetaDBEngine(ctx, cfg.MetaConfig, cfg.AppConfig.SlowlogThreshold)
 	if err != nil {
 		return nil, err
+	}
+	if cfg.ReverseConfig.DirectWrite {
+		createSchema := fmt.Sprintf(`CREATE DATABASE IF NOT EXISTS %s`, cfg.MySQLConfig.SchemaName)
+		_, err = mysqlDB.MySQLDB.ExecContext(ctx, createSchema)
+		if err != nil {
+			return nil, fmt.Errorf("error on exec target database sql [%v]: %v", createSchema, err)
+		}
 	}
 	return &Reverse{
 		Ctx:    ctx,

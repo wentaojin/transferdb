@@ -25,17 +25,17 @@ import (
 // 数据校验元数据表
 type DataCompareMeta struct {
 	ID            uint   `gorm:"primary_key;autoIncrement;comment:'自增编号'" json:"id"`
-	DBTypeS       string `gorm:"type:varchar(15);index:idx_dbtype_st_obj,unique;comment:'源数据库类型'" json:"db_type_s"`
-	DBTypeT       string `gorm:"type:varchar(15);index:idx_dbtype_st_obj,unique;comment:'目标数据库类型'" json:"db_type_t"`
-	SchemaNameS   string `gorm:"not null;index:idx_dbtype_st_obj,unique;comment:'源端 schema'" json:"schema_name_s"`
-	TableNameS    string `gorm:"not null;index:idx_dbtype_st_obj,unique;comment:'源端表名'" json:"table_name_s"`
+	DBTypeS       string `gorm:"type:varchar(30);index:idx_dbtype_st_obj,unique;comment:'源数据库类型'" json:"db_type_s"`
+	DBTypeT       string `gorm:"type:varchar(30);index:idx_dbtype_st_obj,unique;comment:'目标数据库类型'" json:"db_type_t"`
+	SchemaNameS   string `gorm:"type:varchar(100);not null;index:idx_dbtype_st_obj,unique;comment:'源端 schema'" json:"schema_name_s"`
+	TableNameS    string `gorm:"type:varchar(100);not null;index:idx_dbtype_st_obj,unique;comment:'源端表名'" json:"table_name_s"`
 	ColumnDetailS string `gorm:"type:text;comment:'源端查询字段信息'" json:"column_detail_s"`
 	SchemaNameT   string `gorm:"not null;comment:'目标端 schema'" json:"schema_name_t"`
 	TableNameT    string `gorm:"not null;comment:'目标端表名'" json:"table_name_t"`
 	ColumnDetailT string `gorm:"type:text;comment:'目标端查询字段信息'" json:"column_detail_t"`
 	WhereColumn   string `gorm:"comment:'查询类型字段列'" json:"where_column"`
-	WhereRange    string `gorm:"not null;index:idx_dbtype_st_obj,unique;comment:'查询 where 条件'" json:"where_range"`
-	TaskMode      string `gorm:"not null;index:idx_dbtype_st_obj,unique;comment:'任务模式'" json:"task_mode"`
+	WhereRange    string `gorm:"type:varchar(300);not null;index:idx_dbtype_st_obj,unique;comment:'查询 where 条件'" json:"where_range"`
+	TaskMode      string `gorm:"type:varchar(30);not null;index:idx_dbtype_st_obj,unique;comment:'任务模式'" json:"task_mode"`
 	TaskStatus    string `gorm:"not null;comment:'数据对比状态,only waiting,success,failed'" json:"task_status"`
 	IsPartition   string `gorm:"comment:'是否是分区表'" json:"is_partition"` // 同步转换统一转换成非分区表，此处只做标志
 	InfoDetail    string `gorm:"not null;comment:'信息详情'" json:"info_detail"`

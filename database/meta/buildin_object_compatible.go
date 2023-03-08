@@ -25,8 +25,8 @@ import (
 
 type BuildinObjectCompatible struct {
 	ID            uint   `gorm:"primary_key;autoIncrement;comment:'自增编号'" json:"id"`
-	DBTypeS       string `gorm:"type:varchar(15);index:idx_dbtype_st_obj,unique;comment:'源数据库类型'" json:"db_type_s"`
-	DBTypeT       string `gorm:"type:varchar(15);index:idx_dbtype_st_obj,unique;comment:'目标数据库类型'" json:"db_type_t"`
+	DBTypeS       string `gorm:"type:varchar(30);index:idx_dbtype_st_obj,unique;comment:'源数据库类型'" json:"db_type_s"`
+	DBTypeT       string `gorm:"type:varchar(30);index:idx_dbtype_st_obj,unique;comment:'目标数据库类型'" json:"db_type_t"`
 	ObjectNameS   string `gorm:"type:varchar(300);index:idx_dbtype_st_obj,unique;comment:'源数据库对象名'" json:"object_name_s"`
 	IsCompatible  string `gorm:"type:char(1);comment:'对象是否可兼容'" json:"is_compatible"`
 	IsConvertible string `gorm:"type:char(1);comment:'对象是否可改造'" json:"is_convertible"`

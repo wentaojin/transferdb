@@ -40,7 +40,7 @@ type Check struct {
 }
 
 func NewCheck(ctx context.Context, cfg *config.Config) (*Check, error) {
-	metaDB, err := meta.NewMetaDBEngine(ctx, cfg.MySQLConfig, cfg.AppConfig.SlowlogThreshold)
+	metaDB, err := meta.NewMetaDBEngine(ctx, cfg.MetaConfig, cfg.AppConfig.SlowlogThreshold)
 	if err != nil {
 		return nil, err
 	}

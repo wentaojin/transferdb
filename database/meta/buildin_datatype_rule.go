@@ -25,8 +25,8 @@ import (
 
 type BuildinDatatypeRule struct {
 	ID            uint   `gorm:"primary_key;autoIncrement;comment:'自增编号'" json:"id"`
-	DBTypeS       string `gorm:"type:varchar(15);index:idx_dbtype_st_obj,unique;comment:'源数据库类型'" json:"db_type_s"`
-	DBTypeT       string `gorm:"type:varchar(15);index:idx_dbtype_st_obj,unique;comment:'目标数据库类型'" json:"db_type_t"`
+	DBTypeS       string `gorm:"type:varchar(30);index:idx_dbtype_st_obj,unique;comment:'源数据库类型'" json:"db_type_s"`
+	DBTypeT       string `gorm:"type:varchar(30);index:idx_dbtype_st_obj,unique;comment:'目标数据库类型'" json:"db_type_t"`
 	DatatypeNameS string `gorm:"type:varchar(300);index:idx_dbtype_st_obj,unique;comment:'源数据类型名字'" json:"datatype_name_s"`
 	DatatypeNameT string `gorm:"type:varchar(300);comment:'目标数据类型名字'" json:"datatype_name_t"`
 	*BaseModel

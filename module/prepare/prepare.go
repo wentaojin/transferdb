@@ -26,7 +26,7 @@ import (
 func IPrepare(ctx context.Context, cfg *config.Config) error {
 	startTime := time.Now()
 	zap.L().Info("prepare tansferdb env start")
-	metaDB, err := meta.NewMetaDBEngine(ctx, cfg.MySQLConfig, cfg.AppConfig.SlowlogThreshold)
+	metaDB, err := meta.NewMetaDBEngine(ctx, cfg.MetaConfig, cfg.AppConfig.SlowlogThreshold)
 	if err != nil {
 		return err
 	}

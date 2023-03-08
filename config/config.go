@@ -36,6 +36,7 @@ type Config struct {
 	AllConfig     AllConfig     `toml:"all" json:"all"`
 	OracleConfig  OracleConfig  `toml:"oracle" json:"oracle"`
 	MySQLConfig   MySQLConfig   `toml:"mysql" json:"mysql"`
+	MetaConfig    MetaConfig    `toml:"meta" json:"meta"`
 	LogConfig     LogConfig     `toml:"log" json:"log"`
 	DiffConfig    DiffConfig    `toml:"compare" json:"compare"`
 	ConfigFile    string        `json:"config-file"`
@@ -138,6 +139,14 @@ type MySQLConfig struct {
 	SchemaName    string `toml:"schema-name" json:"schema-name"`
 	TableOption   string `toml:"table-option" json:"table-option"`
 	Overwrite     bool   `toml:"overwrite" json:"overwrite"`
+}
+
+type MetaConfig struct {
+	Username   string `toml:"username" json:"username"`
+	Password   string `toml:"password" json:"password"`
+	Host       string `toml:"host" json:"host"`
+	Port       int    `toml:"port" json:"port"`
+	MetaSchema string `toml:"meta-schema" json:"meta-schema"`
 }
 
 type LogConfig struct {

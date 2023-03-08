@@ -26,10 +26,10 @@ import (
 // 自定义字段默认值转换规则 - global 级别
 type BuildinGlobalDefaultval struct {
 	ID            uint   `gorm:"primary_key;autoIncrement;comment:'自增编号'" json:"id"`
-	DBTypeS       string `gorm:"type:varchar(15);index:idx_dbtype_st_map,unique;comment:'源数据库类型'" json:"db_type_s"`
-	DBTypeT       string `gorm:"type:varchar(15);index:idx_dbtype_st_map,unique;comment:'目标数据库类型'" json:"db_type_t"`
-	DefaultValueS string `gorm:"type:varchar(30);not null;index:idx_dbtype_st_map,unique;comment:'源端默认值'" json:"default_value_s"`
-	DefaultValueT string `gorm:"type:varchar(30);not null;comment:'目标默认值'" json:"default_value_t"`
+	DBTypeS       string `gorm:"type:varchar(30);index:idx_dbtype_st_map,unique;comment:'源数据库类型'" json:"db_type_s"`
+	DBTypeT       string `gorm:"type:varchar(30);index:idx_dbtype_st_map,unique;comment:'目标数据库类型'" json:"db_type_t"`
+	DefaultValueS string `gorm:"type:varchar(200);not null;index:idx_dbtype_st_map,unique;comment:'源端默认值'" json:"default_value_s"`
+	DefaultValueT string `gorm:"type:varchar(200);not null;comment:'目标默认值'" json:"default_value_t"`
 	*BaseModel
 }
 

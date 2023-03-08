@@ -25,11 +25,11 @@ import (
 // 自定义字段默认值转换规则 - column 级别
 type BuildinColumnDefaultval struct {
 	ID            uint   `gorm:"primary_key;autoIncrement;comment:'自增编号'" json:"id"`
-	DBTypeS       string `gorm:"type:varchar(15);index:idx_dbtype_st_map,unique;comment:'源数据库类型'" json:"db_type_s"`
-	DBTypeT       string `gorm:"type:varchar(15);index:idx_dbtype_st_map,unique;comment:'目标数据库类型'" json:"db_type_t"`
-	SchemaNameS   string `gorm:"type:varchar(15);index:idx_dbtype_st_map,unique;comment:'源数据库名'" json:"schema_name_s"`
-	TableNameS    string `gorm:"type:varchar(15);index:idx_dbtype_st_map,unique;comment:'源数据库表名'" json:"table_name_s"`
-	ColumnNameS   string `gorm:"type:varchar(15);index:idx_dbtype_st_map,unique;comment:'源数据库表字段名'" json:"column_name_s"`
+	DBTypeS       string `gorm:"type:varchar(30);index:idx_dbtype_st_map,unique;comment:'源数据库类型'" json:"db_type_s"`
+	DBTypeT       string `gorm:"type:varchar(30);index:idx_dbtype_st_map,unique;comment:'目标数据库类型'" json:"db_type_t"`
+	SchemaNameS   string `gorm:"type:varchar(200);index:idx_dbtype_st_map,unique;comment:'源数据库名'" json:"schema_name_s"`
+	TableNameS    string `gorm:"type:varchar(200);index:idx_dbtype_st_map,unique;comment:'源数据库表名'" json:"table_name_s"`
+	ColumnNameS   string `gorm:"type:varchar(200);index:idx_dbtype_st_map,unique;comment:'源数据库表字段名'" json:"column_name_s"`
 	DefaultValueS string `gorm:"type:varchar(30);comment:'源端字段默认值'" json:"default_value_s"`
 	DefaultValueT string `gorm:"type:varchar(30);not null;comment:'目标默认值'" json:"default_value_t"`
 	*BaseModel

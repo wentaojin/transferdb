@@ -22,7 +22,7 @@ import (
 
 // BaseModel returns model struct base fields
 type BaseModel struct {
-	Comment   string    `gorm:"type:varchar(1000);comment:comment content" json:"comment"`
+	Comment   string    `gorm:"type:varchar(300);comment:comment content" json:"comment"`
 	CreatedAt time.Time `gorm:"type:datetime(3) default current_timestamp(3);comment:'创建时间'" json:"createdAt"`
 	UpdatedAt time.Time `gorm:"type:datetime(3) default current_timestamp(3) on update current_timestamp(3);comment:'更新时间'" json:"updatedAt"`
 	*Meta     `gorm:"-" json:"-"`

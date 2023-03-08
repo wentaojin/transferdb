@@ -31,7 +31,7 @@ type Meta struct {
 	GormDB *gorm.DB
 }
 
-func NewMetaDBEngine(ctx context.Context, mysqlCfg config.MySQLConfig, slowThreshold int) (*Meta, error) {
+func NewMetaDBEngine(ctx context.Context, mysqlCfg config.MetaConfig, slowThreshold int) (*Meta, error) {
 	// 创建元数据库
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&parseTime=True&loc=Local",
 		mysqlCfg.Username, mysqlCfg.Password, mysqlCfg.Host, mysqlCfg.Port)
@@ -45,11 +45,6 @@ func NewMetaDBEngine(ctx context.Context, mysqlCfg config.MySQLConfig, slowThres
 	_, err = mysqlDB.ExecContext(ctx, createSchema)
 	if err != nil {
 		return &Meta{}, fmt.Errorf("error on exec meta database sql [%v]: %v", createSchema, err)
-	}
-	createSchema = fmt.Sprintf(`CREATE DATABASE IF NOT EXISTS %s`, mysqlCfg.SchemaName)
-	_, err = mysqlDB.ExecContext(ctx, createSchema)
-	if err != nil {
-		return &Meta{}, fmt.Errorf("error on exec target database sql [%v]: %v", createSchema, err)
 	}
 	err = mysqlDB.Close()
 	if err != nil {
