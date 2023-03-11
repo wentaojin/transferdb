@@ -63,6 +63,8 @@ jobs:
       - name: Build Github Changelog
         id: github_changelog
         uses: mikepenz/release-changelog-builder-action@v3
+        with:
+          configuration: "configuration.json"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Create Github Release
@@ -75,6 +77,6 @@ jobs:
           draft: false
           prerelease: false
           files: |
-            transferdb-${{ github.ref }}-linux-platform.tar.gz
-            transferdb-${{ github.ref }}-darwin-platform.tar.gz
-            transferdb-${{ github.ref }}-windows-platform.tar.gz
+            transferdb-${{ github.ref_name }}-linux-platform.tar.gz
+            transferdb-${{ github.ref_name }}-darwin-platform.tar.gz
+            transferdb-${{ github.ref_name }}-windows-platform.tar.gz
