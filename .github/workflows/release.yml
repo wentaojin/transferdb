@@ -42,22 +42,26 @@ jobs:
           GITREF="-X \"${CODEREPO}/config.GitBranch=`git rev-parse --abbrev-ref HEAD`\""
           LDFLAGS="-w -s ${COMMIT} ${BUILDTS} ${GITHASH} ${GITREF}"
           echo "ldflags=${LDFLAGS}" >> $GITHUB_ENV
-      - name: Run Xgo Build Binary
+      - name: Cross Platform Compile
         run: |
           go install src.techknowlogick.com/xgo@latest
           cd ${{ github.workspace }}
-          xgo -ldflags='${{ env.ldflags }}' -buildmode=default -dest bin -go go-1.19.x -out=transferdb-${{ github.ref }} -targets=linux/amd64,linux/arm64,darwin/arm64,darwin/amd64,windows/amd64 -pkg cmd ${{ github.workspace }}
-      - name: Package Xgo Binary
+          xgo -ldflags='${{ env.ldflags }}' -buildmode=default -dest bin -go go-1.19.x -out=transferdb-${{ github.ref_name }} -targets=linux/amd64,linux/arm64,darwin/arm64,darwin/amd64,windows/amd64 -pkg cmd ${{ github.workspace }}
+      - name: Prepare XGO Binary
         run: |
           cd ${{ github.workspace }}
-          ls -lnrt
+          pwd
           sudo chmod -R 777 bin
           cp example/config.toml bin/
-          tar -zcvf transferdb-${{ github.ref }}-linux-amd64.tar.gz bin/transferdb-${{ github.ref }}-linux-amd64 bin/config.toml
-          tar -zcvf transferdb-${{ github.ref }}-linux-arm64.tar.gz bin/transferdb-${{ github.ref }}-linux-arm64 bin/config.toml
-          tar -zcvf transferdb-${{ github.ref }}-darwin-amd64.tar.gz bin/transferdb-${{ github.ref }}-darwin-amd64 bin/config.toml
-          tar -zcvf transferdb-${{ github.ref }}-darwin-arm64.tar.gz bin/transferdb-${{ github.ref }}-darwin-arm64 bin/config.toml
-          tar -zcvf transferdb-${{ github.ref }}-windows-amd64.tar.gz bin/transferdb-${{ github.ref }}-windows-amd64 bin/config.toml
+          ls -lnrt ${{ github.workspace }}/bin/
+      - name: TAR XGO Binary
+        run: |
+          cd ${{ github.workspace }}
+          tar -zcvf transferdb-${{ github.ref_name }}-linux-amd64.tar.gz bin/transferdb-${{ github.ref_name }}-linux-amd64 bin/config.toml
+          tar -zcvf transferdb-${{ github.ref_name }}-linux-arm64.tar.gz bin/transferdb-${{ github.ref_name }}-linux-arm64 bin/config.toml
+          tar -zcvf transferdb-${{ github.ref_name }}-darwin-amd64.tar.gz bin/transferdb-${{ github.ref_name }}-darwin-amd64 bin/config.toml
+          tar -zcvf transferdb-${{ github.ref_name }}-darwin-arm64.tar.gz bin/transferdb-${{ github.ref_name }}-darwin-arm64 bin/config.toml
+          tar -zcvf transferdb-${{ github.ref_name }}-windows-amd64.tar.gz bin/transferdb-${{ github.ref_name }}-windows-amd64 bin/config.toml
       - name: Build Github Changelog
         id: github_changelog
         uses: mikepenz/release-changelog-builder-action@v3
@@ -65,7 +69,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Create Github Release
         uses: softprops/action-gh-release@v1
-        if: startsWith(github.ref, 'refs/tags/')
         with:
           name: ${{ github.ref_name }}
           tag_name: ${{ github.ref }}
