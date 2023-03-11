@@ -11,8 +11,6 @@ jobs:
   releaser:
     name: Create Release
     runs-on: ubuntu-latest
-    outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
     env:
       GOPATH: ${{ github.workspace }}/go
       GOBIN: ${{ github.workspace }}/go/bin
@@ -25,59 +23,19 @@ jobs:
         with:
           fetch-depth: 1
           path: ${{ github.workspace }}
-      - name: Setup Golang
+      - name: Setup Golang Env
         uses: actions/setup-go@v3
         with:
           go-version: '1.19'
           cache: true
-      - name: View Golang
+      - name: View Golang Env
         run: |
           go version
           go env
-      - name: Build Changelog
-        id: github_changelog
-        uses: mikepenz/release-changelog-builder-action@v3
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Create Release
-        id: create_release
-        uses: softprops/action-gh-release@v1
-        with:
-          name: ${{ github.ref_name }}
-          tag_name: ${{ github.ref }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-          body: ${{steps.github_changelog.outputs.changelog}}
-          draft: false
-          prerelease: false
-  builder:
-    name: Build TransferDB
-    needs: releaser
-    runs-on: ubuntu-latest
-    env:
-      GOPATH: ${{ github.workspace }}/go
-      GOBIN: ${{ github.workspace }}/go/bin
-    defaults:
-      run:
-        working-directory: ${{ github.workspace }}
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 1
-          path: ${{ github.workspace }}
-      - name: Setup Golang
-        uses: actions/setup-go@v3
-        with:
-          go-version: '1.19'
-          cache: true
-      - name: View Golang
-        run: |
-          go version
-          go env
-      - name: Gen Go Ldflags
+      - name: Gen Golang Ldflags
         id: genLdflags
         run: |
-          CODEREPO="github/${{ github.repository }}"
+          CODEREPO="github.com/${{ github.repository }}"
           COMMIT="-X \"${CODEREPO}/config.Version=`git describe --always --no-match --tags --dirty="-dev"`\""
           BUILDTS="-X \"${CODEREPO}/config.BuildTS=`TZ=CST-8 date '+%Y-%m-%d %H:%M:%S'`\""
           GITHASH="-X \"${CODEREPO}/config.GitHash=`git rev-parse HEAD`\""
@@ -88,21 +46,36 @@ jobs:
         run: |
           go install src.techknowlogick.com/xgo@latest
           cd ${{ github.workspace }}
-          xgo -v -x -ldflags='${{ env.ldflags }}' -buildmode=default -dest bin -go go-1.19.x -out=transferdb -targets=linux/amd64,linux/arm64,darwin/arm64,darwin/amd64,windows/amd64 ${{ github.workspace }}/cmd/main.go
+          xgo -ldflags='${{ env.ldflags }}' -buildmode=default -dest bin -go go-1.19.x -out=transferdb-${{ github.ref }} -targets=linux/amd64,linux/arm64,darwin/arm64,darwin/amd64,windows/amd64 -pkg cmd ${{ github.workspace }}
       - name: Package Xgo Binary
         run: |
           cd ${{ github.workspace }}
           ls -lnrt
           sudo chmod -R 777 bin
           cp example/config.toml bin/
-          tar -zcvf transferdb-platform-bin.tar.gz bin/*
-      - name: Upload Assets
-        id: upload-release-asset
-        uses: actions/upload-release-asset@v1
+          tar -zcvf transferdb-${{ github.ref }}-linux-amd64.tar.gz bin/transferdb-${{ github.ref }}-linux-amd64 bin/config.toml
+          tar -zcvf transferdb-${{ github.ref }}-linux-arm64.tar.gz bin/transferdb-${{ github.ref }}-linux-arm64 bin/config.toml
+          tar -zcvf transferdb-${{ github.ref }}-darwin-amd64.tar.gz bin/transferdb-${{ github.ref }}-darwin-amd64 bin/config.toml
+          tar -zcvf transferdb-${{ github.ref }}-darwin-arm64.tar.gz bin/transferdb-${{ github.ref }}-darwin-arm64 bin/config.toml
+          tar -zcvf transferdb-${{ github.ref }}-windows-amd64.tar.gz bin/transferdb-${{ github.ref }}-windows-amd64 bin/config.toml
+      - name: Build Github Changelog
+        id: github_changelog
+        uses: mikepenz/release-changelog-builder-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create Github Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
         with:
-          upload_url: ${{ needs.releaser.outputs.upload_url }}
-          asset_path: transferdb-platform-bin.tar.gz
-          asset_name: transferdb-platform-bin.tar.gz
-          asset_content_type: application/gzip
+          name: ${{ github.ref_name }}
+          tag_name: ${{ github.ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          body: ${{steps.github_changelog.outputs.changelog}}
+          draft: false
+          prerelease: false
+          files: |
+            transferdb-${{ github.ref }}-linux-amd64.tar.gz
+            transferdb-${{ github.ref }}-linux-arm64.tar.gz
+            transferdb-${{ github.ref }}-darwin-amd64.tar.gz
+            transferdb-${{ github.ref }}-darwin-arm64.tar.gz
+            transferdb-${{ github.ref }}-windows-amd64.tar.gz

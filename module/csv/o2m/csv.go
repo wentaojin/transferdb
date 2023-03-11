@@ -446,6 +446,9 @@ func (r *O2M) csvPartSyncTable(csvPartTables []string) error {
 							return fmt.Errorf("get oracle schema table [%v] record by rowid sql falied: %v", m.String(), errf)
 						}
 
+						if errClose := rowsResult.Close(); errClose != nil {
+							return errClose
+						}
 						return nil
 					}
 
@@ -467,6 +470,9 @@ func (r *O2M) csvPartSyncTable(csvPartTables []string) error {
 							return fmt.Errorf("get oracle schema table [%v] rows.Columns failed: %v", m.String(), errf)
 						}
 
+						if errClose := rowsResult.Close(); errClose != nil {
+							return errClose
+						}
 						return nil
 					}
 
@@ -503,6 +509,9 @@ func (r *O2M) csvPartSyncTable(csvPartTables []string) error {
 						}); errf != nil {
 							return errf
 						}
+					}
+					if errClose := rowsResult.Close(); errClose != nil {
+						return errClose
 					}
 					return nil
 				})
