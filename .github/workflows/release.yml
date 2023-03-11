@@ -57,11 +57,11 @@ jobs:
       - name: TAR XGO Binary
         run: |
           cd ${{ github.workspace }}
-          tar -zcvf transferdb-${{ github.ref_name }}-linux-amd64.tar.gz bin/transferdb-${{ github.ref_name }}-linux-amd64 bin/config.toml
-          tar -zcvf transferdb-${{ github.ref_name }}-linux-arm64.tar.gz bin/transferdb-${{ github.ref_name }}-linux-arm64 bin/config.toml
-          tar -zcvf transferdb-${{ github.ref_name }}-darwin-amd64.tar.gz bin/transferdb-${{ github.ref_name }}-darwin-amd64 bin/config.toml
-          tar -zcvf transferdb-${{ github.ref_name }}-darwin-arm64.tar.gz bin/transferdb-${{ github.ref_name }}-darwin-arm64 bin/config.toml
-          tar -zcvf transferdb-${{ github.ref_name }}-windows-amd64.tar.gz bin/transferdb-${{ github.ref_name }}-windows-amd64 bin/config.toml
+          tar -zcvf transferdb-${{ github.ref_name }}-linux-amd64.tar.gz bin/transferdb-*-linux-amd64 bin/config.toml
+          tar -zcvf transferdb-${{ github.ref_name }}-linux-arm64.tar.gz bin/transferdb-*-linux-arm64 bin/config.toml
+          tar -zcvf transferdb-${{ github.ref_name }}-darwin-amd64.tar.gz bin/transferdb-*-darwin-amd64 bin/config.toml
+          tar -zcvf transferdb-${{ github.ref_name }}-darwin-arm64.tar.gz bin/transferdb-*-darwin-arm64 bin/config.toml
+          tar -zcvf transferdb-${{ github.ref_name }}-windows-amd64.tar.gz bin/transferdb-*-windows-amd64 bin/config.toml
       - name: Build Github Changelog
         id: github_changelog
         uses: mikepenz/release-changelog-builder-action@v3
