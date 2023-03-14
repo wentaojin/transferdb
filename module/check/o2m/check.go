@@ -72,12 +72,40 @@ func (r *Check) Check() error {
 		return err
 	}
 
+	// 获取表名自定义规则
+	sourceTableNameRules, err := meta.NewTableNameRuleModel(r.metaDB).DetailTableNameRule(r.ctx, &meta.TableNameRule{
+		DBTypeS:     r.cfg.DBTypeS,
+		DBTypeT:     r.cfg.DBTypeT,
+		SchemaNameS: r.cfg.OracleConfig.SchemaName,
+		SchemaNameT: r.cfg.MySQLConfig.SchemaName,
+	})
+	if err != nil {
+		return err
+	}
+	sourceTableNameRuleMap := make(map[string]string)
+	targetTableNameRuleMap := make(map[string]string)
+
+	if len(sourceTableNameRules) > 0 {
+		for _, tr := range sourceTableNameRules {
+			sourceTableNameRuleMap[common.StringUPPER(tr.TableNameS)] = common.StringUPPER(tr.TableNameT)
+			targetTableNameRuleMap[common.StringUPPER(tr.TableNameT)] = common.StringUPPER(tr.TableNameS)
+		}
+	}
+
 	// 判断下游数据库是否存在 oracle 表
 	mysqlTables, err := r.mysql.GetMySQLTable(r.cfg.MySQLConfig.SchemaName)
 	if err != nil {
 		return err
 	}
-	ok, noExistTables := common.IsSubsetString(mysqlTables, tablesByCfg)
+	var targetTableNameRules []string
+	for _, t := range mysqlTables {
+		if v, ok := targetTableNameRuleMap[common.StringUPPER(t)]; ok {
+			targetTableNameRules = append(targetTableNameRules, v)
+		} else {
+			targetTableNameRules = append(targetTableNameRules, t)
+		}
+	}
+	ok, noExistTables := common.IsSubsetString(targetTableNameRules, tablesByCfg)
 	if !ok {
 		return fmt.Errorf("oracle tables %v isn't exist in the mysqldb schema [%v], please create", noExistTables, r.cfg.MySQLConfig.SchemaName)
 	}
@@ -239,28 +267,10 @@ func (r *Check) Check() error {
 			zap.String("cost", finishTime.Sub(beginTime).String()))
 	}
 
-	// 获取表名自定义规则
-	tableNameRules, err := meta.NewTableNameRuleModel(r.metaDB).DetailTableNameRule(r.ctx, &meta.TableNameRule{
-		DBTypeS:     r.cfg.DBTypeS,
-		DBTypeT:     r.cfg.DBTypeT,
-		SchemaNameS: r.cfg.OracleConfig.SchemaName,
-		SchemaNameT: r.cfg.MySQLConfig.SchemaName,
-	})
-	if err != nil {
-		return err
-	}
-	tableNameRuleMap := make(map[string]string)
-
-	if len(tableNameRules) > 0 {
-		for _, tr := range tableNameRules {
-			tableNameRuleMap[common.StringUPPER(tr.TableNameS)] = common.StringUPPER(tr.TableNameT)
-		}
-	}
-
 	// 任务检查表
 	tasks := GenCheckTaskTable(r.cfg.OracleConfig.SchemaName, r.cfg.MySQLConfig.SchemaName, oracleDBCharacterSet,
 		nlsSort, nlsComp, oracleTableCollation, oracleSchemaCollation, oracleDBCollation,
-		r.cfg.MySQLConfig.DBType, r.oracle, r.mysql, tableNameRuleMap, waitSyncMetas)
+		r.cfg.MySQLConfig.DBType, r.oracle, r.mysql, sourceTableNameRuleMap, waitSyncMetas)
 
 	err = common.PathExist(r.cfg.CheckConfig.CheckSQLDir)
 	if err != nil {

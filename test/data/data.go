@@ -19,6 +19,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/database/oracle"
 	"math"
 	"math/rand"
@@ -28,7 +29,6 @@ import (
 	"time"
 
 	"github.com/pingcap/log"
-	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/config"
 	"go.uber.org/zap"
 )
@@ -146,7 +146,7 @@ func GenRandomDataSQL(oracle *oracle.Oracle, schemaName string, tablePrefix stri
 	insertPrefix := fmt.Sprintf("INSERT INTO %s.%s", schemaName, tablePrefix)
 
 	wg := sync.WaitGroup{}
-	ch := make(chan string, common.BufferSize)
+	ch := make(chan string, common.ChannelBufferSize)
 
 	go func() {
 		for i := 0; i <= tableNums; i++ {

@@ -31,17 +31,17 @@ type FullSyncMeta struct {
 	DBTypeT       string `gorm:"type:varchar(30);index:idx_dbtype_st_map,unique;index:idx_schema_mode;comment:'目标数据库类型'" json:"db_type_t"`
 	SchemaNameS   string `gorm:"type:varchar(100);not null;index:idx_dbtype_st_map,unique;index:idx_schema_mode;comment:'源端 schema'" json:"schema_name_s"`
 	TableNameS    string `gorm:"type:varchar(100);not null;index:idx_dbtype_st_map,unique;comment:'源端表名'" json:"table_name_s"`
-	SchemaNameT   string `gorm:"type:varchar(15);not null;comment:'目标端 schema'" json:"schema_name_t"`
-	TableNameT    string `gorm:"type:varchar(30);not null;comment:'目标端表名'" json:"table_name_t"`
+	SchemaNameT   string `gorm:"type:varchar(100);not null;comment:'目标端 schema'" json:"schema_name_t"`
+	TableNameT    string `gorm:"type:varchar(100);not null;comment:'目标端表名'" json:"table_name_t"`
 	GlobalScnS    uint64 `gorm:"comment:'源端全局 SCN'" json:"global_scn_s"`
 	ColumnDetailS string `gorm:"type:text;comment:'源端查询字段信息'" json:"column_detail_s"`
 	ChunkDetailS  string `gorm:"type:varchar(300);not null;index:idx_dbtype_st_map,unique;comment:'表 chunk 切分信息'" json:"chunk_detail_s"`
 	TaskMode      string `gorm:"type:varchar(30);not null;index:idx_dbtype_st_map,unique;index:idx_schema_mode;comment:'任务模式'" json:"task_mode"`
-	TaskStatus    string `gorm:"not null;comment:'任务 chunk 状态'" json:"task_status"`
+	TaskStatus    string `gorm:"type:varchar(30);not null;comment:'任务 chunk 状态'" json:"task_status"`
 	CSVFile       string `gorm:"type:varchar(300);comment:'csv 文件名'" json:"csv_file"`
-	IsPartition   string `gorm:"comment:'是否是分区表'" json:"is_partition"` // 同步转换统一转换成非分区表，此处只做标志
-	InfoDetail    string `gorm:"not null;comment:'信息详情'" json:"info_detail"`
-	ErrorDetail   string `gorm:"not null;comment:'错误详情'" json:"error_detail"`
+	IsPartition   string `gorm:"type:varchar(10);comment:'是否是分区表'" json:"is_partition"` // 同步转换统一转换成非分区表，此处只做标志
+	InfoDetail    string `gorm:"type:text;not null;comment:'信息详情'" json:"info_detail"`
+	ErrorDetail   string `gorm:"type:text;not null;comment:'错误详情'" json:"error_detail"`
 	*BaseModel
 }
 
@@ -70,7 +70,7 @@ func (rw *FullSyncMeta) DeleteFullSyncMetaBySchemaSyncMode(ctx context.Context, 
 		common.StringUPPER(deleteS.DBTypeS),
 		common.StringUPPER(deleteS.DBTypeT),
 		common.StringUPPER(deleteS.SchemaNameS),
-		deleteS.TaskMode).Delete(&WaitSyncMeta{}).Error
+		deleteS.TaskMode).Delete(&FullSyncMeta{}).Error
 	if err != nil {
 		return fmt.Errorf("delete table [%s] reocrd failed: %v", table, err)
 	}
@@ -121,39 +121,19 @@ func (rw *FullSyncMeta) BatchCreateFullSyncMeta(ctx context.Context, createS []F
 	return nil
 }
 
-func (rw *FullSyncMeta) DistinctFullSyncMetaTableNameSByTaskStatus(ctx context.Context, detailS *FullSyncMeta) ([]string, error) {
-	var tableNames []string
-	table, err := rw.ParseSchemaTable()
-	if err != nil {
-		return tableNames, err
-	}
-	if err := rw.DB(ctx).Model(&FullSyncMeta{}).
-		Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND task_mode = ? AND task_status = ?",
-			common.StringUPPER(detailS.DBTypeS),
-			common.StringUPPER(detailS.DBTypeT),
-			common.StringUPPER(detailS.SchemaNameS),
-			common.StringUPPER(detailS.TaskMode),
-			common.StringUPPER(detailS.TaskStatus)).
-		Distinct().
-		Pluck("table_name_s", &tableNames).Error; err != nil {
-		return tableNames, fmt.Errorf("distinct table [%s] column [table_name_s] failed: %v", table, err)
-	}
-	return tableNames, nil
-}
-
-func (rw *FullSyncMeta) UpdateFullSyncMeta(ctx context.Context, deleteS *FullSyncMeta, updates map[string]interface{}) error {
+func (rw *FullSyncMeta) UpdateFullSyncMetaChunk(ctx context.Context, detailS *FullSyncMeta, updates map[string]interface{}) error {
 	table, err := rw.ParseSchemaTable()
 	if err != nil {
 		return err
 	}
 	if err = rw.DB(ctx).Model(FullSyncMeta{}).
 		Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND table_name_s = ? AND task_mode = ? AND chunk_detail_s = ?",
-			common.StringUPPER(deleteS.DBTypeS),
-			common.StringUPPER(deleteS.DBTypeT),
-			common.StringUPPER(deleteS.SchemaNameS),
-			common.StringUPPER(deleteS.TableNameS),
-			common.StringUPPER(deleteS.TaskMode),
-			deleteS.ChunkDetailS).
+			common.StringUPPER(detailS.DBTypeS),
+			common.StringUPPER(detailS.DBTypeT),
+			common.StringUPPER(detailS.SchemaNameS),
+			common.StringUPPER(detailS.TableNameS),
+			common.StringUPPER(detailS.TaskMode),
+			detailS.ChunkDetailS).
 		Updates(updates).Error; err != nil {
 		return fmt.Errorf("update table [%s] record failed: %v", table, err)
 	}

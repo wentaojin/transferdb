@@ -30,7 +30,7 @@ type TableNameRule struct {
 	SchemaNameS string `gorm:"type:varchar(100);not null;index:idx_dbtype_st_map,unique;index:idx_dbtype_st_table,unique;comment:'源端库 schema'" json:"schema_name_s"`
 	TableNameS  string `gorm:"type:varchar(100);not null;index:idx_dbtype_st_map,unique;index:idx_dbtype_st_table,unique;comment:'源端表名'" json:"table_name_s"`
 	SchemaNameT string `gorm:"type:varchar(100);not null;index:idx_dbtype_st_map,unique;comment:'目标库 schema'" json:"schema_name_t"`
-	TableNameT  string `gorm:"not null;comment:'目标表名'" json:"table_name_t"`
+	TableNameT  string `gorm:"type:varchar(100);not null;comment:'目标表名'" json:"table_name_t"`
 	*BaseModel
 }
 

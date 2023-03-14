@@ -30,8 +30,8 @@ type BuildinColumnDefaultval struct {
 	SchemaNameS   string `gorm:"type:varchar(200);index:idx_dbtype_st_map,unique;comment:'源数据库名'" json:"schema_name_s"`
 	TableNameS    string `gorm:"type:varchar(200);index:idx_dbtype_st_map,unique;comment:'源数据库表名'" json:"table_name_s"`
 	ColumnNameS   string `gorm:"type:varchar(200);index:idx_dbtype_st_map,unique;comment:'源数据库表字段名'" json:"column_name_s"`
-	DefaultValueS string `gorm:"type:varchar(30);comment:'源端字段默认值'" json:"default_value_s"`
-	DefaultValueT string `gorm:"type:varchar(30);not null;comment:'目标默认值'" json:"default_value_t"`
+	DefaultValueS string `gorm:"type:varchar(200);comment:'源端字段默认值'" json:"default_value_s"`
+	DefaultValueT string `gorm:"type:varchar(200);not null;comment:'目标默认值'" json:"default_value_t"`
 	*BaseModel
 }
 

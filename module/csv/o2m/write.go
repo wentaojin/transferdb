@@ -122,21 +122,25 @@ func (f *File) write(w io.Writer) error {
 	// 统计行数
 	var rowCount int
 
-	var columnTypes []string
+	var (
+		columnNames []string
+		columnTypes []string
+	)
 	colTypes, err := f.Rows.ColumnTypes()
 	if err != nil {
 		return fmt.Errorf("failed to csv get rows columnTypes: %v", err)
 	}
 
 	for _, ct := range colTypes {
+		columnNames = append(columnNames, ct.Name())
 		// 数据库字段类型 DatabaseTypeName() 映射 go 类型 ScanType()
 		columnTypes = append(columnTypes, ct.ScanType().String())
 	}
 
 	// 数据 SCAN
-	columns := len(f.SourceColumns)
-	rawResult := make([][]byte, columns)
-	dest := make([]interface{}, columns)
+	columnNums := len(f.SourceColumns)
+	rawResult := make([][]byte, columnNums)
+	dest := make([]interface{}, columnNums)
 	for i := range rawResult {
 		dest[i] = &rawResult[i]
 	}
@@ -167,51 +171,39 @@ func (f *File) write(w io.Writer) error {
 				case "int64":
 					r, err := common.StrconvIntBitSize(string(raw), 64)
 					if err != nil {
-						return err
+						return fmt.Errorf("column [%s] strconv failed, %v", columnNames[i], err)
 					}
 					results = append(results, fmt.Sprintf("%v", r))
 				case "uint64":
 					r, err := common.StrconvUintBitSize(string(raw), 64)
 					if err != nil {
-						return err
+						return fmt.Errorf("column [%s] strconv failed, %v", columnNames[i], err)
 					}
 					results = append(results, fmt.Sprintf("%v", r))
 				case "float32":
 					r, err := common.StrconvFloatBitSize(string(raw), 32)
 					if err != nil {
-						return err
+						return fmt.Errorf("column [%s] strconv failed, %v", columnNames[i], err)
 					}
 					results = append(results, fmt.Sprintf("%v", r))
 				case "float64":
 					r, err := common.StrconvFloatBitSize(string(raw), 64)
 					if err != nil {
-						return err
+						return fmt.Errorf("column [%s] strconv failed, %v", columnNames[i], err)
 					}
 					results = append(results, fmt.Sprintf("%v", r))
 				case "rune":
 					r, err := common.StrconvRune(string(raw))
 					if err != nil {
-						return err
+						return fmt.Errorf("column [%s] strconv failed, %v", columnNames[i], err)
 					}
 					results = append(results, fmt.Sprintf("%v", r))
 				case "godror.Number":
 					r, err := decimal.NewFromString(string(raw))
 					if err != nil {
-						return err
+						return fmt.Errorf("column [%s] strconv failed, %v", columnNames[i], err)
 					}
-					if r.IsInteger() {
-						si, err := common.StrconvIntBitSize(string(raw), 64)
-						if err != nil {
-							return err
-						}
-						results = append(results, fmt.Sprintf("%v", si))
-					} else {
-						rf, err := common.StrconvFloatBitSize(string(raw), 64)
-						if err != nil {
-							return err
-						}
-						results = append(results, fmt.Sprintf("%v", rf))
-					}
+					results = append(results, fmt.Sprintf("%v", r.String()))
 				default:
 					var (
 						by []byte

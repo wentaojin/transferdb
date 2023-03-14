@@ -31,9 +31,9 @@ type ErrorLogDetail struct {
 	SchemaNameT string `gorm:"type:varchar(100);not null;index:idx_dbtype_st_map;comment:'目标端 schema'" json:"schema_name_t"`
 	TableNameT  string `gorm:"type:varchar(100);not null;index:idx_dbtype_st_map;comment:'目标端表名'" json:"table_name_t"`
 	TaskMode    string `gorm:"type:varchar(30);not null;index:idx_dbtype_st_map;comment:'任务模式'" json:"task_mode"`
-	TaskStatus  string `gorm:"not null;comment:'任务状态'" json:"task_status"`
-	InfoDetail  string `gorm:"not null;comment:'信息详情'" json:"info_detail"`
-	ErrorDetail string `gorm:"not null;comment:'错误详情'" json:"error_detail"`
+	TaskStatus  string `gorm:"type:varchar(30);not null;comment:'任务状态'" json:"task_status"`
+	InfoDetail  string `gorm:"type:text;not null;comment:'信息详情'" json:"info_detail"`
+	ErrorDetail string `gorm:"type:text;not null;comment:'错误详情'" json:"error_detail"`
 	*BaseModel
 }
 

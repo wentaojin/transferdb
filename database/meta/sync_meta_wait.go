@@ -29,13 +29,13 @@ type WaitSyncMeta struct {
 	DBTypeT          string `gorm:"type:varchar(30);index:idx_dbtype_st_map,unique;comment:'目标数据库类型'" json:"db_type_t"`
 	SchemaNameS      string `gorm:"type:varchar(100);not null;index:idx_dbtype_st_map,unique;comment:'源端 schema'" json:"schema_name_s"`
 	TableNameS       string `gorm:"type:varchar(100);not null;index:idx_dbtype_st_map,unique;comment:'源端表名'" json:"table_name_s"`
-	TaskMode         string `gorm:"type:varchar(100);not null;index:idx_dbtype_st_map,unique;comment:'任务模式'" json:"task_mode"`
-	TaskStatus       string `gorm:"not null;comment:'任务状态'" json:"task_status"`
+	TaskMode         string `gorm:"type:varchar(30);not null;index:idx_dbtype_st_map,unique;comment:'任务模式'" json:"task_mode"`
+	TaskStatus       string `gorm:"type:varchar(30);not null;comment:'任务状态'" json:"task_status"`
 	GlobalScnS       uint64 `gorm:"comment:'全量任务 full_sync_meta 全局 SCN'" json:"global_scn_s"`
 	ChunkTotalNums   int64  `gorm:"comment:'全量任务 full_sync_meta 任务切分 chunk 数'" json:"chunk_total_nums"`
 	ChunkSuccessNums int64  `gorm:"comment:'全量任务 full_sync_meta 执行成功 chunk 数'" json:"chunk_success_nums"`
 	ChunkFailedNums  int64  `gorm:"comment:'全量任务 full_sync_meta 执行失败 chunk 数'" json:"chunk_failed_nums"`
-	IsPartition      string `gorm:"comment:'是否是分区表'" json:"is_partition"` // 同步转换统一转换成非分区表，此处只做标志
+	IsPartition      string `gorm:"type:varchar(10);comment:'是否是分区表'" json:"is_partition"` // 同步转换统一转换成非分区表，此处只做标志
 	*BaseModel
 }
 

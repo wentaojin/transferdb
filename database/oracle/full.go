@@ -129,6 +129,7 @@ func (o *Oracle) GetOracleTableRowsData(querySQL string, insertBatchSize int) ([
 
 	// 用于判断字段值是数字还是字符
 	var (
+		columnNames   []string
 		columnTypes   []string
 		databaseTypes []string
 	)
@@ -138,6 +139,7 @@ func (o *Oracle) GetOracleTableRowsData(querySQL string, insertBatchSize int) ([
 	}
 
 	for _, ct := range colTypes {
+		columnNames = append(columnNames, ct.Name())
 		// 数据库字段类型 DatabaseTypeName() 映射 go 类型 ScanType()
 		columnTypes = append(columnTypes, ct.ScanType().String())
 		databaseTypes = append(databaseTypes, ct.DatabaseTypeName())
@@ -173,51 +175,39 @@ func (o *Oracle) GetOracleTableRowsData(querySQL string, insertBatchSize int) ([
 				case "int64":
 					r, err := common.StrconvIntBitSize(string(raw), 64)
 					if err != nil {
-						return cols, batchResults, err
+						return cols, batchResults, fmt.Errorf("column [%s] strconv failed, %v", columnNames[i], err)
 					}
 					rowsResult = append(rowsResult, fmt.Sprintf("%v", r))
 				case "uint64":
 					r, err := common.StrconvUintBitSize(string(raw), 64)
 					if err != nil {
-						return cols, batchResults, err
+						return cols, batchResults, fmt.Errorf("column [%s] strconv failed, %v", columnNames[i], err)
 					}
 					rowsResult = append(rowsResult, fmt.Sprintf("%v", r))
 				case "float32":
 					r, err := common.StrconvFloatBitSize(string(raw), 32)
 					if err != nil {
-						return cols, batchResults, err
+						return cols, batchResults, fmt.Errorf("column [%s] strconv failed, %v", columnNames[i], err)
 					}
 					rowsResult = append(rowsResult, fmt.Sprintf("%v", r))
 				case "float64":
 					r, err := common.StrconvFloatBitSize(string(raw), 64)
 					if err != nil {
-						return cols, batchResults, err
+						return cols, batchResults, fmt.Errorf("column [%s] strconv failed, %v", columnNames[i], err)
 					}
 					rowsResult = append(rowsResult, fmt.Sprintf("%v", r))
 				case "rune":
 					r, err := common.StrconvRune(string(raw))
 					if err != nil {
-						return cols, batchResults, err
+						return cols, batchResults, fmt.Errorf("column [%s] strconv failed, %v", columnNames[i], err)
 					}
 					rowsResult = append(rowsResult, fmt.Sprintf("%v", r))
 				case "godror.Number":
 					r, err := decimal.NewFromString(string(raw))
 					if err != nil {
-						return cols, rowsResult, err
+						return cols, rowsResult, fmt.Errorf("column [%s] NewFromString strconv failed, %v", columnNames[i], err)
 					}
-					if r.IsInteger() {
-						si, err := common.StrconvIntBitSize(string(raw), 64)
-						if err != nil {
-							return cols, rowsResult, err
-						}
-						rowsResult = append(rowsResult, fmt.Sprintf("%v", si))
-					} else {
-						rf, err := common.StrconvFloatBitSize(string(raw), 64)
-						if err != nil {
-							return cols, rowsResult, err
-						}
-						rowsResult = append(rowsResult, fmt.Sprintf("%v", rf))
-					}
+					rowsResult = append(rowsResult, fmt.Sprintf("%v", r.String()))
 				default:
 					// 特殊字符
 					rowsResult = append(rowsResult, fmt.Sprintf("'%v'", common.SpecialLettersUsingMySQL(raw)))

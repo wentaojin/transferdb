@@ -33,7 +33,7 @@ type IncrSyncMeta struct {
 	TableNameT  string `gorm:"type:varchar(100);not null;index:idx_dbtype_st_map,unique;comment:'目标表名'" json:"table_name_t"`
 	GlobalScnS  uint64 `gorm:"comment:'源端全局 SCN'" json:"global_scn_s"`
 	TableScnS   uint64 `gorm:"comment:'源端表同步 SCN'" json:"table_scn_s"`
-	IsPartition string `gorm:"comment:'是否是分区表'" json:"is_partition"` // 同步转换统一转换成非分区表，此处只做标志
+	IsPartition string `gorm:"type:varchar(10);comment:'是否是分区表'" json:"is_partition"` // 同步转换统一转换成非分区表，此处只做标志
 	*BaseModel
 }
 

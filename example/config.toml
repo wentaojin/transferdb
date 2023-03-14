@@ -144,7 +144,7 @@ ora-arch = "noncdb"
 # 2、Non-CDB 架构需要具备 logminer 权限用户
 username = "c##ggadmin"
 password = "ggadmin"
-host = "10.2.103.31"
+host = "10.21.13.31"
 port = 1521
 service-name = "orclpdb1"
 # oracle instance client dir -> only linux
@@ -165,7 +165,7 @@ schema-name = "marvin"
 # 源端迁移任务表（只用于 prepare/reverse/check/all/full 阶段，assess 阶段不适用，assess 只适用于 schema 级别）
 # include-table 和 exclude-table 不能同时配置，两者只能配置一个,如果两个都没配置则 Schema 内表全迁移
 # include-table 和 exclude-table 支持正则表达式以及通配符（tab_*/tab*）
-include-table = ["gg_t"]
+include-table = ["lmt_ductn"]
 exclude-table = []
 
 # 只用于 reverse/check/all/full 阶段，assess 阶段不适用
@@ -175,7 +175,7 @@ db-type = "tidb"
 # 目标端连接串
 username = "root"
 password = ""
-host = "10.2.103.30"
+host = "10.21.13.31"
 port = 5000
 # mysql 链接参数
 connect-params = "charset=utf8mb4&multiStatements=true&parseTime=True&loc=Local"
@@ -194,8 +194,8 @@ table-option = "SHARD_ROW_ID_BITS = 4 PRE_SPLIT_REGIONS = 4"
 [meta]
 username = "root"
 password = ""
-host = "10.2.103.30"
-port = 4000
+host = "10.21.13.31"
+port = 5000
 # 元数据库
 # CREATE DATABASE IF NOT EXIST transferdb
 meta-schema = "transferdb"

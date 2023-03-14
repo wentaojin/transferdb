@@ -30,7 +30,7 @@ type TableDatatypeRule struct {
 	SchemaNameS string `gorm:"type:varchar(200);not null;index:idx_dbtype_st_map,unique;comment:'源端库 schema'" json:"schema_name_s"`
 	TableNameS  string `gorm:"type:varchar(200);not null;index:idx_dbtype_st_map,unique;comment:'源端表名'" json:"table_name_s"`
 	ColumnTypeS string `gorm:"type:varchar(100);not null;index:idx_dbtype_st_map,unique;comment:'源端表字段类型'" json:"column_type_s"`
-	ColumnTypeT string `gorm:"not null;comment:'目标表字段类型'" json:"column_type_t"`
+	ColumnTypeT string `gorm:"type:varchar(100);not null;comment:'目标表字段类型'" json:"column_type_t"`
 	*BaseModel
 }
 
