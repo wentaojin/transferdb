@@ -76,12 +76,12 @@ func GenOracleTableColumnMeta(ctx context.Context, metaDB *meta.Meta, dbTypeS, d
 		return columnMeta, fmt.Errorf(`oracle table column meta generate failed, column [%v] json: [%v]`, columnName, columnINFO.String())
 	}
 
-	dataDefault, err = ChangeTableColumnDefaultValue(ctx, metaDB, sourceSchema, dbTypeS, dbTypeT, sourceTableName, columnName, columnINFO.DataDefault)
+	dataDefault, err = ChangeTableColumnDefaultValue(ctx, metaDB, dbTypeS, dbTypeT, sourceSchema, sourceTableName, columnName, columnINFO.DataDefault)
 	if err != nil {
 		return columnMeta, err
 	}
 
-	columnType, err := ChangeTableColumnType(ctx, metaDB, sourceSchema, dbTypeS, dbTypeT, sourceTableName, columnName, columnINFO)
+	columnType, err := ChangeTableColumnType(ctx, metaDB, dbTypeS, dbTypeT, sourceSchema, sourceTableName, columnName, columnINFO)
 	if err != nil {
 		return "", err
 	}

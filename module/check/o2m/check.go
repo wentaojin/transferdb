@@ -143,16 +143,18 @@ func (r *Check) Check() error {
 		zap.Int("clear totals", len(clearTables)),
 		zap.Int("intersection total", len(interTables)))
 
-	// 判断 check_error_detail 是否存在错误记录，是否可进行 check
+	// 判断 error_log_detail 是否存在错误记录，是否可进行 check
 	errTotals, err := meta.NewErrorLogDetailModel(r.metaDB).CountsErrorLogBySchema(r.ctx, &meta.ErrorLogDetail{
 		DBTypeS:     r.cfg.DBTypeS,
 		DBTypeT:     r.cfg.DBTypeT,
 		SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
 		TaskMode:    r.cfg.TaskMode,
 	})
-
-	if errTotals > 0 || err != nil {
-		return fmt.Errorf(`check schema [%s] mode [%s] table task failed: %v, table [check_error_detail] exist failed error, please firstly check log and deal, secondly clear table [check_error_detail], thirdly update meta table [wait_sync_meta] column [task_status] table status WAITING (Need UPPER), finally rerunning`, strings.ToUpper(r.cfg.OracleConfig.SchemaName), r.cfg.TaskMode, err)
+	if err != nil {
+		return err
+	}
+	if errTotals > 0 {
+		return fmt.Errorf(`check schema [%s] mode [%s] table task failed: table [error_log_detail] exist failed error, please firstly check log and deal, secondly clear table [error_log_detail], thirdly update meta table [wait_sync_meta] column [task_status] table status WAITING (Need UPPER), finally rerunning`, strings.ToUpper(r.cfg.OracleConfig.SchemaName), r.cfg.TaskMode)
 	}
 
 	// 判断并记录待同步表列表

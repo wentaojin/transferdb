@@ -58,7 +58,6 @@ func NewChecker(ctx context.Context, oracleTableInfo, mysqlTableInfo *Table, dbT
 // 1、若上游存在，下游不存在，则输出记录，若上游不存在，下游存在，则默认不输出
 // 2、忽略上下游不同索引名、约束名对比，只对比下游是否存在同等约束下同等字段是否存在
 // 3、分区只对比分区类型、分区键、分区表达式等，不对比具体每个分区下的情况
-
 func (c *Diff) CheckPartitionTableType() string {
 	// 表类型检查 - only 分区表
 	zap.L().Info("check table",

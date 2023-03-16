@@ -509,9 +509,6 @@ func (r *O2M) csvPartSyncTable(csvPartTables []string) error {
 							return errf
 						}
 					}
-					if errClose := rowsResult.Close(); errClose != nil {
-						return errClose
-					}
 					return nil
 				})
 			}
