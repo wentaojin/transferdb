@@ -24,28 +24,30 @@ import (
 
 func main() {
 	oraCfg := config.OracleConfig{
-		Username:      "marvin",
-		Password:      "XEW#yu%202212",
-		Host:          "10.32.13.51",
+		Username:      "c##logminer",
+		Password:      "logminer",
+		Host:          "10.21.123.31",
 		Port:          1521,
-		ServiceName:   "orclpdb1",
+		ServiceName:   "orclcdb",
+		PDBName:       "orclpdb1",
 		ConnectParams: "poolMinSessions=10&poolMaxSessions=1000&poolWaitTimeout=60s&poolSessionMaxLifetime=1h&poolSessionTimeout=5m&poolIncrement=1&timezone=Local",
 		SessionParams: []string{},
 		SchemaName:    "marvin",
 		NLSLang:       "AMERICAN_AMERICA.AL32UTF8",
-		IncludeTable:  []string{"xiamen8"},
+		IncludeTable:  []string{"lmt_ductn"},
 		ExcludeTable:  nil,
 	}
 
-	oracleDB, err := oracle.NewOracleDBEngine(context.Background(), oraCfg)
+	ctx := context.Background()
+	oracleDB, err := oracle.NewOracleDBEngine(ctx, oraCfg)
 	if err != nil {
 		panic(err)
 	}
 
-	column, err := oracleDB.GetOracleSchemaTableColumn("MARVIN", "XIAMEN8", true)
+	cols, res, err := oracleDB.GetOracleTableRowsData(`select * from marvin.lmt_ductn`, 10)
 	if err != nil {
 		return
 	}
-
-	fmt.Println(column)
+	fmt.Println(cols)
+	fmt.Println(res)
 }

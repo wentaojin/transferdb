@@ -107,9 +107,9 @@ lib-dir = "/data1/soft/client/instantclient_19_8"
 4、配置 transferdb 参数文件，config.toml 相关参数配置说明见 conf/config.toml
 
 5、表结构转换，[输出示例](example/reverse_${sourcedb}.sql 以及 example/compatibility_${sourcedb}.sql)
-$ ./transferdb --config config.toml --mode prepare
-$ ./transferdb --config config.toml --mode reverseO2M
-$ ./transferdb --config config.toml --mode reverseM2O
+$ ./transferdb -config config.toml -mode prepare
+$ ./transferdb -config config.toml -mode reverse -source oracle -target mysql
+$ ./transferdb -config config.toml -mode reverse -source mysql -target oracle
 
 元数据库[默认 transferdb]自定义转换规则，规则优先级【字段 -> 表 -> 库 -> 内置】
 文件自定义规则示例：
@@ -118,173 +118,34 @@ $ ./transferdb --config config.toml --mode reverseM2O
 表 [column_datatype_rule] 用于字段级别自定义转换规则，字段级别优先级高于表级别、高于库级别、高于内置规则
 表 [buildin_global_defaultval] 用于字段默认值自定义转换规则，优先级适用于全局，注意：自定义默认值是字符 character 数据时需要带有单引号
 表 [buildin_column_defaultval] 用于字段默认值自定义转换规则，优先级适用于表级别字段，注意：自定义默认值字符 character 数据时需要带有单引号
-insert into buildin_column_defaultval (db_type_s,db_type_t,schema_name_s,table_name_s,column_name_s,default_value_s,default_value_t) values('oracle','mysql','marvin','reverse_tims01','v1','''marvin01''','''marvin02''');
+insert into buildin_column_defaultval (db_type_s,db_type_t,schema_name_s,table_name_s,column_name_s,default_value_s,default_value_t) values('ORACLE','MYSQL','MARVIN','REVERSE_TIMS01','V1','''marvin01''','''marvin02''');
 
 
 6、表结构检查(独立于表结构转换，可单独运行，校验规则使用内置规则，[输出示例](example/check_${sourcedb}.sql)
-$ ./transferdb --config config.toml --mode prepare
-$ ./transferdb --config config.toml --mode check
+$ ./transferdb -config config.toml -mode prepare
+$ ./transferdb -config config.toml -mode check -source oracle -target mysql
 
 7、收集现有 Oracle 数据库内表、索引、分区表、字段长度等信息用于评估迁移成本，[输出示例](example/report_marvin.html)
-$ ./transferdb --config config.toml --mode assess
+$ ./transferdb -config config.toml -mode assess -source oracle -target mysql
 
 8、数据全量抽数
-$ ./transferdb --config config.toml --mode full
+$ ./transferdb -config config.toml -mode full -source oracle -target mysql
 
 9、数据同步（全量 + 增量）
-$ ./transferdb --config config.toml --mode all
+$ ./transferdb -config config.toml -mode all -source oracle -target mysql
 
 10、CSV 文件数据导出
-$ ./transferdb --config config.toml --mode csv
+$ ./transferdb -config config.toml -mode csv -source oracle -target mysql
 
 11、数据校验，[输出示例](example/fix.sql)
-$ ./transferdb --config config.toml --mode prepare
-$ ./transferdb --config config.toml --mode compare
+$ ./transferdb -config config.toml -mode prepare
+$ ./transferdb -config config.toml -mode compare -source oracle -target mysql
 ```
-#### ALL 模式同步
-##### 附加日志
-```sql
-/* NONCDB/CDB 数据库开启归档以及补充日志 */
--- 开启归档【必须选项】
-alter database archivelog;
-    
--- 设置归档目录
-alter system set log_archive_dest_1='location=/deploy/oracle/oradata/ARCHIVE' scope=spfile sid='*';
-    
--- 最小附加日志【必须选项】
-ALTER DATABASE ADD supplemental LOG DATA;
 
--- 表级别或者库级别选其一
--- 一般只针对同步表开启即可【必须选项】，未开启会导致同步存在问题
--- 增加库级别附加日志
-ALTER DATABASE ADD supplemental LOG DATA (ALL) COLUMNS;
--- 清理库级别附加日志
-ALTER DATABASE DROP supplemental LOG DATA (all) COLUMNS;
-    
---增加表级别附加日志
-ALTER TABLE marvin.marvin4 ADD supplemental LOG DATA (all) COLUMNS;
-ALTER TABLE marvin.marvin7 ADD supplemental LOG DATA (all) COLUMNS;
-ALTER TABLE marvin.marvin8 ADD supplemental LOG DATA (all) COLUMNS;
-
---清理表级别附加日志
-ALTER TABLE marvin.marvin4 DROP supplemental LOG DATA (all) COLUMNS;
-ALTER TABLE marvin.marvin7 DROP supplemental LOG DATA (all) COLUMNS;
-ALTER TABLE marvin.marvin8 DROP supplemental LOG DATA (all) COLUMNS;
-
-/* 查看附加日志 */
--- 数据库级别附加日志查看
-SELECT supplemental_log_data_min min,
-supplemental_log_data_pk pk,
-supplemental_log_data_ui ui,
-supplemental_log_data_fk fk,
-supplemental_log_data_all allc
-FROM v$database;
-
--- 表级别附加日志查看
-select * from dba_log_groups where upper(owner) = upper('marvin');
-
--- 查看不同用户的连接数
-select username,count(username) from v$session where username is not null group by username;
-```
-##### NonCDB ORACLE
-```sql
-/* NONCDB 用户创建*/
-/*创建表空间*/
-create tablespace LOGMINER_TBS
-datafile '/data1/oracle/app/oracle/oradata/orcl/logminer.dbf'
-size 50M autoextend on next 5M maxsize unlimited;
-
-/*创建临时表空间*/
-create temporary tablespace LOGMINER_TMP_TBL
-tempfile '/data1/oracle/app/oracle/oradata/orcl/logminer_tmp.dbf'
-size 50m autoextend on next 50m maxsize 20480m;
-
-/*创建用户*/
-CREATE USER logminer IDENTIFIED BY logminer
-DEFAULT tablespace LOGMINER_TBS
-temporary tablespace LOGMINER_TMP_TBL;
-
-/* 配置文件 [source] schema-name 同步用户授权 */
--- 创建用户 NonCDB 角色
-create role logminer_privs;
-
--- 角色授权
-grant create session,
-EXECUTE_CATALOG_ROLE,
-select any transaction,
-select any table,
-select any dictionary to logminer_privs;
-grant select on SYSTEM.LOGMNR_COL$ to logminer_privs;
-grant select on SYSTEM.LOGMNR_OBJ$ to logminer_privs;
-grant select on SYSTEM.LOGMNR_USER$ to logminer_privs;
-grant select on SYSTEM.LOGMNR_UID$ to logminer_privs;
-grant select on V_$DATABASE to logminer_privs;
-grant select_catalog_role to logminer_privs;
-grant RESOURCE,CONNECT TO logminer_privs;
-grant EXECUTE ON DBMS_LOGMNR TO logminer_privs;
-grant select on v_$logmnr_contents to logminer_privs;
-
--- 仅当Oracle为12c版本时，才需要添加，否则删除此行内容
-grant LOGMINING to logminer_privs;
-
--- 用户角色授权
-grant logminer_privs to logminer;
-```
-##### CDB ORACLE
-```sql
-/* CDB 用户创建 */
--- CDB/PDB 切换
-alter session set container=CDB$ROOT;
-alter session set container=ORCLPDB;
-
--- CDB 内创建表空间(需要所有 PDBS 创建同样表空间名)
--- datafile '/deploy/oracle/oradata/ORCLPDB/logminer01.dbf'  数据文件名不一样
-create tablespace LOGMINER_TBS
-datafile '/deploy/oracle/oradata/ORCLCDB/logminer00.dbf'
-size 50M autoextend on next 5M maxsize unlimited;
-
--- CDB 内创建临时表空间(需要所有 PDBS 创建同样表空间名)
--- tempfile '/deploy/oracle/oradata/ORCLPDB/logminer_tmp01.dbf' 数据文件名不一样
-create temporary tablespace LOGMINER_TMP_TBL
-tempfile '/deploy/oracle/oradata/ORCLCDB/logminer_tmp00.dbf'
-size 50m autoextend on next 50m maxsize unlimited;
-
--- 创建 CDB 用户(如果设置 CDB 用户默认表空间或者临时表空间，则需要所有 PDBS 内创建同样的表空间名，数据文件名不一样)
-CREATE USER c##logminer IDENTIFIED BY logminer
-DEFAULT tablespace LOGMINER_TBS
-temporary tablespace LOGMINER_TMP_TBL;
-
-ALTER USER c##logminer quota unlimited on users;
-
--- 允许 CDB 用户访问所有 PDBS
-ALTER USER c##logminer SET CONTAINER_DATA=ALL CONTAINER=CURRENT;
-
--- CDB 用户授权
-GRANT DBA to c##logminer CONTAINER=ALL;
-GRANT CREATE SESSION TO c##logminer CONTAINER=ALL;
-GRANT CREATE TABLE TO c##logminer CONTAINER=ALL;
-GRANT EXECUTE_CATALOG_ROLE TO c##logminer CONTAINER=ALL;
-GRANT EXECUTE ON DBMS_LOGMNR TO c##logminer CONTAINER=ALL;
-GRANT SELECT ON V_$DATABASE TO c##logminer CONTAINER=ALL;
-GRANT SELECT ON V_$LOGMNR_CONTENTS TO c##logminer CONTAINER=ALL;
-GRANT SELECT ON V_$ARCHIVED_LOG TO c##logminer CONTAINER=ALL;
-GRANT SELECT ON V_$LOG TO c##logminer CONTAINER=ALL;
-GRANT SELECT ON V_$LOGFILE TO c##logminer CONTAINER=ALL;
-GRANT RESOURCE, CONNECT TO c##logminer CONTAINER=ALL;
-
--- 切换 PDB 用户
--- sqlplus marvin/marvin@192.168.10.100:1521/orclpdb
-alter session set container=ORCLPDB;
--- 授权数据库架构通过程序用户访问
--- ${schema-name} 指配置文件 [source] 参数 schema-name
-alter user ${schema-name} grant connect through c##logminer;
-
--- 权限回收用法(如不需要时可使用)
-alter user ${schema-name} revoke connect through c##logminer;
-```
-若直接在命令行中用 `nohup` 启动程序，可能会因为 SIGHUP 信号而退出，建议把 `nohup` 放到脚本里面且不建议用 kill -9，如：
+#### 程序运行
+直接在命令行中用 `nohup` 启动程序，可能会因为 SIGHUP 信号而退出，建议把 `nohup` 放到脚本里面且不建议用 kill -9，如：
 
 ```shell
 #!/bin/bash
-nohup ./transferdb -config config.toml --mode all > nohup.out &
+nohup ./transferdb -config config.toml -mode all -source oracle -target mysql > nohup.out &
 ```

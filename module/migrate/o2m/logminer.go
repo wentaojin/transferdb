@@ -43,7 +43,7 @@ type logminer struct {
 }
 
 // 捕获增量数据
-func getOracleIncrRecord(ctx context.Context, oracle *oracle.Oracle, sourceSchema, targetSchema string, sourceTable string, tableNameRule map[string]string, lastCheckpoint string, queryTimeout int) ([]logminer, error) {
+func GetOracleIncrRecord(ctx context.Context, oracle *oracle.Oracle, sourceSchema, targetSchema string, sourceTable string, tableNameRule map[string]string, lastCheckpoint string, queryTimeout int) ([]logminer, error) {
 	var lcs []logminer
 
 	c, cancel := context.WithTimeout(ctx, time.Duration(queryTimeout)*time.Second)

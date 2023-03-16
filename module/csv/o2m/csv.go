@@ -562,7 +562,7 @@ func (r *O2M) csvPartSyncTable(csvPartTables []string) error {
 						TableNameS:       common.StringUPPER(t),
 						TaskMode:         r.Cfg.TaskMode,
 						TaskStatus:       common.TaskStatusSuccess,
-						ChunkSuccessNums: int64(len(waitFullMetas) + len(successChunkFullMeta)),
+						ChunkSuccessNums: int64(len(successChunkFullMeta)),
 						ChunkFailedNums:  0,
 					})
 				if err != nil {
@@ -582,7 +582,7 @@ func (r *O2M) csvPartSyncTable(csvPartTables []string) error {
 					TaskMode:    r.Cfg.TaskMode,
 				}, map[string]interface{}{
 					"TaskStatus":       common.TaskStatusFailed,
-					"ChunkSuccessNums": int64(len(waitFullMetas)) - failedChunkTotalErrs + int64(len(successChunkFullMeta)),
+					"ChunkSuccessNums": int64(len(successChunkFullMeta)),
 					"ChunkFailedNums":  failedChunkTotalErrs,
 				})
 				if err != nil {

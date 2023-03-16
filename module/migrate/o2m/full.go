@@ -31,11 +31,12 @@ import (
 )
 
 type Migrate struct {
-	Ctx    context.Context
-	Cfg    *config.Config
-	Oracle *oracle.Oracle
-	Mysql  *mysql.MySQL
-	MetaDB *meta.Meta
+	Ctx         context.Context
+	Cfg         *config.Config
+	Oracle      *oracle.Oracle
+	OracleMiner *oracle.Oracle
+	Mysql       *mysql.MySQL
+	MetaDB      *meta.Meta
 }
 
 func NewFuller(ctx context.Context, cfg *config.Config) (*Migrate, error) {
@@ -295,13 +296,13 @@ func (r *Migrate) Full() error {
 	// 优先存在断点的表
 	// partSyncTables -> waitSyncTables
 	if len(partSyncTables) > 0 {
-		err = r.fullPartSyncTable(partSyncTables)
+		err = r.FullPartSyncTable(partSyncTables)
 		if err != nil {
 			return err
 		}
 	}
 	if len(waitSyncTables) > 0 {
-		err = r.fullWaitSyncTable(waitSyncTables, oracleCollation)
+		err = r.FullWaitSyncTable(waitSyncTables, oracleCollation)
 		if err != nil {
 			return err
 		}
@@ -339,7 +340,7 @@ func (r *Migrate) Full() error {
 	return nil
 }
 
-func (r *Migrate) fullPartSyncTable(fullPartTables []string) error {
+func (r *Migrate) FullPartSyncTable(fullPartTables []string) error {
 	taskTime := time.Now()
 
 	g := &errgroup.Group{}
@@ -516,7 +517,7 @@ func (r *Migrate) fullPartSyncTable(fullPartTables []string) error {
 						TableNameS:       common.StringUPPER(t),
 						TaskMode:         r.Cfg.TaskMode,
 						TaskStatus:       common.TaskStatusSuccess,
-						ChunkSuccessNums: int64(len(waitFullMetas) + len(successChunkFullMeta)),
+						ChunkSuccessNums: int64(len(successChunkFullMeta)),
 						ChunkFailedNums:  0,
 					})
 				if err != nil {
@@ -536,7 +537,7 @@ func (r *Migrate) fullPartSyncTable(fullPartTables []string) error {
 					TaskMode:    r.Cfg.TaskMode,
 				}, map[string]interface{}{
 					"TaskStatus":       common.TaskStatusFailed,
-					"ChunkSuccessNums": int64(len(waitFullMetas)) - failedChunkTotalErrs + int64(len(successChunkFullMeta)),
+					"ChunkSuccessNums": int64(len(successChunkFullMeta)),
 					"ChunkFailedNums":  failedChunkTotalErrs,
 				})
 				if err != nil {
@@ -564,12 +565,12 @@ func (r *Migrate) fullPartSyncTable(fullPartTables []string) error {
 	return nil
 }
 
-func (r *Migrate) fullWaitSyncTable(fullWaitTables []string, oracleCollation bool) error {
-	err := r.initWaitSyncTableRowID(fullWaitTables, oracleCollation)
+func (r *Migrate) FullWaitSyncTable(fullWaitTables []string, oracleCollation bool) error {
+	err := r.InitWaitSyncTableRowID(fullWaitTables, oracleCollation)
 	if err != nil {
 		return err
 	}
-	err = r.fullPartSyncTable(fullWaitTables)
+	err = r.FullPartSyncTable(fullWaitTables)
 	if err != nil {
 		return err
 	}
@@ -577,10 +578,10 @@ func (r *Migrate) fullWaitSyncTable(fullWaitTables []string, oracleCollation boo
 	return nil
 }
 
-func (r *Migrate) initWaitSyncTableRowID(csvWaitTables []string, oracleCollation bool) error {
+func (r *Migrate) InitWaitSyncTableRowID(csvWaitTables []string, oracleCollation bool) error {
 	startTask := time.Now()
 	// 获取自定义库表名规则
-	tableNameRule, err := r.getTableNameRule()
+	tableNameRule, err := r.GetTableNameRule()
 	if err != nil {
 		return err
 	}
@@ -611,7 +612,7 @@ func (r *Migrate) initWaitSyncTableRowID(csvWaitTables []string, oracleCollation
 				targetTableName = common.StringUPPER(t)
 			}
 
-			sourceColumnInfo, err := r.adjustTableSelectColumn(t, oracleCollation)
+			sourceColumnInfo, err := r.AdjustTableSelectColumn(t, oracleCollation)
 			if err != nil {
 				return err
 			}
@@ -795,7 +796,7 @@ func (r *Migrate) initWaitSyncTableRowID(csvWaitTables []string, oracleCollation
 	return nil
 }
 
-func (r *Migrate) getTableNameRule() (map[string]string, error) {
+func (r *Migrate) GetTableNameRule() (map[string]string, error) {
 	// 获取表名自定义规则
 	tableNameRules, err := meta.NewTableNameRuleModel(r.MetaDB).DetailTableNameRule(r.Ctx, &meta.TableNameRule{
 		DBTypeS:     r.Cfg.DBTypeS,
@@ -816,7 +817,7 @@ func (r *Migrate) getTableNameRule() (map[string]string, error) {
 	return tableNameRuleMap, nil
 }
 
-func (r *Migrate) adjustTableSelectColumn(sourceTable string, oracleCollation bool) (string, error) {
+func (r *Migrate) AdjustTableSelectColumn(sourceTable string, oracleCollation bool) (string, error) {
 	// Date/Timestamp 字段类型格式化
 	// Interval Year/Day 数据字符 TO_CHAR 格式化
 	columnsINFO, err := r.Oracle.GetOracleSchemaTableColumn(r.Cfg.OracleConfig.SchemaName, sourceTable, oracleCollation)

@@ -181,7 +181,7 @@ func translateAndAddOracleIncrRecord(dbTypeS, dbTypeT, taskMode, sourceSchema, s
 		// 比如：UPDATE MARVIN.MARVIN1 SET ID = 2 , NAME = 'marvin' WHERE ID = 2 AND NAME = 'pty'
 		// 比如: drop table marvin.marvin7
 		// 比如: truncate table marvin.marvin7
-		mysqlRedo, operationType, err := translateOracleToMySQLSQL(rows.SQLRedo, rows.SQLUndo, common.StringUPPER(rows.TargetSchema), common.StringUPPER(rows.TargetSchema))
+		mysqlRedo, operationType, err := translateOracleToMySQLSQL(rows.SQLRedo, rows.SQLUndo, common.StringUPPER(rows.TargetSchema), common.StringUPPER(rows.TargetTable))
 		if err != nil {
 			return err
 		}

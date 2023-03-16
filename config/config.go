@@ -113,12 +113,12 @@ type AllConfig struct {
 }
 
 type OracleConfig struct {
-	OraArch       string   `toml:"ora-arch" json:"ora-arch"`
 	Username      string   `toml:"username" json:"username"`
 	Password      string   `toml:"password" json:"password"`
 	Host          string   `toml:"host" json:"host"`
 	Port          int      `toml:"port" json:"port"`
 	ServiceName   string   `toml:"service-name" json:"service-name"`
+	PDBName       string   `toml:"pdb-name" json:"pdb-name"`
 	LibDir        string   `toml:"lib-dir" json:"lib-dir"`
 	NLSLang       string   `toml:"nls-lang" json:"nls-lang"`
 	ConnectParams string   `toml:"connect-params" json:"connect-params"`
@@ -215,6 +215,7 @@ func (c *Config) AdjustConfig() {
 	c.DBTypeT = common.StringUPPER(c.DBTypeT)
 	c.TaskMode = common.StringUPPER(c.TaskMode)
 	c.OracleConfig.SchemaName = common.StringUPPER(c.OracleConfig.SchemaName)
+	c.OracleConfig.PDBName = common.StringUPPER(c.OracleConfig.PDBName)
 	c.MySQLConfig.SchemaName = common.StringUPPER(c.MySQLConfig.SchemaName)
 }
 

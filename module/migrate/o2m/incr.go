@@ -34,6 +34,10 @@ func NewIncr(ctx context.Context, cfg *config.Config) (*Migrate, error) {
 	if err != nil {
 		return nil, err
 	}
+	oracleMiner, err := oracle.NewOracleLogminerEngine(ctx, cfg.OracleConfig)
+	if err != nil {
+		return nil, err
+	}
 	mysqlDB, err := mysql.NewMySQLDBEngine(ctx, cfg.MySQLConfig)
 	if err != nil {
 		return nil, err
@@ -44,11 +48,12 @@ func NewIncr(ctx context.Context, cfg *config.Config) (*Migrate, error) {
 	}
 
 	return &Migrate{
-		Ctx:    ctx,
-		Cfg:    cfg,
-		Oracle: oracleDB,
-		Mysql:  mysqlDB,
-		MetaDB: metaDB,
+		Ctx:         ctx,
+		Cfg:         cfg,
+		Oracle:      oracleDB,
+		OracleMiner: oracleMiner,
+		Mysql:       mysqlDB,
+		MetaDB:      metaDB,
 	}, nil
 }
 
@@ -173,7 +178,7 @@ func (r *Migrate) Incr() error {
 		}
 
 		// 获取自定义库表名规则
-		tableNameRule, err := r.getTableNameRule()
+		tableNameRule, err := r.GetTableNameRule()
 		if err != nil {
 			return err
 		}
@@ -222,7 +227,7 @@ func (r *Migrate) Incr() error {
 
 func (r *Migrate) syncTableIncrRecord() error {
 	// 获取自定义库表名规则
-	tableNameRule, err := r.getTableNameRule()
+	tableNameRule, err := r.GetTableNameRule()
 	if err != nil {
 		return err
 	}
@@ -288,16 +293,16 @@ func (r *Migrate) syncTableIncrRecord() error {
 		}
 
 		// logminer 运行
-		if err = r.Oracle.AddOracleLogminerlogFile(log["LOG_FILE"]); err != nil {
+		if err = r.OracleMiner.AddOracleLogminerlogFile(log["LOG_FILE"]); err != nil {
 			return err
 		}
 
-		if err = r.Oracle.StartOracleLogminerStoredProcedure(log["FIRST_CHANGE"]); err != nil {
+		if err = r.OracleMiner.StartOracleLogminerStoredProcedure(log["FIRST_CHANGE"]); err != nil {
 			return err
 		}
 
 		// 捕获数据
-		rowsResult, err := getOracleIncrRecord(r.Ctx, r.Oracle,
+		rowsResult, err := GetOracleIncrRecord(r.Ctx, r.OracleMiner,
 			common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
 			common.StringUPPER(r.Cfg.MySQLConfig.SchemaName),
 			common.StringArrayToCapitalChar(syncSourceTables),
@@ -313,18 +318,18 @@ func (r *Migrate) syncTableIncrRecord() error {
 			zap.Int("row counts", len(rowsResult)))
 
 		// logminer 关闭
-		if err = r.Oracle.EndOracleLogminerStoredProcedure(); err != nil {
+		if err = r.OracleMiner.EndOracleLogminerStoredProcedure(); err != nil {
 			return err
 		}
 
 		// 获取 Oracle 所有 REDO 列表
-		redoLogList, err := r.Oracle.GetOracleALLRedoLogFile()
+		redoLogList, err := r.OracleMiner.GetOracleALLRedoLogFile()
 		if err != nil {
 			return err
 		}
 
 		//获取当前 CURRENT REDO LOG 信息
-		currentRedoLogFirstChange, currentRedoLogMaxSCN, currentRedoLogFileName, err := r.Oracle.GetOracleCurrentRedoMaxSCN()
+		currentRedoLogFirstChange, currentRedoLogMaxSCN, currentRedoLogFileName, err := r.OracleMiner.GetOracleCurrentRedoMaxSCN()
 		if err != nil {
 			return err
 		}
@@ -494,12 +499,12 @@ func (r *Migrate) getTableIncrRecordLogfile() ([]map[string]string, error) {
 
 	// 判断数据是在 archived log Or redo log
 	// 如果 redoSCN 等于 0，说明数据在归档日志
-	redoScn, err := r.Oracle.GetOracleRedoLogSCN(strGlobalSCN)
+	redoScn, err := r.OracleMiner.GetOracleRedoLogSCN(strGlobalSCN)
 	if err != nil {
 		return logFiles, err
 	}
 
-	archivedScn, err := r.Oracle.GetOracleArchivedLogSCN(strGlobalSCN)
+	archivedScn, err := r.OracleMiner.GetOracleArchivedLogSCN(strGlobalSCN)
 	if err != nil {
 		return logFiles, err
 	}
@@ -507,13 +512,13 @@ func (r *Migrate) getTableIncrRecordLogfile() ([]map[string]string, error) {
 	// 获取所需挖掘的日志文件
 	if redoScn == 0 {
 		strArchivedSCN := strconv.FormatUint(archivedScn, 10)
-		logFiles, err = r.Oracle.GetOracleArchivedLogFile(strArchivedSCN)
+		logFiles, err = r.OracleMiner.GetOracleArchivedLogFile(strArchivedSCN)
 		if err != nil {
 			return logFiles, err
 		}
 	} else {
 		strRedoCN := strconv.FormatUint(redoScn, 10)
-		logFiles, err = r.Oracle.GetOracleRedoLogFile(strRedoCN)
+		logFiles, err = r.OracleMiner.GetOracleRedoLogFile(strRedoCN)
 		if err != nil {
 			return logFiles, err
 		}

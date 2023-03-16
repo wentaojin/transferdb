@@ -49,8 +49,8 @@ type IncrTask struct {
 }
 
 type IncrResult struct {
-	Task   IncrTask
-	Status bool
+	Task IncrTask
+	Err  error
 }
 
 // 应用当前日志文件中所有记录
@@ -204,9 +204,10 @@ func createWorkerPool(numOfWorkers int, jobQueue chan IncrTask, resultQueue chan
 
 func getIncrResult(done chan bool, resultQueue chan IncrResult) {
 	for result := range resultQueue {
-		if !result.Status {
+		if result.Err != nil {
 			zap.L().Fatal("task increment table record",
-				zap.String("payload", result.Task.String()))
+				zap.String("payload", result.Task.String()),
+				zap.Error(result.Err))
 		}
 	}
 	done <- true
@@ -217,14 +218,14 @@ func worker(wg *sync.WaitGroup, jobQueue chan IncrTask, resultQueue chan IncrRes
 	for job := range jobQueue {
 		if err := job.IncrApply(); err != nil {
 			result := IncrResult{
-				Task:   job,
-				Status: false,
+				Task: job,
+				Err:  err,
 			}
 			resultQueue <- result
 		}
 		result := IncrResult{
-			Task:   job,
-			Status: true,
+			Task: job,
+			Err:  nil,
 		}
 		resultQueue <- result
 	}

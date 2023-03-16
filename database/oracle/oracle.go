@@ -47,37 +47,91 @@ func NewOracleDBEngine(ctx context.Context, oraCfg config.OracleConfig) (*Oracle
 		err        error
 	)
 
-	switch {
-	// CDB 架构，程序用户 c## 开头
-	case strings.EqualFold(oraCfg.OraArch, "CDB") && !strings.EqualFold(oraCfg.SchemaName, oraCfg.Username) &&
-		strings.HasPrefix(strings.ToUpper(oraCfg.Username), "C##"):
-		// 启用异构池 heterogeneousPool 即程序连接用户与访问 oracle schema 用户名不一致
-		connString = fmt.Sprintf("oracle://@%s/%s?connectionClass=POOL_CONNECTION_CLASS&heterogeneousPool=1&%s",
-			common.StringsBuilder(oraCfg.Host, ":", strconv.Itoa(oraCfg.Port)),
-			oraCfg.ServiceName, oraCfg.ConnectParams)
-		oraDSN, err = godror.ParseDSN(connString)
-		if err != nil {
-			return nil, err
-		}
-
-		// https://blogs.oracle.com/opal/post/external-and-proxy-connection-syntax-examples-for-node-oracledb
-		// Using 12.2 or later client libraries
-		// 异构连接池
-		oraDSN.Username, oraDSN.Password = common.StringsBuilder(oraCfg.Username, "[", oraCfg.SchemaName, "]"), godror.NewPassword(oraCfg.Password)
-		oraDSN.OnInitStmts = oraCfg.SessionParams
-
-	default:
-		connString = fmt.Sprintf("oracle://@%s/%s?connectionClass=POOL_CONNECTION_CLASS&heterogeneousPool=1&%s",
-			common.StringsBuilder(oraCfg.Host, ":", strconv.Itoa(oraCfg.Port)),
-			oraCfg.ServiceName, oraCfg.ConnectParams)
-		oraDSN, err = godror.ParseDSN(connString)
-		if err != nil {
-			return nil, err
-		}
-
-		oraDSN.Username, oraDSN.Password = oraCfg.Username, godror.NewPassword(oraCfg.Password)
-		oraDSN.OnInitStmts = oraCfg.SessionParams
+	// https://github.com/godror/godror/pull/65
+	connString = fmt.Sprintf("oracle://@%s/%s?connectionClass=POOL_CONNECTION_CLASS00&%s",
+		common.StringsBuilder(oraCfg.Host, ":", strconv.Itoa(oraCfg.Port)),
+		oraCfg.ServiceName, oraCfg.ConnectParams)
+	oraDSN, err = godror.ParseDSN(connString)
+	if err != nil {
+		return nil, err
 	}
+
+	oraDSN.Username, oraDSN.Password = oraCfg.Username, godror.NewPassword(oraCfg.Password)
+
+	if !strings.EqualFold(oraCfg.PDBName, "") {
+		oraCfg.SessionParams = append(oraCfg.SessionParams, fmt.Sprintf(`ALTER SESSION SET CONTAINER = %s`, oraCfg.PDBName))
+	}
+
+	if !strings.EqualFold(oraCfg.Username, oraCfg.SchemaName) && !strings.EqualFold(oraCfg.SchemaName, "") {
+		oraCfg.SessionParams = append(oraCfg.SessionParams, fmt.Sprintf(`ALTER SESSION SET CURRENT_SCHEMA = %s`, oraCfg.SchemaName))
+	}
+
+	// 关闭外部认证
+	oraDSN.ExternalAuth = false
+	oraDSN.OnInitStmts = oraCfg.SessionParams
+
+	// libDir won't have any effect on Linux for linking reasons to do with Oracle's libnnz library that are proving to be intractable.
+	// You must set LD_LIBRARY_PATH or run ldconfig before your process starts.
+	// This is documented in various places for other drivers that use ODPI-C. The parameter works on macOS and Windows.
+	if !strings.EqualFold(oraCfg.LibDir, "") && !strings.EqualFold(oraCfg.NLSLang, "") {
+		switch runtime.GOOS {
+		case "linux":
+			if err = os.Setenv("LD_LIBRARY_PATH", oraCfg.LibDir); err != nil {
+				return nil, fmt.Errorf("set LD_LIBRARY_PATH env failed: %v", err)
+			}
+			if err := os.Setenv("NLS_LANG", oraCfg.NLSLang); err != nil {
+				return nil, fmt.Errorf("set NLS_LANG env failed: %v", err)
+			}
+		case "windows", "darwin":
+			oraDSN.LibDir = oraCfg.LibDir
+		}
+	}
+
+	// godror logger 日志输出
+	// godror.SetLogger(zapr.NewLogger(zap.L()))
+
+	sqlDB := sql.OpenDB(godror.NewConnector(oraDSN))
+	sqlDB.SetMaxIdleConns(0)
+	sqlDB.SetMaxOpenConns(0)
+	sqlDB.SetConnMaxLifetime(0)
+
+	err = sqlDB.Ping()
+	if err != nil {
+		return nil, fmt.Errorf("error on ping oracle database connection:%v", err)
+	}
+	return &Oracle{
+		Ctx:      ctx,
+		OracleDB: sqlDB,
+	}, nil
+}
+
+// Only Used for ALL Mode
+func NewOracleLogminerEngine(ctx context.Context, oraCfg config.OracleConfig) (*Oracle, error) {
+	// https://pkg.go.dev/github.com/godror/godror
+	// https://github.com/godror/godror/blob/db9cd12d89cdc1c60758aa3f36ece36cf5a61814/doc/connection.md
+	// https://godror.github.io/godror/doc/connection.html
+	// You can specify connection timeout seconds with "?connect_timeout=15" - Ping uses this timeout, NOT the Deadline in Context!
+	// For more connection options, see [Godor Connection Handling](https://godror.github.io/godror/doc/connection.html).
+	var (
+		connString string
+		oraDSN     dsn.ConnectionParams
+		err        error
+	)
+
+	// https://github.com/godror/godror/pull/65
+	connString = fmt.Sprintf("oracle://@%s/%s?connectionClass=POOL_CONNECTION_CLASS01&%s",
+		common.StringsBuilder(oraCfg.Host, ":", strconv.Itoa(oraCfg.Port)),
+		oraCfg.ServiceName, oraCfg.ConnectParams)
+	oraDSN, err = godror.ParseDSN(connString)
+	if err != nil {
+		return nil, err
+	}
+
+	oraDSN.Username, oraDSN.Password = oraCfg.Username, godror.NewPassword(oraCfg.Password)
+
+	// 关闭外部认证
+	oraDSN.ExternalAuth = false
+	oraDSN.OnInitStmts = oraCfg.SessionParams
 
 	// libDir won't have any effect on Linux for linking reasons to do with Oracle's libnnz library that are proving to be intractable.
 	// You must set LD_LIBRARY_PATH or run ldconfig before your process starts.
