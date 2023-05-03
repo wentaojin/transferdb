@@ -29,12 +29,12 @@ type MySQL struct {
 }
 
 func NewMySQLDBEngine(ctx context.Context, mysqlCfg config.MySQLConfig) (*MySQL, error) {
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?%s",
-		mysqlCfg.Username, mysqlCfg.Password, mysqlCfg.Host, mysqlCfg.Port, mysqlCfg.SchemaName, mysqlCfg.ConnectParams)
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/?%s",
+		mysqlCfg.Username, mysqlCfg.Password, mysqlCfg.Host, mysqlCfg.Port, mysqlCfg.ConnectParams)
 
 	mysqlDB, err := sql.Open("mysql", dsn)
 	if err != nil {
-		return nil, fmt.Errorf("error on open mysql database connection [%v]: %v", mysqlCfg.SchemaName, err)
+		return nil, fmt.Errorf("error on open mysql database connection: %v", err)
 	}
 
 	mysqlDB.SetMaxIdleConns(common.MySQLMaxIdleConn)
@@ -43,7 +43,7 @@ func NewMySQLDBEngine(ctx context.Context, mysqlCfg config.MySQLConfig) (*MySQL,
 	mysqlDB.SetConnMaxIdleTime(common.MySQLConnMaxIdleTime)
 
 	if err = mysqlDB.Ping(); err != nil {
-		return nil, fmt.Errorf("error on ping mysql database connection [%v]: %v", mysqlCfg.SchemaName, err)
+		return nil, fmt.Errorf("error on ping mysql database connection: %v", err)
 	}
 
 	return &MySQL{

@@ -62,15 +62,15 @@ sqlplus / as sysdba
 ALTER SESSION SET CONTAINER =CDB$ROOT;
     
 -- 创建 CDB 用户
-CREATE USER c##ggadmin IDENTIFIED BY ggadmin;
+CREATE USER c##ggadmin IDENTIFIED BY ggadmin CONTAINER = ALL;
 
-ALTER USER c##ggadmin quota unlimited on users;
+ALTER USER c##ggadmin quota unlimited ON users CONTAINER = ALL;
 
 -- 允许 CDB 用户访问所有 PDBS
 ALTER USER c##ggadmin SET CONTAINER_DATA=ALL CONTAINER =CURRENT;
 
 -- 创建权限角色
-CREATE ROLE c##transferdb_privs;
+CREATE ROLE c##transferdb_privs CONTAINER =ALL;
     
 -- 角色授权
 GRANT DBA TO c##transferdb_privs CONTAINER =ALL;
@@ -78,7 +78,7 @@ GRANT EXECUTE_CATALOG_ROLE TO  c##transferdb_privs CONTAINER =ALL;
 GRANT SELECT ON V_$DATABASE TO c##transferdb_privs CONTAINER =ALL;
 
 -- CDB 用户角色授权
-GRANT c##transferdb_privs TO c##ggadmin;
+GRANT c##transferdb_privs TO c##ggadmin CONTAINER =ALL;
 ```
 #### CDB 架构 - ALL 模式
 ```sql
@@ -135,15 +135,15 @@ select * from dba_log_groups where upper(owner) = upper('marvin');
 select username,count(username) from v$session where username is not null group by username;
 
 -- 创建 CDB 用户
-CREATE USER c##ggadmin IDENTIFIED BY ggadmin;
+CREATE USER c##ggadmin IDENTIFIED BY ggadmin CONTAINER = ALL;
 
-ALTER USER c##ggadmin quota unlimited on users;
+ALTER USER c##ggadmin quota unlimited ON users CONTAINER = ALL;
 
 -- 允许 CDB 用户访问所有 PDBS
 ALTER USER c##ggadmin SET CONTAINER_DATA=ALL CONTAINER =CURRENT;
 
 -- 创建权限角色
-CREATE ROLE c##transferdb_privs;
+CREATE ROLE c##transferdb_privs CONTAINER = ALL;
 
 -- 角色授权
 GRANT DBA TO c##transferdb_privs CONTAINER =ALL;
@@ -156,7 +156,7 @@ GRANT SELECT ON V_$LOG TO c##transferdb_privs CONTAINER=ALL;
 GRANT SELECT ON V_$LOGFILE TO c##transferdb_privs CONTAINER=ALL;
 
 -- CDB 用户角色授权
-GRANT c##transferdb_privs TO c##ggadmin;
+GRANT c##transferdb_privs TO c##ggadmin CONTAINER = ALL;
 ```
 
 
