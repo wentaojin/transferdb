@@ -152,11 +152,10 @@ service-name = "utf8"
 # CDB 架构需指定 ${schema-name} 所在的 pdb container
 # NONCDB 架构无须指定，需置空
 pdb-name = ""
-# oracle instance client dir -> only linux
-lib-dir = "/Users/marvin/storehouse/oracle/instantclient_19_8"
-# client 字符集保持数据库 server 一致 -> only linux
+# oracle instance client dir -> 该配置文件 lib-dir 参数 only windows/macOS 生效, 对于 linux 操作系统，需要手工设置环境变量 LD_LIBRARY_PATH
+# transferdb 运行环境所在 client 字符集 NLS_LANG 参数，windows、macOS 以及 linux 操作系统建议手工设置环境变量 NLS_LANG 保持与数据库 server 一致
 # select userenv('language') from dual;
-nls-lang = "AMERICAN_AMERICA.AL32UTF8"
+lib-dir = "/Users/marvin/storehouse/oracle/instantclient_19_8"
 # 配置 oracle 连接参数
 # 配置 oracle 连接会话 session 变量
 connect-params = "poolMinSessions=50&poolMaxSessions=100&poolWaitTimeout=360s&poolSessionMaxLifetime=2h&poolSessionTimeout=2h&poolIncrement=30&timezone=Local&connect_timeout=15"

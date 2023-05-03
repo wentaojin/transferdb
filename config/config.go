@@ -120,7 +120,6 @@ type OracleConfig struct {
 	ServiceName   string   `toml:"service-name" json:"service-name"`
 	PDBName       string   `toml:"pdb-name" json:"pdb-name"`
 	LibDir        string   `toml:"lib-dir" json:"lib-dir"`
-	NLSLang       string   `toml:"nls-lang" json:"nls-lang"`
 	ConnectParams string   `toml:"connect-params" json:"connect-params"`
 	SessionParams []string `toml:"session-params" json:"session-params"`
 	SchemaName    string   `toml:"schema-name" json:"schema-name"`

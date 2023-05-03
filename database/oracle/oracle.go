@@ -23,7 +23,6 @@ import (
 	"github.com/godror/godror/dsn"
 	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/config"
-	"os"
 	"runtime"
 	"strconv"
 	"strings"
@@ -73,15 +72,8 @@ func NewOracleDBEngine(ctx context.Context, oraCfg config.OracleConfig) (*Oracle
 	// libDir won't have any effect on Linux for linking reasons to do with Oracle's libnnz library that are proving to be intractable.
 	// You must set LD_LIBRARY_PATH or run ldconfig before your process starts.
 	// This is documented in various places for other drivers that use ODPI-C. The parameter works on macOS and Windows.
-	if !strings.EqualFold(oraCfg.LibDir, "") && !strings.EqualFold(oraCfg.NLSLang, "") {
+	if !strings.EqualFold(oraCfg.LibDir, "") {
 		switch runtime.GOOS {
-		case "linux":
-			if err = os.Setenv("LD_LIBRARY_PATH", oraCfg.LibDir); err != nil {
-				return nil, fmt.Errorf("set LD_LIBRARY_PATH env failed: %v", err)
-			}
-			if err := os.Setenv("NLS_LANG", oraCfg.NLSLang); err != nil {
-				return nil, fmt.Errorf("set NLS_LANG env failed: %v", err)
-			}
 		case "windows", "darwin":
 			oraDSN.LibDir = oraCfg.LibDir
 		}
@@ -136,15 +128,8 @@ func NewOracleLogminerEngine(ctx context.Context, oraCfg config.OracleConfig) (*
 	// libDir won't have any effect on Linux for linking reasons to do with Oracle's libnnz library that are proving to be intractable.
 	// You must set LD_LIBRARY_PATH or run ldconfig before your process starts.
 	// This is documented in various places for other drivers that use ODPI-C. The parameter works on macOS and Windows.
-	if !strings.EqualFold(oraCfg.LibDir, "") && !strings.EqualFold(oraCfg.NLSLang, "") {
+	if !strings.EqualFold(oraCfg.LibDir, "") {
 		switch runtime.GOOS {
-		case "linux":
-			if err = os.Setenv("LD_LIBRARY_PATH", oraCfg.LibDir); err != nil {
-				return nil, fmt.Errorf("set LD_LIBRARY_PATH env failed: %v", err)
-			}
-			if err := os.Setenv("NLS_LANG", oraCfg.NLSLang); err != nil {
-				return nil, fmt.Errorf("set NLS_LANG env failed: %v", err)
-			}
 		case "windows", "darwin":
 			oraDSN.LibDir = oraCfg.LibDir
 		}

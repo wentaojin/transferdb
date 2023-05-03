@@ -5,21 +5,9 @@ TransferDB 权限手册
 ```sql
 -- 连接 NONCDB
 sqlplus / as sysdba
-    
--- 创建表空间
-CREATE TABLESPACE ggadmin_tbs
-datafile '/data/oracle/oradata/ORCLCDB/ggadmin_tbs00.dbf'
-size 50M auTOextend on next 5M maxsize unlimited;
-
--- 创建临时表空间
-CREATE TEMPORARY TABLESPACE ggadmin_temp
-tempfile '/data/oracle/oradata/ORCLCDB/ggadmin_temp00.dbf'
-size 50m auTOextend on next 50m maxsize unlimited;
 
 -- 创建用户
-CREATE USER ggadmin IDENTIFIED BY ggadmin
-DEFAULT tablespace ggadmin_tbs
-temporary tablespace ggadmin_temp;
+CREATE USER ggadmin IDENTIFIED BY ggadmin;
 
 ALTER USER ggadmin quota unlimited on users;
 
@@ -40,21 +28,9 @@ GRANT transferdb_privs TO ggadmin;
 ```sql
 -- 连接 NONCDB
 sqlplus / as sysdba
-    
--- 创建表空间
-CREATE TABLESPACE ggadmin_tbs
-datafile '/data/oracle/oradata/ORCLCDB/ggadmin_tbs00.dbf'
-size 50M auTOextend on next 5M maxsize unlimited;
-
--- 创建临时表空间
-CREATE TEMPORARY TABLESPACE ggadmin_temp
-tempfile '/data/oracle/oradata/ORCLCDB/ggadmin_temp00.dbf'
-size 50m auTOextend on next 50m maxsize unlimited;
 
 -- 创建用户
-CREATE USER ggadmin IDENTIFIED BY ggadmin
-DEFAULT tablespace ggadmin_tbs
-temporary tablespace ggadmin_temp;
+CREATE USER ggadmin IDENTIFIED BY ggadmin;
 
 ALTER USER ggadmin quota unlimited on users;
 
@@ -85,20 +61,8 @@ GRANT transferdb_privs TO ggadmin;
 sqlplus / as sysdba
 ALTER SESSION SET CONTAINER =CDB$ROOT;
     
--- 创建表空间
-CREATE TABLESPACE ggadmin_tbs
-datafile '/data/oracle/oradata/ORCLCDB/ggadmin_tbs00.dbf'
-size 50M auTOextend on next 5M maxsize unlimited;
-
--- 创建临时表空间
-CREATE TEMPORARY TABLESPACE ggadmin_temp
-tempfile '/data/oracle/oradata/ORCLCDB/ggadmin_temp00.dbf'
-size 50m auTOextend on next 50m maxsize unlimited;
-
 -- 创建 CDB 用户
-CREATE USER c##ggadmin IDENTIFIED BY ggadmin
-DEFAULT tablespace ggadmin_tbs
-temporary tablespace ggadmin_temp;
+CREATE USER c##ggadmin IDENTIFIED BY ggadmin;
 
 ALTER USER c##ggadmin quota unlimited on users;
 
@@ -169,21 +133,9 @@ select * from dba_log_groups where upper(owner) = upper('marvin');
 
 -- 查看不同用户的连接数
 select username,count(username) from v$session where username is not null group by username;
-    
--- 创建表空间
-CREATE TABLESPACE ggadmin_tbs
-datafile '/data/oracle/oradata/ORCLCDB/ggadmin_tbs00.dbf'
-size 50M auTOextend on next 5M maxsize unlimited;
-
--- 创建临时表空间
-CREATE TEMPORARY TABLESPACE ggadmin_temp
-tempfile '/data/oracle/oradata/ORCLCDB/ggadmin_temp00.dbf'
-size 50m auTOextend on next 50m maxsize unlimited;
 
 -- 创建 CDB 用户
-CREATE USER c##ggadmin IDENTIFIED BY ggadmin
-DEFAULT tablespace ggadmin_tbs
-temporary tablespace ggadmin_temp;
+CREATE USER c##ggadmin IDENTIFIED BY ggadmin;
 
 ALTER USER c##ggadmin quota unlimited on users;
 
