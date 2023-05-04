@@ -99,6 +99,13 @@ func (rw *BuildinGlobalDefaultval) InitO2MTBuildinGlobalDefaultValue(ctx context
 
 	buildinColumDefaultvals = append(buildinColumDefaultvals, &BuildinGlobalDefaultval{
 		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeMySQL,
+		DefaultValueS: common.BuildInOracleColumnDefaultValueNULL,
+		DefaultValueT: common.BuildInOracleO2MColumnDefaultValueMap[common.BuildInOracleColumnDefaultValueNULL],
+	})
+
+	buildinColumDefaultvals = append(buildinColumDefaultvals, &BuildinGlobalDefaultval{
+		DBTypeS:       common.DatabaseTypeOracle,
 		DBTypeT:       common.DatabaseTypeTiDB,
 		DefaultValueS: common.BuildInOracleColumnDefaultValueSysdate,
 		DefaultValueT: common.BuildInOracleO2MColumnDefaultValueMap[common.BuildInOracleColumnDefaultValueSysdate],
@@ -109,6 +116,13 @@ func (rw *BuildinGlobalDefaultval) InitO2MTBuildinGlobalDefaultValue(ctx context
 		DBTypeT:       common.DatabaseTypeTiDB,
 		DefaultValueS: common.BuildInOracleColumnDefaultValueSYSGUID,
 		DefaultValueT: common.BuildInOracleO2MColumnDefaultValueMap[common.BuildInOracleColumnDefaultValueSYSGUID],
+	})
+
+	buildinColumDefaultvals = append(buildinColumDefaultvals, &BuildinGlobalDefaultval{
+		DBTypeS:       common.DatabaseTypeOracle,
+		DBTypeT:       common.DatabaseTypeTiDB,
+		DefaultValueS: common.BuildInOracleColumnDefaultValueNULL,
+		DefaultValueT: common.BuildInOracleO2MColumnDefaultValueMap[common.BuildInOracleColumnDefaultValueNULL],
 	})
 
 	return rw.DB(ctx).Clauses(clause.OnConflict{
@@ -135,5 +149,20 @@ func (rw *BuildinGlobalDefaultval) InitMT2OBuildinGlobalDefaultValue(ctx context
 		DefaultValueS: common.BuildInMySQLColumnDefaultValueCurrentTimestamp,
 		DefaultValueT: common.BuildInMySQLM2OColumnDefaultValueMap[common.BuildInMySQLColumnDefaultValueCurrentTimestamp],
 	})
+
+	buildinColumDefaultvals = append(buildinColumDefaultvals, &BuildinGlobalDefaultval{
+		DBTypeS:       common.DatabaseTypeMySQL,
+		DBTypeT:       common.DatabaseTypeOracle,
+		DefaultValueS: common.BuildInMySQLColumnDefaultValueNULL,
+		DefaultValueT: common.BuildInOracleO2MColumnDefaultValueMap[common.BuildInMySQLColumnDefaultValueNULL],
+	})
+
+	buildinColumDefaultvals = append(buildinColumDefaultvals, &BuildinGlobalDefaultval{
+		DBTypeS:       common.DatabaseTypeTiDB,
+		DBTypeT:       common.DatabaseTypeOracle,
+		DefaultValueS: common.BuildInMySQLColumnDefaultValueNULL,
+		DefaultValueT: common.BuildInOracleO2MColumnDefaultValueMap[common.BuildInMySQLColumnDefaultValueNULL],
+	})
+
 	return rw.DB(ctx).Clauses(clause.Insert{Modifier: "IGNORE"}).Create(buildinColumDefaultvals).Error
 }

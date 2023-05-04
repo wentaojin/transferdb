@@ -22,20 +22,24 @@ package common
 const (
 	BuildInOracleColumnDefaultValueSysdate = "SYSDATE"
 	BuildInOracleColumnDefaultValueSYSGUID = "SYS_GUID()"
+	BuildInOracleColumnDefaultValueNULL    = ""
 )
 
 var BuildInOracleO2MColumnDefaultValueMap = map[string]string{
 	BuildInOracleColumnDefaultValueSysdate: "NOW()",
 	BuildInOracleColumnDefaultValueSYSGUID: "UUID()",
+	BuildInOracleColumnDefaultValueNULL:    "NULL",
 }
 
 // MySQL 默认值规则映射规则 M2O
 const (
 	BuildInMySQLColumnDefaultValueCurrentTimestamp = "CURRENT_TIMESTAMP"
+	BuildInMySQLColumnDefaultValueNULL             = "NULL"
 )
 
 var BuildInMySQLM2OColumnDefaultValueMap = map[string]string{
 	BuildInMySQLColumnDefaultValueCurrentTimestamp: "SYSDATE",
+	BuildInMySQLColumnDefaultValueNULL:             "NULL",
 }
 
 /*

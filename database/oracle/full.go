@@ -38,7 +38,7 @@ func (o *Oracle) GetOracleCurrentSnapshotSCN() (uint64, error) {
 }
 
 func (o *Oracle) StartOracleChunkCreateTask(taskName string) error {
-	querySQL := common.StringsBuilder(`SELECT COUNT(1) COUNT FROM user_parallel_execute_chunks WHERE TASK_NAME='`, taskName, `'`)
+	querySQL := common.StringsBuilder(`SELECT COUNT(1) COUNT FROM dba_parallel_execute_chunks WHERE TASK_NAME='`, taskName, `'`)
 	_, res, err := Query(o.Ctx, o.OracleDB, querySQL)
 	if err != nil {
 		return err
@@ -78,7 +78,7 @@ END;`)
 }
 
 func (o *Oracle) GetOracleTableChunksByRowID(taskName string) ([]map[string]string, error) {
-	querySQL := common.StringsBuilder(`SELECT 'ROWID BETWEEN ''' || start_rowid || ''' AND ''' || end_rowid || '''' CMD FROM user_parallel_execute_chunks WHERE  task_name = '`, taskName, `' ORDER BY chunk_id`)
+	querySQL := common.StringsBuilder(`SELECT 'ROWID BETWEEN ''' || start_rowid || ''' AND ''' || end_rowid || '''' CMD FROM dba_parallel_execute_chunks WHERE  task_name = '`, taskName, `' ORDER BY chunk_id`)
 
 	_, res, err := Query(o.Ctx, o.OracleDB, querySQL)
 	if err != nil {
