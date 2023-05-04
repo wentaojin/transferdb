@@ -40,8 +40,8 @@ type FullSyncMeta struct {
 	TaskStatus    string `gorm:"type:varchar(30);not null;comment:'任务 chunk 状态'" json:"task_status"`
 	CSVFile       string `gorm:"type:varchar(300);comment:'csv 文件名'" json:"csv_file"`
 	IsPartition   string `gorm:"type:varchar(10);comment:'是否是分区表'" json:"is_partition"` // 同步转换统一转换成非分区表，此处只做标志
-	InfoDetail    string `gorm:"type:text;not null;comment:'信息详情'" json:"info_detail"`
-	ErrorDetail   string `gorm:"type:text;not null;comment:'错误详情'" json:"error_detail"`
+	InfoDetail    string `gorm:"type:longtext;not null;comment:'信息详情'" json:"info_detail"`
+	ErrorDetail   string `gorm:"type:longtext;not null;comment:'错误详情'" json:"error_detail"`
 	*BaseModel
 }
 
