@@ -497,7 +497,7 @@ func AssessOracleSchemaObjectTypeCompatible(schemaName []string, oracle *oracle.
 	assessInConvert := 0
 
 	for _, ow := range codeInfo {
-		if val, ok := objAssessCompsMap[common.StringUPPER(ow["TYPE"])]; ok {
+		if val, ok := objAssessCompsMap[common.StringUPPER(ow["OBJECT_TYPE"])]; ok {
 			listData = append(listData, SchemaObjectTypeCompatibles{
 				Schema:        ow["OWNER"],
 				ObjectType:    ow["OBJECT_TYPE"],
@@ -520,7 +520,7 @@ func AssessOracleSchemaObjectTypeCompatible(schemaName []string, oracle *oracle.
 		} else {
 			listData = append(listData, SchemaObjectTypeCompatibles{
 				Schema:        ow["OWNER"],
-				ObjectType:    ow["TYPE"],
+				ObjectType:    ow["OBJECT_TYPE"],
 				ObjectCounts:  ow["COUNTS"],
 				IsCompatible:  common.AssessNoCompatible,
 				IsConvertible: common.AssessYesConvertible,
