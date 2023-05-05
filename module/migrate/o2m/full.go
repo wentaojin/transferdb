@@ -100,6 +100,17 @@ func (r *Migrate) Full() error {
 		if err != nil {
 			return err
 		}
+
+		err = meta.NewChunkErrorDetailModel(r.MetaDB).DeleteChunkErrorDetailBySchemaTaskMode(r.Ctx, &meta.ChunkErrorDetail{
+			DBTypeS:     r.Cfg.DBTypeS,
+			DBTypeT:     r.Cfg.DBTypeT,
+			SchemaNameS: r.Cfg.OracleConfig.SchemaName,
+			TaskMode:    r.Cfg.TaskMode,
+		})
+		if err != nil {
+			return err
+		}
+
 		for _, tableName := range exporters {
 			err = meta.NewWaitSyncMetaModel(r.MetaDB).DeleteWaitSyncMeta(r.Ctx, &meta.WaitSyncMeta{
 				DBTypeS:     r.Cfg.DBTypeS,
@@ -189,7 +200,7 @@ func (r *Migrate) Full() error {
 		return err
 	}
 	if errTotals > 0 {
-		return fmt.Errorf(`full schema [%s] mode [%s] table task failed: meta table [wait_sync_meta] exist failed error, please: firstly check meta table [wait_sync_meta] and [full_sync_meta] log record; secondly if need resume, update meta table [wait_sync_meta] column [task_status] table status RUNNING (Need UPPER); finally rerunning`, strings.ToUpper(r.Cfg.OracleConfig.SchemaName), r.Cfg.TaskMode)
+		return fmt.Errorf(`full schema [%s] mode [%s] table task failed: meta table [wait_sync_meta] exist failed error, please: firstly check meta table [wait_sync_meta] and [full_sync_meta] log record; secondly if need resume, update meta table [wait_sync_meta] column [task_status] table status RUNNING (Need UPPER) and delete meta table [chunk_error_detail] current task all records; finally rerunning`, strings.ToUpper(r.Cfg.OracleConfig.SchemaName), r.Cfg.TaskMode)
 	}
 
 	// 判断并记录待同步表列表
@@ -353,7 +364,7 @@ func (r *Migrate) FullPartSyncTable(fullPartTables []string) error {
 			err := meta.NewWaitSyncMetaModel(r.MetaDB).UpdateWaitSyncMeta(r.Ctx, &meta.WaitSyncMeta{
 				DBTypeS:     r.Cfg.DBTypeS,
 				DBTypeT:     r.Cfg.DBTypeT,
-				SchemaNameS: r.Cfg.OracleConfig.SchemaName,
+				SchemaNameS: common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
 				TableNameS:  common.StringUPPER(t),
 				TaskMode:    r.Cfg.TaskMode,
 			}, map[string]interface{}{
@@ -388,71 +399,49 @@ func (r *Migrate) FullPartSyncTable(fullPartTables []string) error {
 
 			waitFullMetas = append(waitFullMetas, failedFullMetas...)
 
+			columnNameS, err := r.Oracle.GetOracleTableRowsColumn(
+				common.StringsBuilder(`SELECT *`, ` FROM `,
+					common.StringUPPER(r.Cfg.OracleConfig.SchemaName), `.`, common.StringUPPER(t), ` WHERE ROWNUM = 1`))
+			if err != nil {
+				return nil
+			}
+
 			g1 := &errgroup.Group{}
 			g1.SetLimit(r.Cfg.FullConfig.SQLThreads)
 			for _, fullMeta := range waitFullMetas {
 				m := fullMeta
 				g1.Go(func() error {
+					readChannel := make(chan []map[string]string, common.ChannelBufferSize)
+					writeChannel := make(chan string, common.ChannelBufferSize)
+
 					// 数据写入
-					columnFields, batchResults, err := IExtractor(
-						NewTable(r.Ctx, m, r.Oracle, r.Cfg.AppConfig.InsertBatchSize))
+					err := IMigrate(NewRows(r.Ctx, m, r.Oracle, r.Mysql, r.Cfg.FullConfig.ApplyThreads, r.Cfg.AppConfig.InsertBatchSize, true, columnNameS, readChannel, writeChannel))
+
 					if err != nil {
 						// record error, skip error
-						if errf := meta.NewFullSyncMetaModel(r.MetaDB).UpdateFullSyncMetaChunk(r.Ctx, &meta.FullSyncMeta{
+						errf := meta.NewCommonModel(r.MetaDB).UpdateFullSyncMetaChunkAndCreateChunkErrorDetail(r.Ctx, &meta.FullSyncMeta{
 							DBTypeS:      m.DBTypeS,
 							DBTypeT:      m.DBTypeT,
 							SchemaNameS:  m.SchemaNameS,
 							TableNameS:   m.TableNameS,
 							TaskMode:     m.TaskMode,
 							ChunkDetailS: m.ChunkDetailS,
-						}, map[string]interface{}{
-							"TaskStatus":  common.TaskStatusFailed,
-							"InfoDetail":  m.String(),
-							"ErrorDetail": err.Error(),
-						}); errf != nil {
+						}, &meta.ChunkErrorDetail{
+							DBTypeS:      m.DBTypeS,
+							DBTypeT:      m.DBTypeT,
+							SchemaNameS:  m.SchemaNameS,
+							TableNameS:   m.TableNameS,
+							SchemaNameT:  m.SchemaNameT,
+							TableNameT:   m.TableNameT,
+							TaskMode:     m.TaskMode,
+							ChunkDetailS: m.ChunkDetailS,
+							InfoDetail:   m.String(),
+							ErrorSQL:     "",
+							ErrorDetail:  err.Error(),
+						})
+						if errf != nil {
 							return fmt.Errorf("get oracle schema table [%v] IExtractor failed: %v", m.String(), errf)
 						}
-
-						return nil
-					}
-					err = ITranslator(NewChunk(r.Ctx, m, r.Oracle, r.Mysql, r.MetaDB, columnFields, batchResults, r.Cfg.FullConfig.ApplyThreads, r.Cfg.AppConfig.InsertBatchSize, true))
-					if err != nil {
-						// record error, skip error
-						if errf := meta.NewFullSyncMetaModel(r.MetaDB).UpdateFullSyncMetaChunk(r.Ctx, &meta.FullSyncMeta{
-							DBTypeS:      m.DBTypeS,
-							DBTypeT:      m.DBTypeT,
-							SchemaNameS:  m.SchemaNameS,
-							TableNameS:   m.TableNameS,
-							TaskMode:     m.TaskMode,
-							ChunkDetailS: m.ChunkDetailS,
-						}, map[string]interface{}{
-							"TaskStatus":  common.TaskStatusFailed,
-							"InfoDetail":  m.String(),
-							"ErrorDetail": err.Error(),
-						}); errf != nil {
-							return fmt.Errorf("get oracle schema table [%v] ITranslator failed: %v", m.String(), errf)
-						}
-
-						return nil
-					}
-					err = IApplier(NewChunk(r.Ctx, m, r.Oracle, r.Mysql, r.MetaDB, columnFields, batchResults, r.Cfg.FullConfig.ApplyThreads, r.Cfg.AppConfig.InsertBatchSize, true))
-					if err != nil {
-						// record error, skip error
-						if errf := meta.NewFullSyncMetaModel(r.MetaDB).UpdateFullSyncMetaChunk(r.Ctx, &meta.FullSyncMeta{
-							DBTypeS:      m.DBTypeS,
-							DBTypeT:      m.DBTypeT,
-							SchemaNameS:  m.SchemaNameS,
-							TableNameS:   m.TableNameS,
-							TaskMode:     m.TaskMode,
-							ChunkDetailS: m.ChunkDetailS,
-						}, map[string]interface{}{
-							"TaskStatus":  common.TaskStatusFailed,
-							"InfoDetail":  m.String(),
-							"ErrorDetail": err.Error(),
-						}); errf != nil {
-							return fmt.Errorf("get oracle schema table [%v] IApplier failed: %v", m.String(), errf)
-						}
-
 						return nil
 					}
 
@@ -566,7 +555,7 @@ func (r *Migrate) FullPartSyncTable(fullPartTables []string) error {
 }
 
 func (r *Migrate) FullWaitSyncTable(fullWaitTables []string, oracleCollation bool) error {
-	err := r.InitWaitSyncTableRowID(fullWaitTables, oracleCollation)
+	err := r.InitWaitSyncTableChunk(fullWaitTables, oracleCollation)
 	if err != nil {
 		return err
 	}
@@ -578,7 +567,7 @@ func (r *Migrate) FullWaitSyncTable(fullWaitTables []string, oracleCollation boo
 	return nil
 }
 
-func (r *Migrate) InitWaitSyncTableRowID(csvWaitTables []string, oracleCollation bool) error {
+func (r *Migrate) InitWaitSyncTableChunk(csvWaitTables []string, oracleCollation bool) error {
 	startTask := time.Now()
 	// 获取自定义库表名规则
 	tableNameRule, err := r.GetTableNameRule()
@@ -651,7 +640,6 @@ func (r *Migrate) InitWaitSyncTableRowID(csvWaitTables []string, oracleCollation
 					ChunkDetailS:  "1 = 1",
 					TaskMode:      r.Cfg.TaskMode,
 					TaskStatus:    common.TaskStatusWaiting,
-					IsPartition:   isPartition,
 				}, &meta.WaitSyncMeta{
 					DBTypeS:          r.Cfg.DBTypeS,
 					DBTypeT:          r.Cfg.DBTypeT,
@@ -659,6 +647,7 @@ func (r *Migrate) InitWaitSyncTableRowID(csvWaitTables []string, oracleCollation
 					TableNameS:       common.StringUPPER(t),
 					TaskMode:         r.Cfg.TaskMode,
 					GlobalScnS:       globalSCN,
+					TableNumRows:     uint64(tableRowsByStatistics),
 					ChunkTotalNums:   1,
 					ChunkSuccessNums: 0,
 					ChunkFailedNums:  0,
@@ -669,11 +658,6 @@ func (r *Migrate) InitWaitSyncTableRowID(csvWaitTables []string, oracleCollation
 				}
 				return nil
 			}
-
-			zap.L().Info("get oracle table statistics rows",
-				zap.String("schema", common.StringUPPER(r.Cfg.OracleConfig.SchemaName)),
-				zap.String("table", common.StringUPPER(t)),
-				zap.Int("rows", tableRowsByStatistics))
 
 			taskName := common.StringsBuilder(common.StringUPPER(r.Cfg.OracleConfig.SchemaName), `_`, common.StringUPPER(t), `_`, `TASK`, strconv.Itoa(workerID))
 
@@ -692,13 +676,6 @@ func (r *Migrate) InitWaitSyncTableRowID(csvWaitTables []string, oracleCollation
 
 			// 判断数据是否存在
 			if len(chunkRes) == 0 {
-				zap.L().Warn("get oracle table rowids rows",
-					zap.String("schema", common.StringUPPER(r.Cfg.OracleConfig.SchemaName)),
-					zap.String("table", common.StringUPPER(t)),
-					zap.String("column", sourceColumnInfo),
-					zap.String("where", "1 = 1"),
-					zap.Int("rowids rows", len(chunkRes)))
-
 				err = meta.NewCommonModel(r.MetaDB).CreateFullSyncMetaAndUpdateWaitSyncMeta(r.Ctx, &meta.FullSyncMeta{
 					DBTypeS:       r.Cfg.DBTypeS,
 					DBTypeT:       r.Cfg.DBTypeT,
@@ -711,13 +688,13 @@ func (r *Migrate) InitWaitSyncTableRowID(csvWaitTables []string, oracleCollation
 					ChunkDetailS:  "1 = 1",
 					TaskMode:      r.Cfg.TaskMode,
 					TaskStatus:    common.TaskStatusWaiting,
-					IsPartition:   isPartition,
 				}, &meta.WaitSyncMeta{
 					DBTypeS:          r.Cfg.DBTypeS,
 					DBTypeT:          r.Cfg.DBTypeT,
 					SchemaNameS:      common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
 					TableNameS:       common.StringUPPER(t),
 					TaskMode:         r.Cfg.TaskMode,
+					TableNumRows:     uint64(tableRowsByStatistics),
 					GlobalScnS:       globalSCN,
 					ChunkTotalNums:   1,
 					ChunkSuccessNums: 0,
@@ -745,7 +722,6 @@ func (r *Migrate) InitWaitSyncTableRowID(csvWaitTables []string, oracleCollation
 					ChunkDetailS:  res["CMD"],
 					TaskMode:      r.Cfg.TaskMode,
 					TaskStatus:    common.TaskStatusWaiting,
-					IsPartition:   isPartition,
 				})
 			}
 
@@ -763,6 +739,7 @@ func (r *Migrate) InitWaitSyncTableRowID(csvWaitTables []string, oracleCollation
 				TableNameS:  common.StringUPPER(t),
 				TaskMode:    r.Cfg.TaskMode,
 			}, map[string]interface{}{
+				"TableNumRows":     uint64(tableRowsByStatistics),
 				"GlobalScnS":       globalSCN,
 				"ChunkTotalNums":   len(chunkRes),
 				"ChunkSuccessNums": 0,
@@ -778,7 +755,7 @@ func (r *Migrate) InitWaitSyncTableRowID(csvWaitTables []string, oracleCollation
 			}
 
 			endTime := time.Now()
-			zap.L().Info("source table init wait_sync_meta and full_sync_meta finished",
+			zap.L().Info("init source single table wait_sync_meta and full_sync_meta finished",
 				zap.String("schema", r.Cfg.OracleConfig.SchemaName),
 				zap.String("table", t),
 				zap.String("cost", endTime.Sub(startTime).String()))
@@ -790,7 +767,7 @@ func (r *Migrate) InitWaitSyncTableRowID(csvWaitTables []string, oracleCollation
 		return err
 	}
 
-	zap.L().Info("source schema init wait_sync_meta and full_sync_meta finished",
+	zap.L().Info("init source schema table wait_sync_meta and full_sync_meta finished",
 		zap.String("schema", r.Cfg.OracleConfig.SchemaName),
 		zap.String("cost", time.Now().Sub(startTask).String()))
 	return nil

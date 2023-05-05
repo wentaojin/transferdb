@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/wentaojin/transferdb/common"
-	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
@@ -39,9 +38,6 @@ type FullSyncMeta struct {
 	TaskMode      string `gorm:"type:varchar(30);not null;index:idx_dbtype_st_map,unique;index:idx_schema_mode;comment:'任务模式'" json:"task_mode"`
 	TaskStatus    string `gorm:"type:varchar(30);not null;comment:'任务 chunk 状态'" json:"task_status"`
 	CSVFile       string `gorm:"type:varchar(300);comment:'csv 文件名'" json:"csv_file"`
-	IsPartition   string `gorm:"type:varchar(10);comment:'是否是分区表'" json:"is_partition"` // 同步转换统一转换成非分区表，此处只做标志
-	InfoDetail    string `gorm:"type:longtext;not null;comment:'信息详情'" json:"info_detail"`
-	ErrorDetail   string `gorm:"type:longtext;not null;comment:'错误详情'" json:"error_detail"`
 	*BaseModel
 }
 
@@ -89,7 +85,7 @@ func (rw *FullSyncMeta) DetailFullSyncMeta(ctx context.Context, detailS *FullSyn
 	return dsMetas, nil
 }
 
-func (rw *FullSyncMeta) DeleteFullSyncMetaBySchemaTableRowid(ctx context.Context, deleteS *FullSyncMeta) error {
+func (rw *FullSyncMeta) DeleteFullSyncMetaBySchemaTableChunk(ctx context.Context, deleteS *FullSyncMeta) error {
 	table, err := rw.ParseSchemaTable()
 	if err != nil {
 		return err
@@ -104,9 +100,6 @@ func (rw *FullSyncMeta) DeleteFullSyncMetaBySchemaTableRowid(ctx context.Context
 	if err != nil {
 		return fmt.Errorf("delete table [%s] reocrd failed: %v", table, err)
 	}
-	zap.L().Info("delete table record",
-		zap.String("table", deleteS.String()),
-		zap.String("status", "success"))
 	return nil
 }
 

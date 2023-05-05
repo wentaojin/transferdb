@@ -608,7 +608,7 @@ func (r *O2M) csvPartSyncTable(csvPartTables []string) error {
 }
 
 func (r *O2M) csvWaitSyncTable(csvWaitTables []string, tableNameRule map[string]string, oracleCollation bool) error {
-	err := r.initWaitSyncTableRowID(csvWaitTables, tableNameRule, oracleCollation)
+	err := r.initWaitSyncTableChunk(csvWaitTables, tableNameRule, oracleCollation)
 	if err != nil {
 		return err
 	}
@@ -619,7 +619,7 @@ func (r *O2M) csvWaitSyncTable(csvWaitTables []string, tableNameRule map[string]
 	return nil
 }
 
-func (r *O2M) initWaitSyncTableRowID(csvWaitTables []string, tableNameRule map[string]string, oracleCollation bool) error {
+func (r *O2M) initWaitSyncTableChunk(csvWaitTables []string, tableNameRule map[string]string, oracleCollation bool) error {
 	startTask := time.Now()
 	// 全量同步前，获取 SCN 以及初始化元数据表
 	globalSCN, err := r.Oracle.GetOracleCurrentSnapshotSCN()
@@ -691,7 +691,6 @@ func (r *O2M) initWaitSyncTableRowID(csvWaitTables []string, tableNameRule map[s
 					ChunkDetailS:  "1 = 1",
 					TaskMode:      r.Cfg.TaskMode,
 					TaskStatus:    common.TaskStatusWaiting,
-					IsPartition:   isPartition,
 					CSVFile: filepath.Join(r.Cfg.CSVConfig.OutputDir,
 						common.StringUPPER(r.Cfg.OracleConfig.SchemaName), common.StringUPPER(t),
 						common.StringsBuilder(common.StringUPPER(r.Cfg.MySQLConfig.SchemaName),
@@ -703,6 +702,7 @@ func (r *O2M) initWaitSyncTableRowID(csvWaitTables []string, tableNameRule map[s
 					TableNameS:       common.StringUPPER(t),
 					TaskMode:         r.Cfg.TaskMode,
 					GlobalScnS:       globalSCN,
+					TableNumRows:     uint64(tableRowsByStatistics),
 					ChunkTotalNums:   1,
 					ChunkSuccessNums: 0,
 					ChunkFailedNums:  0,
@@ -713,11 +713,6 @@ func (r *O2M) initWaitSyncTableRowID(csvWaitTables []string, tableNameRule map[s
 				}
 				return nil
 			}
-
-			zap.L().Info("get oracle table statistics rows",
-				zap.String("schema", common.StringUPPER(r.Cfg.OracleConfig.SchemaName)),
-				zap.String("table", common.StringUPPER(t)),
-				zap.Int("rows", tableRowsByStatistics))
 
 			taskName := common.StringsBuilder(common.StringUPPER(r.Cfg.OracleConfig.SchemaName), `_`, common.StringUPPER(t), `_`, `TASK`, strconv.Itoa(workerID))
 
@@ -736,13 +731,6 @@ func (r *O2M) initWaitSyncTableRowID(csvWaitTables []string, tableNameRule map[s
 
 			// 判断数据是否存在
 			if len(chunkRes) == 0 {
-				zap.L().Warn("get oracle table rowids rows",
-					zap.String("schema", common.StringUPPER(r.Cfg.OracleConfig.SchemaName)),
-					zap.String("table", common.StringUPPER(t)),
-					zap.String("column", sourceColumnInfo),
-					zap.String("where", "1 = 1"),
-					zap.Int("rowids rows", len(chunkRes)))
-
 				err = meta.NewCommonModel(r.MetaDB).CreateFullSyncMetaAndUpdateWaitSyncMeta(r.Ctx, &meta.FullSyncMeta{
 					DBTypeS:       r.Cfg.DBTypeS,
 					DBTypeT:       r.Cfg.DBTypeT,
@@ -755,7 +743,6 @@ func (r *O2M) initWaitSyncTableRowID(csvWaitTables []string, tableNameRule map[s
 					ChunkDetailS:  "1 = 1",
 					TaskMode:      r.Cfg.TaskMode,
 					TaskStatus:    common.TaskStatusWaiting,
-					IsPartition:   isPartition,
 					CSVFile: filepath.Join(r.Cfg.CSVConfig.OutputDir,
 						common.StringUPPER(r.Cfg.OracleConfig.SchemaName), common.StringUPPER(t),
 						common.StringsBuilder(common.StringUPPER(r.Cfg.MySQLConfig.SchemaName),
@@ -767,6 +754,7 @@ func (r *O2M) initWaitSyncTableRowID(csvWaitTables []string, tableNameRule map[s
 					TableNameS:       common.StringUPPER(t),
 					TaskMode:         r.Cfg.TaskMode,
 					GlobalScnS:       globalSCN,
+					TableNumRows:     uint64(tableRowsByStatistics),
 					ChunkTotalNums:   1,
 					ChunkSuccessNums: 0,
 					ChunkFailedNums:  0,
@@ -799,7 +787,6 @@ func (r *O2M) initWaitSyncTableRowID(csvWaitTables []string, tableNameRule map[s
 					ChunkDetailS:  res["CMD"],
 					TaskMode:      r.Cfg.TaskMode,
 					TaskStatus:    common.TaskStatusWaiting,
-					IsPartition:   isPartition,
 					CSVFile:       csvFile,
 				})
 			}
@@ -813,6 +800,7 @@ func (r *O2M) initWaitSyncTableRowID(csvWaitTables []string, tableNameRule map[s
 					TableNameS:       common.StringUPPER(t),
 					TaskMode:         r.Cfg.TaskMode,
 					GlobalScnS:       globalSCN,
+					TableNumRows:     uint64(tableRowsByStatistics),
 					ChunkTotalNums:   int64(len(chunkRes)),
 					ChunkSuccessNums: 0,
 					ChunkFailedNums:  0,
@@ -827,7 +815,7 @@ func (r *O2M) initWaitSyncTableRowID(csvWaitTables []string, tableNameRule map[s
 			}
 
 			endTime := time.Now()
-			zap.L().Info("source table init wait_sync_meta and full_sync_meta finished",
+			zap.L().Info("init source single table wait_sync_meta and full_sync_meta finished",
 				zap.String("schema", r.Cfg.OracleConfig.SchemaName),
 				zap.String("table", t),
 				zap.String("cost", endTime.Sub(startTime).String()))
@@ -839,7 +827,7 @@ func (r *O2M) initWaitSyncTableRowID(csvWaitTables []string, tableNameRule map[s
 		return err
 	}
 
-	zap.L().Info("source schema init wait_sync_meta and full_sync_meta finished",
+	zap.L().Info("init source schema table wait_sync_meta and full_sync_meta finished",
 		zap.String("schema", r.Cfg.OracleConfig.SchemaName),
 		zap.String("cost", time.Now().Sub(startTask).String()))
 	return nil

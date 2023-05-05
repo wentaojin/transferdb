@@ -19,7 +19,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/shopspring/decimal"
-	"github.com/thinkeridea/go-extend/exstrings"
 	"github.com/wentaojin/transferdb/common"
 )
 
@@ -103,23 +102,49 @@ END;`)
 }
 
 // 获取表字段名以及行数据 -> 用于 FULL/ALL
-func (o *Oracle) GetOracleTableRowsData(querySQL string, insertBatchSize int) ([]string, []string, error) {
+func (o *Oracle) GetOracleTableRowsColumn(querySQL string) ([]string, error) {
 	var (
-		err          error
-		rowsResult   []string
-		rowsTMP      []string
-		batchResults []string
-		cols         []string
+		err     error
+		columns []string
 	)
+
 	rows, err := o.OracleDB.QueryContext(o.Ctx, querySQL)
 	if err != nil {
-		return []string{}, batchResults, err
+		return columns, err
 	}
 	defer rows.Close()
 
 	tmpCols, err := rows.Columns()
 	if err != nil {
-		return cols, batchResults, err
+		return columns, err
+	}
+
+	// 字段名关键字反引号处理
+	for _, col := range tmpCols {
+		columns = append(columns, common.StringsBuilder("`", col, "`"))
+	}
+	return columns, nil
+}
+
+func (o *Oracle) GetOracleTableRowsData(querySQL string, insertBatchSize int, dataChan chan []map[string]string) error {
+	var (
+		err  error
+		cols []string
+	)
+
+	// 临时数据存放
+	var rowsTMP []map[string]string
+	rowsMap := make(map[string]string)
+
+	rows, err := o.OracleDB.QueryContext(o.Ctx, querySQL)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	tmpCols, err := rows.Columns()
+	if err != nil {
+		return err
 	}
 
 	// 字段名关键字反引号处理
@@ -135,7 +160,7 @@ func (o *Oracle) GetOracleTableRowsData(querySQL string, insertBatchSize int) ([
 	)
 	colTypes, err := rows.ColumnTypes()
 	if err != nil {
-		return cols, batchResults, err
+		return err
 	}
 
 	for _, ct := range colTypes {
@@ -157,7 +182,7 @@ func (o *Oracle) GetOracleTableRowsData(querySQL string, insertBatchSize int) ([
 	for rows.Next() {
 		err = rows.Scan(dest...)
 		if err != nil {
-			return cols, batchResults, err
+			return err
 		}
 
 		for i, raw := range rawResult {
@@ -167,75 +192,82 @@ func (o *Oracle) GetOracleTableRowsData(querySQL string, insertBatchSize int) ([
 			// 按照 Oracle 特性来，转换同步统一转换成 NULL 即可，但需要注意业务逻辑中空字符串得写入，需要变更
 			// Oracle/Mysql 对于 'NULL' 统一字符 NULL 处理，查询出来转成 NULL,所以需要判断处理
 			if raw == nil {
-				rowsResult = append(rowsResult, fmt.Sprintf("%v", `NULL`))
+				rowsMap[cols[i]] = fmt.Sprintf("%v", `NULL`)
 			} else if string(raw) == "" {
-				rowsResult = append(rowsResult, fmt.Sprintf("%v", `NULL`))
+				rowsMap[cols[i]] = fmt.Sprintf("%v", `NULL`)
 			} else {
 				switch columnTypes[i] {
 				case "int64":
 					r, err := common.StrconvIntBitSize(string(raw), 64)
 					if err != nil {
-						return cols, batchResults, fmt.Errorf("column [%s] strconv failed, %v", columnNames[i], err)
+						return fmt.Errorf("column [%s] strconv failed, %v", columnNames[i], err)
 					}
-					rowsResult = append(rowsResult, fmt.Sprintf("%v", r))
+					rowsMap[cols[i]] = fmt.Sprintf("%v", r)
 				case "uint64":
 					r, err := common.StrconvUintBitSize(string(raw), 64)
 					if err != nil {
-						return cols, batchResults, fmt.Errorf("column [%s] strconv failed, %v", columnNames[i], err)
+						return fmt.Errorf("column [%s] strconv failed, %v", columnNames[i], err)
 					}
-					rowsResult = append(rowsResult, fmt.Sprintf("%v", r))
+					rowsMap[cols[i]] = fmt.Sprintf("%v", r)
 				case "float32":
 					r, err := common.StrconvFloatBitSize(string(raw), 32)
 					if err != nil {
-						return cols, batchResults, fmt.Errorf("column [%s] strconv failed, %v", columnNames[i], err)
+						return fmt.Errorf("column [%s] strconv failed, %v", columnNames[i], err)
 					}
-					rowsResult = append(rowsResult, fmt.Sprintf("%v", r))
+					rowsMap[cols[i]] = fmt.Sprintf("%v", r)
 				case "float64":
 					r, err := common.StrconvFloatBitSize(string(raw), 64)
 					if err != nil {
-						return cols, batchResults, fmt.Errorf("column [%s] strconv failed, %v", columnNames[i], err)
+						return fmt.Errorf("column [%s] strconv failed, %v", columnNames[i], err)
 					}
-					rowsResult = append(rowsResult, fmt.Sprintf("%v", r))
+					rowsMap[cols[i]] = fmt.Sprintf("%v", r)
 				case "rune":
 					r, err := common.StrconvRune(string(raw))
 					if err != nil {
-						return cols, batchResults, fmt.Errorf("column [%s] strconv failed, %v", columnNames[i], err)
+						return fmt.Errorf("column [%s] strconv failed, %v", columnNames[i], err)
 					}
-					rowsResult = append(rowsResult, fmt.Sprintf("%v", r))
+					rowsMap[cols[i]] = fmt.Sprintf("%v", r)
 				case "godror.Number":
 					r, err := decimal.NewFromString(string(raw))
 					if err != nil {
-						return cols, rowsResult, fmt.Errorf("column [%s] NewFromString strconv failed, %v", columnNames[i], err)
+						return fmt.Errorf("column [%s] NewFromString strconv failed, %v", columnNames[i], err)
 					}
-					rowsResult = append(rowsResult, fmt.Sprintf("%v", r.String()))
+					rowsMap[cols[i]] = fmt.Sprintf("%v", r)
 				default:
 					// 特殊字符
-					rowsResult = append(rowsResult, fmt.Sprintf("'%v'", common.SpecialLettersUsingMySQL(raw)))
+					rowsMap[cols[i]] = fmt.Sprintf("'%v'", common.SpecialLettersUsingMySQL(raw))
 				}
 			}
 		}
 
-		rowsTMP = append(rowsTMP, common.StringsBuilder("(", exstrings.Join(rowsResult, ","), ")"))
+		// 临时数组
+		rowsTMP = append(rowsTMP, rowsMap)
 
-		// 数组清空
-		rowsResult = rowsResult[0:0]
+		// MAP 清空
+		rowsMap = make(map[string]string)
 
 		// batch 批次
 		if len(rowsTMP) == insertBatchSize {
-			batchResults = append(batchResults, exstrings.Join(rowsTMP, ","))
+
+			dataChan <- rowsTMP
+
 			// 数组清空
 			rowsTMP = rowsTMP[0:0]
 		}
 	}
 
 	if err = rows.Err(); err != nil {
-		return cols, batchResults, err
+		return err
 	}
 
 	// 非 batch 批次
 	if len(rowsTMP) > 0 {
-		batchResults = append(batchResults, exstrings.Join(rowsTMP, ","))
+
+		dataChan <- rowsTMP
 	}
 
-	return cols, batchResults, nil
+	// 通道关闭
+	close(dataChan)
+
+	return nil
 }

@@ -140,6 +140,29 @@ func (rw *Transaction) CreateDataCompareMetaAndUpdateWaitSyncMeta(ctx context.Co
 	return nil
 }
 
+func (rw *Transaction) UpdateFullSyncMetaChunkAndCreateChunkErrorDetail(ctx context.Context, detailS *FullSyncMeta, chunkErrorS *ChunkErrorDetail) error {
+	txn := rw.DB(ctx).Begin()
+	err := txn.Create(chunkErrorS).Error
+	if err != nil {
+		return fmt.Errorf("create table [chunk_error_detail] record by transaction failed: %v", err)
+	}
+
+	err = txn.Model(&FullSyncMeta{}).Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND table_name_s = ? AND task_mode = ? AND chunk_detail_s = ?", common.StringUPPER(detailS.DBTypeS),
+		common.StringUPPER(detailS.DBTypeT),
+		common.StringUPPER(detailS.SchemaNameS),
+		common.StringUPPER(detailS.TableNameS),
+		common.StringUPPER(detailS.TaskMode),
+		detailS.ChunkDetailS).Updates(map[string]interface{}{
+		"TaskStatus": common.TaskStatusFailed,
+	}).Error
+	if err != nil {
+		return fmt.Errorf("update table [full_sync_meta] record by transaction failed: %v", err)
+	}
+	txn.Commit()
+
+	return nil
+}
+
 func (rw *Transaction) BatchCreateDataCompareMetaAndUpdateWaitSyncMeta(ctx context.Context, dataMeta []DataCompareMeta, batchSize int, waitSyncMeta *WaitSyncMeta) error {
 	for _, data := range ArrayStructGroupsOf(dataMeta, int64(batchSize)) {
 		err := rw.DB(ctx).Create(data).Error

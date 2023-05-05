@@ -19,24 +19,17 @@ import (
 	"github.com/wentaojin/transferdb/module/migrate"
 )
 
-func IExtractor(e migrate.Extractor) ([]string, []string, error) {
-	columnFields, batchResults, err := e.GetTableRows()
-	if err != nil {
-		return columnFields, batchResults, err
-	}
-	return columnFields, batchResults, nil
-}
-
-func ITranslator(t migrate.Translator) error {
-	err := t.TranslateTableRows()
+func IMigrate(ex migrate.Migrator) error {
+	err := ex.ReadData()
 	if err != nil {
 		return err
 	}
-	return nil
-}
+	err = ex.ProcessData()
+	if err != nil {
+		return err
+	}
 
-func IApplier(r migrate.Applier) error {
-	err := r.ApplyTableRows()
+	err = ex.ApplyData()
 	if err != nil {
 		return err
 	}

@@ -15,16 +15,10 @@ limitations under the License.
 */
 package migrate
 
-type Extractor interface {
-	GetTableRows() ([]string, []string, error)
-}
-
-type Translator interface {
-	TranslateTableRows() error
-}
-
-type Applier interface {
-	ApplyTableRows() error
+type Migrator interface {
+	ReadData() error
+	ProcessData() error
+	ApplyData() error
 }
 
 type Fuller interface {
