@@ -19,14 +19,14 @@ import (
 	"context"
 	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/config"
-	"github.com/wentaojin/transferdb/module/csv"
-	"github.com/wentaojin/transferdb/module/csv/o2m"
+	"github.com/wentaojin/transferdb/module/migrate"
+	"github.com/wentaojin/transferdb/module/migrate/csv/o2m"
 	"strings"
 )
 
 func ICSVer(ctx context.Context, cfg *config.Config) error {
 	var (
-		c   csv.CSVer
+		c   migrate.CSVer
 		err error
 	)
 	switch {

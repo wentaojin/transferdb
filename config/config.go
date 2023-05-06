@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"github.com/wentaojin/transferdb/common"
 	"os"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 )
@@ -209,13 +210,44 @@ func (c *Config) configFromFile(file string) error {
 	return nil
 }
 
-func (c *Config) AdjustConfig() {
+func (c *Config) AdjustConfig() error {
 	c.DBTypeS = common.StringUPPER(c.DBTypeS)
 	c.DBTypeT = common.StringUPPER(c.DBTypeT)
 	c.TaskMode = common.StringUPPER(c.TaskMode)
 	c.OracleConfig.SchemaName = common.StringUPPER(c.OracleConfig.SchemaName)
 	c.OracleConfig.PDBName = common.StringUPPER(c.OracleConfig.PDBName)
 	c.MySQLConfig.SchemaName = common.StringUPPER(c.MySQLConfig.SchemaName)
+
+	err := c.adjustCSVConfig()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *Config) adjustCSVConfig() error {
+	if c.CSVConfig.Separator == "" {
+		c.CSVConfig.Separator = ","
+	}
+	if c.CSVConfig.Terminator == "" {
+		c.CSVConfig.Terminator = "\r\n"
+	}
+	isSupport := false
+	if c.CSVConfig.Charset != "" {
+		switch strings.ToUpper(c.CSVConfig.Charset) {
+		case common.UTF8CharacterSetCSV:
+			isSupport = true
+		case common.GBKCharacterSetCSV:
+			isSupport = true
+		default:
+			isSupport = false
+		}
+	}
+	if !isSupport {
+		return fmt.Errorf("target db character is not support: [%s]", c.CSVConfig.Charset)
+	}
+	return nil
 }
 
 func (c *Config) String() string {

@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"github.com/shopspring/decimal"
 	"github.com/wentaojin/transferdb/common"
+	"github.com/wentaojin/transferdb/config"
+	"strings"
 )
 
 func (o *Oracle) GetOracleCurrentSnapshotSCN() (uint64, error) {
@@ -97,6 +99,160 @@ END;`)
 	if err != nil {
 		return fmt.Errorf("oracle DBMS_PARALLEL_EXECUTE drop task failed: %v, sql: %v", err, clearSQL)
 	}
+
+	return nil
+}
+
+// 获取表字段以及行数据 -> 用于 CSV
+func (o *Oracle) GetOracleTableRowsColumnCSV(querySQL string) ([]string, error) {
+
+	rows, err := o.OracleDB.QueryContext(o.Ctx, querySQL)
+	if err != nil {
+		return []string{}, err
+	}
+	defer rows.Close()
+
+	columns, err := rows.Columns()
+	if err != nil {
+		return []string{}, err
+	}
+
+	return columns, nil
+}
+
+func (o *Oracle) GetOracleTableRowsDataCSV(querySQL string, csvCfg config.CSVConfig, dataChan chan map[string]string) error {
+	var (
+		err         error
+		columnNames []string
+		columnTypes []string
+	)
+	// 临时数据存期
+	rowsMap := make(map[string]string)
+
+	rows, err := o.OracleDB.QueryContext(o.Ctx, querySQL)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	colTypes, err := rows.ColumnTypes()
+	if err != nil {
+		return fmt.Errorf("failed to csv get rows columnTypes: %v", err)
+	}
+
+	for _, ct := range colTypes {
+		columnNames = append(columnNames, ct.Name())
+		// 数据库字段类型 DatabaseTypeName() 映射 go 类型 ScanType()
+		columnTypes = append(columnTypes, ct.ScanType().String())
+	}
+
+	// 数据 SCAN
+	columnNums := len(columnNames)
+	rawResult := make([][]byte, columnNums)
+	dest := make([]interface{}, columnNums)
+	for i := range rawResult {
+		dest[i] = &rawResult[i]
+	}
+
+	// 表行数读取
+	for rows.Next() {
+		err = rows.Scan(dest...)
+		if err != nil {
+			return err
+		}
+
+		for i, raw := range rawResult {
+			// 注意 Oracle/Mysql NULL VS 空字符串区别
+			// Oracle 空字符串与 NULL 归于一类，统一 NULL 处理 （is null 可以查询 NULL 以及空字符串值，空字符串查询无法查询到空字符串值）
+			// Mysql 空字符串与 NULL 非一类，NULL 是 NULL，空字符串是空字符串（is null 只查询 NULL 值，空字符串查询只查询到空字符串值）
+			// 按照 Oracle 特性来，转换同步统一转换成 NULL 即可，但需要注意业务逻辑中空字符串得写入，需要变更
+			// Oracle/Mysql 对于 'NULL' 统一字符 NULL 处理，查询出来转成 NULL,所以需要判断处理
+			if raw == nil {
+				rowsMap[columnNames[i]] = fmt.Sprintf("%v", `NULL`)
+			} else if string(raw) == "" {
+				rowsMap[columnNames[i]] = fmt.Sprintf("%v", `NULL`)
+			} else {
+				switch columnTypes[i] {
+				case "int64":
+					r, err := common.StrconvIntBitSize(string(raw), 64)
+					if err != nil {
+						return fmt.Errorf("column [%s] strconv failed, %v", columnNames[i], err)
+					}
+					rowsMap[columnNames[i]] = fmt.Sprintf("%v", r)
+				case "uint64":
+					r, err := common.StrconvUintBitSize(string(raw), 64)
+					if err != nil {
+						return fmt.Errorf("column [%s] strconv failed, %v", columnNames[i], err)
+					}
+					rowsMap[columnNames[i]] = fmt.Sprintf("%v", r)
+				case "float32":
+					r, err := common.StrconvFloatBitSize(string(raw), 32)
+					if err != nil {
+						return fmt.Errorf("column [%s] strconv failed, %v", columnNames[i], err)
+					}
+					rowsMap[columnNames[i]] = fmt.Sprintf("%v", r)
+				case "float64":
+					r, err := common.StrconvFloatBitSize(string(raw), 64)
+					if err != nil {
+						return fmt.Errorf("column [%s] strconv failed, %v", columnNames[i], err)
+					}
+					rowsMap[columnNames[i]] = fmt.Sprintf("%v", r)
+				case "rune":
+					r, err := common.StrconvRune(string(raw))
+					if err != nil {
+						return fmt.Errorf("column [%s] strconv failed, %v", columnNames[i], err)
+					}
+					rowsMap[columnNames[i]] = fmt.Sprintf("%v", r)
+				case "godror.Number":
+					r, err := decimal.NewFromString(string(raw))
+					if err != nil {
+						return fmt.Errorf("column [%s] strconv failed, %v", columnNames[i], err)
+					}
+					rowsMap[columnNames[i]] = fmt.Sprintf("%v", r)
+				default:
+					var (
+						by []byte
+						bs string
+					)
+					// 处理字符集、特殊字符转义、字符串引用定界符
+					if strings.ToUpper(csvCfg.Charset) == common.GBKCharacterSetCSV {
+						gbkBytes, err := common.Utf8ToGbk(raw)
+						if err != nil {
+							return err
+						}
+						by = gbkBytes
+					} else {
+						by = raw
+					}
+
+					if csvCfg.EscapeBackslash {
+						bs = common.SpecialLettersUsingMySQL(by)
+					} else {
+						bs = string(by)
+					}
+
+					if csvCfg.Delimiter == "" {
+						rowsMap[columnNames[i]] = fmt.Sprintf("%v", bs)
+					} else {
+						rowsMap[columnNames[i]] = fmt.Sprintf("%v", common.StringsBuilder(csvCfg.Delimiter, bs, csvCfg.Delimiter))
+					}
+				}
+			}
+		}
+
+		// 数据写入
+		dataChan <- rowsMap
+
+		// MAP 清空
+		rowsMap = make(map[string]string)
+	}
+
+	if err = rows.Err(); err != nil {
+		return err
+	}
+
+	// 通道关闭
+	close(dataChan)
 
 	return nil
 }

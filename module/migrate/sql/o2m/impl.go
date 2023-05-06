@@ -13,8 +13,25 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package csv
+package o2m
 
-type CSVer interface {
-	CSV() error
+import (
+	"github.com/wentaojin/transferdb/module/migrate"
+)
+
+func IMigrate(ex migrate.Migrator) error {
+	err := ex.ReadData()
+	if err != nil {
+		return err
+	}
+	err = ex.ProcessData()
+	if err != nil {
+		return err
+	}
+
+	err = ex.ApplyData()
+	if err != nil {
+		return err
+	}
+	return nil
 }

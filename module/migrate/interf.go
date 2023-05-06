@@ -28,3 +28,7 @@ type Fuller interface {
 type Increr interface {
 	Incr() error
 }
+
+type CSVer interface {
+	CSV() error
+}
