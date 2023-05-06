@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"github.com/wentaojin/transferdb/common"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type ChunkErrorDetail struct {
@@ -75,7 +76,17 @@ func (rw *ChunkErrorDetail) CreateChunkErrorDetail(ctx context.Context, createS 
 	if err != nil {
 		return err
 	}
-	if err = rw.DB(ctx).Create(createS).Error; err != nil {
+	if err = rw.DB(ctx).Clauses(clause.OnConflict{
+		Columns: []clause.Column{
+			{Name: "db_type_s"},
+			{Name: "db_type_t"},
+			{Name: "schema_name_s"},
+			{Name: "table_name_s"},
+			{Name: "task_mode"},
+			{Name: "chunk_detail_s"},
+			{Name: "error_sql"}},
+		DoUpdates: clause.AssignmentColumns([]string{"schema_name_t", "table_name_t", "info_detail", "error_detail"}),
+	}).Create(createS).Error; err != nil {
 		return fmt.Errorf("create table [%s] record failed: %v", table, err)
 	}
 	return nil

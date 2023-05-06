@@ -126,6 +126,11 @@ func (r *Migrate) Full() error {
 			if err := r.Mysql.TruncateMySQLTable(r.Cfg.MySQLConfig.SchemaName, tableName); err != nil {
 				return err
 			}
+			zap.L().Info("truncate table",
+				zap.String("schema", r.Cfg.MySQLConfig.SchemaName),
+				zap.String("table", tableName),
+				zap.String("status", "success"))
+
 			// 判断并记录待同步表列表
 			waitSyncMetas, err := meta.NewWaitSyncMetaModel(r.MetaDB).DetailWaitSyncMeta(r.Ctx, &meta.WaitSyncMeta{
 				DBTypeS:     r.Cfg.DBTypeS,
@@ -415,7 +420,7 @@ func (r *Migrate) FullPartSyncTable(fullPartTables []string) error {
 					writeChannel := make(chan string, common.ChannelBufferSize)
 
 					// 数据写入
-					err := IMigrate(NewRows(r.Ctx, m, r.Oracle, r.Mysql, r.Cfg.FullConfig.ApplyThreads, r.Cfg.AppConfig.InsertBatchSize, true, columnNameS, readChannel, writeChannel))
+					err := IMigrate(NewRows(r.Ctx, m, r.Oracle, r.Mysql, r.MetaDB, r.Cfg.FullConfig.ApplyThreads, r.Cfg.AppConfig.InsertBatchSize, true, columnNameS, readChannel, writeChannel))
 
 					if err != nil {
 						// record error, skip error
@@ -426,6 +431,8 @@ func (r *Migrate) FullPartSyncTable(fullPartTables []string) error {
 							TableNameS:   m.TableNameS,
 							TaskMode:     m.TaskMode,
 							ChunkDetailS: m.ChunkDetailS,
+						}, map[string]interface{}{
+							"TaskStatus": common.TaskStatusFailed,
 						}, &meta.ChunkErrorDetail{
 							DBTypeS:      m.DBTypeS,
 							DBTypeT:      m.DBTypeT,
@@ -436,7 +443,6 @@ func (r *Migrate) FullPartSyncTable(fullPartTables []string) error {
 							TaskMode:     m.TaskMode,
 							ChunkDetailS: m.ChunkDetailS,
 							InfoDetail:   m.String(),
-							ErrorSQL:     "",
 							ErrorDetail:  err.Error(),
 						})
 						if errf != nil {
@@ -621,13 +627,6 @@ func (r *Migrate) InitWaitSyncTableChunk(csvWaitTables []string, oracleCollation
 			}
 			// 统计信息数据行数 0，直接全表扫
 			if tableRowsByStatistics == 0 {
-				zap.L().Warn("get oracle table rows",
-					zap.String("schema", r.Cfg.OracleConfig.SchemaName),
-					zap.String("table", t),
-					zap.String("column", sourceColumnInfo),
-					zap.String("where", "1 = 1"),
-					zap.Int("statistics rows", tableRowsByStatistics))
-
 				err = meta.NewCommonModel(r.MetaDB).CreateFullSyncMetaAndUpdateWaitSyncMeta(r.Ctx, &meta.FullSyncMeta{
 					DBTypeS:       r.Cfg.DBTypeS,
 					DBTypeT:       r.Cfg.DBTypeT,

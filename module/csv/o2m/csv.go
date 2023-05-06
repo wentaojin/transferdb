@@ -101,6 +101,16 @@ func (r *O2M) CSV() error {
 			return err
 		}
 
+		err = meta.NewChunkErrorDetailModel(r.MetaDB).DeleteChunkErrorDetailBySchemaTaskMode(r.Ctx, &meta.ChunkErrorDetail{
+			DBTypeS:     r.Cfg.DBTypeS,
+			DBTypeT:     r.Cfg.DBTypeT,
+			SchemaNameS: r.Cfg.OracleConfig.SchemaName,
+			TaskMode:    r.Cfg.TaskMode,
+		})
+		if err != nil {
+			return err
+		}
+
 		for _, tableName := range exporters {
 			err = meta.NewWaitSyncMetaModel(r.MetaDB).DeleteWaitSyncMeta(r.Ctx, &meta.WaitSyncMeta{
 				DBTypeS:     r.Cfg.DBTypeS,
@@ -187,7 +197,7 @@ func (r *O2M) CSV() error {
 		return err
 	}
 	if errTotals > 0 {
-		return fmt.Errorf(`csv schema [%s] mode [%s] table task failed: meta table [wait_sync_meta] exist failed error, please: firstly check meta table [wait_sync_meta] and [full_sync_meta] log record; secondly if need resume, update meta table [wait_sync_meta] column [task_status] table status RUNNING (Need UPPER); finally rerunning`, strings.ToUpper(r.Cfg.OracleConfig.SchemaName), r.Cfg.TaskMode)
+		return fmt.Errorf(`csv schema [%s] mode [%s] table task failed: meta table [wait_sync_meta] exist failed error, please: firstly check meta table [wait_sync_meta] and [full_sync_meta] log record; secondly if need resume, update meta table [wait_sync_meta] column [task_status] table status RUNNING (Need UPPER) and delete meta table [chunk_error_detail] current task all records; finally rerunning`, strings.ToUpper(r.Cfg.OracleConfig.SchemaName), r.Cfg.TaskMode)
 	}
 
 	// 判断并记录待同步表列表
@@ -672,12 +682,6 @@ func (r *O2M) initWaitSyncTableChunk(csvWaitTables []string, tableNameRule map[s
 			}
 			// 统计信息数据行数 0，直接全表扫
 			if tableRowsByStatistics == 0 {
-				zap.L().Warn("get oracle table rows",
-					zap.String("schema", r.Cfg.OracleConfig.SchemaName),
-					zap.String("table", t),
-					zap.String("column", sourceColumnInfo),
-					zap.String("where", "1 = 1"),
-					zap.Int("statistics rows", tableRowsByStatistics))
 
 				err = meta.NewCommonModel(r.MetaDB).CreateFullSyncMetaAndUpdateWaitSyncMeta(r.Ctx, &meta.FullSyncMeta{
 					DBTypeS:       r.Cfg.DBTypeS,

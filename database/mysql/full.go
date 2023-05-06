@@ -17,25 +17,20 @@ package mysql
 
 import (
 	"fmt"
-	"go.uber.org/zap"
 )
 
 func (m *MySQL) TruncateMySQLTable(targetSchema string, targetTable string) error {
 	_, err := m.MySQLDB.ExecContext(m.Ctx, fmt.Sprintf("TRUNCATE TABLE %s.%s", targetSchema, targetTable))
 	if err != nil {
-		return fmt.Errorf("truncate mysql schema [%v] table [%v] reocrd failed: %v", targetSchema, targetTable, err.Error())
+		return err
 	}
-	zap.L().Info("truncate table",
-		zap.String("schema", targetSchema),
-		zap.String("table", targetTable),
-		zap.String("status", "success"))
 	return nil
 }
 
 func (m *MySQL) WriteMySQLTable(sql string) error {
 	_, err := m.MySQLDB.ExecContext(m.Ctx, sql)
 	if err != nil {
-		return fmt.Errorf("source schema table sql [%v] write failed: %v", sql, err)
+		return err
 	}
 	return nil
 }

@@ -32,6 +32,7 @@ type Rows struct {
 	SyncMeta     meta.FullSyncMeta
 	Oracle       *oracle.Oracle
 	MySQL        *mysql.MySQL
+	Meta         *meta.Meta
 	ApplyThreads int
 	BatchSize    int
 	SafeMode     bool
@@ -41,7 +42,7 @@ type Rows struct {
 }
 
 func NewRows(ctx context.Context, syncMeta meta.FullSyncMeta,
-	oracle *oracle.Oracle, mysql *mysql.MySQL, applyThreads, batchSize int, safeMode bool,
+	oracle *oracle.Oracle, mysql *mysql.MySQL, meta *meta.Meta, applyThreads, batchSize int, safeMode bool,
 	columnNameS []string, readChannel chan []map[string]string, writeChannel chan string) *Rows {
 
 	return &Rows{
@@ -49,6 +50,7 @@ func NewRows(ctx context.Context, syncMeta meta.FullSyncMeta,
 		SyncMeta:     syncMeta,
 		Oracle:       oracle,
 		MySQL:        mysql,
+		Meta:         meta,
 		ApplyThreads: applyThreads,
 		SafeMode:     safeMode,
 		BatchSize:    batchSize,
@@ -64,7 +66,24 @@ func (t *Rows) ReadData() error {
 
 	err := t.Oracle.GetOracleTableRowsData(querySQL, t.BatchSize, t.ReadChannel)
 	if err != nil {
-		return err
+		// 错误 SQL 记录
+		errf := meta.NewChunkErrorDetailModel(t.Meta).CreateChunkErrorDetail(t.Ctx, &meta.ChunkErrorDetail{
+			DBTypeS:      t.SyncMeta.DBTypeS,
+			DBTypeT:      t.SyncMeta.DBTypeT,
+			SchemaNameS:  t.SyncMeta.SchemaNameS,
+			TableNameS:   t.SyncMeta.TableNameS,
+			SchemaNameT:  t.SyncMeta.SchemaNameT,
+			TableNameT:   t.SyncMeta.TableNameT,
+			TaskMode:     t.SyncMeta.TaskMode,
+			ChunkDetailS: t.SyncMeta.ChunkDetailS,
+			InfoDetail:   t.SyncMeta.String(),
+			ErrorSQL:     querySQL,
+			ErrorDetail:  err.Error(),
+		})
+		if errf != nil {
+			return errf
+		}
+		return nil
 	}
 
 	endTime := time.Now()
@@ -112,11 +131,6 @@ func (t *Rows) ProcessData() error {
 func (t *Rows) ApplyData() error {
 	startTime := time.Now()
 
-	zap.L().Info("target schema table chunk data applier start",
-		zap.String("schema", t.SyncMeta.SchemaNameT),
-		zap.String("table", t.SyncMeta.TableNameT),
-		zap.String("chunk", t.SyncMeta.ChunkDetailS))
-
 	g := &errgroup.Group{}
 	g.SetLimit(t.ApplyThreads)
 
@@ -125,7 +139,24 @@ func (t *Rows) ApplyData() error {
 		g.Go(func() error {
 			err := t.MySQL.WriteMySQLTable(querySql)
 			if err != nil {
-				return err
+				// 错误 SQL 记录
+				errf := meta.NewChunkErrorDetailModel(t.Meta).CreateChunkErrorDetail(t.Ctx, &meta.ChunkErrorDetail{
+					DBTypeS:      t.SyncMeta.DBTypeS,
+					DBTypeT:      t.SyncMeta.DBTypeT,
+					SchemaNameS:  t.SyncMeta.SchemaNameS,
+					TableNameS:   t.SyncMeta.TableNameS,
+					SchemaNameT:  t.SyncMeta.SchemaNameT,
+					TableNameT:   t.SyncMeta.TableNameT,
+					TaskMode:     t.SyncMeta.TaskMode,
+					ChunkDetailS: t.SyncMeta.ChunkDetailS,
+					InfoDetail:   t.SyncMeta.String(),
+					ErrorSQL:     querySql,
+					ErrorDetail:  err.Error(),
+				})
+				if errf != nil {
+					return errf
+				}
+				return nil
 			}
 			return nil
 		})

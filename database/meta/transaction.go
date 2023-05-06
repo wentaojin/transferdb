@@ -140,7 +140,8 @@ func (rw *Transaction) CreateDataCompareMetaAndUpdateWaitSyncMeta(ctx context.Co
 	return nil
 }
 
-func (rw *Transaction) UpdateFullSyncMetaChunkAndCreateChunkErrorDetail(ctx context.Context, detailS *FullSyncMeta, chunkErrorS *ChunkErrorDetail) error {
+func (rw *Transaction) UpdateFullSyncMetaChunkAndCreateChunkErrorDetail(ctx context.Context, detailS *FullSyncMeta,
+	updateS map[string]interface{}, chunkErrorS *ChunkErrorDetail) error {
 	txn := rw.DB(ctx).Begin()
 	err := txn.Create(chunkErrorS).Error
 	if err != nil {
@@ -152,9 +153,7 @@ func (rw *Transaction) UpdateFullSyncMetaChunkAndCreateChunkErrorDetail(ctx cont
 		common.StringUPPER(detailS.SchemaNameS),
 		common.StringUPPER(detailS.TableNameS),
 		common.StringUPPER(detailS.TaskMode),
-		detailS.ChunkDetailS).Updates(map[string]interface{}{
-		"TaskStatus": common.TaskStatusFailed,
-	}).Error
+		detailS.ChunkDetailS).Updates(updateS).Error
 	if err != nil {
 		return fmt.Errorf("update table [full_sync_meta] record by transaction failed: %v", err)
 	}

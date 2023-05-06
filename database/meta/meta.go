@@ -112,6 +112,7 @@ func (m *Meta) MigrateTables() (err error) {
 		new(BuildinObjectCompatible),
 		new(BuildinDatatypeRule),
 		new(TableNameRule),
+		new(ChunkErrorDetail),
 	)
 }
 
