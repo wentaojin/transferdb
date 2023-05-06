@@ -318,7 +318,7 @@ func AssessOracleSchemaIndexTypeCompatible(schemaName []string, oracle *oracle.O
 	for _, ow := range columnInfo {
 		if val, ok := objAssessCompsMap[common.StringUPPER(ow["INDEX_TYPE"])]; ok {
 			listData = append(listData, SchemaIndexTypeCompatibles{
-				Schema:        ow["OWNER"],
+				Schema:        ow["TABLE_OWNER"],
 				IndexType:     ow["INDEX_TYPE"],
 				ObjectCounts:  ow["COUNT"],
 				IsCompatible:  val.IsCompatible,
@@ -338,7 +338,7 @@ func AssessOracleSchemaIndexTypeCompatible(schemaName []string, oracle *oracle.O
 			}
 		} else {
 			listData = append(listData, SchemaIndexTypeCompatibles{
-				Schema:        ow["OWNER"],
+				Schema:        ow["TABLE_OWNER"],
 				IndexType:     ow["INDEX_TYPE"],
 				ObjectCounts:  ow["COUNT"],
 				IsCompatible:  common.AssessNoCompatible,

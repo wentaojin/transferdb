@@ -32,6 +32,7 @@ type Rule struct {
 }
 
 type Info struct {
+	SourceTableDDL    string              `json:"-"` // 忽略
 	PrimaryKeyINFO    []map[string]string `json:"primary_key_info"`
 	UniqueKeyINFO     []map[string]string `json:"unique_key_info"`
 	ForeignKeyINFO    []map[string]string `json:"foreign_key_info"`
@@ -86,6 +87,7 @@ func (r *Rule) GenCreateTableDDL() (interface{}, error) {
 		SourceSchemaName:   r.SourceSchemaName,
 		SourceTableName:    r.SourceTableName,
 		SourceTableType:    r.SourceTableType,
+		SourceTableDDL:     r.SourceTableDDL,
 		TargetSchemaName:   r.GenSchemaName(), // change schema name
 		TargetTableName:    r.GenTableName(),  // change table name
 		TargetDBType:       r.TargetDBType,

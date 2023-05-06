@@ -299,7 +299,13 @@ func (t *Table) GetTableInfo() (interface{}, error) {
 		return nil, err
 	}
 
+	ddl, err := t.GetTableOriginDDL()
+	if err != nil {
+		return nil, err
+	}
+
 	return &Info{
+		SourceTableDDL:    ddl,
 		PrimaryKeyINFO:    primaryKey,
 		UniqueKeyINFO:     uniqueKey,
 		ForeignKeyINFO:    foreignKey,
@@ -310,6 +316,14 @@ func (t *Table) GetTableInfo() (interface{}, error) {
 		TableColumnINFO:   columnMeta,
 		ColumnCommentINFO: columnComment,
 	}, nil
+}
+
+func (t *Table) GetTableOriginDDL() (string, error) {
+	ddl, err := t.Oracle.GetOracleTableOriginDDL(t.SourceSchemaName, t.SourceTableName, "TABLE")
+	if err != nil {
+		return ddl, err
+	}
+	return ddl, nil
 }
 
 func (t *Table) String() string {
@@ -421,26 +435,27 @@ func GenCompatibilityTable(f *reverse.Write, sourceSchema string, partitionTable
 			return err
 		}
 
-		var mviewComp strings.Builder
-
-		mviewComp.WriteString("/*\n")
-		mviewComp.WriteString(" oracle materialized view maybe mysql has compatibility, will skip convert to reverse, please manual process\n")
-		t = table.NewWriter()
-		t.SetStyle(table.StyleLight)
-		t.AppendHeader(table.Row{"SCHEMA", "MVIEW NAME", "ORACLE TABLE TYPE", "SUGGEST"})
-
 		if len(materializedViews) > 0 {
+			var mviewComp strings.Builder
+
+			mviewComp.WriteString("/*\n")
+			mviewComp.WriteString(" oracle materialized view maybe mysql has compatibility, will skip convert to reverse, please manual process\n")
+			t = table.NewWriter()
+			t.SetStyle(table.StyleLight)
+			t.AppendHeader(table.Row{"SCHEMA", "MVIEW NAME", "ORACLE TABLE TYPE", "SUGGEST"})
+
 			for _, cd := range materializedViews {
 				t.AppendRows([]table.Row{
 					{sourceSchema, cd, "Materialized View", "Manual Process Table"},
 				})
 			}
-		}
-		mviewComp.WriteString(t.Render() + "\n")
-		mviewComp.WriteString("*/\n")
 
-		if _, err := f.CWriteFile(mviewComp.String()); err != nil {
-			return err
+			mviewComp.WriteString(t.Render() + "\n")
+			mviewComp.WriteString("*/\n")
+
+			if _, err := f.CWriteFile(mviewComp.String()); err != nil {
+				return err
+			}
 		}
 	}
 	endTime := time.Now()

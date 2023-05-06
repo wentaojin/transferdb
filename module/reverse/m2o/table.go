@@ -343,7 +343,13 @@ func (t *Table) GetTableInfo() (interface{}, error) {
 		return nil, err
 	}
 
+	ddl, err := t.GetTableOriginDDL()
+	if err != nil {
+		return nil, err
+	}
+
 	return &Info{
+		SourceTableDDL:       ddl,
 		PrimaryKeyINFO:       primaryKey,
 		UniqueKeyINFO:        uniqueKey,
 		ForeignKeyINFO:       foreignKey,
@@ -355,6 +361,14 @@ func (t *Table) GetTableInfo() (interface{}, error) {
 		ColumnCommentINFO:    columnComment,
 		TablePartitionDetail: tablePartitionDetail,
 	}, nil
+}
+
+func (t *Table) GetTableOriginDDL() (string, error) {
+	ddl, err := t.MySQL.GetMySQLTableOriginDDL(t.SourceSchemaName, t.SourceTableName)
+	if err != nil {
+		return ddl, err
+	}
+	return ddl, nil
 }
 
 func (t *Table) GetTablePartitionDetail() (string, error) {

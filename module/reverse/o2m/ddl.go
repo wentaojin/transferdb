@@ -29,6 +29,7 @@ type DDL struct {
 	SourceSchemaName   string   `json:"source_schema"`
 	SourceTableName    string   `json:"source_table_name"`
 	SourceTableType    string   `json:"source_table_type"`
+	SourceTableDDL     string   `json:"-"` // 忽略
 	TargetSchemaName   string   `json:"target_schema"`
 	TargetTableName    string   `json:"target_table_name"`
 	TargetDBType       string   `json:"target_db_type"`
@@ -66,6 +67,7 @@ func (d *DDL) Write(w *reverse.Write) error {
 		{"TABLE", d.SourceTableType, fmt.Sprintf("%s.%s", d.SourceSchemaName, d.SourceTableName), fmt.Sprintf("%s.%s", d.TargetSchemaName, d.TargetTableName), "Create Table"},
 	})
 	sqlRev.WriteString(fmt.Sprintf("%v\n", sw.Render()))
+	sqlRev.WriteString(fmt.Sprintf("ORIGIN DDL:%v\n", d.SourceTableDDL))
 	sqlRev.WriteString("*/\n")
 
 	var reverseDDL string

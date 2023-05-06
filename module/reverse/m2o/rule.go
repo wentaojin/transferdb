@@ -29,6 +29,7 @@ type Rule struct {
 }
 
 type Info struct {
+	SourceTableDDL       string              `json:"-"` // 忽略
 	PrimaryKeyINFO       []map[string]string `json:"primary_key_info"`
 	UniqueKeyINFO        []map[string]string `json:"unique_key_info"`
 	ForeignKeyINFO       []map[string]string `json:"foreign_key_info"`
@@ -89,7 +90,8 @@ func (r *Rule) GenCreateTableDDL() (interface{}, error) {
 	return &DDL{
 		SourceSchemaName:     r.SourceSchemaName,
 		SourceTableName:      r.SourceTableName,
-		SourceTableType:      "NORMAL",     // MySQL/TiDB table type
+		SourceTableType:      "NORMAL", // MySQL/TiDB table type
+		SourceTableDDL:       r.SourceTableDDL,
 		TargetSchemaName:     targetSchema, // change schema name
 		TargetTableName:      targetTable,  // change table name
 		TablePrefix:          tablePrefix,

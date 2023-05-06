@@ -666,3 +666,39 @@ func (o *Oracle) WriteOracleTable(sql string) error {
 	}
 	return nil
 }
+
+func (o *Oracle) GetOracleTableOriginDDL(schemaName, tableName, tableType string) (string, error) {
+	_, err := o.OracleDB.ExecContext(o.Ctx, `BEGIN
+	DBMS_METADATA.set_transform_param (DBMS_METADATA.session_transform, 'SQLTERMINATOR', true);
+	DBMS_METADATA.set_transform_param (DBMS_METADATA.session_transform, 'PRETTY', true);
+	DBMS_METADATA.set_transform_param (DBMS_METADATA.session_transform, 'SEGMENT_ATTRIBUTES', false);
+	DBMS_METADATA.set_transform_param (DBMS_METADATA.session_transform, 'TABLESPACE', false);
+	DBMS_METADATA.set_transform_param (DBMS_METADATA.session_transform, 'STORAGE', false);
+	END;`)
+	if err != nil {
+		return "", nil
+	}
+	ddlSql := fmt.Sprintf(`SELECT REGEXP_REPLACE(REPLACE(DBMS_METADATA.GET_DDL('%s','%s','%s'),'"'), ',\s*''NLS_CALENDAR=GREGORIAN''', '') ORIGIN_DDL FROM DUAL`, tableType, tableName, schemaName)
+
+	rows, err := o.OracleDB.QueryContext(o.Ctx, ddlSql)
+	if err != nil {
+		return "", err
+	}
+	defer rows.Close()
+
+	var ddl string
+	for rows.Next() {
+		if err = rows.Scan(&ddl); err != nil {
+			return ddl, fmt.Errorf("get oracle schema table origin ddl scan failed: %v", err)
+		}
+	}
+
+	if err = rows.Close(); err != nil {
+		return ddl, fmt.Errorf("get oracle schema table origin ddl close failed: %v", err)
+	}
+	if err = rows.Err(); err != nil {
+		return ddl, fmt.Errorf("get oracle schema table origin ddl Err failed: %v", err)
+	}
+
+	return ddl, nil
+}

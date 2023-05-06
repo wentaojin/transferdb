@@ -437,3 +437,16 @@ func (m *MySQL) GetMySQLTableComment(schemaName, tableName string) ([]map[string
 
 	return res, nil
 }
+
+func (m *MySQL) GetMySQLTableOriginDDL(schemaName, tableName string) (string, error) {
+	showSQL := fmt.Sprintf(`SHOW CREATE TABLE %v.%v`, schemaName, tableName)
+	_, res, err := Query(m.Ctx, m.MySQLDB, showSQL)
+	if err != nil {
+		return "", err
+	}
+	if len(res) > 1 {
+		return "", fmt.Errorf("[%v] sql return result over one, current result [%v]", showSQL, len(res))
+	}
+
+	return res[0]["Create Table"], nil
+}

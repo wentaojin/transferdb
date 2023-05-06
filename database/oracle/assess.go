@@ -602,7 +602,16 @@ func (o *Oracle) GetOracleSchemaConstraintTypeCounts(schemaName []string) ([]map
 }
 
 func (o *Oracle) GetOracleSchemaIndexTypeCounts(schemaName []string) ([]map[string]string, error) {
-	querySQL := fmt.Sprintf(`select owner,INDEX_TYPE,count(*) COUNT from dba_indexes where OWNER IN (%s) group by owner,INDEX_TYPE ORDER BY COUNT DESC`, strings.Join(schemaName, ","))
+	// 排除 LOB INDEX，LOB INDEX 用于 LOB 字段，Oracle 数据库自动为该字段创建的索引
+	querySQL := fmt.Sprintf(`select TABLE_OWNER,INDEX_TYPE,COUNT(*) COUNT from (
+select distinct a.table_owner,a.table_name,a.index_owner,a.index_name,INDEX_TYPE
+from dba_ind_columns a,dba_indexes b
+where a.table_owner=b.table_owner and a.table_name=b.table_name 
+and a.index_owner=b.owner
+and a.table_owner in (%s)
+and b.index_type<>'LOB' and a.index_name=b.index_name
+and a.INDEX_NAME not in (select INDEX_NAME from dba_lobs where owner in (%s))
+) group by table_owner,index_type order by COUNT DESC`, strings.Join(schemaName, ","), strings.Join(schemaName, ","))
 
 	_, res, err := Query(o.Ctx, o.OracleDB, querySQL)
 	if err != nil {
