@@ -44,17 +44,29 @@ type DDL struct {
 	TableCompatibleDDL []string `json:"table_compatible_ddl"`
 }
 
-func (d *DDL) Write(w *reverse.Write) error {
-	var (
-		tableDDL      string
-		checkKeyDDL   []string
-		foreignKeyDDL []string
+func (d *DDL) Write(w *reverse.Write) (string, error) {
+	if w.Cfg.ReverseConfig.DirectWrite {
+		errSql, err := d.WriteDB(w)
+		if err != nil {
+			return errSql, err
+		}
+	} else {
+		errSql, err := d.WriteFile(w)
+		if err != nil {
+			return errSql, err
+		}
+	}
+	return "", nil
+}
 
+func (d *DDL) WriteFile(w *reverse.Write) (string, error) {
+
+	revDDLS, compDDLS := d.GenDDLStructure()
+
+	var (
 		sqlRev  strings.Builder
 		sqlComp strings.Builder
 	)
-
-	zap.L().Info("reverse oracle table struct", zap.String("table", d.String()))
 
 	// 表 with 主键
 	sqlRev.WriteString("/*\n")
@@ -70,24 +82,114 @@ func (d *DDL) Write(w *reverse.Write) error {
 	sqlRev.WriteString(fmt.Sprintf("ORIGIN DDL:%v\n", d.SourceTableDDL))
 	sqlRev.WriteString("*/\n")
 
-	var reverseDDL string
+	sqlRev.WriteString(strings.Join(revDDLS, "\n"))
+
+	// 兼容项处理
+	if len(compDDLS) > 0 {
+		sqlComp.WriteString("/*\n")
+		sqlComp.WriteString(" oracle table index or consrtaint maybe mysql has compatibility, skip\n")
+		tw := table.NewWriter()
+		tw.SetStyle(table.StyleLight)
+		tw.AppendHeader(table.Row{"#", "ORACLE", "MYSQL", "SUGGEST"})
+		tw.AppendRows([]table.Row{
+			{"TABLE", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.SourceTableName), fmt.Sprintf("%s.%s", d.TargetSchemaName, d.TargetTableName), "Create Index Or Constraints"}})
+
+		sqlComp.WriteString(fmt.Sprintf("%v\n", tw.Render()))
+		sqlComp.WriteString("*/\n")
+
+		sqlComp.WriteString(strings.Join(compDDLS, "\n"))
+	}
+
+	// 数据写入
+	if sqlRev.String() != "" {
+		if _, err := w.RWriteFile(sqlRev.String()); err != nil {
+			return sqlRev.String(), err
+		}
+	}
+	if sqlComp.String() != "" {
+		if _, err := w.CWriteFile(sqlComp.String()); err != nil {
+			return sqlComp.String(), err
+		}
+	}
+	return "", nil
+}
+
+func (d *DDL) WriteDB(w *reverse.Write) (string, error) {
+
+	revDDLS, compDDLS := d.GenDDLStructure()
+
+	var (
+		sqlRev  strings.Builder
+		sqlComp strings.Builder
+	)
+
+	// 表 with 主键
+	sqlRev.WriteString(strings.Join(revDDLS, "\n"))
+
+	// 兼容项处理
+	if len(compDDLS) > 0 {
+		sqlComp.WriteString("/*\n")
+		sqlComp.WriteString(" oracle table index or consrtaint maybe mysql has compatibility, skip\n")
+		tw := table.NewWriter()
+		tw.SetStyle(table.StyleLight)
+		tw.AppendHeader(table.Row{"#", "ORACLE", "MYSQL", "SUGGEST"})
+		tw.AppendRows([]table.Row{
+			{"TABLE", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.SourceTableName), fmt.Sprintf("%s.%s", d.TargetSchemaName, d.TargetTableName), "Create Index Or Constraints"}})
+
+		sqlComp.WriteString(fmt.Sprintf("%v\n", tw.Render()))
+		sqlComp.WriteString("*/\n")
+
+		sqlComp.WriteString(strings.Join(compDDLS, "\n"))
+	}
+
+	// 数据写入
+	if sqlRev.String() != "" {
+		if err := w.RWriteDB(sqlRev.String()); err != nil {
+			return sqlRev.String(), err
+		}
+	}
+	if sqlComp.String() != "" {
+		if _, err := w.CWriteFile(sqlComp.String()); err != nil {
+			return sqlComp.String(), err
+		}
+	}
+	return "", nil
+}
+
+func (d *DDL) GenDDLStructure() ([]string, []string) {
+	var (
+		reverseDDLS   []string
+		compDDLS      []string
+		tableDDL      string
+		checkKeyDDL   []string
+		foreignKeyDDL []string
+	)
+
+	// 表 with 主键
+	var structDDL string
 	if len(d.TableKeys) > 0 {
-		reverseDDL = fmt.Sprintf("%s (\n%s,\n%s\n)",
+		structDDL = fmt.Sprintf("%s (\n%s,\n%s\n)",
 			d.TablePrefix,
 			strings.Join(d.TableColumns, ",\n"),
 			strings.Join(d.TableKeys, ",\n"))
 	} else {
-		reverseDDL = fmt.Sprintf("%s (\n%s\n)",
+		structDDL = fmt.Sprintf("%s (\n%s\n)",
 			d.TablePrefix,
 			strings.Join(d.TableColumns, ",\n"))
 	}
 
 	if strings.EqualFold(d.TableComment, "") {
-		tableDDL = fmt.Sprintf("%s %s;", reverseDDL, d.TableSuffix)
+		tableDDL = fmt.Sprintf("%s %s;", structDDL, d.TableSuffix)
 	} else {
-		tableDDL = fmt.Sprintf("%s %s %s;", reverseDDL, d.TableSuffix, d.TableComment)
+		tableDDL = fmt.Sprintf("%s %s %s;", structDDL, d.TableSuffix, d.TableComment)
 	}
-	sqlRev.WriteString(tableDDL + "\n\n")
+
+	zap.L().Info("reverse oracle table structure",
+		zap.String("schema", d.TargetSchemaName),
+		zap.String("table", d.TargetTableName),
+		zap.String("sql", tableDDL))
+
+	reverseDDLS = append(reverseDDLS, tableDDL+"\n")
 
 	// foreign and check key sql ddl
 	if len(d.TableForeignKeys) > 0 {
@@ -113,104 +215,56 @@ func (d *DDL) Write(w *reverse.Write) error {
 		}
 	}
 
-	// 兼容项处理
-	if len(d.TableForeignKeys) > 0 || len(d.TableCheckKeys) > 0 || len(d.TableCompatibleDDL) > 0 {
-		sqlComp.WriteString("/*\n")
-		sqlComp.WriteString(" oracle table index or consrtaint maybe mysql has compatibility, skip\n")
-		tw := table.NewWriter()
-		tw.SetStyle(table.StyleLight)
-		tw.AppendHeader(table.Row{"#", "ORACLE", "MYSQL", "SUGGEST"})
-		tw.AppendRows([]table.Row{
-			{"TABLE", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.SourceTableName), fmt.Sprintf("%s.%s", d.TargetSchemaName, d.TargetTableName), "Create Index Or Constraints"}})
-
-		sqlComp.WriteString(fmt.Sprintf("%v\n", tw.Render()))
-		sqlComp.WriteString("*/\n")
-	}
-
 	// 外键约束、检查约束
 	if d.TargetDBType != common.DatabaseTypeTiDB {
 		if len(foreignKeyDDL) > 0 {
 			for _, sql := range foreignKeyDDL {
-				sqlRev.WriteString(sql + "\n")
+				reverseDDLS = append(reverseDDLS, sql)
 			}
 		}
 
 		if common.VersionOrdinal(d.TargetDBVersion) > common.VersionOrdinal(common.MySQLCheckConsVersion) {
 			if len(checkKeyDDL) > 0 {
 				for _, sql := range checkKeyDDL {
-					sqlRev.WriteString(sql + "\n")
+					reverseDDLS = append(reverseDDLS, sql)
 				}
 			}
 		} else {
 			// 增加不兼容性语句
 			if len(checkKeyDDL) > 0 {
 				for _, sql := range checkKeyDDL {
-					sqlComp.WriteString(sql + "\n")
+					compDDLS = append(compDDLS, sql)
 				}
 			}
 		}
 		// 增加不兼容性语句
 		if len(d.TableCompatibleDDL) > 0 {
 			for _, sql := range d.TableCompatibleDDL {
-				sqlComp.WriteString(sql + "\n")
+				compDDLS = append(compDDLS, sql)
 			}
 		}
 
-		// 文件写入
-		if sqlRev.String() != "" {
-			if w.Cfg.ReverseConfig.DirectWrite {
-				if err := w.RWriteDB(sqlRev.String()); err != nil {
-					return err
-				}
-			} else {
-				if _, err := w.RWriteFile(sqlRev.String()); err != nil {
-					return err
-				}
-			}
-		}
-		if sqlComp.String() != "" {
-			if _, err := w.CWriteFile(sqlComp.String()); err != nil {
-				return err
-			}
-		}
-
-		return nil
+		return reverseDDLS, compDDLS
 	}
 
 	// TiDB 增加不兼容性语句
 	if len(foreignKeyDDL) > 0 {
 		for _, sql := range foreignKeyDDL {
-			sqlComp.WriteString(sql + "\n")
+			compDDLS = append(compDDLS, sql)
 		}
 	}
 	if len(checkKeyDDL) > 0 {
 		for _, sql := range checkKeyDDL {
-			sqlComp.WriteString(sql + "\n")
+			compDDLS = append(compDDLS, sql)
 		}
 	}
 	if len(d.TableCompatibleDDL) > 0 {
 		for _, sql := range d.TableCompatibleDDL {
-			sqlComp.WriteString(sql + "\n")
+			compDDLS = append(compDDLS, sql)
 		}
 	}
-	// 文件写入
-	if sqlRev.String() != "" {
-		if w.Cfg.ReverseConfig.DirectWrite {
-			if err := w.RWriteDB(sqlRev.String()); err != nil {
-				return err
-			}
-		} else {
-			if _, err := w.RWriteFile(sqlRev.String()); err != nil {
-				return err
-			}
-		}
-	}
-	if sqlComp.String() != "" {
-		if _, err := w.CWriteFile(sqlComp.String()); err != nil {
-			return err
-		}
-	}
-	return nil
+
+	return reverseDDLS, compDDLS
 }
 
 func (d *DDL) String() string {

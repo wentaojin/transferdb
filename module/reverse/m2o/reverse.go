@@ -215,9 +215,9 @@ func (r *Reverse) Reverse() error {
 				}
 				return nil
 			}
-			err = IWriter(f, ddl)
-			if err != nil {
-				if err = meta.NewErrorLogDetailModel(r.metaDB).CreateErrorLog(r.ctx, &meta.ErrorLogDetail{
+			errSql, errw := IWriter(f, ddl)
+			if errw != nil {
+				if errm := meta.NewErrorLogDetailModel(r.metaDB).CreateErrorLog(r.ctx, &meta.ErrorLogDetail{
 					DBTypeS:     r.cfg.DBTypeS,
 					DBTypeT:     r.cfg.DBTypeT,
 					SchemaNameS: t.SourceSchemaName,
@@ -225,17 +225,19 @@ func (r *Reverse) Reverse() error {
 					SchemaNameT: t.TargetSchemaName,
 					TableNameT:  t.TargetTableName,
 					TaskMode:    r.cfg.TaskMode,
+					SourceDDL:   ddl.SourceTableDDL,
+					TargetDDL:   errSql,
 					TaskStatus:  "Failed",
 					InfoDetail:  t.String(),
-					ErrorDetail: err.Error(),
-				}); err != nil {
+					ErrorDetail: errw.Error(),
+				}); errm != nil {
 					zap.L().Error("reverse table mysql to oracle failed",
 						zap.String("schema", t.SourceSchemaName),
 						zap.String("table", t.SourceTableName),
 						zap.Error(
 							fmt.Errorf("writer table task failed, detail see [error_log_detail], please rerunning")))
 
-					return fmt.Errorf("writer table task failed, detail see [error_log_detail], please rerunning, error: %v", err)
+					return fmt.Errorf("writer table task failed, detail see [error_log_detail], please rerunning, error: %v", errm)
 				}
 				return nil
 			}

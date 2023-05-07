@@ -204,6 +204,7 @@ func (rw *Transaction) CreateFullSyncMetaAndUpdateWaitSyncMeta(ctx context.Conte
 			common.StringUPPER(waitSyncMeta.TableNameS),
 			waitSyncMeta.TaskMode).
 		Updates(map[string]interface{}{
+			"TableNumRows":     waitSyncMeta.TableNumRows,
 			"GlobalScnS":       waitSyncMeta.GlobalScnS,
 			"ChunkTotalNums":   waitSyncMeta.ChunkTotalNums,
 			"ChunkSuccessNums": waitSyncMeta.ChunkSuccessNums,
@@ -232,6 +233,7 @@ func (rw *Transaction) BatchCreateFullSyncMetaAndUpdateWaitSyncMeta(ctx context.
 			common.StringUPPER(waitSyncMeta.TableNameS),
 			waitSyncMeta.TaskMode).
 		Updates(map[string]interface{}{
+			"TableNumRows":     waitSyncMeta.TableNumRows,
 			"GlobalScnS":       waitSyncMeta.GlobalScnS,
 			"ChunkTotalNums":   waitSyncMeta.ChunkTotalNums,
 			"ChunkSuccessNums": waitSyncMeta.ChunkSuccessNums,

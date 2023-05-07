@@ -54,10 +54,6 @@ func IReverse(s reverse.Generator) (*DDL, error) {
 	return d.(*DDL), nil
 }
 
-func IWriter(w *reverse.Write, iw reverse.Writer) error {
-	err := iw.Write(w)
-	if err != nil {
-		return err
-	}
-	return nil
+func IWriter(w *reverse.Write, iw reverse.Writer) (string, error) {
+	return iw.Write(w)
 }

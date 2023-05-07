@@ -351,7 +351,7 @@ func (r *Migrate) Full() error {
 		zap.Int("table totals", len(exporters)),
 		zap.Int("table success", len(succTotals)),
 		zap.Int("table failed", len(failedTotals)),
-		zap.String("log detail", "if exist table failed, please see meta table [wait/full_sync_meta]"),
+		zap.String("log detail", "if exist table failed, please see meta table [wait/full_sync_meta/chunk_error_detail]"),
 		zap.String("cost", time.Now().Sub(startTime).String()))
 	return nil
 }

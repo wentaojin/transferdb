@@ -32,6 +32,8 @@ type ErrorLogDetail struct {
 	TableNameT  string `gorm:"type:varchar(100);not null;index:idx_dbtype_st_map;comment:'目标端表名'" json:"table_name_t"`
 	TaskMode    string `gorm:"type:varchar(30);not null;index:idx_dbtype_st_map;comment:'任务模式'" json:"task_mode"`
 	TaskStatus  string `gorm:"type:varchar(30);not null;comment:'任务状态'" json:"task_status"`
+	SourceDDL   string `gorm:"type:longtext;not null;comment:'源端原始 DDL'" json:"source_ddl"`
+	TargetDDL   string `gorm:"type:longtext;not null;comment:'目标端转换 DDL'" json:"target_ddl"`
 	InfoDetail  string `gorm:"type:longtext;not null;comment:'信息详情'" json:"info_detail"`
 	ErrorDetail string `gorm:"type:longtext;not null;comment:'错误详情'" json:"error_detail"`
 	*BaseModel

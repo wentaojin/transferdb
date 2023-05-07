@@ -53,7 +53,7 @@ type Generator interface {
 }
 
 type Writer interface {
-	Write(w *Write) error
+	Write(w *Write) (string, error)
 }
 
 type Reverser interface {

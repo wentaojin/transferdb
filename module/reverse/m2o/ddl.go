@@ -44,14 +44,27 @@ type DDL struct {
 	TablePartitionDetail string   `json:"table_partition_detail"`
 }
 
-func (d *DDL) Write(w *reverse.Write) error {
+func (d *DDL) Write(w *reverse.Write) (string, error) {
+	if w.Cfg.ReverseConfig.DirectWrite {
+		errSql, err := d.WriteDB(w)
+		if err != nil {
+			return errSql, err
+		}
+	} else {
+		errSql, err := d.WriteFile(w)
+		if err != nil {
+			return errSql, err
+		}
+	}
+	return "", nil
+}
+
+func (d *DDL) WriteFile(w *reverse.Write) (string, error) {
 	var (
-		checkKeyDDL   []string
-		foreignKeyDDL []string
-		sqlRev        strings.Builder
-		sqlComp       strings.Builder
+		sqlRev  strings.Builder
+		sqlComp strings.Builder
 	)
-	zap.L().Info("reverse mysql table struct", zap.String("table", d.String()))
+	revDDLS, compDDLS := d.GenDDLStructure()
 
 	// 表 with 主键
 	sqlRev.WriteString("/*\n")
@@ -72,6 +85,86 @@ func (d *DDL) Write(w *reverse.Write) error {
 	sqlRev.WriteString(fmt.Sprintf("%v\n", sw.Render()))
 	sqlRev.WriteString(fmt.Sprintf("ORIGIN DDL:%v\n", d.SourceTableDDL))
 	sqlRev.WriteString("*/\n")
+
+	sqlRev.WriteString(strings.Join(revDDLS, "\n"))
+
+	// 兼容项处理
+	if len(compDDLS) > 0 {
+		sqlComp.WriteString("/*\n")
+		sqlComp.WriteString(" mysql table structure object maybe oracle has compatibility, skip\n")
+		tw := table.NewWriter()
+		tw.SetStyle(table.StyleLight)
+		tw.AppendHeader(table.Row{"#", "MYSQL", "ORACLE", "SUGGEST"})
+		tw.AppendRows([]table.Row{
+			{"TABLE", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.SourceTableName), fmt.Sprintf("%s.%s", d.TargetSchemaName, d.TargetTableName), "Manual Processing"}})
+
+		sqlComp.WriteString(fmt.Sprintf("%v\n", tw.Render()))
+		sqlComp.WriteString("*/\n")
+
+		sqlComp.WriteString(strings.Join(compDDLS, "\n"))
+	}
+
+	// 数据写入
+	if sqlRev.String() != "" {
+		if _, err := w.RWriteFile(sqlRev.String()); err != nil {
+			return sqlRev.String(), err
+		}
+	}
+	if sqlComp.String() != "" {
+		if _, err := w.CWriteFile(sqlComp.String()); err != nil {
+			return sqlComp.String(), err
+		}
+	}
+	return "", nil
+}
+
+func (d *DDL) WriteDB(w *reverse.Write) (string, error) {
+	var (
+		sqlRev  strings.Builder
+		sqlComp strings.Builder
+	)
+	revDDLS, compDDLS := d.GenDDLStructure()
+
+	// 表 with 主键
+	sqlRev.WriteString(strings.Join(revDDLS, "\n"))
+
+	// 兼容项处理
+	if len(compDDLS) > 0 {
+		sqlComp.WriteString("/*\n")
+		sqlComp.WriteString(" mysql table structure object maybe oracle has compatibility, skip\n")
+		tw := table.NewWriter()
+		tw.SetStyle(table.StyleLight)
+		tw.AppendHeader(table.Row{"#", "MYSQL", "ORACLE", "SUGGEST"})
+		tw.AppendRows([]table.Row{
+			{"TABLE", fmt.Sprintf("%s.%s", d.SourceSchemaName, d.SourceTableName), fmt.Sprintf("%s.%s", d.TargetSchemaName, d.TargetTableName), "Manual Processing"}})
+
+		sqlComp.WriteString(fmt.Sprintf("%v\n", tw.Render()))
+		sqlComp.WriteString("*/\n")
+
+		sqlComp.WriteString(strings.Join(compDDLS, "\n"))
+	}
+
+	// 数据写入
+	if sqlRev.String() != "" {
+		if err := w.RWriteDB(sqlRev.String()); err != nil {
+			return sqlRev.String(), err
+		}
+	}
+	if sqlComp.String() != "" {
+		if _, err := w.CWriteFile(sqlComp.String()); err != nil {
+			return sqlComp.String(), err
+		}
+	}
+	return "", nil
+}
+
+func (d *DDL) GenDDLStructure() ([]string, []string) {
+	var (
+		revDDLS       []string
+		compDDLS      []string
+		checkKeyDDL   []string
+		foreignKeyDDL []string
+	)
 
 	// table create sql -> target
 	var reverseDDL string
@@ -101,13 +194,18 @@ func (d *DDL) Write(w *reverse.Write) error {
 		}
 	}
 
-	sqlRev.WriteString(reverseDDL + "\n")
+	zap.L().Info("reverse mysql table structure",
+		zap.String("schema", d.TargetSchemaName),
+		zap.String("table", d.TargetTableName),
+		zap.String("sql", reverseDDL))
+
+	revDDLS = append(revDDLS, reverseDDL+"\n")
 
 	if len(d.ColumnCommentDDL) > 0 {
-		sqlRev.WriteString(strings.Join(d.ColumnCommentDDL, "\n") + "\n")
+		revDDLS = append(revDDLS, strings.Join(d.ColumnCommentDDL, "\n"))
 	}
 	if d.TableComment != "" {
-		sqlRev.WriteString(d.TableComment + "\n")
+		revDDLS = append(revDDLS, d.TableComment+"\n")
 	}
 
 	if len(d.TableCheckKeys) > 0 {
@@ -120,7 +218,7 @@ func (d *DDL) Write(w *reverse.Write) error {
 
 			checkKeyDDL = append(checkKeyDDL, ckSQL)
 		}
-		sqlRev.WriteString(strings.Join(checkKeyDDL, "\n") + "\n")
+		revDDLS = append(revDDLS, strings.Join(checkKeyDDL, "\n"))
 	}
 
 	if len(d.TableForeignKeys) > 0 {
@@ -132,36 +230,18 @@ func (d *DDL) Write(w *reverse.Write) error {
 				zap.String("fk sql", addFkSQL))
 			foreignKeyDDL = append(foreignKeyDDL, addFkSQL)
 		}
-		sqlRev.WriteString(strings.Join(foreignKeyDDL, "\n") + "\n")
+		revDDLS = append(revDDLS, strings.Join(foreignKeyDDL, "\n"))
 	}
 
 	if len(d.TableIndexes) > 0 {
-		sqlRev.WriteString(strings.Join(d.TableIndexes, "\n") + "\n")
+		revDDLS = append(revDDLS, strings.Join(d.TableIndexes, "\n"))
 	}
 
 	if len(d.TableCompatibleDDL) > 0 {
-		sqlComp.WriteString(strings.Join(d.TableCompatibleDDL, "\n") + "\n")
+		compDDLS = append(compDDLS, strings.Join(d.TableCompatibleDDL, "\n"))
 	}
 
-	// 文件写入
-	if sqlRev.String() != "" {
-		if w.Cfg.ReverseConfig.DirectWrite {
-			err := w.RWriteDB(sqlRev.String())
-			if err != nil {
-				return err
-			}
-		} else {
-			if _, err := w.RWriteFile(sqlRev.String()); err != nil {
-				return err
-			}
-		}
-	}
-	if sqlComp.String() != "" {
-		if _, err := w.CWriteFile(sqlComp.String()); err != nil {
-			return err
-		}
-	}
-	return nil
+	return revDDLS, compDDLS
 }
 
 func (d *DDL) String() string {

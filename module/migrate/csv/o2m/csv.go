@@ -291,7 +291,7 @@ func (r *O2M) CSV() error {
 
 	if len(panicTblFullSlice) > 0 {
 		endTime := time.Now()
-		zap.L().Error("all oracle table data csv error",
+		zap.L().Error("oracle schema table data csv error",
 			zap.String("schema", r.Cfg.OracleConfig.SchemaName),
 			zap.String("cost", endTime.Sub(startTime).String()),
 			zap.Int("part sync tables", len(partSyncTables)),
@@ -354,13 +354,13 @@ func (r *O2M) CSV() error {
 		return err
 	}
 
-	zap.L().Info("source schema all table data csv finished",
+	zap.L().Info("source schema table data csv finished",
 		zap.String("schema", r.Cfg.OracleConfig.SchemaName),
 		zap.Int("table totals", len(exporters)),
 		zap.Int("table success", len(succTotals)),
 		zap.Int("table failed", len(failedTotals)),
 		zap.String("output", r.Cfg.CSVConfig.OutputDir),
-		zap.String("log detail", "if exist table failed, please see meta table [wait/full_sync_meta]"),
+		zap.String("log detail", "if exist table failed, please see meta table [wait/full_sync_meta/chunk_error_detail]"),
 		zap.String("cost", time.Now().Sub(startTime).String()))
 	return nil
 }
@@ -379,10 +379,6 @@ func (r *O2M) csvPartSyncTable(csvPartTables []string) error {
 		t := tbl
 		g.Go(func() error {
 			taskTime := time.Now()
-			zap.L().Info("source schema table csv data start",
-				zap.String("schema", r.Cfg.OracleConfig.SchemaName),
-				zap.String("table", t))
-
 			err = meta.NewWaitSyncMetaModel(r.MetaDB).UpdateWaitSyncMeta(r.Ctx, &meta.WaitSyncMeta{
 				DBTypeS:     r.Cfg.DBTypeS,
 				DBTypeT:     r.Cfg.DBTypeT,
@@ -421,7 +417,7 @@ func (r *O2M) csvPartSyncTable(csvPartTables []string) error {
 
 			waitFullMetas = append(waitFullMetas, failedFullMetas...)
 
-			columnNameS, err := r.Oracle.GetOracleTableRowsColumn(
+			columnNameS, err := r.Oracle.GetOracleTableRowsColumnCSV(
 				common.StringsBuilder(`SELECT *`, ` FROM `,
 					common.StringUPPER(r.Cfg.OracleConfig.SchemaName), `.`, common.StringUPPER(t), ` WHERE ROWNUM = 1`))
 			if err != nil {
@@ -542,29 +538,31 @@ func (r *O2M) csvPartSyncTable(csvPartTables []string) error {
 					zap.String("schema", r.Cfg.OracleConfig.SchemaName),
 					zap.String("table", common.StringUPPER(t)),
 					zap.String("cost", time.Now().Sub(taskTime).String()))
-			} else {
-				// 若存在错误，修改表状态，skip 清理，统一忽略，最后显示
-				err = meta.NewWaitSyncMetaModel(r.MetaDB).UpdateWaitSyncMeta(r.Ctx, &meta.WaitSyncMeta{
-					DBTypeS:     r.Cfg.DBTypeS,
-					DBTypeT:     r.Cfg.DBTypeT,
-					SchemaNameS: common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
-					TableNameS:  common.StringUPPER(t),
-					TaskMode:    r.Cfg.TaskMode,
-				}, map[string]interface{}{
-					"TaskStatus":       common.TaskStatusFailed,
-					"ChunkSuccessNums": int64(len(successChunkFullMeta)),
-					"ChunkFailedNums":  failedChunkTotalErrs,
-				})
-				if err != nil {
-					return err
-				}
-				zap.L().Warn("update mysql [wait_sync_meta] meta",
-					zap.String("schema", r.Cfg.OracleConfig.SchemaName),
-					zap.String("table", common.StringUPPER(t)),
-					zap.String("mode", r.Cfg.TaskMode),
-					zap.String("updated", "csv table exist error, skip"),
-					zap.String("cost", time.Now().Sub(startTime).String()))
+
+				return nil
 			}
+			// 若存在错误，修改表状态，skip 清理，统一忽略，最后显示
+			err = meta.NewWaitSyncMetaModel(r.MetaDB).UpdateWaitSyncMeta(r.Ctx, &meta.WaitSyncMeta{
+				DBTypeS:     r.Cfg.DBTypeS,
+				DBTypeT:     r.Cfg.DBTypeT,
+				SchemaNameS: common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
+				TableNameS:  common.StringUPPER(t),
+				TaskMode:    r.Cfg.TaskMode,
+			}, map[string]interface{}{
+				"TaskStatus":       common.TaskStatusFailed,
+				"ChunkSuccessNums": int64(len(successChunkFullMeta)),
+				"ChunkFailedNums":  failedChunkTotalErrs,
+			})
+			if err != nil {
+				return err
+			}
+			zap.L().Warn("update mysql [wait_sync_meta] meta",
+				zap.String("schema", r.Cfg.OracleConfig.SchemaName),
+				zap.String("table", common.StringUPPER(t)),
+				zap.String("mode", r.Cfg.TaskMode),
+				zap.String("updated", "csv table exist error, skip"),
+				zap.String("cost", time.Now().Sub(startTime).String()))
+
 			return nil
 		})
 	}
