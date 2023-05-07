@@ -40,12 +40,12 @@ type Rows struct {
 	Meta          *meta.Meta
 	SourceCharset string
 	ColumnNameS   []string
-	ReadChannel   chan []map[string]string
+	ReadChannel   chan map[string]string
 	WriteChannel  chan string
 }
 
 func NewRows(ctx context.Context, syncMeta meta.FullSyncMeta,
-	oracle *oracle.Oracle, meta *meta.Meta, cfg *config.Config, sourceCharset string, columnNameS []string, readChannel chan []map[string]string, writeChannel chan string) *Rows {
+	oracle *oracle.Oracle, meta *meta.Meta, cfg *config.Config, sourceCharset string, columnNameS []string, readChannel chan map[string]string, writeChannel chan string) *Rows {
 	return &Rows{
 		Ctx:           ctx,
 		SyncMeta:      syncMeta,
@@ -69,7 +69,7 @@ func (t *Rows) ReadData() error {
 
 	querySQL := common.StringsBuilder(`SELECT `, t.SyncMeta.ColumnDetailS, ` FROM `, t.SyncMeta.SchemaNameS, `.`, t.SyncMeta.TableNameS, ` WHERE `, t.SyncMeta.ChunkDetailS)
 
-	err := t.Oracle.GetOracleTableRowsDataCSV(querySQL, t.Cfg.AppConfig.InsertBatchSize, t.Cfg.CSVConfig, t.ReadChannel)
+	err := t.Oracle.GetOracleTableRowsDataCSV(querySQL, t.Cfg.CSVConfig, t.ReadChannel)
 	if err != nil {
 		// 错误 SQL 记录
 		errf := meta.NewChunkErrorDetailModel(t.Meta).CreateChunkErrorDetail(t.Ctx, &meta.ChunkErrorDetail{
@@ -104,19 +104,17 @@ func (t *Rows) ReadData() error {
 func (t *Rows) ProcessData() error {
 
 	for dataC := range t.ReadChannel {
-		for _, dMap := range dataC {
-			// 按字段名顺序遍历获取对应值
-			var (
-				rowsTMP []string
-			)
-			for _, column := range t.ColumnNameS {
-				if val, ok := dMap[column]; ok {
-					rowsTMP = append(rowsTMP, val)
-				}
+		// 按字段名顺序遍历获取对应值
+		var (
+			rowsTMP []string
+		)
+		for _, column := range t.ColumnNameS {
+			if val, ok := dataC[column]; ok {
+				rowsTMP = append(rowsTMP, val)
 			}
-			// csv 文件行数据输入
-			t.WriteChannel <- common.StringsBuilder(exstrings.Join(rowsTMP, t.Cfg.CSVConfig.Separator), t.Cfg.CSVConfig.Terminator)
 		}
+		// csv 文件行数据输入
+		t.WriteChannel <- common.StringsBuilder(exstrings.Join(rowsTMP, t.Cfg.CSVConfig.Separator), t.Cfg.CSVConfig.Terminator)
 	}
 
 	// 通道关闭

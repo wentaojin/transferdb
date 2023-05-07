@@ -39,10 +39,9 @@ type ChunkErrorDetail struct {
 }
 
 func NewChunkErrorDetailModel(m *Meta) *ChunkErrorDetail {
-	return &ChunkErrorDetail{
-		BaseModel: &BaseModel{
-			Meta: m},
-	}
+	return &ChunkErrorDetail{BaseModel: &BaseModel{
+		Meta: m,
+	}}
 }
 
 func (rw *ChunkErrorDetail) ParseSchemaTable() (string, error) {

@@ -120,14 +120,13 @@ func (o *Oracle) GetOracleTableRowsColumnCSV(querySQL string) ([]string, error) 
 	return columns, nil
 }
 
-func (o *Oracle) GetOracleTableRowsDataCSV(querySQL string, insertBatchSize int, csvCfg config.CSVConfig, dataChan chan []map[string]string) error {
+func (o *Oracle) GetOracleTableRowsDataCSV(querySQL string, csvCfg config.CSVConfig, dataChan chan map[string]string) error {
 	var (
 		err         error
 		columnNames []string
 		columnTypes []string
 	)
 	// 临时数据存放
-	var rowsTMP []map[string]string
 	rowsMap := make(map[string]string)
 
 	rows, err := o.OracleDB.QueryContext(o.Ctx, querySQL)
@@ -241,30 +240,15 @@ func (o *Oracle) GetOracleTableRowsDataCSV(querySQL string, insertBatchSize int,
 			}
 		}
 
-		// 临时数组
-		rowsTMP = append(rowsTMP, rowsMap)
+		// 数据输入
+		dataChan <- rowsMap
 
 		// MAP 清空
 		rowsMap = make(map[string]string)
-
-		// batch 批次
-		if len(rowsTMP) == insertBatchSize {
-
-			dataChan <- rowsTMP
-
-			// 数组清空
-			rowsTMP = rowsTMP[0:0]
-		}
 	}
 
 	if err = rows.Err(); err != nil {
 		return err
-	}
-
-	// 非 batch 批次
-	if len(rowsTMP) > 0 {
-
-		dataChan <- rowsTMP
 	}
 
 	// 通道关闭
