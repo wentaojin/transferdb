@@ -36,21 +36,22 @@ type Rows struct {
 	Ctx           context.Context
 	SyncMeta      meta.FullSyncMeta
 	Oracle        *oracle.Oracle
-	CsvCfg        config.CSVConfig
+	Cfg           *config.Config
 	Meta          *meta.Meta
 	SourceCharset string
 	ColumnNameS   []string
-	ReadChannel   chan map[string]string
+	ReadChannel   chan []map[string]string
 	WriteChannel  chan string
 }
 
 func NewRows(ctx context.Context, syncMeta meta.FullSyncMeta,
-	oracle *oracle.Oracle, csvCfg config.CSVConfig, sourceCharset string, columnNameS []string, readChannel chan map[string]string, writeChannel chan string) *Rows {
+	oracle *oracle.Oracle, meta *meta.Meta, cfg *config.Config, sourceCharset string, columnNameS []string, readChannel chan []map[string]string, writeChannel chan string) *Rows {
 	return &Rows{
 		Ctx:           ctx,
 		SyncMeta:      syncMeta,
 		Oracle:        oracle,
-		CsvCfg:        csvCfg,
+		Meta:          meta,
+		Cfg:           cfg,
 		SourceCharset: sourceCharset,
 		ColumnNameS:   columnNameS,
 		ReadChannel:   readChannel,
@@ -68,7 +69,7 @@ func (t *Rows) ReadData() error {
 
 	querySQL := common.StringsBuilder(`SELECT `, t.SyncMeta.ColumnDetailS, ` FROM `, t.SyncMeta.SchemaNameS, `.`, t.SyncMeta.TableNameS, ` WHERE `, t.SyncMeta.ChunkDetailS)
 
-	err := t.Oracle.GetOracleTableRowsDataCSV(querySQL, t.CsvCfg, t.ReadChannel)
+	err := t.Oracle.GetOracleTableRowsDataCSV(querySQL, t.Cfg.AppConfig.InsertBatchSize, t.Cfg.CSVConfig, t.ReadChannel)
 	if err != nil {
 		// 错误 SQL 记录
 		errf := meta.NewChunkErrorDetailModel(t.Meta).CreateChunkErrorDetail(t.Ctx, &meta.ChunkErrorDetail{
@@ -103,18 +104,19 @@ func (t *Rows) ReadData() error {
 func (t *Rows) ProcessData() error {
 
 	for dataC := range t.ReadChannel {
-		// 按字段名顺序遍历获取对应值
-		var (
-			rowsTMP []string
-		)
-		for _, column := range t.ColumnNameS {
-			if val, ok := dataC[column]; ok {
-				rowsTMP = append(rowsTMP, val)
+		for _, dMap := range dataC {
+			// 按字段名顺序遍历获取对应值
+			var (
+				rowsTMP []string
+			)
+			for _, column := range t.ColumnNameS {
+				if val, ok := dMap[column]; ok {
+					rowsTMP = append(rowsTMP, val)
+				}
 			}
+			// csv 文件行数据输入
+			t.WriteChannel <- common.StringsBuilder(exstrings.Join(rowsTMP, t.Cfg.CSVConfig.Separator), t.Cfg.CSVConfig.Terminator)
 		}
-
-		// csv 文件行数据输入
-		t.WriteChannel <- common.StringsBuilder(exstrings.Join(rowsTMP, t.CsvCfg.Separator), t.CsvCfg.Terminator)
 	}
 
 	// 通道关闭
@@ -142,7 +144,7 @@ func (t *Rows) WriteFile() error {
 	// 文件目录判断
 	if err := common.PathExist(
 		filepath.Join(
-			t.CsvCfg.OutputDir,
+			t.Cfg.CSVConfig.OutputDir,
 			strings.ToUpper(t.SyncMeta.SchemaNameS),
 			strings.ToUpper(t.SyncMeta.TableNameS))); err != nil {
 		return err
@@ -162,8 +164,8 @@ func (t *Rows) WriteFile() error {
 
 func (t *Rows) Write(w io.Writer) error {
 	writer := bufio.NewWriter(w)
-	if t.CsvCfg.Header {
-		if _, err := writer.WriteString(common.StringsBuilder(exstrings.Join(t.ColumnNameS, t.CsvCfg.Separator), t.CsvCfg.Terminator)); err != nil {
+	if t.Cfg.CSVConfig.Header {
+		if _, err := writer.WriteString(common.StringsBuilder(exstrings.Join(t.ColumnNameS, t.Cfg.CSVConfig.Separator), t.Cfg.CSVConfig.Terminator)); err != nil {
 			return fmt.Errorf("failed to write headers: %v", err)
 		}
 	}
@@ -183,9 +185,9 @@ func (t *Rows) Write(w io.Writer) error {
 }
 
 func (t *Rows) AdjustDBCharsetConfig() error {
-	if t.CsvCfg.Charset == "" {
+	if t.Cfg.CSVConfig.Charset == "" {
 		if val, ok := common.OracleDBCSVCharacterSetMap[strings.ToUpper(t.SourceCharset)]; ok {
-			t.CsvCfg.Charset = val
+			t.Cfg.CSVConfig.Charset = val
 		} else {
 			return fmt.Errorf("oracle db csv characterset [%v] isn't support", t.SourceCharset)
 		}
