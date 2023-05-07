@@ -25,7 +25,6 @@ import (
 	"github.com/wentaojin/transferdb/database/meta"
 	"github.com/wentaojin/transferdb/database/oracle"
 	"go.uber.org/zap"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -40,12 +39,12 @@ type Rows struct {
 	Meta          *meta.Meta
 	SourceCharset string
 	ColumnNameS   []string
-	ReadChannel   chan map[string]string
+	ReadChannel   chan []map[string]string
 	WriteChannel  chan string
 }
 
 func NewRows(ctx context.Context, syncMeta meta.FullSyncMeta,
-	oracle *oracle.Oracle, meta *meta.Meta, cfg *config.Config, sourceCharset string, columnNameS []string, readChannel chan map[string]string, writeChannel chan string) *Rows {
+	oracle *oracle.Oracle, meta *meta.Meta, cfg *config.Config, sourceCharset string, columnNameS []string, readChannel chan []map[string]string, writeChannel chan string) *Rows {
 	return &Rows{
 		Ctx:           ctx,
 		SyncMeta:      syncMeta,
@@ -69,7 +68,7 @@ func (t *Rows) ReadData() error {
 
 	querySQL := common.StringsBuilder(`SELECT `, t.SyncMeta.ColumnDetailS, ` FROM `, t.SyncMeta.SchemaNameS, `.`, t.SyncMeta.TableNameS, ` WHERE `, t.SyncMeta.ChunkDetailS)
 
-	err := t.Oracle.GetOracleTableRowsDataCSV(querySQL, t.Cfg.CSVConfig, t.ReadChannel)
+	err := t.Oracle.GetOracleTableRowsDataCSV(querySQL, t.Cfg.AppConfig.InsertBatchSize, t.Cfg.CSVConfig, t.ReadChannel)
 	if err != nil {
 		// 错误 SQL 记录
 		errf := meta.NewChunkErrorDetailModel(t.Meta).CreateChunkErrorDetail(t.Ctx, &meta.ChunkErrorDetail{
@@ -104,17 +103,19 @@ func (t *Rows) ReadData() error {
 func (t *Rows) ProcessData() error {
 
 	for dataC := range t.ReadChannel {
-		// 按字段名顺序遍历获取对应值
-		var (
-			rowsTMP []string
-		)
-		for _, column := range t.ColumnNameS {
-			if val, ok := dataC[column]; ok {
-				rowsTMP = append(rowsTMP, val)
+		for _, dMap := range dataC {
+			// 按字段名顺序遍历获取对应值
+			var (
+				rowsTMP []string
+			)
+			for _, column := range t.ColumnNameS {
+				if val, ok := dMap[column]; ok {
+					rowsTMP = append(rowsTMP, val)
+				}
 			}
+			// csv 文件行数据输入
+			t.WriteChannel <- common.StringsBuilder(exstrings.Join(rowsTMP, t.Cfg.CSVConfig.Separator), t.Cfg.CSVConfig.Terminator)
 		}
-		// csv 文件行数据输入
-		t.WriteChannel <- common.StringsBuilder(exstrings.Join(rowsTMP, t.Cfg.CSVConfig.Separator), t.Cfg.CSVConfig.Terminator)
 	}
 
 	// 通道关闭
@@ -125,20 +126,6 @@ func (t *Rows) ProcessData() error {
 
 func (t *Rows) ApplyData() error {
 	startTime := time.Now()
-	err := t.WriteFile()
-	if err != nil {
-		return err
-	}
-	endTime := time.Now()
-	zap.L().Info("target schema table chunk data applier finished",
-		zap.String("schema", t.SyncMeta.SchemaNameT),
-		zap.String("table", t.SyncMeta.TableNameT),
-		zap.String("chunk", t.SyncMeta.ChunkDetailS),
-		zap.String("cost", endTime.Sub(startTime).String()))
-	return nil
-}
-
-func (t *Rows) WriteFile() error {
 	// 文件目录判断
 	if err := common.PathExist(
 		filepath.Join(
@@ -152,18 +139,11 @@ func (t *Rows) WriteFile() error {
 	if err != nil {
 		return err
 	}
-	defer fileW.Close()
 
-	if err = t.Write(fileW); err != nil {
-		return err
-	}
-	return nil
-}
+	writer := bufio.NewWriter(fileW)
 
-func (t *Rows) Write(w io.Writer) error {
-	writer := bufio.NewWriter(w)
 	if t.Cfg.CSVConfig.Header {
-		if _, err := writer.WriteString(common.StringsBuilder(exstrings.Join(t.ColumnNameS, t.Cfg.CSVConfig.Separator), t.Cfg.CSVConfig.Terminator)); err != nil {
+		if _, err = writer.WriteString(common.StringsBuilder(exstrings.Join(t.ColumnNameS, t.Cfg.CSVConfig.Separator), t.Cfg.CSVConfig.Terminator)); err != nil {
 			return fmt.Errorf("failed to write headers: %v", err)
 		}
 	}
@@ -175,10 +155,21 @@ func (t *Rows) Write(w io.Writer) error {
 		}
 	}
 
-	if err := writer.Flush(); err != nil {
+	if err = writer.Flush(); err != nil {
 		return fmt.Errorf("failed to flush data row to csv %w", err)
 	}
 
+	err = fileW.Close()
+	if err != nil {
+		return fmt.Errorf("failed to close file to csv %w", err)
+	}
+
+	endTime := time.Now()
+	zap.L().Info("target schema table chunk data applier finished",
+		zap.String("schema", t.SyncMeta.SchemaNameT),
+		zap.String("table", t.SyncMeta.TableNameT),
+		zap.String("chunk", t.SyncMeta.ChunkDetailS),
+		zap.String("cost", endTime.Sub(startTime).String()))
 	return nil
 }
 
