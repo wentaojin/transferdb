@@ -25,6 +25,7 @@ import (
 	"github.com/wentaojin/transferdb/database/meta"
 	"github.com/wentaojin/transferdb/database/oracle"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 	"os"
 	"path/filepath"
 	"strings"
@@ -139,8 +140,11 @@ func (t *Rows) ApplyData() error {
 	if err != nil {
 		return err
 	}
+	defer fileW.Close()
 
-	writer := bufio.NewWriter(fileW)
+	// 使用 bufio 来缓存写入文件，以提高效率
+	writer := bufio.NewWriterSize(fileW, 4096)
+	defer writer.Flush()
 
 	if t.Cfg.CSVConfig.Header {
 		if _, err = writer.WriteString(common.StringsBuilder(exstrings.Join(t.ColumnNameS, t.Cfg.CSVConfig.Separator), t.Cfg.CSVConfig.Terminator)); err != nil {
@@ -148,20 +152,22 @@ func (t *Rows) ApplyData() error {
 		}
 	}
 
+	g := &errgroup.Group{}
+	g.SetLimit(t.Cfg.CSVConfig.SQLThreads)
+
 	for dataC := range t.WriteChannel {
-		// 写入文件
-		if _, err := writer.WriteString(dataC); err != nil {
-			return fmt.Errorf("failed to write data row to csv %w", err)
-		}
+		data := dataC
+		g.Go(func() error {
+			// 写入文件
+			if _, err = writer.WriteString(data); err != nil {
+				return fmt.Errorf("failed to write data row to csv %w", err)
+			}
+			return nil
+		})
 	}
 
-	if err = writer.Flush(); err != nil {
-		return fmt.Errorf("failed to flush data row to csv %w", err)
-	}
-
-	err = fileW.Close()
-	if err != nil {
-		return fmt.Errorf("failed to close file to csv %w", err)
+	if err = g.Wait(); err != nil {
+		return err
 	}
 
 	endTime := time.Now()
