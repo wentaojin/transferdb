@@ -25,7 +25,6 @@ import (
 	"github.com/wentaojin/transferdb/database/meta"
 	"github.com/wentaojin/transferdb/database/oracle"
 	"go.uber.org/zap"
-	"golang.org/x/sync/errgroup"
 	"os"
 	"path/filepath"
 	"strings"
@@ -45,7 +44,11 @@ type Rows struct {
 }
 
 func NewRows(ctx context.Context, syncMeta meta.FullSyncMeta,
-	oracle *oracle.Oracle, meta *meta.Meta, cfg *config.Config, sourceCharset string, columnNameS []string, readChannel chan []map[string]string, writeChannel chan string) *Rows {
+	oracle *oracle.Oracle, meta *meta.Meta, cfg *config.Config, sourceCharset string, columnNameS []string) *Rows {
+
+	writeChannel := make(chan string, common.ChannelBufferSize)
+	readChannel := make(chan []map[string]string, common.ChannelBufferSize)
+
 	return &Rows{
 		Ctx:           ctx,
 		SyncMeta:      syncMeta,
@@ -98,6 +101,10 @@ func (t *Rows) ReadData() error {
 		zap.String("chunk", t.SyncMeta.ChunkDetailS),
 		zap.String("sql", querySQL),
 		zap.String("cost", endTime.Sub(startTime).String()))
+
+	// 通道关闭
+	close(t.ReadChannel)
+
 	return nil
 }
 
@@ -114,8 +121,12 @@ func (t *Rows) ProcessData() error {
 					rowsTMP = append(rowsTMP, val)
 				}
 			}
-			// csv 文件行数据输入
-			t.WriteChannel <- common.StringsBuilder(exstrings.Join(rowsTMP, t.Cfg.CSVConfig.Separator), t.Cfg.CSVConfig.Terminator)
+			if len(rowsTMP) != len(t.ColumnNameS) {
+				return fmt.Errorf("source schema table column counts vs data counts isn't match")
+			} else {
+				// csv 文件行数据输入
+				t.WriteChannel <- common.StringsBuilder(exstrings.Join(rowsTMP, t.Cfg.CSVConfig.Separator), t.Cfg.CSVConfig.Terminator)
+			}
 		}
 	}
 
@@ -152,22 +163,10 @@ func (t *Rows) ApplyData() error {
 		}
 	}
 
-	g := &errgroup.Group{}
-	g.SetLimit(t.Cfg.CSVConfig.SQLThreads)
-
 	for dataC := range t.WriteChannel {
-		data := dataC
-		g.Go(func() error {
-			// 写入文件
-			if _, err = writer.WriteString(data); err != nil {
-				return fmt.Errorf("failed to write data row to csv %w", err)
-			}
-			return nil
-		})
-	}
-
-	if err = g.Wait(); err != nil {
-		return err
+		if _, err = writer.WriteString(dataC); err != nil {
+			return fmt.Errorf("failed to write data row to csv %w", err)
+		}
 	}
 
 	endTime := time.Now()

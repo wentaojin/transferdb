@@ -253,7 +253,7 @@ func (o *Oracle) GetOracleTableRowsDataCSV(querySQL string, insertBatchSize int,
 			dataChan <- rowsTMP
 
 			// 数组清空
-			rowsTMP = rowsTMP[0:0]
+			rowsTMP = make([]map[string]string, 0)
 		}
 	}
 
@@ -266,9 +266,6 @@ func (o *Oracle) GetOracleTableRowsDataCSV(querySQL string, insertBatchSize int,
 
 		dataChan <- rowsTMP
 	}
-
-	// 通道关闭
-	close(dataChan)
 
 	return nil
 }
@@ -424,7 +421,7 @@ func (o *Oracle) GetOracleTableRowsData(querySQL string, insertBatchSize int, da
 			dataChan <- rowsTMP
 
 			// 数组清空
-			rowsTMP = rowsTMP[0:0]
+			rowsTMP = make([]map[string]string, 0)
 		}
 	}
 
@@ -434,12 +431,8 @@ func (o *Oracle) GetOracleTableRowsData(querySQL string, insertBatchSize int, da
 
 	// 非 batch 批次
 	if len(rowsTMP) > 0 {
-
 		dataChan <- rowsTMP
 	}
-
-	// 通道关闭
-	close(dataChan)
 
 	return nil
 }

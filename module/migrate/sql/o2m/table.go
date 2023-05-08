@@ -17,6 +17,7 @@ package o2m
 
 import (
 	"context"
+	"fmt"
 	"github.com/thinkeridea/go-extend/exstrings"
 	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/database/meta"
@@ -43,7 +44,10 @@ type Rows struct {
 
 func NewRows(ctx context.Context, syncMeta meta.FullSyncMeta,
 	oracle *oracle.Oracle, mysql *mysql.MySQL, meta *meta.Meta, applyThreads, batchSize int, safeMode bool,
-	columnNameS []string, readChannel chan []map[string]string, writeChannel chan string) *Rows {
+	columnNameS []string) *Rows {
+
+	readChannel := make(chan []map[string]string, common.ChannelBufferSize)
+	writeChannel := make(chan string, common.ChannelBufferSize)
 
 	return &Rows{
 		Ctx:          ctx,
@@ -93,6 +97,10 @@ func (t *Rows) ReadData() error {
 		zap.String("chunk", t.SyncMeta.ChunkDetailS),
 		zap.String("sql", querySQL),
 		zap.String("cost", endTime.Sub(startTime).String()))
+
+	// 通道关闭
+	close(t.ReadChannel)
+
 	return nil
 }
 
@@ -111,7 +119,12 @@ func (t *Rows) ProcessData() error {
 					rowsTMP = append(rowsTMP, val)
 				}
 			}
-			batchRows = append(batchRows, common.StringsBuilder("(", exstrings.Join(rowsTMP, ","), ")"))
+
+			if len(rowsTMP) != len(t.ColumnNameS) {
+				return fmt.Errorf("source schema table column counts vs data counts isn't match")
+			} else {
+				batchRows = append(batchRows, common.StringsBuilder("(", exstrings.Join(rowsTMP, ","), ")"))
+			}
 		}
 
 		// 数据输入

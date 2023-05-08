@@ -416,11 +416,8 @@ func (r *Migrate) FullPartSyncTable(fullPartTables []string) error {
 			for _, fullMeta := range waitFullMetas {
 				m := fullMeta
 				g1.Go(func() error {
-					readChannel := make(chan []map[string]string, common.ChannelBufferSize)
-					writeChannel := make(chan string, common.ChannelBufferSize)
-
 					// 数据写入
-					err := IMigrate(NewRows(r.Ctx, m, r.Oracle, r.Mysql, r.MetaDB, r.Cfg.FullConfig.ApplyThreads, r.Cfg.AppConfig.InsertBatchSize, true, columnNameS, readChannel, writeChannel))
+					err := IMigrate(NewRows(r.Ctx, m, r.Oracle, r.Mysql, r.MetaDB, r.Cfg.FullConfig.ApplyThreads, r.Cfg.AppConfig.InsertBatchSize, true, columnNameS))
 
 					if err != nil {
 						// record error, skip error

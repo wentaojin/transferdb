@@ -17,19 +17,35 @@ package o2m
 
 import (
 	"github.com/wentaojin/transferdb/module/migrate"
+	"golang.org/x/sync/errgroup"
 )
 
 func IMigrate(ex migrate.Migrator) error {
+	g := &errgroup.Group{}
+
+	g.Go(func() error {
+		err := ex.ProcessData()
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	g.Go(func() error {
+		err := ex.ApplyData()
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+
 	err := ex.ReadData()
 	if err != nil {
 		return err
 	}
-	err = ex.ProcessData()
-	if err != nil {
-		return err
-	}
 
-	err = ex.ApplyData()
+	err = g.Wait()
 	if err != nil {
 		return err
 	}

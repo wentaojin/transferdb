@@ -430,11 +430,7 @@ func (r *O2M) csvPartSyncTable(csvPartTables []string) error {
 			for _, fullSyncMeta := range waitFullMetas {
 				m := fullSyncMeta
 				g1.Go(func() error {
-
-					readChannel := make(chan []map[string]string, common.ChannelBufferSize)
-					writeChannel := make(chan string, common.ChannelBufferSize)
-
-					err = IMigrate(NewRows(r.Ctx, m, r.Oracle, r.MetaDB, r.Cfg, oracleDBCharacterSet, columnNameS, readChannel, writeChannel))
+					err = IMigrate(NewRows(r.Ctx, m, r.Oracle, r.MetaDB, r.Cfg, oracleDBCharacterSet, columnNameS))
 					if err != nil {
 						// record error, skip error
 						errf := meta.NewCommonModel(r.MetaDB).UpdateFullSyncMetaChunkAndCreateChunkErrorDetail(r.Ctx, &meta.FullSyncMeta{
