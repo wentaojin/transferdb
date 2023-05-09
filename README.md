@@ -17,7 +17,9 @@ Features
 Quick Start
 -----------
 [使用手册](docs/transferdb_guaid.md)
+
 [权限手册](docs/transferdb_privs.md)
+
 [参数说明](example/config.toml)
 
 Development
