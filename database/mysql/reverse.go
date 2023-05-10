@@ -179,11 +179,11 @@ func (m *MySQL) GetMySQLPartitionTableDetailINFO(schemaName, tableName string) (
 		return "", err
 	}
 
-	partitonINFO := strings.Split(strings.ReplaceAll(res[0]["Create Table"], "`", ""), "PARTITION BY")[1]
+	partitonINFO := strings.Split(strings.ReplaceAll(res[0]["Create Table"], "`", ""), "PARTITION BY")
 	if err != nil {
-		return partitonINFO, fmt.Errorf("get table paritiotn info failed: %v", res[0]["Create Table"])
+		return "", fmt.Errorf("get table paritiotn info failed: %v", res[0]["Create Table"])
 	}
-	return partitonINFO, nil
+	return strings.Join(partitonINFO[1:], "\n"), nil
 }
 
 func (m *MySQL) GetMySQLTablePrimaryKey(schemaName, tableName string) ([]map[string]string, error) {
