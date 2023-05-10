@@ -20,6 +20,20 @@ import (
 	"strings"
 )
 
+func (o *Oracle) GetOracleSoftVersion() (string, error) {
+	_, res, err := Query(o.Ctx, o.OracleDB, `SELECT BANNER FROM v$version`)
+	if err != nil {
+		return "", err
+	}
+	if strings.EqualFold(res[0]["BANNER"], "Enterprise Edition Release") {
+		return "Enterprise Edition Release", nil
+	}
+	if strings.EqualFold(res[0]["BANNER"], "Express Edition Release") {
+		return "Express Edition Release", nil
+	}
+	return res[0]["BANNER"], nil
+}
+
 func (o *Oracle) GetOracleDBName() (string, string, string, error) {
 	_, res, err := Query(o.Ctx, o.OracleDB, `SELECT name dbname,platform_id platform_id,platform_name platform_name FROM v$database`)
 	if err != nil {
@@ -43,6 +57,17 @@ func (o *Oracle) GetOracleParameters() (string, string, string, string, error) {
 		CLusterDatabaseInstance string
 		characterSet            string
 	)
+	var isExpress bool
+	version, err := o.GetOracleSoftVersion()
+	if err != nil {
+		return "", "", "", "", err
+	}
+	if strings.EqualFold(version, "Express Edition Release") {
+		isExpress = true
+	} else {
+		isExpress = false
+	}
+
 	_, res, err := Query(o.Ctx, o.OracleDB, `SELECT VALUE FROM v$parameter WHERE	NAME = 'db_block_size'`)
 	if err != nil {
 		return dbBlockSize, clusterDatabase, CLusterDatabaseInstance, characterSet, err
@@ -55,11 +80,16 @@ func (o *Oracle) GetOracleParameters() (string, string, string, string, error) {
 	}
 	clusterDatabase = res[0]["VALUE"]
 
-	_, res, err = Query(o.Ctx, o.OracleDB, `SELECT VALUE FROM v$parameter WHERE	NAME = 'cluster_database_instances'`)
-	if err != nil {
-		return dbBlockSize, clusterDatabase, CLusterDatabaseInstance, characterSet, err
+	if !isExpress {
+		_, res, err = Query(o.Ctx, o.OracleDB, `SELECT VALUE FROM v$parameter WHERE	NAME = 'cluster_database_instances'`)
+		if err != nil {
+			return dbBlockSize, clusterDatabase, CLusterDatabaseInstance, characterSet, err
+		}
+		CLusterDatabaseInstance = res[0]["VALUE"]
+	} else {
+		// Express 不支持该 SQL 查询，手工赋值 1
+		CLusterDatabaseInstance = "1"
 	}
-	CLusterDatabaseInstance = res[0]["VALUE"]
 
 	_, res, err = Query(o.Ctx, o.OracleDB, `select VALUE from nls_database_parameters WHERE PARAMETER='NLS_CHARACTERSET'`)
 	if err != nil {
