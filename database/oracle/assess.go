@@ -25,10 +25,10 @@ func (o *Oracle) GetOracleSoftVersion() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if strings.EqualFold(res[0]["BANNER"], "Enterprise Edition Release") {
+	if strings.Contains(res[0]["BANNER"], "Enterprise Edition Release") {
 		return "Enterprise Edition Release", nil
 	}
-	if strings.EqualFold(res[0]["BANNER"], "Express Edition Release") {
+	if strings.Contains(res[0]["BANNER"], "Express Edition Release") {
 		return "Express Edition Release", nil
 	}
 	return res[0]["BANNER"], nil
