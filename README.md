@@ -13,6 +13,7 @@ Features
 - ORACLE -> MySQL/TiDB 数据库数据校验
 - ORACLE -> MySQL/TiDB 数据库实时同步【实验性】
 - MySQL/TiDB -> ORACLE 数据库表结构定义转换，支持库、表、列级别以及默认值自定义
+- MySQL/TiDB -> ORACLE 数据库表结构对比【实验性】
 
 Quick Start
 -----------

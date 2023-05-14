@@ -135,7 +135,6 @@ type MySQLConfig struct {
 	Host          string `toml:"host" json:"host"`
 	Port          int    `toml:"port" json:"port"`
 	ConnectParams string `toml:"connect-params" json:"connect-params"`
-	MetaSchema    string `toml:"meta-schema" json:"meta-schema"`
 	SchemaName    string `toml:"schema-name" json:"schema-name"`
 	TableOption   string `toml:"table-option" json:"table-option"`
 	Overwrite     bool   `toml:"overwrite" json:"overwrite"`
