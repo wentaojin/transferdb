@@ -20,6 +20,7 @@ import (
 	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/config"
 	"github.com/wentaojin/transferdb/module/check"
+	"github.com/wentaojin/transferdb/module/check/m2o"
 	"github.com/wentaojin/transferdb/module/check/o2m"
 	"strings"
 )
@@ -32,6 +33,11 @@ func ICheck(ctx context.Context, cfg *config.Config) error {
 	switch {
 	case strings.EqualFold(cfg.DBTypeS, common.DatabaseTypeOracle) && strings.EqualFold(cfg.DBTypeT, common.DatabaseTypeMySQL):
 		r, err = o2m.NewCheck(ctx, cfg)
+		if err != nil {
+			return err
+		}
+	case strings.EqualFold(cfg.DBTypeS, common.DatabaseTypeMySQL) && strings.EqualFold(cfg.DBTypeT, common.DatabaseTypeOracle):
+		r, err = m2o.NewCheck(ctx, cfg)
 		if err != nil {
 			return err
 		}
