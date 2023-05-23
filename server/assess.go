@@ -20,7 +20,9 @@ import (
 	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/config"
 	"github.com/wentaojin/transferdb/module/assess"
-	"github.com/wentaojin/transferdb/module/assess/o2m"
+	"github.com/wentaojin/transferdb/module/assess/oracle/o2m"
+	"github.com/wentaojin/transferdb/module/assess/oracle/o2t"
+
 	"strings"
 )
 
@@ -32,6 +34,11 @@ func IAssess(ctx context.Context, cfg *config.Config) error {
 	switch {
 	case strings.EqualFold(cfg.DBTypeS, common.DatabaseTypeOracle) && strings.EqualFold(cfg.DBTypeT, common.DatabaseTypeMySQL):
 		a, err = o2m.NewAssess(ctx, cfg)
+		if err != nil {
+			return err
+		}
+	case strings.EqualFold(cfg.DBTypeS, common.DatabaseTypeOracle) && strings.EqualFold(cfg.DBTypeT, common.DatabaseTypeTiDB):
+		a, err = o2t.NewAssess(ctx, cfg)
 		if err != nil {
 			return err
 		}

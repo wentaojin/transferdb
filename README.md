@@ -25,19 +25,21 @@ Quick Start
 
 Development
 -----------
-信息评估 make assess
+环境准备 make prepare
 
-表结构转换 make prepare / make reverseO2M/reverseM2O
+信息评估 make assessO2M/assessO2T
 
-表结构核对 make check
+表结构转换 make reverseO2M/reverseO2T reverseM2O/reverseT2O
 
-全量数据迁移 make full
+表结构核对 make checkO2M/checkO2T checkM2O/checkT2O
 
-数据实时同步 make all
+全量数据迁移 make fullO2M/fullO2T
 
-CSV 数据导出 make csv
+数据实时同步 make allO2M/allO2T
 
-数据校验 make compare
+CSV 数据导出 make csvO2M/csvO2T
+
+数据校验 make compareO2M/compareO2T
 
 程序编译 make build
 

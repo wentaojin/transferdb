@@ -27,7 +27,7 @@ pprof-port = ":9696"
 
 [reverse]
 # 任务表并发
-reverse-threads = 256
+reverse-threads = 128
 # 是否直接写下游
 # 设置 true 代表表结构转换之后直接往下游执行(不会记录远端 Origin DDL，当建表语句报错报错信息表内会显示)
 # 设置 false 代表表结构转换之后写本地文件(本地文件会记录源端 Origin DDL)
@@ -82,8 +82,6 @@ terminator = "|+|\r\n"
 delimiter = '"'
 # 使用反斜杠 (\) 来转义导出文件中的特殊字符
 escape-backslash = true
-# 目标数据库字符集 utf8/gbk，设置为空表示以上游数据库为准
-charset = "utf8"
 # 1、任务行数数，固定动作，一旦确认，不能更改，除非设置 enable-checkpoint = false，重新导出导入
 # 2、代表每张表每并发处理多少行数
 # 3、代表多少行数据切分一个 csv 文件
@@ -145,18 +143,20 @@ worker-threads = 64
 # 3、需要指定 ${schema-name} 所在的 pdb container
 # - NonCDB 架构
 # 1、无需指定 pdb-name，需置空，其他正常设置
-username = "c##ggadmin"
-password = "ggadmin"
-host = "10.2.13.323"
+username = "findpt"
+password = "findpt"
+host = "10.2.103.33"
 port = 1521
-service-name = "orclcdb"
+service-name = "gbk"
 # CDB 架构需指定 ${schema-name} 所在的 pdb container
 # NONCDB 架构无须指定，需置空
-pdb-name = "orclpdb1"
+pdb-name = ""
 # oracle instance client dir -> 该配置文件 lib-dir 参数 only windows/macOS 生效, 对于 linux 操作系统，需要手工设置环境变量 LD_LIBRARY_PATH
-# transferdb 运行环境所在 client 字符集 NLS_LANG 参数，windows、macOS 以及 linux 操作系统建议手工设置环境变量 NLS_LANG 保持与数据库 server 一致
-# select userenv('language') from dual;
 lib-dir = "/Users/marvin/storehouse/oracle/instantclient_19_8"
+# 设置 transferdb 运行环境所在 client 字符集参数，需保持跟 oracle server 一致
+# select userenv('language') from dual;
+# 常见的 ZHS16GBK 或 AL32UTF8
+charset = "ZHS16GBK"
 # 配置 oracle 连接参数
 # 配置 oracle 连接会话 session 变量
 connect-params = "poolMinSessions=50&poolMaxSessions=100&poolWaitTimeout=360s&poolSessionMaxLifetime=2h&poolSessionTimeout=2h&poolIncrement=30&timezone=Local&connect_timeout=15"
@@ -166,26 +166,24 @@ connect-params = "poolMinSessions=50&poolMaxSessions=100&poolWaitTimeout=360s&po
 # Interval Year/Day 数据字符 TO_CHAR 格式化
 session-params = []
 # 配置 oracle 迁移 schema（assess 阶段可设置可不设置，不设置则表示 assess 库内所有 schema，其他阶段必须设置）
-schema-name = "marvin"
+schema-name = "findpt"
 # 源端迁移任务表（只用于 prepare/reverse/check/all/full 阶段，assess 阶段不适用，assess 只适用于 schema 级别）
 # include-table 和 exclude-table 不能同时配置，两者只能配置一个,如果两个都没配置则 Schema 内表全迁移
 # include-table 和 exclude-table 支持正则表达式以及通配符（tab_*/tab*）
-include-table = []
+include-table = ["gbk00"]
 exclude-table = []
 
 # 只用于 reverse/check/all/full 阶段，assess 阶段不适用
 [mysql]
-# 数据库类型，only mysql/tidb
-db-type = "tidb"
 # 目标端连接串
 username = "root"
 password = ""
-host = "10.2.13.31"
-port = 5000
+host = "10.2.103.30"
+port = 5500
 # mysql 链接参数
 connect-params = "charset=utf8mb4&multiStatements=true&parseTime=True&loc=Local"
 # 目标端 schema
-schema-name = "marvin"
+schema-name = "marvin01"
 # 表后缀可选项 - Only 适用于 Oracle -> TiDB
 # TiDB 数据库全局生效（自动读取下游数据参数判定生效与否）：
 # tidb_enable_clustered_index = on 全局聚簇索引，table-option 不生效
@@ -198,9 +196,9 @@ table-option = "SHARD_ROW_ID_BITS = 4 PRE_SPLIT_REGIONS = 4"
 # 用于 prepare 阶段
 [meta]
 username = "root"
-password = ""
-host = "10.2.13.231"
-port = 5000
+password = "marvin"
+host = "10.2.103.30"
+port = 3306
 # 元数据库【多个 transferdb 同时运行, 元数据库都在同个下游，建议区分 meta-schema 运行】
 # CREATE DATABASE IF NOT EXIST transferdb
 meta-schema = "transferdb"

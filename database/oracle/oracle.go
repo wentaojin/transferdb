@@ -79,6 +79,11 @@ func NewOracleDBEngine(ctx context.Context, oraCfg config.OracleConfig) (*Oracle
 		}
 	}
 
+	// charset 字符集
+	if !strings.EqualFold(oraCfg.Charset, "") {
+		oraDSN.Charset = oraCfg.Charset
+	}
+
 	// godror logger 日志输出
 	// godror.SetLogger(zapr.NewLogger(zap.L()))
 
@@ -133,6 +138,11 @@ func NewOracleLogminerEngine(ctx context.Context, oraCfg config.OracleConfig) (*
 		case "windows", "darwin":
 			oraDSN.LibDir = oraCfg.LibDir
 		}
+	}
+
+	// charset 字符集
+	if !strings.EqualFold(oraCfg.Charset, "") {
+		oraDSN.Charset = oraCfg.Charset
 	}
 
 	// godror logger 日志输出

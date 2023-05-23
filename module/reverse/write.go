@@ -17,13 +17,11 @@ package reverse
 
 import (
 	"bufio"
-	"fmt"
 	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/config"
 	"github.com/wentaojin/transferdb/database/mysql"
 	"github.com/wentaojin/transferdb/database/oracle"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 )
@@ -40,28 +38,17 @@ type Write struct {
 	Oracle *oracle.Oracle
 }
 
-func NewWriter(cfg *config.Config, mysql *mysql.MySQL, oracle *oracle.Oracle) (*Write, error) {
+func NewWriter(cfg *config.Config, mysql *mysql.MySQL, oracle *oracle.Oracle, reverseFile, compFile string) (*Write, error) {
 	w := &Write{}
 
 	if !cfg.ReverseConfig.DirectWrite {
-		err := common.PathExist(cfg.ReverseConfig.DDLReverseDir)
-		if err != nil {
-			return nil, err
-		}
-		reverseFile := filepath.Join(cfg.ReverseConfig.DDLReverseDir, fmt.Sprintf("reverse_%s.sql", cfg.OracleConfig.SchemaName))
-		err = w.initOutReverseFile(reverseFile)
+		err := w.initOutReverseFile(reverseFile)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	err := common.PathExist(cfg.ReverseConfig.DDLCompatibleDir)
-	if err != nil {
-		return nil, err
-	}
-	compFile := filepath.Join(cfg.ReverseConfig.DDLCompatibleDir, fmt.Sprintf("compatibility_%s.sql", cfg.OracleConfig.SchemaName))
-
-	err = w.initOutCompatibleFile(compFile)
+	err := w.initOutCompatibleFile(compFile)
 	if err != nil {
 		return nil, err
 	}

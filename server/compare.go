@@ -20,7 +20,8 @@ import (
 	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/config"
 	"github.com/wentaojin/transferdb/module/compare"
-	"github.com/wentaojin/transferdb/module/compare/o2m"
+	"github.com/wentaojin/transferdb/module/compare/oracle/o2m"
+	"github.com/wentaojin/transferdb/module/compare/oracle/o2t"
 	"strings"
 )
 
@@ -32,6 +33,11 @@ func ICompare(ctx context.Context, cfg *config.Config) error {
 	switch {
 	case strings.EqualFold(cfg.DBTypeS, common.DatabaseTypeOracle) && strings.EqualFold(cfg.DBTypeT, common.DatabaseTypeMySQL):
 		c, err = o2m.NewCompare(ctx, cfg)
+		if err != nil {
+			return err
+		}
+	case strings.EqualFold(cfg.DBTypeS, common.DatabaseTypeOracle) && strings.EqualFold(cfg.DBTypeT, common.DatabaseTypeTiDB):
+		c, err = o2t.NewCompare(ctx, cfg)
 		if err != nil {
 			return err
 		}

@@ -18,7 +18,7 @@ package main
 import (
 	"database/sql"
 	"fmt"
-	"github.com/wentaojin/transferdb/module/migrate/sql/o2m"
+	"github.com/wentaojin/transferdb/module/migrate/sql/oracle/o2m"
 	"math"
 
 	"github.com/xxjwxc/gowp/workpool"

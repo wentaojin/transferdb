@@ -20,7 +20,8 @@ import (
 	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/config"
 	"github.com/wentaojin/transferdb/module/migrate"
-	"github.com/wentaojin/transferdb/module/migrate/csv/o2m"
+	"github.com/wentaojin/transferdb/module/migrate/csv/oracle/o2m"
+	"github.com/wentaojin/transferdb/module/migrate/csv/oracle/o2t"
 	"strings"
 )
 
@@ -31,7 +32,12 @@ func ICSVer(ctx context.Context, cfg *config.Config) error {
 	)
 	switch {
 	case strings.EqualFold(cfg.DBTypeS, common.DatabaseTypeOracle) && strings.EqualFold(cfg.DBTypeT, common.DatabaseTypeMySQL):
-		c, err = o2m.NewCSVer(ctx, cfg)
+		c, err = o2m.NewCSV(ctx, cfg)
+		if err != nil {
+			return err
+		}
+	case strings.EqualFold(cfg.DBTypeS, common.DatabaseTypeOracle) && strings.EqualFold(cfg.DBTypeT, common.DatabaseTypeTiDB):
+		c, err = o2t.NewCSV(ctx, cfg)
 		if err != nil {
 			return err
 		}

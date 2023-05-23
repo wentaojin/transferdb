@@ -19,11 +19,9 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/BurntSushi/toml"
 	"github.com/wentaojin/transferdb/common"
 	"os"
-	"strings"
-
-	"github.com/BurntSushi/toml"
 )
 
 // 程序配置文件
@@ -87,7 +85,6 @@ type CSVConfig struct {
 	Terminator       string `toml:"terminator" json:"terminator"`
 	Delimiter        string `toml:"delimiter" json:"delimiter"`
 	EscapeBackslash  bool   `toml:"escape-backslash" json:"escape-backslash"`
-	Charset          string `toml:"charset" json:"charset"`
 	Rows             int    `toml:"rows" json:"rows"`
 	OutputDir        string `toml:"output-dir" json:"output-dir"`
 	TaskThreads      int    `toml:"task-threads" json:"task-threads"`
@@ -120,6 +117,7 @@ type OracleConfig struct {
 	Port          int      `toml:"port" json:"port"`
 	ServiceName   string   `toml:"service-name" json:"service-name"`
 	PDBName       string   `toml:"pdb-name" json:"pdb-name"`
+	Charset       string   `toml:"charset" json:"charset"`
 	LibDir        string   `toml:"lib-dir" json:"lib-dir"`
 	ConnectParams string   `toml:"connect-params" json:"connect-params"`
 	SessionParams []string `toml:"session-params" json:"session-params"`
@@ -129,7 +127,6 @@ type OracleConfig struct {
 }
 
 type MySQLConfig struct {
-	DBType        string `toml:"db-type" json:"db-type"`
 	Username      string `toml:"username" json:"username"`
 	Password      string `toml:"password" json:"password"`
 	Host          string `toml:"host" json:"host"`
@@ -196,7 +193,10 @@ func (c *Config) Parse(args []string) error {
 		return fmt.Errorf("no config file")
 	}
 
-	c.AdjustConfig()
+	err = c.AdjustConfig()
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -217,35 +217,6 @@ func (c *Config) AdjustConfig() error {
 	c.OracleConfig.PDBName = common.StringUPPER(c.OracleConfig.PDBName)
 	c.MySQLConfig.SchemaName = common.StringUPPER(c.MySQLConfig.SchemaName)
 
-	err := c.adjustCSVConfig()
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (c *Config) adjustCSVConfig() error {
-	if c.CSVConfig.Separator == "" {
-		c.CSVConfig.Separator = ","
-	}
-	if c.CSVConfig.Terminator == "" {
-		c.CSVConfig.Terminator = "\r\n"
-	}
-	isSupport := false
-	if c.CSVConfig.Charset != "" {
-		switch strings.ToUpper(c.CSVConfig.Charset) {
-		case common.UTF8CharacterSetCSV:
-			isSupport = true
-		case common.GBKCharacterSetCSV:
-			isSupport = true
-		default:
-			isSupport = false
-		}
-	}
-	if !isSupport {
-		return fmt.Errorf("target db character is not support: [%s]", c.CSVConfig.Charset)
-	}
 	return nil
 }
 

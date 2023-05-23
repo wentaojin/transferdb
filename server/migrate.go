@@ -20,7 +20,8 @@ import (
 	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/config"
 	"github.com/wentaojin/transferdb/module/migrate"
-	o2m2 "github.com/wentaojin/transferdb/module/migrate/sql/o2m"
+	"github.com/wentaojin/transferdb/module/migrate/sql/oracle/o2m"
+	"github.com/wentaojin/transferdb/module/migrate/sql/oracle/o2t"
 	"strings"
 )
 
@@ -31,7 +32,12 @@ func IMigrateFull(ctx context.Context, cfg *config.Config) error {
 	)
 	switch {
 	case strings.EqualFold(cfg.DBTypeS, common.DatabaseTypeOracle) && strings.EqualFold(cfg.DBTypeT, common.DatabaseTypeMySQL):
-		f, err = o2m2.NewFuller(ctx, cfg)
+		f, err = o2m.NewFuller(ctx, cfg)
+		if err != nil {
+			return err
+		}
+	case strings.EqualFold(cfg.DBTypeS, common.DatabaseTypeOracle) && strings.EqualFold(cfg.DBTypeT, common.DatabaseTypeTiDB):
+		f, err = o2t.NewFuller(ctx, cfg)
 		if err != nil {
 			return err
 		}
@@ -50,7 +56,12 @@ func IMigrateIncr(ctx context.Context, cfg *config.Config) error {
 	)
 	switch {
 	case strings.EqualFold(cfg.DBTypeS, common.DatabaseTypeOracle) && strings.EqualFold(cfg.DBTypeT, common.DatabaseTypeMySQL):
-		i, err = o2m2.NewIncr(ctx, cfg)
+		i, err = o2m.NewIncr(ctx, cfg)
+		if err != nil {
+			return err
+		}
+	case strings.EqualFold(cfg.DBTypeS, common.DatabaseTypeOracle) && strings.EqualFold(cfg.DBTypeT, common.DatabaseTypeTiDB):
+		i, err = o2t.NewIncr(ctx, cfg)
 		if err != nil {
 			return err
 		}

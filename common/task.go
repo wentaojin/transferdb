@@ -62,3 +62,11 @@ const (
 	DatabaseTypeTiDB   = "TIDB"
 	DatabaseTypeMySQL  = "MYSQL"
 )
+
+// 任务类型
+const (
+	TaskTypeOracle2MySQL = "ORACLE2MYSQL"
+	TaskTypeOracle2TiDB  = "ORACLE2TIDB"
+	TaskTypeMySQL2Oracle = "MYSQL2ORACLE"
+	TaskTypeTiDB2Oracle  = "TIDB2ORACLE"
+)

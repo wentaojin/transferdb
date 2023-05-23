@@ -20,8 +20,10 @@ import (
 	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/config"
 	"github.com/wentaojin/transferdb/module/reverse"
-	"github.com/wentaojin/transferdb/module/reverse/m2o"
-	"github.com/wentaojin/transferdb/module/reverse/o2m"
+	"github.com/wentaojin/transferdb/module/reverse/mysql/m2o"
+	"github.com/wentaojin/transferdb/module/reverse/mysql/t2o"
+	"github.com/wentaojin/transferdb/module/reverse/oracle/o2m"
+	"github.com/wentaojin/transferdb/module/reverse/oracle/o2t"
 	"strings"
 )
 
@@ -36,8 +38,18 @@ func IReverse(ctx context.Context, cfg *config.Config) error {
 		if err != nil {
 			return err
 		}
+	case strings.EqualFold(cfg.DBTypeS, common.DatabaseTypeOracle) && strings.EqualFold(cfg.DBTypeT, common.DatabaseTypeTiDB):
+		r, err = o2t.NewReverse(ctx, cfg)
+		if err != nil {
+			return err
+		}
 	case strings.EqualFold(cfg.DBTypeS, common.DatabaseTypeMySQL) && strings.EqualFold(cfg.DBTypeT, common.DatabaseTypeOracle):
 		r, err = m2o.NewReverse(ctx, cfg)
+		if err != nil {
+			return err
+		}
+	case strings.EqualFold(cfg.DBTypeS, common.DatabaseTypeTiDB) && strings.EqualFold(cfg.DBTypeT, common.DatabaseTypeOracle):
+		r, err = t2o.NewReverse(ctx, cfg)
 		if err != nil {
 			return err
 		}

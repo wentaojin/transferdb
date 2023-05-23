@@ -180,7 +180,7 @@ func (m *MySQL) GetMySQLPartitionTableDetailINFO(schemaName, tableName string) (
 	}
 
 	partitionFirstIndex := strings.Index(strings.ReplaceAll(res[0]["Create Table"], "`", ""), "PARTITION BY")
-	
+
 	return res[0]["Create Table"][partitionFirstIndex:], nil
 }
 

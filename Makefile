@@ -1,4 +1,4 @@
-.PHONY: build assess prepare check reverseO2M reverseM2O all full csv comapre gotool clean help
+.PHONY: build assessO2M assessO2T prepare checkO2M checkO2T checkM2O checkT2O reverseO2M reverseO2T reverseM2O reverseT2O allO2T allO2M fullO2M fullO2T csvO2M csvO2T comapreO2M compareO2T gotool clean help
 
 CMDPATH="./cmd"
 BINARYPATH="bin/transferdb"
@@ -30,8 +30,11 @@ LDFLAGS += -X "$(REPO)/config.GitBranch=$(GITREF)"
 build: clean gotool
 	$(GOBUILD) -ldflags '$(LDFLAGS)' -o $(BINARYPATH) $(CMDPATH)
 
-assess: gotool
-	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode assess
+assessO2M: gotool
+	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode assess -source oracle -target mysql
+
+assessO2T: gotool
+	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode assess -source oracle -target tidb
 
 prepare: gotool
 	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode prepare
@@ -42,20 +45,47 @@ reverseO2M: gotool
 reverseM2O: gotool
 	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode reverse -source mysql -target oracle
 
-check: gotool
-	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode check
+reverseO2T: gotool
+	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode reverse -source oracle -target tidb
 
-all: gotool
-	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode all
+reverseT2O: gotool
+	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode reverse -source tidb -target oracle
 
-compare: gotool
-	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode compare
+checkO2M: gotool
+	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode check -source oracle -target mysql
 
-full: gotool
-	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode full
+checkO2T: gotool
+	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode check -source oracle -target tidb
 
-csv: gotool
-	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode csv
+checkM2O: gotool
+	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode check -source mysql -target oracle
+
+checkT2O: gotool
+	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode check -source tidb -target oracle
+
+allO2M: gotool
+	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode all -source oracle -target mysql
+
+allO2T: gotool
+	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode all -source oracle -target tidb
+
+compareO2M: gotool
+	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode compare -source oracle -target mysql
+
+compareO2T: gotool
+	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode compare -source oracle -target tidb
+
+fullO2T: gotool
+	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode full -source oracle -target tidb
+
+fullO2M: gotool
+	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode full -source oracle -target mysql
+
+csvO2T: gotool
+	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode csv -source oracle -target tidb
+
+csvO2M: gotool
+	$(GORUN) $(CMDPATH) --config $(CONFIGPATH) --mode csv -source oracle -target mysql
 
 gotool:
 	$(GO) mod tidy

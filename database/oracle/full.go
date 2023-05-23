@@ -21,7 +21,6 @@ import (
 	"github.com/shopspring/decimal"
 	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/config"
-	"strings"
 )
 
 func (o *Oracle) GetOracleCurrentSnapshotSCN() (uint64, error) {
@@ -120,7 +119,7 @@ func (o *Oracle) GetOracleTableRowsColumnCSV(querySQL string) ([]string, error) 
 	return columns, nil
 }
 
-func (o *Oracle) GetOracleTableRowsDataCSV(querySQL string, insertBatchSize int, csvCfg config.CSVConfig, dataChan chan []map[string]string) error {
+func (o *Oracle) GetOracleTableRowsDataCSV(querySQL string, cfg *config.Config, dataChan chan []map[string]string) error {
 	var (
 		err         error
 		columnNames []string
@@ -211,31 +210,19 @@ func (o *Oracle) GetOracleTableRowsDataCSV(querySQL string, insertBatchSize int,
 					}
 					rowsMap[columnNames[i]] = fmt.Sprintf("%v", r)
 				default:
-					var (
-						by []byte
-						bs string
-					)
+					var bs string
+
 					// 处理字符集、特殊字符转义、字符串引用定界符
-					if strings.ToUpper(csvCfg.Charset) == common.GBKCharacterSetCSV {
-						gbkBytes, err := common.Utf8ToGbk(raw)
-						if err != nil {
-							return err
-						}
-						by = gbkBytes
+					if cfg.CSVConfig.EscapeBackslash {
+						bs = common.SpecialLettersUsingMySQL(raw)
 					} else {
-						by = raw
+						bs = string(raw)
 					}
 
-					if csvCfg.EscapeBackslash {
-						bs = common.SpecialLettersUsingMySQL(by)
-					} else {
-						bs = string(by)
-					}
-
-					if csvCfg.Delimiter == "" {
+					if cfg.CSVConfig.Delimiter == "" {
 						rowsMap[columnNames[i]] = fmt.Sprintf("%v", bs)
 					} else {
-						rowsMap[columnNames[i]] = fmt.Sprintf("%v", common.StringsBuilder(csvCfg.Delimiter, bs, csvCfg.Delimiter))
+						rowsMap[columnNames[i]] = fmt.Sprintf("%v", common.StringsBuilder(cfg.CSVConfig.Delimiter, bs, cfg.CSVConfig.Delimiter))
 					}
 				}
 			}
@@ -248,7 +235,7 @@ func (o *Oracle) GetOracleTableRowsDataCSV(querySQL string, insertBatchSize int,
 		rowsMap = make(map[string]string)
 
 		// batch 批次
-		if len(rowsTMP) == insertBatchSize {
+		if len(rowsTMP) == cfg.AppConfig.InsertBatchSize {
 
 			dataChan <- rowsTMP
 

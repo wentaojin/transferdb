@@ -18,9 +18,11 @@ package common
 import (
 	"bytes"
 	"fmt"
+	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/simplifiedchinese"
+	"golang.org/x/text/encoding/traditionalchinese"
 	"golang.org/x/text/transform"
-	"io/ioutil"
+	"io"
 	"os"
 	"reflect"
 	"regexp"
@@ -377,24 +379,136 @@ func DiffStructArray(structA, structB interface{}) ([]interface{}, []interface{}
 	return addDiffs, removeDiffs, false
 }
 
-// GBK 转 UTF-8
-func GbkToUtf8(s []byte) ([]byte, error) {
-	reader := transform.NewReader(bytes.NewReader(s), simplifiedchinese.GBK.NewDecoder())
-	d, e := ioutil.ReadAll(reader)
-	if e != nil {
-		return nil, e
-	}
-	return d, nil
-}
+func CharsetConvert(data []byte, fromCharset, toCharset string) ([]byte, error) {
+	switch {
+	case strings.EqualFold(fromCharset, CharsetUTF8MB4) && strings.EqualFold(toCharset, CharsetGBK):
+		reader := transform.NewReader(bytes.NewReader(data), encoding.ReplaceUnsupported(simplifiedchinese.GBK.NewEncoder()))
+		gbkBytes, err := io.ReadAll(reader)
+		if err != nil {
+			return nil, err
+		}
+		return gbkBytes, nil
 
-// UTF-8 转 GBK
-func Utf8ToGbk(s []byte) ([]byte, error) {
-	reader := transform.NewReader(bytes.NewReader(s), simplifiedchinese.GBK.NewEncoder())
-	d, e := ioutil.ReadAll(reader)
-	if e != nil {
-		return nil, e
+	case strings.EqualFold(fromCharset, CharsetUTF8MB4) && strings.EqualFold(toCharset, CharsetGB18030):
+		reader := transform.NewReader(bytes.NewReader(data), simplifiedchinese.GB18030.NewEncoder())
+		gbk18030Bytes, err := io.ReadAll(reader)
+		if err != nil {
+			return nil, err
+		}
+		return gbk18030Bytes, nil
+
+	case strings.EqualFold(fromCharset, CharsetUTF8MB4) && strings.EqualFold(toCharset, CharsetBIG5):
+		reader := transform.NewReader(bytes.NewReader(data), traditionalchinese.Big5.NewEncoder())
+		bigBytes, err := io.ReadAll(reader)
+		if err != nil {
+			return nil, err
+		}
+		return bigBytes, nil
+
+	case strings.EqualFold(fromCharset, CharsetGBK) && strings.EqualFold(toCharset, CharsetGB18030):
+		decoder := simplifiedchinese.GBK.NewDecoder()
+		utf8Data, err := decoder.Bytes(data)
+		if err != nil {
+			return nil, err
+		}
+		gb18030Bytes, err := io.ReadAll(transform.NewReader(bytes.NewReader(utf8Data), simplifiedchinese.GB18030.NewEncoder()))
+		if err != nil {
+			return nil, err
+		}
+		return gb18030Bytes, nil
+
+	case strings.EqualFold(fromCharset, CharsetGBK) && strings.EqualFold(toCharset, CharsetBIG5):
+		decoder := simplifiedchinese.GBK.NewDecoder()
+		utf8Data, err := decoder.Bytes(data)
+		if err != nil {
+			return nil, err
+		}
+
+		big5Data, err := io.ReadAll(transform.NewReader(bytes.NewReader(utf8Data), traditionalchinese.Big5.NewEncoder()))
+		if err != nil {
+			return nil, err
+		}
+		return big5Data, nil
+
+	case strings.EqualFold(fromCharset, CharsetGBK) && strings.EqualFold(toCharset, CharsetUTF8MB4):
+		decoder := simplifiedchinese.GBK.NewDecoder()
+		utf8Data, err := decoder.Bytes(data)
+		if err != nil {
+			return nil, err
+		}
+
+		fmt.Println(string(utf8Data))
+		return utf8Data, nil
+
+	case strings.EqualFold(fromCharset, CharsetGB18030) && strings.EqualFold(toCharset, CharsetBIG5):
+		decoder := simplifiedchinese.GB18030.NewDecoder()
+		utf8Data, err := decoder.Bytes(data)
+		if err != nil {
+			return nil, err
+		}
+
+		big5Data, err := io.ReadAll(transform.NewReader(bytes.NewReader(utf8Data), traditionalchinese.Big5.NewEncoder()))
+		if err != nil {
+			return nil, err
+		}
+		return big5Data, nil
+
+	case strings.EqualFold(fromCharset, CharsetGB18030) && strings.EqualFold(toCharset, CharsetUTF8MB4):
+		decoder := simplifiedchinese.GB18030.NewDecoder()
+		utf8Data, err := decoder.Bytes(data)
+		if err != nil {
+			return nil, err
+		}
+		return utf8Data, nil
+
+	case strings.EqualFold(fromCharset, CharsetGB18030) && strings.EqualFold(toCharset, CharsetGBK):
+		decoder := simplifiedchinese.GB18030.NewDecoder()
+		utf8Data, err := decoder.Bytes(data)
+		if err != nil {
+			return nil, err
+		}
+		gbkData, err := io.ReadAll(transform.NewReader(bytes.NewReader(utf8Data), simplifiedchinese.GBK.NewEncoder()))
+		if err != nil {
+			return nil, err
+		}
+		return gbkData, nil
+
+	case strings.EqualFold(fromCharset, CharsetBIG5) && strings.EqualFold(toCharset, CharsetUTF8MB4):
+		decoder := traditionalchinese.Big5.NewDecoder()
+		utf8Data, err := decoder.Bytes(data)
+		if err != nil {
+			return nil, err
+		}
+
+		return utf8Data, nil
+
+	case strings.EqualFold(fromCharset, CharsetBIG5) && strings.EqualFold(toCharset, CharsetGBK):
+		decoder := traditionalchinese.Big5.NewDecoder()
+		utf8Data, err := decoder.Bytes(data)
+		if err != nil {
+			return nil, err
+		}
+		gbkData, err := io.ReadAll(transform.NewReader(bytes.NewReader(utf8Data), simplifiedchinese.GBK.NewEncoder()))
+		if err != nil {
+			return nil, err
+		}
+		return gbkData, nil
+
+	case strings.EqualFold(fromCharset, CharsetBIG5) && strings.EqualFold(toCharset, CharsetGB18030):
+		decoder := traditionalchinese.Big5.NewDecoder()
+		utf8Data, err := decoder.Bytes(data)
+		if err != nil {
+			return nil, err
+		}
+		gbkData, err := io.ReadAll(transform.NewReader(bytes.NewReader(utf8Data), simplifiedchinese.GB18030.NewEncoder()))
+		if err != nil {
+			return nil, err
+		}
+		return gbkData, nil
+
+	default:
+		return nil, fmt.Errorf("from charset [%v], to charset [%v] convert isn't support", fromCharset, toCharset)
 	}
-	return d, nil
 }
 
 // 如果存在特殊字符，直接在特殊字符前添加\

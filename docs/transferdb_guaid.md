@@ -108,8 +108,8 @@ lib-dir = "/data1/soft/client/instantclient_19_8"
 
 5、表结构转换，[输出示例](example/reverse_${sourcedb}.sql 以及 example/compatibility_${sourcedb}.sql)
 $ ./transferdb -config config.toml -mode prepare
-$ ./transferdb -config config.toml -mode reverse -source oracle -target mysql
-$ ./transferdb -config config.toml -mode reverse -source mysql -target oracle
+$ ./transferdb -config config.toml -mode reverse -source oracle -target mysql/tidb
+$ ./transferdb -config config.toml -mode reverse -source mysql/tidb -target oracle
 
 元数据库[默认 transferdb]自定义转换规则，规则优先级【字段 -> 表 -> 库 -> 内置】
 文件自定义规则示例：
@@ -123,23 +123,23 @@ insert into buildin_column_defaultval (db_type_s,db_type_t,schema_name_s,table_n
 
 6、表结构检查(独立于表结构转换，可单独运行，校验规则使用内置规则，[输出示例](example/check_${sourcedb}.sql)
 $ ./transferdb -config config.toml -mode prepare
-$ ./transferdb -config config.toml -mode check -source oracle -target mysql
+$ ./transferdb -config config.toml -mode check -source oracle -target mysql/tidb
 
 7、收集现有 Oracle 数据库内表、索引、分区表、字段长度等信息用于评估迁移成本，[输出示例](example/report_marvin.html)
-$ ./transferdb -config config.toml -mode assess -source oracle -target mysql
+$ ./transferdb -config config.toml -mode assess -source oracle -target mysql/tidb
 
 8、数据全量抽数
-$ ./transferdb -config config.toml -mode full -source oracle -target mysql
+$ ./transferdb -config config.toml -mode full -source oracle -target mysql/tidb
 
 9、数据同步（全量 + 增量）
-$ ./transferdb -config config.toml -mode all -source oracle -target mysql
+$ ./transferdb -config config.toml -mode all -source oracle -target mysql/tidb
 
 10、CSV 文件数据导出
-$ ./transferdb -config config.toml -mode csv -source oracle -target mysql
+$ ./transferdb -config config.toml -mode csv -source oracle -target mysql/tidb
 
 11、数据校验，[输出示例](example/fix.sql)
 $ ./transferdb -config config.toml -mode prepare
-$ ./transferdb -config config.toml -mode compare -source oracle -target mysql
+$ ./transferdb -config config.toml -mode compare -source oracle -target mysql/tidb
 ```
 
 #### 程序运行
