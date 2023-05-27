@@ -862,7 +862,9 @@ func (r *CSV) adjustTableSelectColumn(sourceTable string, oracleCollation bool) 
 
 func (r *CSV) AdjustCSVConfig(sourceDBCharset string) error {
 	if !strings.EqualFold(r.Cfg.OracleConfig.Charset, sourceDBCharset) {
-		return fmt.Errorf("oracle charset [%v] and oracle config charset [%v] aren't equal, please adjust oracle config charset", sourceDBCharset, r.Cfg.OracleConfig.Charset)
+		zap.L().Warn("oracle charset and oracle config charset",
+			zap.String("oracle charset", sourceDBCharset),
+			zap.String("oracle config charset", r.Cfg.OracleConfig.Charset))
 	}
 
 	if r.Cfg.CSVConfig.Separator == "" {

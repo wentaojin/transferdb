@@ -133,7 +133,7 @@ func (rw *WaitSyncMeta) DeleteWaitSyncMetaSuccessTables(ctx context.Context, del
 	if err != nil {
 		return err
 	}
-	err = rw.DB(ctx).Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND task_mode = ? AND task_status = ? AND AND table_name_s IN (?)",
+	err = rw.DB(ctx).Where("db_type_s = ? AND db_type_t = ? AND schema_name_s = ? AND task_mode = ? AND task_status = ? AND table_name_s IN (?)",
 		common.StringUPPER(deleteS.DBTypeS),
 		common.StringUPPER(deleteS.DBTypeT),
 		common.StringUPPER(deleteS.SchemaNameS),

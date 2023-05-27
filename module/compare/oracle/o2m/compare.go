@@ -85,7 +85,9 @@ func (r *Compare) NewCompare() error {
 	}
 	dbCharset := strings.Split(charset, ".")[1]
 	if !strings.EqualFold(r.cfg.OracleConfig.Charset, dbCharset) {
-		return fmt.Errorf("oracle charset [%v] and oracle config charset [%v] aren't equal, please adjust oracle config charset", dbCharset, r.cfg.OracleConfig.Charset)
+		zap.L().Warn("oracle charset and oracle config charset",
+			zap.String("oracle charset", dbCharset),
+			zap.String("oracle config charset", r.cfg.OracleConfig.Charset))
 	}
 
 	// 获取配置文件待同步表列表
@@ -711,7 +713,9 @@ func (r *Compare) compareWaitTableTasks(f *compare.File, waitTableTasks []*Task)
 
 func (r *Compare) AdjustCompareConfig(sourceDBCharset string) error {
 	if !strings.EqualFold(r.cfg.OracleConfig.Charset, sourceDBCharset) {
-		return fmt.Errorf("oracle charset [%v] and oracle config charset [%v] aren't equal, please adjust oracle config charset", sourceDBCharset, r.cfg.OracleConfig.Charset)
+		zap.L().Warn("oracle charset and oracle config charset",
+			zap.String("oracle charset", sourceDBCharset),
+			zap.String("oracle config charset", r.cfg.OracleConfig.Charset))
 	}
 	return nil
 }

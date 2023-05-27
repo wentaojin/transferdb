@@ -79,7 +79,9 @@ func (r *Migrate) Incr() error {
 	}
 	dbCharset := strings.Split(charset, ".")[1]
 	if !strings.EqualFold(r.Cfg.OracleConfig.Charset, dbCharset) {
-		return fmt.Errorf("oracle charset [%v] and oracle config charset [%v] aren't equal, please adjust oracle config charset", dbCharset, r.Cfg.OracleConfig.Charset)
+		zap.L().Warn("oracle charset and oracle config charset",
+			zap.String("oracle charset", dbCharset),
+			zap.String("oracle config charset", r.Cfg.OracleConfig.Charset))
 	}
 
 	// 获取配置文件待同步表列表

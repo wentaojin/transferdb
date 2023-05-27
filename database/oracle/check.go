@@ -109,7 +109,7 @@ f.TABLE_NAME,
 		END 
 	END ) TABLE_TYPE 
 FROM
-(SELECT tmp.owner,tmp.TABLE_NAME，tmp.CLUSTER_NAME,tmp.PARTITIONED,tmp.TEMPORARY,tmp.DURATION,tmp.IOT_TYPE
+(SELECT tmp.owner,tmp.TABLE_NAME,tmp.CLUSTER_NAME,tmp.PARTITIONED,tmp.TEMPORARY,tmp.DURATION,tmp.IOT_TYPE
 FROM
 	DBA_TABLES tmp, DBA_TABLES w
 WHERE tmp.owner=w.owner AND tmp.table_name = w.table_name AND tmp.owner  = '%s' AND (w.IOT_TYPE IS NUll OR w.IOT_TYPE='IOT')) f left join (
