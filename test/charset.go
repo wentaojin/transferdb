@@ -42,6 +42,7 @@ var (
 	schemaName  = flag.String("schema", "marvin", "specify query schema name")
 	tableName   = flag.String("table", "marvin", "specify query table name")
 	chunk       = flag.String("chunk", "", "specify query table chunk")
+	querySQL    = flag.String("sql", "", "specify query sql")
 )
 
 func main() {
@@ -82,18 +83,23 @@ func main() {
 	}
 
 	var queryS string
-	if strings.EqualFold(*chunk, "") {
-		queryS = common.StringsBuilder(`SELECT `, column, ` FROM `, common.StringUPPER(*schemaName), `.`, common.StringUPPER(*tableName))
-	} else {
+
+	switch {
+	case !strings.EqualFold(*querySQL, ""):
+		queryS = *querySQL
+	case !strings.EqualFold(*chunk, ""):
 		queryS = common.StringsBuilder(`SELECT `, column, ` FROM `, common.StringUPPER(*schemaName), `.`, common.StringUPPER(*tableName), ` WHERE `, *chunk)
+	default:
+		queryS = common.StringsBuilder(`SELECT `, column, ` FROM `, common.StringUPPER(*schemaName), `.`, common.StringUPPER(*tableName))
 	}
 
-	_, err = getOracleTableRowsData(ctx, oraConn, queryS)
+	res, err := getOracleTableRowsData(ctx, oraConn, queryS)
 	if err != nil {
 		panic(err)
-	} else {
-		fmt.Println("success")
 	}
+
+	fmt.Println(res)
+	fmt.Println("success")
 }
 
 func newOracleDBEngine(ctx context.Context, oraCfg config.OracleConfig, charset string) (*oracle.Oracle, error) {

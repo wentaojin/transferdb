@@ -143,9 +143,9 @@ worker-threads = 64
 # 3、需要指定 ${schema-name} 所在的 pdb container
 # - NonCDB 架构
 # 1、无需指定 pdb-name，需置空，其他正常设置
-username = "marvin"
-password = "marvin"
-host = "192.168.0.1"
+username = "findpt"
+password = "findpt"
+host = "10.2.103.33"
 port = 1521
 service-name = "gbk"
 # CDB 架构需指定 ${schema-name} 所在的 pdb container
@@ -166,22 +166,22 @@ connect-params = "poolMinSessions=50&poolMaxSessions=100&poolWaitTimeout=360s&po
 # Interval Year/Day 数据字符 TO_CHAR 格式化
 session-params = []
 # 配置 oracle 迁移 schema（assess 阶段可设置可不设置，不设置则表示 assess 库内所有 schema，其他阶段必须设置）
-schema-name = "marvin"
+schema-name = "findpt"
 # 源端迁移任务表（只用于 prepare/reverse/check/all/full 阶段，assess 阶段不适用，assess 只适用于 schema 级别）
 # include-table 和 exclude-table 不能同时配置，两者只能配置一个,如果两个都没配置则 Schema 内表全迁移
 # include-table 和 exclude-table 支持正则表达式以及通配符（tab_*/tab*）
-include-table = ["marvin"]
+include-table = ["gbk00"]
 exclude-table = []
 
 # 只用于 reverse/check/all/full 阶段，assess 阶段不适用
 [mysql]
 # 目标端连接串
 username = "root"
-password = "marvin"
-host = "192.168.0.18"
-port = 5500
+password = ""
+host = "10.2.14.60"
+port = 4000
 # mysql 链接参数
-connect-params = "charset=utf8mb4&multiStatements=true&parseTime=True&loc=Local"
+connect-params = "multiStatements=true&parseTime=True&loc=Local"
 # 目标端 schema
 schema-name = "marvin"
 # 表后缀可选项 - Only 适用于 Oracle -> TiDB
@@ -196,9 +196,9 @@ table-option = "SHARD_ROW_ID_BITS = 4 PRE_SPLIT_REGIONS = 4"
 # 用于 prepare 阶段
 [meta]
 username = "root"
-password = "marvin"
-host = "192.168.0.19"
-port = 3306
+password = ""
+host = "10.2.14.60"
+port = 4000
 # 元数据库【多个 transferdb 同时运行, 元数据库都在同个下游，建议区分 meta-schema 运行】
 # CREATE DATABASE IF NOT EXIST transferdb
 meta-schema = "transferdb"
