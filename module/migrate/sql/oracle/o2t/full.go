@@ -26,6 +26,7 @@ import (
 	"github.com/wentaojin/transferdb/module/migrate/sql/oracle/public"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -87,11 +88,15 @@ func (r *Migrate) Full() error {
 	if err != nil {
 		return err
 	}
-	dbCharset := strings.Split(charset, ".")[1]
-	if !strings.EqualFold(r.Cfg.OracleConfig.Charset, dbCharset) {
+	sourceDBCharset := strings.Split(charset, ".")[1]
+	if !strings.EqualFold(r.Cfg.OracleConfig.Charset, sourceDBCharset) {
 		zap.L().Warn("oracle charset and oracle config charset",
-			zap.String("oracle charset", dbCharset),
+			zap.String("oracle charset", sourceDBCharset),
 			zap.String("oracle config charset", r.Cfg.OracleConfig.Charset))
+		return fmt.Errorf("oracle charset [%v] and oracle config charset [%v] aren't equal, please adjust oracle config charset", sourceDBCharset, r.Cfg.OracleConfig.Charset)
+	}
+	if _, ok := common.MigrateStringDataTypeDatabaseCharsetMap[common.TaskTypeOracle2TiDB][common.StringUPPER(r.Cfg.OracleConfig.Charset)]; !ok {
+		return fmt.Errorf("oracle current charset [%v] isn't support, support charset [%v]", r.Cfg.OracleConfig.Charset, common.MigrateStringDataTypeDatabaseCharsetMap[common.TaskTypeOracle2TiDB])
 	}
 
 	// 获取配置文件待同步表列表
@@ -373,6 +378,9 @@ func (r *Migrate) Full() error {
 func (r *Migrate) FullPartSyncTable(fullPartTables []string) error {
 	taskTime := time.Now()
 
+	// 获取报错 sql
+	re := regexp.MustCompile("sql \\[(?s).*] execute")
+
 	g := &errgroup.Group{}
 	g.SetLimit(r.Cfg.FullConfig.TableThreads)
 
@@ -431,9 +439,23 @@ func (r *Migrate) FullPartSyncTable(fullPartTables []string) error {
 				m := fullMeta
 				g1.Go(func() error {
 					// 数据写入
-					err := public.IMigrate(NewRows(r.Ctx, m, r.Oracle, r.Mysql, r.MetaDB, r.Cfg.FullConfig.ApplyThreads, r.Cfg.AppConfig.InsertBatchSize, true, columnNameS))
+					err = public.IMigrate(NewRows(r.Ctx, m, r.Oracle, r.Mysql, r.MetaDB,
+						common.MigrateStringDataTypeDatabaseCharsetMap[common.TaskTypeOracle2TiDB][common.StringUPPER(r.Cfg.OracleConfig.Charset)],
+						common.StringUPPER(r.Cfg.MySQLConfig.Charset),
+						r.Cfg.FullConfig.ApplyThreads, r.Cfg.AppConfig.InsertBatchSize, true, columnNameS))
 
 					if err != nil {
+						var (
+							errorSQL string
+							errMsg   string
+						)
+						errMsg = err.Error()
+
+						if re.MatchString(errMsg) {
+							errorSQL = re.FindStringSubmatch(errMsg)[0]
+							errMsg = re.ReplaceAllString(errMsg, "sql execute")
+						}
+
 						// record error, skip error
 						errf := meta.NewCommonModel(r.MetaDB).UpdateFullSyncMetaChunkAndCreateChunkErrorDetail(r.Ctx, &meta.FullSyncMeta{
 							DBTypeS:      m.DBTypeS,
@@ -454,7 +476,8 @@ func (r *Migrate) FullPartSyncTable(fullPartTables []string) error {
 							TaskMode:     m.TaskMode,
 							ChunkDetailS: m.ChunkDetailS,
 							InfoDetail:   m.String(),
-							ErrorDetail:  err.Error(),
+							ErrorSQL:     errorSQL,
+							ErrorDetail:  errMsg,
 						})
 						if errf != nil {
 							return fmt.Errorf("get oracle schema table [%v] IMigrate failed: %v", m.String(), errf)

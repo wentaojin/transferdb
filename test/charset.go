@@ -1,5 +1,5 @@
 /*
-Copyright © 2020 Marvin
+Copyright ? 2020 Marvin
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ limitations under the License.
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"database/sql"
@@ -27,12 +28,15 @@ import (
 	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/config"
 	"github.com/wentaojin/transferdb/database/oracle"
+	"os"
 	"runtime"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
 var (
+	fileName    = flag.String("file", "", "specify read filename")
 	userName    = flag.String("user", "user", "specify oracle db username")
 	password    = flag.String("pass", "pass", "specify oracle db username password")
 	host        = flag.String("host", "host", "specify oracle db host")
@@ -64,8 +68,8 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	// 判断上游 Oracle 数据库版本
-	// 需要 oracle 11g 及以上
+	// ?��????? Oracle ?????��
+	// ??? oracle 11g ??????
 	oracleDBVersion, err := oraConn.GetOracleDBVersion()
 	if err != nil {
 		panic(err)
@@ -93,13 +97,39 @@ func main() {
 		queryS = common.StringsBuilder(`SELECT `, column, ` FROM `, common.StringUPPER(*schemaName), `.`, common.StringUPPER(*tableName))
 	}
 
-	res, err := getOracleTableRowsData(ctx, oraConn, queryS)
-	if err != nil {
-		panic(err)
+	if !strings.EqualFold(*fileName, "") {
+		readFile, err := os.Open(*fileName)
+		if err != nil {
+			return
+		}
+
+		fileScanner := bufio.NewScanner(readFile)
+
+		fileScanner.Split(bufio.ScanLines)
+
+		i := 0
+
+		for fileScanner.Scan() {
+			queryS = fileScanner.Text()
+			_, err := getOracleTableRowsData(ctx, oraConn, queryS)
+			if err != nil {
+				panic(fmt.Errorf("sql [%v] read failed: %v", queryS, err))
+			}
+			i++
+			fmt.Printf("success: %v\n", i)
+		}
+
+		err = readFile.Close()
+		if err != nil {
+			panic(err)
+		}
 	}
 
+	res, err := getOracleTableRowsData(ctx, oraConn, queryS)
+	if err != nil {
+		panic(fmt.Errorf("sql [%v] read failed: %v", queryS, err))
+	}
 	fmt.Println(res)
-	fmt.Println("success")
 }
 
 func newOracleDBEngine(ctx context.Context, oraCfg config.OracleConfig, charset string) (*oracle.Oracle, error) {
@@ -133,7 +163,7 @@ func newOracleDBEngine(ctx context.Context, oraCfg config.OracleConfig, charset 
 		oraCfg.SessionParams = append(oraCfg.SessionParams, fmt.Sprintf(`ALTER SESSION SET CURRENT_SCHEMA = %s`, oraCfg.SchemaName))
 	}
 
-	// 关闭外部认证
+	// ????????
 	oraDSN.ExternalAuth = false
 	oraDSN.OnInitStmts = oraCfg.SessionParams
 
@@ -147,12 +177,12 @@ func newOracleDBEngine(ctx context.Context, oraCfg config.OracleConfig, charset 
 		}
 	}
 
-	// charset 字符集
+	// charset ?????
 	if !strings.EqualFold(charset, "") {
 		oraDSN.Charset = charset
 	}
 
-	// godror logger 日志输出
+	// godror logger ??????
 	// godror.SetLogger(zapr.NewLogger(zap.L()))
 
 	sqlDB := sql.OpenDB(godror.NewConnector(oraDSN))
@@ -173,8 +203,8 @@ func newOracleDBEngine(ctx context.Context, oraCfg config.OracleConfig, charset 
 }
 
 func adjustTableSelectColumn(oraConn *oracle.Oracle, sourceSchema, sourceTable string, oracleCollation bool) (string, error) {
-	// Date/Timestamp 字段类型格式化
-	// Interval Year/Day 数据字符 TO_CHAR 格式化
+	// Date/Timestamp 日志
+	// Interval Year/Day ??????? TO_CHAR ?????
 	columnsINFO, err := oraConn.GetOracleSchemaTableColumn(sourceSchema, sourceTable, oracleCollation)
 	if err != nil {
 		return "", err
@@ -184,24 +214,24 @@ func adjustTableSelectColumn(oraConn *oracle.Oracle, sourceSchema, sourceTable s
 
 	for _, rowCol := range columnsINFO {
 		switch strings.ToUpper(rowCol["DATA_TYPE"]) {
-		// 数字
+		// ????
 		case "NUMBER":
 			columnNames = append(columnNames, rowCol["COLUMN_NAME"])
 		case "DECIMAL", "DEC", "DOUBLE PRECISION", "FLOAT", "INTEGER", "INT", "REAL", "NUMERIC", "BINARY_FLOAT", "BINARY_DOUBLE", "SMALLINT":
 			columnNames = append(columnNames, rowCol["COLUMN_NAME"])
-			// 字符
+			// ???
 		case "BFILE", "CHARACTER", "LONG", "NCHAR VARYING", "ROWID", "UROWID", "VARCHAR", "CHAR", "NCHAR", "NVARCHAR2", "NCLOB", "CLOB":
 			columnNames = append(columnNames, rowCol["COLUMN_NAME"])
 			// XMLTYPE
 		case "XMLTYPE":
 			columnNames = append(columnNames, fmt.Sprintf(" XMLSERIALIZE(CONTENT %s AS CLOB) AS %s", rowCol["COLUMN_NAME"], rowCol["COLUMN_NAME"]))
-			// 二进制
+			// ??????
 		case "BLOB", "LONG RAW", "RAW":
 			columnNames = append(columnNames, rowCol["COLUMN_NAME"])
-			// 时间
+			// ???
 		case "DATE":
 			columnNames = append(columnNames, common.StringsBuilder("TO_CHAR(", rowCol["COLUMN_NAME"], ",'yyyy-MM-dd HH24:mi:ss') AS ", rowCol["COLUMN_NAME"]))
-			// 默认其他类型
+			// ???????????
 		default:
 			if strings.Contains(rowCol["DATA_TYPE"], "INTERVAL") {
 				columnNames = append(columnNames, common.StringsBuilder("TO_CHAR(", rowCol["COLUMN_NAME"], ") AS ", rowCol["COLUMN_NAME"]))
@@ -249,7 +279,7 @@ func getOracleTableRowsData(ctx context.Context, oraConn *oracle.Oracle, queryS 
 		return rowsTMP, err
 	}
 
-	// 用于判断字段值是数字还是字符
+	// ?????��?????????????????
 	var (
 		columnNames   []string
 		columnTypes   []string
@@ -331,8 +361,13 @@ func getOracleTableRowsData(ctx context.Context, oraConn *oracle.Oracle, queryS 
 					}
 					rowsMap[cols[i]] = fmt.Sprintf("%v", r)
 				default:
-					// 特殊字符
-					rowsMap[cols[i]] = fmt.Sprintf("'%v'", common.SpecialLettersUsingMySQL(raw))
+					convert, err := common.CharsetConvert(raw, common.MYSQLCharsetGBK, common.MYSQLCharsetGBK)
+					if err != nil {
+						return nil, err
+					}
+
+					rowsMap[cols[i]] = fmt.Sprintf("'%v'", strings.ReplaceAll(common.SpecialLettersUsingMySQL(convert), string(utf8.RuneError), ""))
+
 				}
 			}
 		}

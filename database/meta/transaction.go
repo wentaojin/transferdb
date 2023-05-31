@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"github.com/wentaojin/transferdb/common"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type Transaction struct {
@@ -143,7 +144,7 @@ func (rw *Transaction) CreateDataCompareMetaAndUpdateWaitSyncMeta(ctx context.Co
 func (rw *Transaction) UpdateFullSyncMetaChunkAndCreateChunkErrorDetail(ctx context.Context, detailS *FullSyncMeta,
 	updateS map[string]interface{}, chunkErrorS *ChunkErrorDetail) error {
 	txn := rw.DB(ctx).Begin()
-	err := txn.Create(chunkErrorS).Error
+	err := txn.Clauses(clause.Insert{Modifier: "IGNORE"}).Create(chunkErrorS).Error
 	if err != nil {
 		return fmt.Errorf("create table [chunk_error_detail] record by transaction failed: %v", err)
 	}

@@ -53,32 +53,45 @@ const (
 // alter-primary-key = fase 主键整型数据类型列表
 var TiDBIntegerPrimaryKeyList = []string{"TINYINT", "SMALLINT", "INT", "BIGINT", "DECIMAL"}
 
+// transferdb 字符类型数据字符集转换支持列表
+var (
+	MYSQLCharsetUTF8MB4       = "UTF8MB4"
+	MYSQLCharsetUTF8          = "UTF8"
+	MYSQLCharsetBIG5          = "BIG5"
+	MYSQLCharsetGBK           = "GBK"
+	MYSQLCharsetGB18030       = "GB18030"
+	ORACLECharsetAL32UTF8     = "AL32UTF8"
+	ORACLECharsetZHT16BIG5    = "ZHT16BIG5"
+	ORACLECharsetZHS16GBK     = "ZHS16GBK"
+	ORACLECharsetZHS32GB18030 = "ZHS32GB18030"
+)
+
 // 表结构迁移以及表结构校验字符集、排序规则 MAP
 var MigrateTableStructureDatabaseCharsetMap = map[string]map[string]string{
 	TaskTypeOracle2MySQL: {
-		"AL32UTF8":     "UTF8MB4",
-		"ZHT16BIG5":    "BIG5",
-		"ZHS16GBK":     "GBK",
-		"ZHS32GB18030": "GB18030",
+		ORACLECharsetAL32UTF8:     MYSQLCharsetUTF8MB4,
+		ORACLECharsetZHT16BIG5:    MYSQLCharsetBIG5,
+		ORACLECharsetZHS16GBK:     MYSQLCharsetGBK,
+		ORACLECharsetZHS32GB18030: MYSQLCharsetGB18030,
 	},
 	// TiDB 统一使用 UTF8MB4 字符集
 	TaskTypeOracle2TiDB: {
-		"AL32UTF8":     "UTF8MB4",
-		"ZHT16BIG5":    "UTF8MB4",
-		"ZHS16GBK":     "UTF8MB4",
-		"ZHS32GB18030": "UTF8MB4",
+		ORACLECharsetAL32UTF8:     MYSQLCharsetUTF8MB4,
+		ORACLECharsetZHT16BIG5:    MYSQLCharsetUTF8MB4,
+		ORACLECharsetZHS16GBK:     MYSQLCharsetUTF8MB4,
+		ORACLECharsetZHS32GB18030: MYSQLCharsetUTF8MB4,
 	},
 	TaskTypeMySQL2Oracle: {
-		"UTF8MB4": "AL32UTF8",
-		"UTF8":    "AL32UTF8",
-		"BIG5":    "ZHT16BIG5",
-		"GBK":     "ZHS16GBK",
-		"GB18030": "ZHS32GB18030",
+		MYSQLCharsetUTF8MB4: ORACLECharsetAL32UTF8,
+		MYSQLCharsetUTF8:    ORACLECharsetAL32UTF8,
+		MYSQLCharsetBIG5:    ORACLECharsetZHT16BIG5,
+		MYSQLCharsetGBK:     ORACLECharsetZHS16GBK,
+		MYSQLCharsetGB18030: ORACLECharsetZHS32GB18030,
 	},
 	TaskTypeTiDB2Oracle: {
-		"UTF8MB4": "AL32UTF8",
-		"UTF8":    "AL32UTF8",
-		"GBK":     "ZHS16GBK",
+		MYSQLCharsetUTF8MB4: ORACLECharsetAL32UTF8,
+		MYSQLCharsetUTF8:    ORACLECharsetAL32UTF8,
+		MYSQLCharsetGBK:     ORACLECharsetZHS16GBK,
 	},
 }
 
@@ -93,36 +106,36 @@ var MigrateTableStructureDatabaseCollationMap = map[string]map[string]map[string
 		// 不区分大小写，但区分重音
 		// MySQL 8.0 ONlY
 		"BINARY_CI": {
-			"UTF8MB4": "UTF8MB4_0900_AS_CI",
-			"UTF8":    "UTF8_0900_AS_CI",
-			"BIG5":    "BIG5_CHINESE_CI",    // 无此排序规则，用 BIG5_CHINESE_CI 代替
-			"GBK":     "GBK_CHINESE_CI",     // 无此排序规则，用 GBK_CHINESE_CI 代替
-			"GB18030": "GB18030_CHINESE_CI", // 无此排序规则，用 GB18030_CHINESE_CI 代替，gb18030_unicode_520_ci 区分大小写，但不区分重音
+			MYSQLCharsetUTF8MB4: "UTF8MB4_0900_AS_CI",
+			MYSQLCharsetUTF8:    "UTF8_0900_AS_CI",
+			MYSQLCharsetBIG5:    "BIG5_CHINESE_CI",    // 无此排序规则，用 BIG5_CHINESE_CI 代替
+			MYSQLCharsetGBK:     "GBK_CHINESE_CI",     // 无此排序规则，用 GBK_CHINESE_CI 代替
+			MYSQLCharsetGB18030: "GB18030_CHINESE_CI", // 无此排序规则，用 GB18030_CHINESE_CI 代替，gb18030_unicode_520_ci 区分大小写，但不区分重音
 		},
 		// 不区分大小写和重音
 		"BINARY_AI": {
-			"UTF8MB4": "UTF8MB4_GENERAL_CI",
-			"UTF8":    "UTF8_GENERAL_CI",
-			"BIG5":    "BIG5_CHINESE_CI",
-			"GBK":     "GBK_CHINESE_CI",
-			"GB18030": "GB18030_CHINESE_CI",
+			MYSQLCharsetUTF8MB4: "UTF8MB4_GENERAL_CI",
+			MYSQLCharsetUTF8:    "UTF8_GENERAL_CI",
+			MYSQLCharsetBIG5:    "BIG5_CHINESE_CI",
+			MYSQLCharsetGBK:     "GBK_CHINESE_CI",
+			MYSQLCharsetGB18030: "GB18030_CHINESE_CI",
 		},
 		// 区分大小写和重音，如果不使用扩展名下，该规则是 ORACLE 默认值
 		"BINARY_CS": {
-			"UTF8MB4": "UTF8MB4_BIN",
-			"UTF8":    "UTF8_BIN",
-			"BIG5":    "BIG5_BIN",
-			"GBK":     "GBK_BIN",
-			"GB18030": "GB18030_BIN",
+			MYSQLCharsetUTF8MB4: "UTF8MB4_BIN",
+			MYSQLCharsetUTF8:    "UTF8_BIN",
+			MYSQLCharsetBIG5:    "BIG5_BIN",
+			MYSQLCharsetGBK:     "GBK_BIN",
+			MYSQLCharsetGB18030: "GB18030_BIN",
 		},
 		// ORACLE 12.2 以下版本
 		// 区分大小写和重音
 		"BINARY": {
-			"UTF8MB4": "UTF8MB4_BIN",
-			"UTF8":    "UTF8_BIN",
-			"BIG5":    "BIG5_BIN",
-			"GBK":     "GBK_BIN",
-			"GB18030": "GB18030_BIN",
+			MYSQLCharsetUTF8MB4: "UTF8MB4_BIN",
+			MYSQLCharsetUTF8:    "UTF8_BIN",
+			MYSQLCharsetBIG5:    "BIG5_BIN",
+			MYSQLCharsetGBK:     "GBK_BIN",
+			MYSQLCharsetGB18030: "GB18030_BIN",
 		},
 	},
 	// Charset 统一 UTF8MB4
@@ -131,36 +144,36 @@ var MigrateTableStructureDatabaseCollationMap = map[string]map[string]map[string
 		// 不区分大小写，但区分重音
 		// MySQL 8.0 ONlY
 		"BINARY_CI": {
-			"UTF8MB4": "UTF8MB4_0900_AS_CI",
-			"UTF8":    "UTF8_0900_AS_CI",
-			"BIG5":    "BIG5_CHINESE_CI",    // 无此排序规则，用 BIG5_CHINESE_CI 代替
-			"GBK":     "GBK_CHINESE_CI",     // 无此排序规则，用 GBK_CHINESE_CI 代替
-			"GB18030": "GB18030_CHINESE_CI", // 无此排序规则，用 GB18030_CHINESE_CI 代替，gb18030_unicode_520_ci 区分大小写，但不区分重音
+			MYSQLCharsetUTF8MB4: "UTF8MB4_0900_AS_CI",
+			MYSQLCharsetUTF8:    "UTF8_0900_AS_CI",
+			MYSQLCharsetBIG5:    "BIG5_CHINESE_CI",    // 无此排序规则，用 BIG5_CHINESE_CI 代替
+			MYSQLCharsetGBK:     "GBK_CHINESE_CI",     // 无此排序规则，用 GBK_CHINESE_CI 代替
+			MYSQLCharsetGB18030: "GB18030_CHINESE_CI", // 无此排序规则，用 GB18030_CHINESE_CI 代替，gb18030_unicode_520_ci 区分大小写，但不区分重音
 		},
 		// 不区分大小写和重音
 		"BINARY_AI": {
-			"UTF8MB4": "UTF8MB4_GENERAL_CI",
-			"UTF8":    "UTF8_GENERAL_CI",
-			"BIG5":    "BIG5_CHINESE_CI",
-			"GBK":     "GBK_CHINESE_CI",
-			"GB18030": "GB18030_CHINESE_CI",
+			MYSQLCharsetUTF8MB4: "UTF8MB4_GENERAL_CI",
+			MYSQLCharsetUTF8:    "UTF8_GENERAL_CI",
+			MYSQLCharsetBIG5:    "BIG5_CHINESE_CI",
+			MYSQLCharsetGBK:     "GBK_CHINESE_CI",
+			MYSQLCharsetGB18030: "GB18030_CHINESE_CI",
 		},
 		// 区分大小写和重音，如果不使用扩展名下，该规则是 ORACLE 默认值
 		"BINARY_CS": {
-			"UTF8MB4": "UTF8MB4_BIN",
-			"UTF8":    "UTF8_BIN",
-			"BIG5":    "BIG5_BIN",
-			"GBK":     "GBK_BIN",
-			"GB18030": "GB18030_BIN",
+			MYSQLCharsetUTF8MB4: "UTF8MB4_BIN",
+			MYSQLCharsetUTF8:    "UTF8_BIN",
+			MYSQLCharsetBIG5:    "BIG5_BIN",
+			MYSQLCharsetGBK:     "GBK_BIN",
+			MYSQLCharsetGB18030: "GB18030_BIN",
 		},
 		// ORACLE 12.2 以下版本
 		// 区分大小写和重音
 		"BINARY": {
-			"UTF8MB4": "UTF8MB4_BIN",
-			"UTF8":    "UTF8_BIN",
-			"BIG5":    "BIG5_BIN",
-			"GBK":     "GBK_BIN",
-			"GB18030": "GB18030_BIN",
+			MYSQLCharsetUTF8MB4: "UTF8MB4_BIN",
+			MYSQLCharsetUTF8:    "UTF8_BIN",
+			MYSQLCharsetBIG5:    "BIG5_BIN",
+			MYSQLCharsetGBK:     "GBK_BIN",
+			MYSQLCharsetGB18030: "GB18030_BIN",
 		},
 	},
 	TaskTypeMySQL2Oracle: {
@@ -171,74 +184,74 @@ var MigrateTableStructureDatabaseCollationMap = map[string]map[string]map[string
 		// 无此排序规则，用 GBK_CHINESE_CI 代替
 		// 无此排序规则，用 GB18030_CHINESE_CI 代替，gb18030_unicode_520_ci 区分大小写，但不区分重音
 		"UTF8MB4_0900_AS_CI": {
-			"AL32UTF8":     "BINARY_CI",
-			"ZHT16BIG5":    "BINARY_CI",
-			"ZHS16GBK":     "BINARY_CI",
-			"ZHS32GB18030": "BINARY_CI",
+			ORACLECharsetAL32UTF8:     "BINARY_CI",
+			ORACLECharsetZHT16BIG5:    "BINARY_CI",
+			ORACLECharsetZHS16GBK:     "BINARY_CI",
+			ORACLECharsetZHS32GB18030: "BINARY_CI",
 		},
 		// 不区分大小写和重音
 		"UTF8MB4_GENERAL_CI": {
-			"AL32UTF8":     "BINARY_AI",
-			"ZHT16BIG5":    "BINARY_AI",
-			"ZHS16GBK":     "BINARY_AI",
-			"ZHS32GB18030": "BINARY_AI",
+			ORACLECharsetAL32UTF8:     "BINARY_AI",
+			ORACLECharsetZHT16BIG5:    "BINARY_AI",
+			ORACLECharsetZHS16GBK:     "BINARY_AI",
+			ORACLECharsetZHS32GB18030: "BINARY_AI",
 		},
 		"UTF8_GENERAL_CI": {
-			"AL32UTF8":     "BINARY_AI",
-			"ZHT16BIG5":    "BINARY_AI",
-			"ZHS16GBK":     "BINARY_AI",
-			"ZHS32GB18030": "BINARY_AI",
+			ORACLECharsetAL32UTF8:     "BINARY_AI",
+			ORACLECharsetZHT16BIG5:    "BINARY_AI",
+			ORACLECharsetZHS16GBK:     "BINARY_AI",
+			ORACLECharsetZHS32GB18030: "BINARY_AI",
 		},
 		"BIG5_CHINESE_CI": {
-			"AL32UTF8":     "BINARY_AI/BINARY_CI",
-			"ZHT16BIG5":    "BINARY_AI/BINARY_CI",
-			"ZHS16GBK":     "BINARY_AI/BINARY_CI",
-			"ZHS32GB18030": "BINARY_AI/BINARY_CI",
+			ORACLECharsetAL32UTF8:     "BINARY_AI/BINARY_CI",
+			ORACLECharsetZHT16BIG5:    "BINARY_AI/BINARY_CI",
+			ORACLECharsetZHS16GBK:     "BINARY_AI/BINARY_CI",
+			ORACLECharsetZHS32GB18030: "BINARY_AI/BINARY_CI",
 		},
 		"GBK_CHINESE_CI": {
-			"AL32UTF8":     "BINARY_AI/BINARY_CI",
-			"ZHT16BIG5":    "BINARY_AI/BINARY_CI",
-			"ZHS16GBK":     "BINARY_AI/BINARY_CI",
-			"ZHS32GB18030": "BINARY_AI/BINARY_CI",
+			ORACLECharsetAL32UTF8:     "BINARY_AI/BINARY_CI",
+			ORACLECharsetZHT16BIG5:    "BINARY_AI/BINARY_CI",
+			ORACLECharsetZHS16GBK:     "BINARY_AI/BINARY_CI",
+			ORACLECharsetZHS32GB18030: "BINARY_AI/BINARY_CI",
 		},
 		"GB18030_CHINESE_CI": {
-			"AL32UTF8":     "BINARY_AI/BINARY_CI",
-			"ZHT16BIG5":    "BINARY_AI/BINARY_CI",
-			"ZHS16GBK":     "BINARY_AI/BINARY_CI",
-			"ZHS32GB18030": "BINARY_AI/BINARY_CI",
+			ORACLECharsetAL32UTF8:     "BINARY_AI/BINARY_CI",
+			ORACLECharsetZHT16BIG5:    "BINARY_AI/BINARY_CI",
+			ORACLECharsetZHS16GBK:     "BINARY_AI/BINARY_CI",
+			ORACLECharsetZHS32GB18030: "BINARY_AI/BINARY_CI",
 		},
 		// 区分大小写和重音，如果不使用扩展名下，该规则是 ORACLE 默认值 -> BINARY_CS
 		// ORACLE 12.2 以下版本 -> BINARY
 		// 区分大小写和重音
 		"UTF8MB4_BIN": {
-			"AL32UTF8":     "BINARY/BINARY_CS",
-			"ZHT16BIG5":    "BINARY/BINARY_CS",
-			"ZHS16GBK":     "BINARY/BINARY_CS",
-			"ZHS32GB18030": "BINARY/BINARY_CS",
+			ORACLECharsetAL32UTF8:     "BINARY/BINARY_CS",
+			ORACLECharsetZHT16BIG5:    "BINARY/BINARY_CS",
+			ORACLECharsetZHS16GBK:     "BINARY/BINARY_CS",
+			ORACLECharsetZHS32GB18030: "BINARY/BINARY_CS",
 		},
 		"UTF8_BIN": {
-			"AL32UTF8":     "BINARY/BINARY_CS",
-			"ZHT16BIG5":    "BINARY/BINARY_CS",
-			"ZHS16GBK":     "BINARY/BINARY_CS",
-			"ZHS32GB18030": "BINARY/BINARY_CS",
+			ORACLECharsetAL32UTF8:     "BINARY/BINARY_CS",
+			ORACLECharsetZHT16BIG5:    "BINARY/BINARY_CS",
+			ORACLECharsetZHS16GBK:     "BINARY/BINARY_CS",
+			ORACLECharsetZHS32GB18030: "BINARY/BINARY_CS",
 		},
 		"BIG5_BIN": {
-			"AL32UTF8":     "BINARY/BINARY_CS",
-			"ZHT16BIG5":    "BINARY/BINARY_CS",
-			"ZHS16GBK":     "BINARY/BINARY_CS",
-			"ZHS32GB18030": "BINARY/BINARY_CS",
+			ORACLECharsetAL32UTF8:     "BINARY/BINARY_CS",
+			ORACLECharsetZHT16BIG5:    "BINARY/BINARY_CS",
+			ORACLECharsetZHS16GBK:     "BINARY/BINARY_CS",
+			ORACLECharsetZHS32GB18030: "BINARY/BINARY_CS",
 		},
 		"GBK_BIN": {
-			"AL32UTF8":     "BINARY/BINARY_CS",
-			"ZHT16BIG5":    "BINARY/BINARY_CS",
-			"ZHS16GBK":     "BINARY/BINARY_CS",
-			"ZHS32GB18030": "BINARY/BINARY_CS",
+			ORACLECharsetAL32UTF8:     "BINARY/BINARY_CS",
+			ORACLECharsetZHT16BIG5:    "BINARY/BINARY_CS",
+			ORACLECharsetZHS16GBK:     "BINARY/BINARY_CS",
+			ORACLECharsetZHS32GB18030: "BINARY/BINARY_CS",
 		},
 		"GB18030_BIN": {
-			"AL32UTF8":     "BINARY/BINARY_CS",
-			"ZHT16BIG5":    "BINARY/BINARY_CS",
-			"ZHS16GBK":     "BINARY/BINARY_CS",
-			"ZHS32GB18030": "BINARY/BINARY_CS",
+			ORACLECharsetAL32UTF8:     "BINARY/BINARY_CS",
+			ORACLECharsetZHT16BIG5:    "BINARY/BINARY_CS",
+			ORACLECharsetZHS16GBK:     "BINARY/BINARY_CS",
+			ORACLECharsetZHS32GB18030: "BINARY/BINARY_CS",
 		},
 	},
 	TaskTypeTiDB2Oracle: {
@@ -249,50 +262,50 @@ var MigrateTableStructureDatabaseCollationMap = map[string]map[string]map[string
 		// 无此排序规则，用 GBK_CHINESE_CI 代替
 		// 无此排序规则，用 GB18030_CHINESE_CI 代替，gb18030_unicode_520_ci 区分大小写，但不区分重音
 		"UTF8MB4_0900_AS_CI": {
-			"AL32UTF8":     "BINARY_CI",
-			"ZHT16BIG5":    "BINARY_CI",
-			"ZHS16GBK":     "BINARY_CI",
-			"ZHS32GB18030": "BINARY_CI",
+			ORACLECharsetAL32UTF8:     "BINARY_CI",
+			ORACLECharsetZHT16BIG5:    "BINARY_CI",
+			ORACLECharsetZHS16GBK:     "BINARY_CI",
+			ORACLECharsetZHS32GB18030: "BINARY_CI",
 		},
 		// 不区分大小写和重音
 		"UTF8MB4_GENERAL_CI": {
-			"AL32UTF8":     "BINARY_AI",
-			"ZHT16BIG5":    "BINARY_AI",
-			"ZHS16GBK":     "BINARY_AI",
-			"ZHS32GB18030": "BINARY_AI",
+			ORACLECharsetAL32UTF8:     "BINARY_AI",
+			ORACLECharsetZHT16BIG5:    "BINARY_AI",
+			ORACLECharsetZHS16GBK:     "BINARY_AI",
+			ORACLECharsetZHS32GB18030: "BINARY_AI",
 		},
 		"UTF8_GENERAL_CI": {
-			"AL32UTF8":     "BINARY_AI",
-			"ZHT16BIG5":    "BINARY_AI",
-			"ZHS16GBK":     "BINARY_AI",
-			"ZHS32GB18030": "BINARY_AI",
+			ORACLECharsetAL32UTF8:     "BINARY_AI",
+			ORACLECharsetZHT16BIG5:    "BINARY_AI",
+			ORACLECharsetZHS16GBK:     "BINARY_AI",
+			ORACLECharsetZHS32GB18030: "BINARY_AI",
 		},
 		"GBK_CHINESE_CI": {
-			"AL32UTF8":     "BINARY_AI/BINARY_CI",
-			"ZHT16BIG5":    "BINARY_AI/BINARY_CI",
-			"ZHS16GBK":     "BINARY_AI/BINARY_CI",
-			"ZHS32GB18030": "BINARY_AI/BINARY_CI",
+			ORACLECharsetAL32UTF8:     "BINARY_AI/BINARY_CI",
+			ORACLECharsetZHT16BIG5:    "BINARY_AI/BINARY_CI",
+			ORACLECharsetZHS16GBK:     "BINARY_AI/BINARY_CI",
+			ORACLECharsetZHS32GB18030: "BINARY_AI/BINARY_CI",
 		},
 		// 区分大小写和重音，如果不使用扩展名下，该规则是 ORACLE 默认值 -> BINARY_CS
 		// ORACLE 12.2 以下版本 -> BINARY
 		// 区分大小写和重音
 		"UTF8MB4_BIN": {
-			"AL32UTF8":     "BINARY/BINARY_CS",
-			"ZHT16BIG5":    "BINARY/BINARY_CS",
-			"ZHS16GBK":     "BINARY/BINARY_CS",
-			"ZHS32GB18030": "BINARY/BINARY_CS",
+			ORACLECharsetAL32UTF8:     "BINARY/BINARY_CS",
+			ORACLECharsetZHT16BIG5:    "BINARY/BINARY_CS",
+			ORACLECharsetZHS16GBK:     "BINARY/BINARY_CS",
+			ORACLECharsetZHS32GB18030: "BINARY/BINARY_CS",
 		},
 		"UTF8_BIN": {
-			"AL32UTF8":     "BINARY/BINARY_CS",
-			"ZHT16BIG5":    "BINARY/BINARY_CS",
-			"ZHS16GBK":     "BINARY/BINARY_CS",
-			"ZHS32GB18030": "BINARY/BINARY_CS",
+			ORACLECharsetAL32UTF8:     "BINARY/BINARY_CS",
+			ORACLECharsetZHT16BIG5:    "BINARY/BINARY_CS",
+			ORACLECharsetZHS16GBK:     "BINARY/BINARY_CS",
+			ORACLECharsetZHS32GB18030: "BINARY/BINARY_CS",
 		},
 		"GBK_BIN": {
-			"AL32UTF8":     "BINARY/BINARY_CS",
-			"ZHT16BIG5":    "BINARY/BINARY_CS",
-			"ZHS16GBK":     "BINARY/BINARY_CS",
-			"ZHS32GB18030": "BINARY/BINARY_CS",
+			ORACLECharsetAL32UTF8:     "BINARY/BINARY_CS",
+			ORACLECharsetZHT16BIG5:    "BINARY/BINARY_CS",
+			ORACLECharsetZHS16GBK:     "BINARY/BINARY_CS",
+			ORACLECharsetZHS32GB18030: "BINARY/BINARY_CS",
 		},
 	},
 }
@@ -301,27 +314,20 @@ var MigrateTableStructureDatabaseCollationMap = map[string]map[string]map[string
 // 字符类型数据映射规则 -> 用于程序连接源端数据库读取数据字符类型数据，以对应字符集写入下游数据库
 var MigrateStringDataTypeDatabaseCharsetMap = map[string]map[string]string{
 	TaskTypeOracle2MySQL: {
-		"AL32UTF8":     "UTF8MB4",
-		"ZHT16BIG5":    "BIG5",
-		"ZHS16GBK":     "GBK",
-		"ZHS32GB18030": "GB18030",
+		ORACLECharsetAL32UTF8:     MYSQLCharsetUTF8MB4,
+		ORACLECharsetZHT16BIG5:    MYSQLCharsetBIG5,
+		ORACLECharsetZHS16GBK:     MYSQLCharsetGBK,
+		ORACLECharsetZHS32GB18030: MYSQLCharsetGB18030,
 	},
 	TaskTypeOracle2TiDB: {
-		"AL32UTF8":     "UTF8MB4",
-		"ZHT16BIG5":    "UTF8MB4",
-		"ZHS16GBK":     "UTF8MB4",
-		"ZHS32GB18030": "UTF8MB4",
+		ORACLECharsetAL32UTF8:     MYSQLCharsetUTF8MB4,
+		ORACLECharsetZHT16BIG5:    MYSQLCharsetBIG5,
+		ORACLECharsetZHS16GBK:     MYSQLCharsetGBK,
+		ORACLECharsetZHS32GB18030: MYSQLCharsetGB18030,
 	},
 }
 
-// transferdb 字符类型数据字符集转换支持列表
-var (
-	CharsetUTF8MB4 = "UTF8MB4"
-	CharsetBIG5    = "BIG5"
-	CharsetGBK     = "GBK"
-	CharsetGB18030 = "GBK18030"
-)
-var TransferDBStringDataTypeCharsetTransformList = []string{CharsetUTF8MB4, CharsetGBK, CharsetGB18030, CharsetBIG5}
+var MigrateCSVSupportCharset = []string{MYSQLCharsetUTF8MB4, MYSQLCharsetGBK, MYSQLCharsetBIG5, MYSQLCharsetGB18030}
 
 // Oracle 不支持数据类型 -> M2O
 var OracleIsNotSupportDataType = []string{"ENUM", "SET"}

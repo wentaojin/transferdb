@@ -83,6 +83,7 @@ type CSVConfig struct {
 	Header           bool   `toml:"header" json:"header"`
 	Separator        string `toml:"separator" json:"separator"`
 	Terminator       string `toml:"terminator" json:"terminator"`
+	Charset          string `toml:"charset" json:"charset"`
 	Delimiter        string `toml:"delimiter" json:"delimiter"`
 	EscapeBackslash  bool   `toml:"escape-backslash" json:"escape-backslash"`
 	Rows             int    `toml:"rows" json:"rows"`
@@ -131,6 +132,7 @@ type MySQLConfig struct {
 	Password      string `toml:"password" json:"password"`
 	Host          string `toml:"host" json:"host"`
 	Port          int    `toml:"port" json:"port"`
+	Charset       string `toml:"charset" json:"charset"`
 	ConnectParams string `toml:"connect-params" json:"connect-params"`
 	SchemaName    string `toml:"schema-name" json:"schema-name"`
 	TableOption   string `toml:"table-option" json:"table-option"`

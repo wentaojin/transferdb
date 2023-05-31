@@ -22,6 +22,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/config"
+	"strings"
 )
 
 type MySQL struct {
@@ -30,6 +31,9 @@ type MySQL struct {
 }
 
 func NewMySQLDBEngine(ctx context.Context, mysqlCfg config.MySQLConfig) (*MySQL, error) {
+	if !strings.EqualFold(mysqlCfg.Charset, "") {
+		mysqlCfg.ConnectParams = fmt.Sprintf("charset=%s&%s", strings.ToLower(mysqlCfg.Charset), mysqlCfg.ConnectParams)
+	}
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/?%s",
 		mysqlCfg.Username, mysqlCfg.Password, mysqlCfg.Host, mysqlCfg.Port, mysqlCfg.ConnectParams)
 

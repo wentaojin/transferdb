@@ -77,11 +77,15 @@ func (r *Migrate) Incr() error {
 	if err != nil {
 		return err
 	}
-	dbCharset := strings.Split(charset, ".")[1]
-	if !strings.EqualFold(r.Cfg.OracleConfig.Charset, dbCharset) {
+	sourceDBCharset := strings.Split(charset, ".")[1]
+	if !strings.EqualFold(r.Cfg.OracleConfig.Charset, sourceDBCharset) {
 		zap.L().Warn("oracle charset and oracle config charset",
-			zap.String("oracle charset", dbCharset),
+			zap.String("oracle charset", sourceDBCharset),
 			zap.String("oracle config charset", r.Cfg.OracleConfig.Charset))
+		return fmt.Errorf("oracle charset [%v] and oracle config charset [%v] aren't equal, please adjust oracle config charset", sourceDBCharset, r.Cfg.OracleConfig.Charset)
+	}
+	if _, ok := common.MigrateStringDataTypeDatabaseCharsetMap[common.TaskTypeOracle2MySQL][common.StringUPPER(r.Cfg.OracleConfig.Charset)]; !ok {
+		return fmt.Errorf("oracle current charset [%v] isn't support, support charset [%v]", r.Cfg.OracleConfig.Charset, common.MigrateStringDataTypeDatabaseCharsetMap[common.TaskTypeOracle2MySQL])
 	}
 
 	// 获取配置文件待同步表列表

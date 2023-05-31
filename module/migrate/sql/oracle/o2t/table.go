@@ -29,38 +29,42 @@ import (
 )
 
 type Rows struct {
-	Ctx          context.Context
-	SyncMeta     meta.FullSyncMeta
-	Oracle       *oracle.Oracle
-	MySQL        *mysql.MySQL
-	Meta         *meta.Meta
-	ApplyThreads int
-	BatchSize    int
-	SafeMode     bool
-	ColumnNameS  []string
-	ReadChannel  chan []map[string]string
-	WriteChannel chan string
+	Ctx             context.Context
+	SyncMeta        meta.FullSyncMeta
+	Oracle          *oracle.Oracle
+	MySQL           *mysql.MySQL
+	Meta            *meta.Meta
+	SourceDBCharset string
+	TargetDBCharset string
+	ApplyThreads    int
+	BatchSize       int
+	SafeMode        bool
+	ColumnNameS     []string
+	ReadChannel     chan []map[string]string
+	WriteChannel    chan string
 }
 
 func NewRows(ctx context.Context, syncMeta meta.FullSyncMeta,
-	oracle *oracle.Oracle, mysql *mysql.MySQL, meta *meta.Meta, applyThreads, batchSize int, safeMode bool,
+	oracle *oracle.Oracle, mysql *mysql.MySQL, meta *meta.Meta, sourceDBCharset string, targetDBCharset string, applyThreads, batchSize int, safeMode bool,
 	columnNameS []string) *Rows {
 
 	readChannel := make(chan []map[string]string, common.ChannelBufferSize)
 	writeChannel := make(chan string, common.ChannelBufferSize)
 
 	return &Rows{
-		Ctx:          ctx,
-		SyncMeta:     syncMeta,
-		Oracle:       oracle,
-		MySQL:        mysql,
-		Meta:         meta,
-		ApplyThreads: applyThreads,
-		SafeMode:     safeMode,
-		BatchSize:    batchSize,
-		ColumnNameS:  columnNameS,
-		ReadChannel:  readChannel,
-		WriteChannel: writeChannel,
+		Ctx:             ctx,
+		SyncMeta:        syncMeta,
+		Oracle:          oracle,
+		MySQL:           mysql,
+		Meta:            meta,
+		SourceDBCharset: sourceDBCharset,
+		TargetDBCharset: targetDBCharset,
+		ApplyThreads:    applyThreads,
+		SafeMode:        safeMode,
+		BatchSize:       batchSize,
+		ColumnNameS:     columnNameS,
+		ReadChannel:     readChannel,
+		WriteChannel:    writeChannel,
 	}
 }
 
@@ -68,26 +72,11 @@ func (t *Rows) ReadData() error {
 	startTime := time.Now()
 	querySQL := common.StringsBuilder(`SELECT `, t.SyncMeta.ColumnDetailS, ` FROM `, t.SyncMeta.SchemaNameS, `.`, t.SyncMeta.TableNameS, ` WHERE `, t.SyncMeta.ChunkDetailS)
 
-	err := t.Oracle.GetOracleTableRowsData(querySQL, t.BatchSize, t.ReadChannel)
+	err := t.Oracle.GetOracleTableRowsData(querySQL, t.BatchSize, t.SourceDBCharset, t.TargetDBCharset, t.ReadChannel)
 	if err != nil {
-		// 错误 SQL 记录
-		errf := meta.NewChunkErrorDetailModel(t.Meta).CreateChunkErrorDetail(t.Ctx, &meta.ChunkErrorDetail{
-			DBTypeS:      t.SyncMeta.DBTypeS,
-			DBTypeT:      t.SyncMeta.DBTypeT,
-			SchemaNameS:  t.SyncMeta.SchemaNameS,
-			TableNameS:   t.SyncMeta.TableNameS,
-			SchemaNameT:  t.SyncMeta.SchemaNameT,
-			TableNameT:   t.SyncMeta.TableNameT,
-			TaskMode:     t.SyncMeta.TaskMode,
-			ChunkDetailS: t.SyncMeta.ChunkDetailS,
-			InfoDetail:   t.SyncMeta.String(),
-			ErrorSQL:     querySQL,
-			ErrorDetail:  err.Error(),
-		})
-		if errf != nil {
-			return errf
-		}
-		return nil
+		// 通道关闭
+		close(t.ReadChannel)
+		return fmt.Errorf("source sql [%v] execute failed: %v", querySQL, err)
 	}
 
 	endTime := time.Now()
@@ -152,24 +141,7 @@ func (t *Rows) ApplyData() error {
 		g.Go(func() error {
 			err := t.MySQL.WriteMySQLTable(querySql)
 			if err != nil {
-				// 错误 SQL 记录
-				errf := meta.NewChunkErrorDetailModel(t.Meta).CreateChunkErrorDetail(t.Ctx, &meta.ChunkErrorDetail{
-					DBTypeS:      t.SyncMeta.DBTypeS,
-					DBTypeT:      t.SyncMeta.DBTypeT,
-					SchemaNameS:  t.SyncMeta.SchemaNameS,
-					TableNameS:   t.SyncMeta.TableNameS,
-					SchemaNameT:  t.SyncMeta.SchemaNameT,
-					TableNameT:   t.SyncMeta.TableNameT,
-					TaskMode:     t.SyncMeta.TaskMode,
-					ChunkDetailS: t.SyncMeta.ChunkDetailS,
-					InfoDetail:   t.SyncMeta.String(),
-					ErrorSQL:     querySql,
-					ErrorDetail:  err.Error(),
-				})
-				if errf != nil {
-					return errf
-				}
-				return nil
+				return fmt.Errorf("target sql [%v] execute failed: %v", querySql, err)
 			}
 			return nil
 		})

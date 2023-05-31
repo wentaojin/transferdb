@@ -119,7 +119,7 @@ func (o *Oracle) GetOracleTableRowsColumnCSV(querySQL string) ([]string, error) 
 	return columns, nil
 }
 
-func (o *Oracle) GetOracleTableRowsDataCSV(querySQL string, cfg *config.Config, dataChan chan []map[string]string) error {
+func (o *Oracle) GetOracleTableRowsDataCSV(querySQL, sourceDBCharset, targetDBCharset string, cfg *config.Config, dataChan chan []map[string]string) error {
 	var (
 		err         error
 		columnNames []string
@@ -212,11 +212,16 @@ func (o *Oracle) GetOracleTableRowsDataCSV(querySQL string, cfg *config.Config, 
 				default:
 					var bs string
 
+					convertRaw, err := common.CharsetConvert(raw, sourceDBCharset, targetDBCharset)
+					if err != nil {
+						return fmt.Errorf("column [%s] charset convert failed, %v", columnNames[i], err)
+					}
+
 					// 处理字符集、特殊字符转义、字符串引用定界符
 					if cfg.CSVConfig.EscapeBackslash {
-						bs = common.SpecialLettersUsingMySQL(raw)
+						bs = common.SpecialLettersUsingMySQL(convertRaw)
 					} else {
-						bs = string(raw)
+						bs = string(convertRaw)
 					}
 
 					if cfg.CSVConfig.Delimiter == "" {
@@ -282,7 +287,7 @@ func (o *Oracle) GetOracleTableRowsColumn(querySQL string) ([]string, error) {
 	return columns, nil
 }
 
-func (o *Oracle) GetOracleTableRowsData(querySQL string, insertBatchSize int, dataChan chan []map[string]string) error {
+func (o *Oracle) GetOracleTableRowsData(querySQL string, insertBatchSize int, sourceDBCharset, targetDBCharset string, dataChan chan []map[string]string) error {
 	var (
 		err  error
 		cols []string
@@ -391,7 +396,11 @@ func (o *Oracle) GetOracleTableRowsData(querySQL string, insertBatchSize int, da
 					rowsMap[cols[i]] = fmt.Sprintf("%v", r)
 				default:
 					// 特殊字符
-					rowsMap[cols[i]] = fmt.Sprintf("'%v'", common.SpecialLettersUsingMySQL(raw))
+					convertRaw, err := common.CharsetConvert(raw, sourceDBCharset, targetDBCharset)
+					if err != nil {
+						return fmt.Errorf("column [%s] charset convert failed, %v", columnNames[i], err)
+					}
+					rowsMap[cols[i]] = fmt.Sprintf("'%v'", common.SpecialLettersUsingMySQL(convertRaw))
 				}
 			}
 		}

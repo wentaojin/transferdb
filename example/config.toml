@@ -78,6 +78,8 @@ header = true
 separator = '|#|'
 # 行尾定界字符，支持一个或多个字符, 默认值 "\r\n" （回车+换行）
 terminator = "|+|\r\n"
+# 目标数据字符集
+charset = "UTF8MB4"
 # 字符串引用定界符，支持一个或多个字符，设置为空表示字符串未加引号
 delimiter = '"'
 # 使用反斜杠 (\) 来转义导出文件中的特殊字符
@@ -181,7 +183,12 @@ password = "marvin"
 host = "192.168.0.18"
 port = 5500
 # mysql 链接参数
-connect-params = "charset=utf8mb4&multiStatements=true&parseTime=True&loc=Local"
+connect-params = "multiStatements=true&parseTime=True&loc=Local"
+# 设置目标端数据库连接字符集，默认字符集 utf8mb4 (tidb 表结构 only utf8mb4, mysql 表结构 utf8mb4、gbk、gb18030 自适应)
+# AL32UTF8(UTF8MB4) -> UTF8MB4/GBK/GB18030
+# ZHS16GBK(GBK) -> UTF8MB/GBK/GB18030
+# ZHS32GB18030(GB18030) -> UTF8MB/GBK/GB18030
+charset = "UTF8MB4"
 # 目标端 schema
 schema-name = "marvin"
 # 表后缀可选项 - Only 适用于 Oracle -> TiDB

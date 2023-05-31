@@ -27,6 +27,7 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -381,6 +382,9 @@ func (r *CSV) CSV() error {
 func (r *CSV) csvPartSyncTable(csvPartTables []string, sourceDBCharset string) error {
 	startTime := time.Now()
 
+	// 获取报错 sql
+	re := regexp.MustCompile("sql \\[(?s).*] execute")
+
 	g := &errgroup.Group{}
 	g.SetLimit(r.Cfg.CSVConfig.TableThreads)
 
@@ -439,8 +443,19 @@ func (r *CSV) csvPartSyncTable(csvPartTables []string, sourceDBCharset string) e
 			for _, fullSyncMeta := range waitFullMetas {
 				m := fullSyncMeta
 				g1.Go(func() error {
-					err = public.IMigrate(NewRows(r.Ctx, m, r.Oracle, r.MetaDB, r.Cfg, columnNameS, sourceDBCharset))
+					err = public.IMigrate(NewRows(r.Ctx, m, r.Oracle, r.MetaDB, r.Cfg, columnNameS, common.MigrateStringDataTypeDatabaseCharsetMap[common.TaskTypeOracle2TiDB][sourceDBCharset]))
 					if err != nil {
+						var (
+							errorSQL string
+							errMsg   string
+						)
+						errMsg = err.Error()
+
+						if re.MatchString(errMsg) {
+							errorSQL = re.FindStringSubmatch(errMsg)[0]
+							errMsg = re.ReplaceAllString(errMsg, "sql execute")
+						}
+
 						// record error, skip error
 						errf := meta.NewCommonModel(r.MetaDB).UpdateFullSyncMetaChunkAndCreateChunkErrorDetail(r.Ctx, &meta.FullSyncMeta{
 							DBTypeS:      m.DBTypeS,
@@ -461,7 +476,8 @@ func (r *CSV) csvPartSyncTable(csvPartTables []string, sourceDBCharset string) e
 							TaskMode:     m.TaskMode,
 							ChunkDetailS: m.ChunkDetailS,
 							InfoDetail:   m.String(),
-							ErrorDetail:  err.Error(),
+							ErrorSQL:     errorSQL,
+							ErrorDetail:  errMsg,
 						})
 						if errf != nil {
 							return fmt.Errorf("get oracle schema table [%v] IMigrate failed: %v", m.String(), errf)
@@ -865,6 +881,18 @@ func (r *CSV) AdjustCSVConfig(sourceDBCharset string) error {
 		zap.L().Warn("oracle charset and oracle config charset",
 			zap.String("oracle charset", sourceDBCharset),
 			zap.String("oracle config charset", r.Cfg.OracleConfig.Charset))
+		return fmt.Errorf("oracle charset [%v] and oracle config charset [%v] aren't equal, please adjust oracle config charset", sourceDBCharset, r.Cfg.OracleConfig.Charset)
+	}
+	if _, ok := common.MigrateStringDataTypeDatabaseCharsetMap[common.TaskTypeOracle2TiDB][common.StringUPPER(r.Cfg.OracleConfig.Charset)]; !ok {
+		return fmt.Errorf("oracle current charset [%v] isn't support, support charset [%v]", r.Cfg.OracleConfig.Charset, common.MigrateStringDataTypeDatabaseCharsetMap[common.TaskTypeOracle2TiDB])
+	}
+
+	if r.Cfg.CSVConfig.Charset == "" || strings.EqualFold(r.Cfg.CSVConfig.Charset, common.MYSQLCharsetUTF8) {
+		r.Cfg.CSVConfig.Charset = common.MYSQLCharsetUTF8MB4
+	} else {
+		if !common.IsContainString(common.MigrateCSVSupportCharset, common.StringUPPER(r.Cfg.CSVConfig.Charset)) {
+			return fmt.Errorf("csv current config charset [%v] isn't support, support charset [%v]", r.Cfg.OracleConfig.Charset, common.MigrateCSVSupportCharset)
+		}
 	}
 
 	if r.Cfg.CSVConfig.Separator == "" {

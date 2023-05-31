@@ -50,8 +50,6 @@ func NewRows(ctx context.Context, syncMeta meta.FullSyncMeta,
 	writeChannel := make(chan string, common.ChannelBufferSize)
 	readChannel := make(chan []map[string]string, common.ChannelBufferSize)
 
-	dbCharsetT := common.MigrateTableStructureDatabaseCharsetMap[common.TaskTypeOracle2TiDB][sourceDBCharset]
-
 	return &Rows{
 		Ctx:          ctx,
 		SyncMeta:     syncMeta,
@@ -59,7 +57,7 @@ func NewRows(ctx context.Context, syncMeta meta.FullSyncMeta,
 		Meta:         meta,
 		Cfg:          cfg,
 		DBCharsetS:   sourceDBCharset,
-		DBCharsetT:   dbCharsetT,
+		DBCharsetT:   common.StringUPPER(cfg.CSVConfig.Charset),
 		ColumnNameS:  columnNameS,
 		ReadChannel:  readChannel,
 		WriteChannel: writeChannel,
@@ -71,26 +69,11 @@ func (t *Rows) ReadData() error {
 
 	querySQL := common.StringsBuilder(`SELECT `, t.SyncMeta.ColumnDetailS, ` FROM `, t.SyncMeta.SchemaNameS, `.`, t.SyncMeta.TableNameS, ` WHERE `, t.SyncMeta.ChunkDetailS)
 
-	err := t.Oracle.GetOracleTableRowsDataCSV(querySQL, t.Cfg, t.ReadChannel)
+	err := t.Oracle.GetOracleTableRowsDataCSV(querySQL, t.DBCharsetS, t.DBCharsetT, t.Cfg, t.ReadChannel)
 	if err != nil {
-		// 错误 SQL 记录
-		errf := meta.NewChunkErrorDetailModel(t.Meta).CreateChunkErrorDetail(t.Ctx, &meta.ChunkErrorDetail{
-			DBTypeS:      t.SyncMeta.DBTypeS,
-			DBTypeT:      t.SyncMeta.DBTypeT,
-			SchemaNameS:  t.SyncMeta.SchemaNameS,
-			TableNameS:   t.SyncMeta.TableNameS,
-			SchemaNameT:  t.SyncMeta.SchemaNameT,
-			TableNameT:   t.SyncMeta.TableNameT,
-			TaskMode:     t.SyncMeta.TaskMode,
-			ChunkDetailS: t.SyncMeta.ChunkDetailS,
-			InfoDetail:   t.SyncMeta.String(),
-			ErrorSQL:     querySQL,
-			ErrorDetail:  err.Error(),
-		})
-		if errf != nil {
-			return errf
-		}
-		return nil
+		// 通道关闭
+		close(t.ReadChannel)
+		return fmt.Errorf("source sql [%v] execute failed: %v", querySQL, err)
 	}
 
 	endTime := time.Now()
