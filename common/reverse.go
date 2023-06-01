@@ -327,7 +327,7 @@ var MigrateStringDataTypeDatabaseCharsetMap = map[string]map[string]string{
 	},
 }
 
-var MigrateCSVSupportCharset = []string{MYSQLCharsetUTF8MB4, MYSQLCharsetGBK, MYSQLCharsetBIG5, MYSQLCharsetGB18030}
+var MigrateDataSupportCharset = []string{MYSQLCharsetUTF8MB4, MYSQLCharsetGBK, MYSQLCharsetBIG5, MYSQLCharsetGB18030}
 
 // Oracle 不支持数据类型 -> M2O
 var OracleIsNotSupportDataType = []string{"ENUM", "SET"}

@@ -890,8 +890,8 @@ func (r *CSV) AdjustCSVConfig(sourceDBCharset string) error {
 	if r.Cfg.CSVConfig.Charset == "" || strings.EqualFold(r.Cfg.CSVConfig.Charset, common.MYSQLCharsetUTF8) {
 		r.Cfg.CSVConfig.Charset = common.MYSQLCharsetUTF8MB4
 	} else {
-		if !common.IsContainString(common.MigrateCSVSupportCharset, common.StringUPPER(r.Cfg.CSVConfig.Charset)) {
-			return fmt.Errorf("csv current config charset [%v] isn't support, support charset [%v]", r.Cfg.OracleConfig.Charset, common.MigrateCSVSupportCharset)
+		if !common.IsContainString(common.MigrateDataSupportCharset, common.StringUPPER(r.Cfg.CSVConfig.Charset)) {
+			return fmt.Errorf("csv current config charset [%v] isn't support, support charset [%v]", r.Cfg.OracleConfig.Charset, common.MigrateDataSupportCharset)
 		}
 	}
 

@@ -27,12 +27,12 @@ import (
 	"github.com/shopspring/decimal"
 	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/config"
+	"github.com/wentaojin/transferdb/database/mysql"
 	"github.com/wentaojin/transferdb/database/oracle"
 	"os"
 	"runtime"
 	"strconv"
 	"strings"
-	"unicode/utf8"
 )
 
 var (
@@ -68,8 +68,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	// ?��????? Oracle ?????��
-	// ??? oracle 11g ??????
+
 	oracleDBVersion, err := oraConn.GetOracleDBVersion()
 	if err != nil {
 		panic(err)
@@ -129,7 +128,46 @@ func main() {
 	if err != nil {
 		panic(fmt.Errorf("sql [%v] read failed: %v", queryS, err))
 	}
+
 	fmt.Println(res)
+
+	//myCfg := config.MySQLConfig{
+	//	Username:   "tims31",
+	//	Password:   "tims134",
+	//	Host:       "10.21.133.24",
+	//	Port:       3366,
+	//	Charset:    "GBK",
+	//	SchemaName: "marvin",
+	//}
+
+	myCfg := config.MySQLConfig{
+		Username:   "root",
+		Password:   "marvin",
+		Host:       "10.32.124.60",
+		Port:       4000,
+		Charset:    "GBK",
+		SchemaName: "marvin",
+	}
+
+	my, err := mysql.NewMySQLDBEngine(ctx, myCfg)
+	if err != nil {
+		panic(err)
+	}
+	//_, err = my.MySQLDB.Exec(`DROP IF EXISTS marvin.test`)
+	//if err != nil {
+	//	panic(err)
+	//}
+	fmt.Println(res)
+	//insertS := fmt.Sprintf(`INSERT INTO marvin.test1 (n) VALUES (%v)`, res[0]["TRANS_DESC"])
+
+	insertS := fmt.Sprintf(`INSERT INTO marvin.t01 VALUES (%v,%v,%v)`, res[0]["ID"], res[0]["N1"], res[0]["N2"])
+
+	fmt.Println(insertS)
+	_, err = my.MySQLDB.Exec(insertS)
+	if err != nil {
+		panic(err)
+	}
+
 }
 
 func newOracleDBEngine(ctx context.Context, oraCfg config.OracleConfig, charset string) (*oracle.Oracle, error) {
@@ -361,13 +399,21 @@ func getOracleTableRowsData(ctx context.Context, oraConn *oracle.Oracle, queryS 
 					}
 					rowsMap[cols[i]] = fmt.Sprintf("%v", r)
 				default:
-					convert, err := common.CharsetConvert(raw, common.MYSQLCharsetGBK, common.MYSQLCharsetGBK)
+					convert, err := common.CharsetConvert(raw, common.MYSQLCharsetGBK, common.MYSQLCharsetUTF8MB4)
 					if err != nil {
 						return nil, err
 					}
 
-					rowsMap[cols[i]] = fmt.Sprintf("'%v'", strings.ReplaceAll(common.SpecialLettersUsingMySQL(convert), string(utf8.RuneError), ""))
+					fmt.Println(string(convert))
 
+					s, err := common.CharsetConvert([]byte(common.SpecialLettersUsingMySQL(convert)), common.MYSQLCharsetUTF8MB4, common.MYSQLCharsetGBK)
+					if err != nil {
+						return nil, err
+					}
+
+					rowsMap[cols[i]] = fmt.Sprintf("'%v'", string(s))
+
+					//rowsMap[cols[i]] = fmt.Sprintf("'%v'", common.SpecialLettersUsingMySQL(raw))
 				}
 			}
 		}

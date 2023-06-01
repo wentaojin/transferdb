@@ -721,5 +721,8 @@ func (r *Compare) AdjustCompareConfig(sourceDBCharset string) error {
 	if _, ok := common.MigrateStringDataTypeDatabaseCharsetMap[common.TaskTypeOracle2TiDB][common.StringUPPER(r.cfg.OracleConfig.Charset)]; !ok {
 		return fmt.Errorf("oracle current charset [%v] isn't support, support charset [%v]", r.cfg.OracleConfig.Charset, common.MigrateStringDataTypeDatabaseCharsetMap[common.TaskTypeOracle2TiDB])
 	}
+	if !common.IsContainString(common.MigrateDataSupportCharset, common.StringUPPER(r.cfg.MySQLConfig.Charset)) {
+		return fmt.Errorf("mysql current config charset [%v] isn't support, support charset [%v]", r.cfg.MySQLConfig.Charset, common.MigrateDataSupportCharset)
+	}
 	return nil
 }

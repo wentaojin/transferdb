@@ -110,7 +110,10 @@ func (t *Rows) ProcessData() error {
 			}
 
 			if len(rowsTMP) != len(t.ColumnNameS) {
+				// 通道关闭
+				close(t.WriteChannel)
 				return fmt.Errorf("source schema table column counts vs data counts isn't match")
+				
 			} else {
 				batchRows = append(batchRows, common.StringsBuilder("(", exstrings.Join(rowsTMP, ","), ")"))
 			}

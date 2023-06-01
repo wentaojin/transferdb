@@ -87,6 +87,9 @@ func (r *Migrate) Incr() error {
 	if _, ok := common.MigrateStringDataTypeDatabaseCharsetMap[common.TaskTypeOracle2MySQL][common.StringUPPER(r.Cfg.OracleConfig.Charset)]; !ok {
 		return fmt.Errorf("oracle current charset [%v] isn't support, support charset [%v]", r.Cfg.OracleConfig.Charset, common.MigrateStringDataTypeDatabaseCharsetMap[common.TaskTypeOracle2MySQL])
 	}
+	if !common.IsContainString(common.MigrateDataSupportCharset, common.StringUPPER(r.Cfg.MySQLConfig.Charset)) {
+		return fmt.Errorf("mysql current config charset [%v] isn't support, support charset [%v]", r.Cfg.MySQLConfig.Charset, common.MigrateDataSupportCharset)
+	}
 
 	// 获取配置文件待同步表列表
 	exporters, err := public.FilterCFGTable(r.Cfg, r.Oracle)
