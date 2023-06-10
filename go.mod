@@ -5,7 +5,7 @@ go 1.19
 require (
 	github.com/BurntSushi/toml v0.4.1
 	github.com/go-sql-driver/mysql v1.6.0
-	github.com/godror/godror v0.33.0
+	github.com/godror/godror v0.37.0
 	github.com/jedib0t/go-pretty/v6 v6.2.4
 	github.com/pingcap/log v0.0.0-20201112100606-8f1e84a3abc8
 	github.com/pingcap/parser v0.0.0-20200623164729-3a18f1e5dceb
@@ -53,7 +53,7 @@ require (
 	golang.org/x/crypto v0.0.0-20220622213112-05595931fe9d // indirect
 	golang.org/x/net v0.0.0-20211112202133-69e39bad7dc2 // indirect
 	golang.org/x/sys v0.0.0-20210809222454-d867a43fc93e // indirect
-	google.golang.org/protobuf v1.27.1 // indirect
+	google.golang.org/protobuf v1.28.1 // indirect
 	gopkg.in/eapache/queue.v1 v1.1.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	honnef.co/go/tools v0.1.1 // indirect

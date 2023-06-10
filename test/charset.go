@@ -27,7 +27,6 @@ import (
 	"github.com/shopspring/decimal"
 	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/config"
-	"github.com/wentaojin/transferdb/database/mysql"
 	"github.com/wentaojin/transferdb/database/oracle"
 	"os"
 	"runtime"
@@ -58,7 +57,7 @@ func main() {
 		Host:          *host,
 		Port:          *port,
 		ServiceName:   *serviceName,
-		ConnectParams: "poolMinSessions=10&poolMaxSessions=1000&poolWaitTimeout=60s&poolSessionMaxLifetime=1h&poolSessionTimeout=5m&poolIncrement=1&timezone=Local",
+		ConnectParams: "",
 		SchemaName:    *schemaName,
 		IncludeTable:  []string{*tableName},
 	}
@@ -140,33 +139,33 @@ func main() {
 	//	SchemaName: "marvin",
 	//}
 
-	myCfg := config.MySQLConfig{
-		Username:   "root",
-		Password:   "marvin",
-		Host:       "10.32.124.60",
-		Port:       4000,
-		Charset:    "GBK",
-		SchemaName: "marvin",
-	}
+	//myCfg := config.MySQLConfig{
+	//	Username:   "root",
+	//	Password:   "",
+	//	Host:       "10.212.123.60",
+	//	Port:       5000,
+	//	Charset:    "UTF8MB4",
+	//	SchemaName: "marvin",
+	//}
 
-	my, err := mysql.NewMySQLDBEngine(ctx, myCfg)
-	if err != nil {
-		panic(err)
-	}
+	//my, err := mysql.NewMySQLDBEngine(ctx, myCfg)
+	//if err != nil {
+	//	panic(err)
+	//}
 	//_, err = my.MySQLDB.Exec(`DROP IF EXISTS marvin.test`)
 	//if err != nil {
 	//	panic(err)
 	//}
-	fmt.Println(res)
+
 	//insertS := fmt.Sprintf(`INSERT INTO marvin.test1 (n) VALUES (%v)`, res[0]["TRANS_DESC"])
 
-	insertS := fmt.Sprintf(`INSERT INTO marvin.t01 VALUES (%v,%v,%v)`, res[0]["ID"], res[0]["N1"], res[0]["N2"])
+	//insertS := fmt.Sprintf(`INSERT INTO marvin.t01 VALUES (%v,%v,%v)`, res[0]["ID"], res[0]["N1"], res[0]["N2"])
 
-	fmt.Println(insertS)
-	_, err = my.MySQLDB.Exec(insertS)
-	if err != nil {
-		panic(err)
-	}
+	//fmt.Println(insertS)
+	//_, err = my.MySQLDB.Exec(insertS)
+	//if err != nil {
+	//	panic(err)
+	//}
 
 }
 
@@ -406,7 +405,7 @@ func getOracleTableRowsData(ctx context.Context, oraConn *oracle.Oracle, queryS 
 
 					fmt.Println(string(convert))
 
-					s, err := common.CharsetConvert([]byte(common.SpecialLettersUsingMySQL(convert)), common.MYSQLCharsetUTF8MB4, common.MYSQLCharsetGBK)
+					s, err := common.CharsetConvert([]byte(common.SpecialLettersUsingMySQL(convert)), common.MYSQLCharsetUTF8MB4, common.MYSQLCharsetUTF8MB4)
 					if err != nil {
 						return nil, err
 					}

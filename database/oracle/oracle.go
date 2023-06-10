@@ -81,7 +81,7 @@ func NewOracleDBEngine(ctx context.Context, oraCfg config.OracleConfig) (*Oracle
 
 	// charset 字符集
 	if !strings.EqualFold(oraCfg.Charset, "") {
-		oraDSN.Charset = oraCfg.Charset
+		oraDSN.CommonParams.Charset = oraCfg.Charset
 	}
 
 	// godror logger 日志输出
