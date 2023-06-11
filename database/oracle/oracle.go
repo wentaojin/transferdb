@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"github.com/godror/godror"
 	"github.com/godror/godror/dsn"
+	"github.com/rs/xid"
 	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/config"
 	"runtime"
@@ -47,9 +48,10 @@ func NewOracleDBEngine(ctx context.Context, oraCfg config.OracleConfig) (*Oracle
 	)
 
 	// https://github.com/godror/godror/pull/65
-	connString = fmt.Sprintf("oracle://@%s/%s?connectionClass=POOL_CONNECTION_CLASS00&%s",
+	connClass := fmt.Sprintf("pool_%v", xid.New().String())
+	connString = fmt.Sprintf("oracle://@%s/%s?connectionClass=%s&%s",
 		common.StringsBuilder(oraCfg.Host, ":", strconv.Itoa(oraCfg.Port)),
-		oraCfg.ServiceName, oraCfg.ConnectParams)
+		oraCfg.ServiceName, connClass, oraCfg.ConnectParams)
 	oraDSN, err = godror.ParseDSN(connString)
 	if err != nil {
 		return nil, err
@@ -116,9 +118,10 @@ func NewOracleLogminerEngine(ctx context.Context, oraCfg config.OracleConfig) (*
 	)
 
 	// https://github.com/godror/godror/pull/65
-	connString = fmt.Sprintf("oracle://@%s/%s?connectionClass=POOL_CONNECTION_CLASS01&%s",
+	connClass := fmt.Sprintf("pool_%v", xid.New().String())
+	connString = fmt.Sprintf("oracle://@%s/%s?connectionClass=%s&%s",
 		common.StringsBuilder(oraCfg.Host, ":", strconv.Itoa(oraCfg.Port)),
-		oraCfg.ServiceName, oraCfg.ConnectParams)
+		oraCfg.ServiceName, connClass, oraCfg.ConnectParams)
 	oraDSN, err = godror.ParseDSN(connString)
 	if err != nil {
 		return nil, err
