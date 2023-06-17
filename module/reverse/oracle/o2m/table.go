@@ -41,6 +41,7 @@ type Table struct {
 	TargetTableOption     string          `json:"target_table_option"`
 	OracleCollation       bool            `json:"oracle_collation"`
 	SourceDBCharset       string          `json:"sourcedb_charset"`
+	TargetDBCharset       string          `json:"targetdb_charset"`
 	SourceSchemaCollation string          `json:"source_schema_collation"` // 可为空
 	SourceTableCollation  string          `json:"source_table_collation"`  // 可为空
 	SourceDBNLSSort       string          `json:"sourcedb_nlssort"`
@@ -55,7 +56,7 @@ type Table struct {
 	MetaDB                    *meta.Meta        `json:"-"`
 }
 
-func GenReverseTableTask(r *Reverse, tableNameRule map[string]string, tableColumnRule, tableDefaultRule map[string]map[string]string, oracleDBVersion, oracleDBCharset string, oracleCollation bool, exporters []string, nlsSort, nlsComp string) ([]*Table, error) {
+func GenReverseTableTask(r *Reverse, tableNameRule map[string]string, tableColumnRule, tableDefaultRule map[string]map[string]string, oracleDBVersion, oracleDBCharset, targetDBCharset string, oracleCollation bool, exporters []string, nlsSort, nlsComp string) ([]*Table, error) {
 	var tables []*Table
 
 	beginTime := time.Now()
@@ -158,6 +159,7 @@ func GenReverseTableTask(r *Reverse, tableNameRule map[string]string, tableColum
 					TargetTableOption:         common.StringUPPER(r.Cfg.MySQLConfig.TableOption),
 					SourceTableType:           tablesMap[t],
 					SourceDBCharset:           oracleDBCharset,
+					TargetDBCharset:           targetDBCharset,
 					SourceDBNLSSort:           nlsSort,
 					SourceDBNLSComp:           nlsComp,
 					TableColumnDatatypeRule:   tableColumnRule[common.StringUPPER(t)],

@@ -628,7 +628,7 @@ func (r *CSV) initWaitSyncTableChunk(csvWaitTables []string, tableNameRule map[s
 				return fmt.Errorf("csv config paramter output-dir can't be null, please configure")
 			}
 
-			sourceColumnInfo, err := r.adjustTableSelectColumn(t, oracleCollation)
+			sourceColumnInfo, err := r.AdjustTableSelectColumn(t, oracleCollation)
 			if err != nil {
 				return err
 			}
@@ -803,7 +803,7 @@ func (r *CSV) initWaitSyncTableChunk(csvWaitTables []string, tableNameRule map[s
 	return nil
 }
 
-func (r *CSV) adjustTableSelectColumn(sourceTable string, oracleCollation bool) (string, error) {
+func (r *CSV) AdjustTableSelectColumn(sourceTable string, oracleCollation bool) (string, error) {
 	// Date/Timestamp 字段类型格式化
 	// Interval Year/Day 数据字符 TO_CHAR 格式化
 	columnsINFO, err := r.Oracle.GetOracleSchemaTableColumn(r.Cfg.OracleConfig.SchemaName, sourceTable, oracleCollation)
@@ -817,41 +817,41 @@ func (r *CSV) adjustTableSelectColumn(sourceTable string, oracleCollation bool) 
 		switch strings.ToUpper(rowCol["DATA_TYPE"]) {
 		// 数字
 		case "NUMBER":
-			columnNames = append(columnNames, rowCol["COLUMN_NAME"])
+			columnNames = append(columnNames, common.StringsBuilder(`"`, rowCol["COLUMN_NAME"], `"`))
 		case "DECIMAL", "DEC", "DOUBLE PRECISION", "FLOAT", "INTEGER", "INT", "REAL", "NUMERIC", "BINARY_FLOAT", "BINARY_DOUBLE", "SMALLINT":
-			columnNames = append(columnNames, rowCol["COLUMN_NAME"])
+			columnNames = append(columnNames, common.StringsBuilder(`"`, rowCol["COLUMN_NAME"], `"`))
 		// 字符
 		case "BFILE", "CHARACTER", "LONG", "NCHAR VARYING", "ROWID", "UROWID", "VARCHAR", "CHAR", "NCHAR", "NVARCHAR2", "NCLOB", "CLOB":
-			columnNames = append(columnNames, rowCol["COLUMN_NAME"])
+			columnNames = append(columnNames, common.StringsBuilder(`"`, rowCol["COLUMN_NAME"], `"`))
 		// XMLTYPE
 		case "XMLTYPE":
-			columnNames = append(columnNames, fmt.Sprintf(" XMLSERIALIZE(CONTENT %s AS CLOB) AS %s", rowCol["COLUMN_NAME"], rowCol["COLUMN_NAME"]))
+			columnNames = append(columnNames, fmt.Sprintf(` XMLSERIALIZE(CONTENT "%s" AS CLOB) AS "%s"`, rowCol["COLUMN_NAME"], rowCol["COLUMN_NAME"]))
 		// 二进制
 		case "BLOB", "LONG RAW", "RAW":
-			columnNames = append(columnNames, rowCol["COLUMN_NAME"])
+			columnNames = append(columnNames, common.StringsBuilder(`"`, rowCol["COLUMN_NAME"], `"`))
 		// 时间
 		case "DATE":
-			columnNames = append(columnNames, common.StringsBuilder("TO_CHAR(", rowCol["COLUMN_NAME"], ",'yyyy-MM-dd HH24:mi:ss') AS ", rowCol["COLUMN_NAME"]))
+			columnNames = append(columnNames, common.StringsBuilder(`TO_CHAR("`, rowCol["COLUMN_NAME"], `",'yyyy-MM-dd HH24:mi:ss') AS "`, rowCol["COLUMN_NAME"], `"`))
 		// 默认其他类型
 		default:
 			if strings.Contains(rowCol["DATA_TYPE"], "INTERVAL") {
-				columnNames = append(columnNames, common.StringsBuilder("TO_CHAR(", rowCol["COLUMN_NAME"], ") AS ", rowCol["COLUMN_NAME"]))
+				columnNames = append(columnNames, common.StringsBuilder(`TO_CHAR("`, rowCol["COLUMN_NAME"], `") AS "`, rowCol["COLUMN_NAME"], `"`))
 			} else if strings.Contains(rowCol["DATA_TYPE"], "TIMESTAMP") {
 				dataScale, err := strconv.Atoi(rowCol["DATA_SCALE"])
 				if err != nil {
 					return "", fmt.Errorf("aujust oracle timestamp datatype scale [%s] strconv.Atoi failed: %v", rowCol["DATA_SCALE"], err)
 				}
 				if dataScale == 0 {
-					columnNames = append(columnNames, common.StringsBuilder("TO_CHAR(", rowCol["COLUMN_NAME"], ",'yyyy-mm-dd hh24:mi:ss') AS ", rowCol["COLUMN_NAME"]))
+					columnNames = append(columnNames, common.StringsBuilder(`TO_CHAR("`, rowCol["COLUMN_NAME"], `",'yyyy-MM-dd HH24:mi:ss') AS "`, rowCol["COLUMN_NAME"], `"`))
 				} else if dataScale < 0 && dataScale <= 6 {
-					columnNames = append(columnNames, common.StringsBuilder("TO_CHAR(", rowCol["COLUMN_NAME"],
-						",'yyyy-mm-dd hh24:mi:ss.ff", rowCol["DATA_SCALE"], "') AS ", rowCol["COLUMN_NAME"]))
+					columnNames = append(columnNames, common.StringsBuilder(`TO_CHAR("`, rowCol["COLUMN_NAME"],
+						`",'yyyy-mm-dd hh24:mi:ss.ff`, rowCol["DATA_SCALE"], `') AS "`, rowCol["COLUMN_NAME"], `"`))
 				} else {
-					columnNames = append(columnNames, common.StringsBuilder("TO_CHAR(", rowCol["COLUMN_NAME"], ",'yyyy-mm-dd hh24:mi:ss.ff6') AS ", rowCol["COLUMN_NAME"]))
+					columnNames = append(columnNames, common.StringsBuilder(`TO_CHAR("`, rowCol["COLUMN_NAME"], `",'yyyy-mm-dd hh24:mi:ss.ff6') AS "`, rowCol["COLUMN_NAME"], `"`))
 				}
 
 			} else {
-				columnNames = append(columnNames, rowCol["COLUMN_NAME"])
+				columnNames = append(columnNames, common.StringsBuilder(`"`, rowCol["COLUMN_NAME"], `"`))
 			}
 		}
 

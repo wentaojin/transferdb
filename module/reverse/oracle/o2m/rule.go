@@ -559,7 +559,16 @@ func (r *Rule) GenTableNormalIndex() (normalIndexes []string, compatibilityIndex
 
 func (r *Rule) GenTableComment() (tableComment string, err error) {
 	if len(r.TableColumnINFO) > 0 && r.TableCommentINFO[0]["COMMENTS"] != "" {
-		tableComment = fmt.Sprintf("COMMENT='%s'", r.TableCommentINFO[0]["COMMENTS"])
+		convertUtf8Raw, err := common.CharsetConvert([]byte(r.TableCommentINFO[0]["COMMENTS"]), common.MigrateStringDataTypeDatabaseCharsetMap[common.TaskTypeOracle2MySQL][common.StringUPPER(r.SourceDBCharset)], common.MYSQLCharsetUTF8MB4)
+		if err != nil {
+			return tableComment, fmt.Errorf("column [%s] charset convert failed, %v", r.TableCommentINFO[0]["COMMENTS"], err)
+		}
+
+		convertTargetRaw, err := common.CharsetConvert([]byte(common.SpecialLettersUsingMySQL(convertUtf8Raw)), common.MYSQLCharsetUTF8MB4, common.StringUPPER(r.TargetDBCharset))
+		if err != nil {
+			return tableComment, fmt.Errorf("column [%s] charset convert failed, %v", r.TableCommentINFO[0]["COMMENTS"], err)
+		}
+		tableComment = fmt.Sprintf("COMMENT='%s'", string(convertTargetRaw))
 	}
 	return tableComment, err
 }
@@ -602,7 +611,17 @@ func (r *Rule) GenTableColumn() (tableColumns []string, err error) {
 		}
 
 		if !strings.EqualFold(rowCol["COMMENTS"], "") {
-			comment = "'" + common.SpecialLettersUsingMySQL([]byte(rowCol["COMMENTS"])) + "'"
+			convertUtf8Raw, err := common.CharsetConvert([]byte(rowCol["COMMENTS"]), common.MigrateStringDataTypeDatabaseCharsetMap[common.TaskTypeOracle2MySQL][common.StringUPPER(r.SourceDBCharset)], common.MYSQLCharsetUTF8MB4)
+			if err != nil {
+				return tableColumns, fmt.Errorf("column [%s] charset convert failed, %v", rowCol["COLUMN_NAME"], err)
+			}
+
+			convertTargetRaw, err := common.CharsetConvert([]byte(common.SpecialLettersUsingMySQL(convertUtf8Raw)), common.MYSQLCharsetUTF8MB4, common.StringUPPER(r.TargetDBCharset))
+			if err != nil {
+				return tableColumns, fmt.Errorf("column [%s] charset convert failed, %v", rowCol["COLUMN_NAME"], err)
+			}
+
+			comment = "'" + string(convertTargetRaw) + "'"
 		} else {
 			comment = rowCol["COMMENTS"]
 		}

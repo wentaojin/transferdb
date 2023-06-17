@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"github.com/godror/godror"
 	"github.com/godror/godror/dsn"
-	"github.com/rs/xid"
 	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/config"
 	"runtime"
@@ -47,11 +46,15 @@ func NewOracleDBEngine(ctx context.Context, oraCfg config.OracleConfig) (*Oracle
 		err        error
 	)
 
+	//https://www.syntio.net/en/labs-musings/efficient-fetching-of-data-from-oracle-database-in-golang/
 	// https://github.com/godror/godror/pull/65
-	connClass := fmt.Sprintf("pool_%v", xid.New().String())
-	connString = fmt.Sprintf("oracle://@%s/%s?connectionClass=%s&%s",
+	//connClass := fmt.Sprintf("pool_%v", xid.New().String())
+	//connString = fmt.Sprintf("oracle://@%s/%s?connectionClass=%s&%s",
+	//	common.StringsBuilder(oraCfg.Host, ":", strconv.Itoa(oraCfg.Port)),
+	//	oraCfg.ServiceName, "connClass", oraCfg.ConnectParams)
+	connString = fmt.Sprintf("oracle://@%s/%s?standaloneConnection=1&%s",
 		common.StringsBuilder(oraCfg.Host, ":", strconv.Itoa(oraCfg.Port)),
-		oraCfg.ServiceName, connClass, oraCfg.ConnectParams)
+		oraCfg.ServiceName, oraCfg.ConnectParams)
 	oraDSN, err = godror.ParseDSN(connString)
 	if err != nil {
 		return nil, err
@@ -118,10 +121,13 @@ func NewOracleLogminerEngine(ctx context.Context, oraCfg config.OracleConfig) (*
 	)
 
 	// https://github.com/godror/godror/pull/65
-	connClass := fmt.Sprintf("pool_%v", xid.New().String())
-	connString = fmt.Sprintf("oracle://@%s/%s?connectionClass=%s&%s",
+	//connClass := fmt.Sprintf("pool_%v", xid.New().String())
+	//connString = fmt.Sprintf("oracle://@%s/%s?connectionClass=%s&%s",
+	//	common.StringsBuilder(oraCfg.Host, ":", strconv.Itoa(oraCfg.Port)),
+	//	oraCfg.ServiceName, connClass, oraCfg.ConnectParams)
+	connString = fmt.Sprintf("oracle://@%s/%s?standaloneConnection=1&%s",
 		common.StringsBuilder(oraCfg.Host, ":", strconv.Itoa(oraCfg.Port)),
-		oraCfg.ServiceName, connClass, oraCfg.ConnectParams)
+		oraCfg.ServiceName, oraCfg.ConnectParams)
 	oraDSN, err = godror.ParseDSN(connString)
 	if err != nil {
 		return nil, err

@@ -160,8 +160,8 @@ lib-dir = "/Users/marvin/storehouse/oracle/instantclient_19_8"
 # 常见的 ZHS16GBK 或 AL32UTF8
 charset = "ZHS16GBK"
 # 配置 oracle 连接参数
+#connect-params = "poolMinSessions=50&poolMaxSessions=100&poolWaitTimeout=360s&poolSessionMaxLifetime=2h&poolSessionTimeout=2h&poolIncrement=30&timezone=Local&connect_timeout=15"
 # 配置 oracle 连接会话 session 变量
-connect-params = "poolMinSessions=50&poolMaxSessions=100&poolWaitTimeout=360s&poolSessionMaxLifetime=2h&poolSessionTimeout=2h&poolIncrement=30&timezone=Local&connect_timeout=15"
 # All/Full/CSV 模式内置 Date/Timestamp/Interval Year/Day 数据类型格式化
 # Date 'yyyy-mm-dd hh24:mi:ss'
 # Timestamp 'yyyy-mm-dd hh24:mi:ss.ffx', x 根据 timestamp 精度格式化, 如果超过 6, 按精度 6 格式化字符

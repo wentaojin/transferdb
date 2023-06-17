@@ -163,7 +163,7 @@ func (r *Reverse) Reverse() error {
 		zap.String("cost", time.Now().Sub(ruleTime).String()))
 
 	// 获取 reverse 表任务列表
-	tables, err := GenReverseTableTask(r, tableNameRuleMap, tableColumnRuleMap, tableDefaultRuleMap, oracleDBVersion, oracleDBCharset, oracleCollation, exporterTables, nlsSort, nlsComp)
+	tables, err := GenReverseTableTask(r, tableNameRuleMap, tableColumnRuleMap, tableDefaultRuleMap, oracleDBVersion, oracleDBCharset, r.Cfg.MySQLConfig.Charset, oracleCollation, exporterTables, nlsSort, nlsComp)
 	if err != nil {
 		return err
 	}

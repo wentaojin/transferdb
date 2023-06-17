@@ -27,6 +27,7 @@ import (
 	"github.com/shopspring/decimal"
 	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/config"
+	"github.com/wentaojin/transferdb/database/mysql"
 	"github.com/wentaojin/transferdb/database/oracle"
 	"os"
 	"runtime"
@@ -41,7 +42,8 @@ var (
 	host        = flag.String("host", "host", "specify oracle db host")
 	port        = flag.Int("port", 1521, "specify oracle db host port")
 	serviceName = flag.String("service", "service", "specify oracle db servicename")
-	charset     = flag.String("charset", "", "specify oracle db charset")
+	charsetS    = flag.String("charset_s", "", "specify oracle db charset")
+	charsetT    = flag.String("charset_t", "", "specify mysql db charset")
 	schemaName  = flag.String("schema", "marvin", "specify query schema name")
 	tableName   = flag.String("table", "marvin", "specify query table name")
 	chunk       = flag.String("chunk", "", "specify query table chunk")
@@ -63,7 +65,7 @@ func main() {
 	}
 
 	ctx := context.Background()
-	oraConn, err := newOracleDBEngine(ctx, oraCfg, *charset)
+	oraConn, err := newOracleDBEngine(ctx, oraCfg, *charsetS)
 	if err != nil {
 		panic(err)
 	}
@@ -109,7 +111,7 @@ func main() {
 
 		for fileScanner.Scan() {
 			queryS = fileScanner.Text()
-			_, err := getOracleTableRowsData(ctx, oraConn, queryS)
+			_, err := getOracleTableRowsData(ctx, oraConn, queryS, common.MigrateStringDataTypeDatabaseCharsetMap[common.TaskTypeOracle2TiDB][common.StringUPPER(*charsetS)], common.StringUPPER(*charsetT))
 			if err != nil {
 				panic(fmt.Errorf("sql [%v] read failed: %v", queryS, err))
 			}
@@ -123,12 +125,10 @@ func main() {
 		}
 	}
 
-	res, err := getOracleTableRowsData(ctx, oraConn, queryS)
+	res, err := getOracleTableRowsData(ctx, oraConn, queryS, common.MigrateStringDataTypeDatabaseCharsetMap[common.TaskTypeOracle2TiDB][common.StringUPPER(*charsetS)], common.StringUPPER(*charsetT))
 	if err != nil {
 		panic(fmt.Errorf("sql [%v] read failed: %v", queryS, err))
 	}
-
-	fmt.Println(res)
 
 	//myCfg := config.MySQLConfig{
 	//	Username:   "tims31",
@@ -139,33 +139,33 @@ func main() {
 	//	SchemaName: "marvin",
 	//}
 
-	//myCfg := config.MySQLConfig{
-	//	Username:   "root",
-	//	Password:   "",
-	//	Host:       "10.212.123.60",
-	//	Port:       5000,
-	//	Charset:    "UTF8MB4",
-	//	SchemaName: "marvin",
-	//}
+	myCfg := config.MySQLConfig{
+		Username:   "root",
+		Password:   "",
+		Host:       "10.2.14.60",
+		Port:       5000,
+		Charset:    *charsetT,
+		SchemaName: "findpt",
+	}
 
-	//my, err := mysql.NewMySQLDBEngine(ctx, myCfg)
-	//if err != nil {
-	//	panic(err)
-	//}
+	my, err := mysql.NewMySQLDBEngine(ctx, myCfg)
+	if err != nil {
+		panic(err)
+	}
 	//_, err = my.MySQLDB.Exec(`DROP IF EXISTS marvin.test`)
 	//if err != nil {
 	//	panic(err)
 	//}
 
-	//insertS := fmt.Sprintf(`INSERT INTO marvin.test1 (n) VALUES (%v)`, res[0]["TRANS_DESC"])
+	insertS := fmt.Sprintf(`INSERT INTO findpt.t (trans_desc) VALUES (%v)`, res[0]["TRANS_DESC"])
 
 	//insertS := fmt.Sprintf(`INSERT INTO marvin.t01 VALUES (%v,%v,%v)`, res[0]["ID"], res[0]["N1"], res[0]["N2"])
 
-	//fmt.Println(insertS)
-	//_, err = my.MySQLDB.Exec(insertS)
-	//if err != nil {
-	//	panic(err)
-	//}
+	fmt.Println(insertS)
+	_, err = my.MySQLDB.Exec(insertS)
+	if err != nil {
+		panic(err)
+	}
 
 }
 
@@ -182,7 +182,7 @@ func newOracleDBEngine(ctx context.Context, oraCfg config.OracleConfig, charset 
 	)
 
 	// https://github.com/godror/godror/pull/65
-	connString = fmt.Sprintf("oracle://@%s/%s?connectionClass=POOL_CONNECTION_CLASS00&%s",
+	connString = fmt.Sprintf("oracle://@%s/%s?standaloneConnection=1&%s",
 		common.StringsBuilder(oraCfg.Host, ":", strconv.Itoa(oraCfg.Port)),
 		oraCfg.ServiceName, oraCfg.ConnectParams)
 	oraDSN, err = godror.ParseDSN(connString)
@@ -296,7 +296,7 @@ func adjustTableSelectColumn(oraConn *oracle.Oracle, sourceSchema, sourceTable s
 	return strings.Join(columnNames, ","), nil
 }
 
-func getOracleTableRowsData(ctx context.Context, oraConn *oracle.Oracle, queryS string) ([]map[string]string, error) {
+func getOracleTableRowsData(ctx context.Context, oraConn *oracle.Oracle, queryS string, sourceDBCharset, targetDBCharset string) ([]map[string]string, error) {
 	var (
 		err  error
 		cols []string
@@ -398,19 +398,23 @@ func getOracleTableRowsData(ctx context.Context, oraConn *oracle.Oracle, queryS 
 					}
 					rowsMap[cols[i]] = fmt.Sprintf("%v", r)
 				default:
-					convert, err := common.CharsetConvert(raw, common.MYSQLCharsetGBK, common.MYSQLCharsetUTF8MB4)
+					fmt.Printf("source charset data: %v\n", string(raw))
+
+					convert, err := common.CharsetConvert(raw, sourceDBCharset, common.MYSQLCharsetUTF8MB4)
 					if err != nil {
 						return nil, err
 					}
 
-					fmt.Println(string(convert))
+					fmt.Printf("utf8mb4 charset data: %v\n", string(convert))
 
-					s, err := common.CharsetConvert([]byte(common.SpecialLettersUsingMySQL(convert)), common.MYSQLCharsetUTF8MB4, common.MYSQLCharsetUTF8MB4)
+					s, err := common.CharsetConvert([]byte(common.SpecialLettersUsingMySQL(convert)), common.MYSQLCharsetUTF8MB4, targetDBCharset)
 					if err != nil {
 						return nil, err
 					}
 
 					rowsMap[cols[i]] = fmt.Sprintf("'%v'", string(s))
+
+					fmt.Printf("utf8mb4 convert charset data: %v\n", string(s))
 
 					//rowsMap[cols[i]] = fmt.Sprintf("'%v'", common.SpecialLettersUsingMySQL(raw))
 				}
