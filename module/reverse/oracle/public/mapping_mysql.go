@@ -388,7 +388,7 @@ func OracleTableColumnMapMySQLRule(sourceSchema, sourceTable string, column Colu
 	case common.BuildInOracleDatatypeRowid:
 		originColumnType = common.BuildInOracleDatatypeRowid
 		if val, ok := buildinDatatypeMap[common.BuildInOracleDatatypeRowid]; ok {
-			buildInColumnType = fmt.Sprintf("%s(10)", common.StringUPPER(val))
+			buildInColumnType = fmt.Sprintf("%s(64)", common.StringUPPER(val))
 			return originColumnType, buildInColumnType, nil
 		} else {
 			return originColumnType, buildInColumnType, fmt.Errorf("oracle table column type [%s] map mysql column type rule isn't exist, please checkin", common.BuildInOracleDatatypeRowid)

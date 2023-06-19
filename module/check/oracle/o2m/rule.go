@@ -763,7 +763,7 @@ func OracleTableColumnMapRuleCheck(
 		)
 		return fixedMsg, tableRows, nil
 	case common.BuildInOracleDatatypeRowid:
-		if mysqlDataType == "CHAR" && mysqlDataLength == 10 && oracleDiffColMeta == mysqlDiffColMeta {
+		if mysqlDataType == "VARCHAR" && mysqlDataLength == 64 && oracleDiffColMeta == mysqlDiffColMeta {
 			return "", nil, nil
 		}
 		tableRows = table.Row{tableName, columnName,

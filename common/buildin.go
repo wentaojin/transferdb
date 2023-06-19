@@ -152,7 +152,7 @@ var BuildInOracleO2MDatatypeNameMap = map[string]string{
 	BuildInOracleDatatypeNvarchar2:                   "VARCHAR",
 	BuildInOracleDatatypeRaw:                         "VARBINARY",
 	BuildInOracleDatatypeReal:                        "DOUBLE",
-	BuildInOracleDatatypeRowid:                       "CHAR",
+	BuildInOracleDatatypeRowid:                       "VARCHAR",
 	BuildInOracleDatatypeSmallint:                    "SMALLINT",
 	BuildInOracleDatatypeUrowid:                      "VARCHAR",
 	BuildInOracleDatatypeVarchar2:                    "VARCHAR",
