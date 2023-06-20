@@ -25,19 +25,20 @@ import (
 
 // 全量同步元数据表
 type FullSyncMeta struct {
-	ID            uint   `gorm:"primary_key;autoIncrement;comment:'自增编号'" json:"id"`
-	DBTypeS       string `gorm:"type:varchar(30);index:idx_dbtype_st_map,unique;index:idx_schema_mode;comment:'源数据库类型'" json:"db_type_s"`
-	DBTypeT       string `gorm:"type:varchar(30);index:idx_dbtype_st_map,unique;index:idx_schema_mode;comment:'目标数据库类型'" json:"db_type_t"`
-	SchemaNameS   string `gorm:"type:varchar(100);not null;index:idx_dbtype_st_map,unique;index:idx_schema_mode;comment:'源端 schema'" json:"schema_name_s"`
-	TableNameS    string `gorm:"type:varchar(100);not null;index:idx_dbtype_st_map,unique;comment:'源端表名'" json:"table_name_s"`
-	SchemaNameT   string `gorm:"type:varchar(100);not null;comment:'目标端 schema'" json:"schema_name_t"`
-	TableNameT    string `gorm:"type:varchar(100);not null;comment:'目标端表名'" json:"table_name_t"`
-	GlobalScnS    uint64 `gorm:"comment:'源端全局 SCN'" json:"global_scn_s"`
-	ColumnDetailS string `gorm:"type:text;comment:'源端查询字段信息'" json:"column_detail_s"`
-	ChunkDetailS  string `gorm:"type:varchar(300);not null;index:idx_dbtype_st_map,unique;comment:'表 chunk 切分信息'" json:"chunk_detail_s"`
-	TaskMode      string `gorm:"type:varchar(30);not null;index:idx_dbtype_st_map,unique;index:idx_schema_mode;comment:'任务模式'" json:"task_mode"`
-	TaskStatus    string `gorm:"type:varchar(30);not null;comment:'任务 chunk 状态'" json:"task_status"`
-	CSVFile       string `gorm:"type:varchar(300);comment:'csv 文件名'" json:"csv_file"`
+	ID             uint   `gorm:"primary_key;autoIncrement;comment:'自增编号'" json:"id"`
+	DBTypeS        string `gorm:"type:varchar(30);index:idx_dbtype_st_map,unique;index:idx_schema_mode;comment:'源数据库类型'" json:"db_type_s"`
+	DBTypeT        string `gorm:"type:varchar(30);index:idx_dbtype_st_map,unique;index:idx_schema_mode;comment:'目标数据库类型'" json:"db_type_t"`
+	SchemaNameS    string `gorm:"type:varchar(100);not null;index:idx_dbtype_st_map,unique;index:idx_schema_mode;comment:'源端 schema'" json:"schema_name_s"`
+	TableNameS     string `gorm:"type:varchar(100);not null;index:idx_dbtype_st_map,unique;comment:'源端表名'" json:"table_name_s"`
+	SchemaNameT    string `gorm:"type:varchar(100);not null;comment:'目标端 schema'" json:"schema_name_t"`
+	TableNameT     string `gorm:"type:varchar(100);not null;comment:'目标端表名'" json:"table_name_t"`
+	GlobalScnS     uint64 `gorm:"comment:'源端全局 SCN'" json:"global_scn_s"`
+	ConsistentRead string `gorm:"type:varchar(10);not null;comment:'一致性读'" json:"consistent_read"`
+	ColumnDetailS  string `gorm:"type:text;comment:'源端查询字段信息'" json:"column_detail_s"`
+	ChunkDetailS   string `gorm:"type:varchar(300);not null;index:idx_dbtype_st_map,unique;comment:'表 chunk 切分信息'" json:"chunk_detail_s"`
+	TaskMode       string `gorm:"type:varchar(30);not null;index:idx_dbtype_st_map,unique;index:idx_schema_mode;comment:'任务模式'" json:"task_mode"`
+	TaskStatus     string `gorm:"type:varchar(30);not null;comment:'任务 chunk 状态'" json:"task_status"`
+	CSVFile        string `gorm:"type:varchar(300);comment:'csv 文件名'" json:"csv_file"`
 	*BaseModel
 }
 

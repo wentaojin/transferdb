@@ -623,6 +623,14 @@ func (r *CSV) initWaitSyncTableChunk(csvWaitTables []string, tableNameRule map[s
 		return err
 	}
 
+	// 一致性读
+	var isConsistentRead string
+	if r.Cfg.CSVConfig.ConsistentRead {
+		isConsistentRead = "YES"
+	} else {
+		isConsistentRead = "NO"
+	}
+
 	g := &errgroup.Group{}
 	g.SetLimit(r.Cfg.CSVConfig.TaskThreads)
 
@@ -638,10 +646,6 @@ func (r *CSV) initWaitSyncTableChunk(csvWaitTables []string, tableNameRule map[s
 				targetTableName = val
 			} else {
 				targetTableName = common.StringUPPER(t)
-			}
-
-			if r.Cfg.CSVConfig.OutputDir == "" {
-				return fmt.Errorf("csv config paramter output-dir can't be null, please configure")
 			}
 
 			sourceColumnInfo, err := r.AdjustTableSelectColumn(t, oracleCollation)
@@ -666,17 +670,18 @@ func (r *CSV) initWaitSyncTableChunk(csvWaitTables []string, tableNameRule map[s
 			if tableRowsByStatistics == 0 {
 
 				err = meta.NewCommonModel(r.MetaDB).CreateFullSyncMetaAndUpdateWaitSyncMeta(r.Ctx, &meta.FullSyncMeta{
-					DBTypeS:       r.Cfg.DBTypeS,
-					DBTypeT:       r.Cfg.DBTypeT,
-					SchemaNameS:   common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
-					TableNameS:    common.StringUPPER(t),
-					SchemaNameT:   common.StringUPPER(r.Cfg.MySQLConfig.SchemaName),
-					TableNameT:    common.StringUPPER(targetTableName),
-					GlobalScnS:    globalSCN,
-					ColumnDetailS: sourceColumnInfo,
-					ChunkDetailS:  "1 = 1",
-					TaskMode:      r.Cfg.TaskMode,
-					TaskStatus:    common.TaskStatusWaiting,
+					DBTypeS:        r.Cfg.DBTypeS,
+					DBTypeT:        r.Cfg.DBTypeT,
+					SchemaNameS:    common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
+					TableNameS:     common.StringUPPER(t),
+					SchemaNameT:    common.StringUPPER(r.Cfg.MySQLConfig.SchemaName),
+					TableNameT:     common.StringUPPER(targetTableName),
+					GlobalScnS:     globalSCN,
+					ConsistentRead: isConsistentRead,
+					ColumnDetailS:  sourceColumnInfo,
+					ChunkDetailS:   "1 = 1",
+					TaskMode:       r.Cfg.TaskMode,
+					TaskStatus:     common.TaskStatusWaiting,
 					CSVFile: filepath.Join(r.Cfg.CSVConfig.OutputDir,
 						common.StringUPPER(r.Cfg.OracleConfig.SchemaName), common.StringUPPER(t),
 						common.StringsBuilder(common.StringUPPER(r.Cfg.MySQLConfig.SchemaName),
@@ -688,6 +693,7 @@ func (r *CSV) initWaitSyncTableChunk(csvWaitTables []string, tableNameRule map[s
 					TableNameS:       common.StringUPPER(t),
 					TaskMode:         r.Cfg.TaskMode,
 					GlobalScnS:       globalSCN,
+					ConsistentRead:   isConsistentRead,
 					TableNumRows:     uint64(tableRowsByStatistics),
 					ChunkTotalNums:   1,
 					ChunkSuccessNums: 0,
@@ -718,17 +724,18 @@ func (r *CSV) initWaitSyncTableChunk(csvWaitTables []string, tableNameRule map[s
 			// 判断数据是否存在
 			if len(chunkRes) == 0 {
 				err = meta.NewCommonModel(r.MetaDB).CreateFullSyncMetaAndUpdateWaitSyncMeta(r.Ctx, &meta.FullSyncMeta{
-					DBTypeS:       r.Cfg.DBTypeS,
-					DBTypeT:       r.Cfg.DBTypeT,
-					SchemaNameS:   common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
-					TableNameS:    common.StringUPPER(t),
-					SchemaNameT:   common.StringUPPER(r.Cfg.MySQLConfig.SchemaName),
-					TableNameT:    common.StringUPPER(targetTableName),
-					GlobalScnS:    globalSCN,
-					ColumnDetailS: sourceColumnInfo,
-					ChunkDetailS:  "1 = 1",
-					TaskMode:      r.Cfg.TaskMode,
-					TaskStatus:    common.TaskStatusWaiting,
+					DBTypeS:        r.Cfg.DBTypeS,
+					DBTypeT:        r.Cfg.DBTypeT,
+					SchemaNameS:    common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
+					TableNameS:     common.StringUPPER(t),
+					SchemaNameT:    common.StringUPPER(r.Cfg.MySQLConfig.SchemaName),
+					TableNameT:     common.StringUPPER(targetTableName),
+					GlobalScnS:     globalSCN,
+					ConsistentRead: isConsistentRead,
+					ColumnDetailS:  sourceColumnInfo,
+					ChunkDetailS:   "1 = 1",
+					TaskMode:       r.Cfg.TaskMode,
+					TaskStatus:     common.TaskStatusWaiting,
 					CSVFile: filepath.Join(r.Cfg.CSVConfig.OutputDir,
 						common.StringUPPER(r.Cfg.OracleConfig.SchemaName), common.StringUPPER(t),
 						common.StringsBuilder(common.StringUPPER(r.Cfg.MySQLConfig.SchemaName),
@@ -740,6 +747,7 @@ func (r *CSV) initWaitSyncTableChunk(csvWaitTables []string, tableNameRule map[s
 					TableNameS:       common.StringUPPER(t),
 					TaskMode:         r.Cfg.TaskMode,
 					GlobalScnS:       globalSCN,
+					ConsistentRead:   isConsistentRead,
 					TableNumRows:     uint64(tableRowsByStatistics),
 					ChunkTotalNums:   1,
 					ChunkSuccessNums: 0,
@@ -762,18 +770,19 @@ func (r *CSV) initWaitSyncTableChunk(csvWaitTables []string, tableNameRule map[s
 						common.StringUPPER(targetTableName), `.`, strconv.Itoa(i), `.csv`))
 
 				fullMetas = append(fullMetas, meta.FullSyncMeta{
-					DBTypeS:       r.Cfg.DBTypeS,
-					DBTypeT:       r.Cfg.DBTypeT,
-					SchemaNameS:   common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
-					TableNameS:    common.StringUPPER(t),
-					SchemaNameT:   common.StringUPPER(r.Cfg.MySQLConfig.SchemaName),
-					TableNameT:    common.StringUPPER(targetTableName),
-					GlobalScnS:    globalSCN,
-					ColumnDetailS: sourceColumnInfo,
-					ChunkDetailS:  res["CMD"],
-					TaskMode:      r.Cfg.TaskMode,
-					TaskStatus:    common.TaskStatusWaiting,
-					CSVFile:       csvFile,
+					DBTypeS:        r.Cfg.DBTypeS,
+					DBTypeT:        r.Cfg.DBTypeT,
+					SchemaNameS:    common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
+					TableNameS:     common.StringUPPER(t),
+					SchemaNameT:    common.StringUPPER(r.Cfg.MySQLConfig.SchemaName),
+					TableNameT:     common.StringUPPER(targetTableName),
+					GlobalScnS:     globalSCN,
+					ConsistentRead: isConsistentRead,
+					ColumnDetailS:  sourceColumnInfo,
+					ChunkDetailS:   res["CMD"],
+					TaskMode:       r.Cfg.TaskMode,
+					TaskStatus:     common.TaskStatusWaiting,
+					CSVFile:        csvFile,
 				})
 			}
 
@@ -786,6 +795,7 @@ func (r *CSV) initWaitSyncTableChunk(csvWaitTables []string, tableNameRule map[s
 					TableNameS:       common.StringUPPER(t),
 					TaskMode:         r.Cfg.TaskMode,
 					GlobalScnS:       globalSCN,
+					ConsistentRead:   isConsistentRead,
 					TableNumRows:     uint64(tableRowsByStatistics),
 					ChunkTotalNums:   int64(len(chunkRes)),
 					ChunkSuccessNums: 0,
@@ -877,6 +887,11 @@ func (r *CSV) AdjustTableSelectColumn(sourceTable string, oracleCollation bool) 
 }
 
 func (r *CSV) AdjustCSVConfig(sourceDBCharset string) error {
+
+	if r.Cfg.CSVConfig.OutputDir == "" {
+		return fmt.Errorf("csv config paramter output-dir can't be null, please configure")
+	}
+
 	if !strings.EqualFold(r.Cfg.OracleConfig.Charset, sourceDBCharset) {
 		zap.L().Warn("oracle charset and oracle config charset",
 			zap.String("oracle charset", sourceDBCharset),

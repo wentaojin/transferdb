@@ -104,6 +104,8 @@ sql-threads = 64
 #   - 若不想断点恢复或者重新调整 chunk-size 数，设置 enable-checkpoint = false,重新运行全量任务
 #   - 无法断点续传期间，则需要设置 enable-checkpoint = false 重新导入导出
 enable-checkpoint = true
+# 是否一致性读 ORA
+consistent-read = false
 
 [full]
 # 表间串行，表内并发
@@ -124,6 +126,8 @@ apply-threads = 64
 #   - 若不想断点恢复或者重新调整 chunk-size 数，设置 enable-checkpoint = false,重新运行全量任务
 #   - 无法断点续传期间，则需要设置 enable-checkpoint = false 重新导入导出
 enable-checkpoint = true
+# 是否一致性读 ORA
+consistent-read = false
 
 [all]
 # logminer 单次挖掘最长耗时，单位: 秒

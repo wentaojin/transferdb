@@ -627,6 +627,14 @@ func (r *Migrate) InitWaitSyncTableChunk(csvWaitTables []string, oracleCollation
 		return err
 	}
 
+	// 一致性读
+	var isConsistentRead string
+	if r.Cfg.FullConfig.ConsistentRead {
+		isConsistentRead = "YES"
+	} else {
+		isConsistentRead = "NO"
+	}
+
 	g := &errgroup.Group{}
 	g.SetLimit(r.Cfg.FullConfig.TaskThreads)
 
@@ -664,17 +672,18 @@ func (r *Migrate) InitWaitSyncTableChunk(csvWaitTables []string, oracleCollation
 			// 统计信息数据行数 0，直接全表扫
 			if tableRowsByStatistics == 0 {
 				err = meta.NewCommonModel(r.MetaDB).CreateFullSyncMetaAndUpdateWaitSyncMeta(r.Ctx, &meta.FullSyncMeta{
-					DBTypeS:       r.Cfg.DBTypeS,
-					DBTypeT:       r.Cfg.DBTypeT,
-					SchemaNameS:   common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
-					TableNameS:    common.StringUPPER(t),
-					SchemaNameT:   common.StringUPPER(r.Cfg.MySQLConfig.SchemaName),
-					TableNameT:    common.StringUPPER(targetTableName),
-					GlobalScnS:    globalSCN,
-					ColumnDetailS: sourceColumnInfo,
-					ChunkDetailS:  "1 = 1",
-					TaskMode:      r.Cfg.TaskMode,
-					TaskStatus:    common.TaskStatusWaiting,
+					DBTypeS:        r.Cfg.DBTypeS,
+					DBTypeT:        r.Cfg.DBTypeT,
+					SchemaNameS:    common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
+					TableNameS:     common.StringUPPER(t),
+					SchemaNameT:    common.StringUPPER(r.Cfg.MySQLConfig.SchemaName),
+					TableNameT:     common.StringUPPER(targetTableName),
+					GlobalScnS:     globalSCN,
+					ConsistentRead: isConsistentRead,
+					ColumnDetailS:  sourceColumnInfo,
+					ChunkDetailS:   "1 = 1",
+					TaskMode:       r.Cfg.TaskMode,
+					TaskStatus:     common.TaskStatusWaiting,
 				}, &meta.WaitSyncMeta{
 					DBTypeS:          r.Cfg.DBTypeS,
 					DBTypeT:          r.Cfg.DBTypeT,
@@ -682,6 +691,7 @@ func (r *Migrate) InitWaitSyncTableChunk(csvWaitTables []string, oracleCollation
 					TableNameS:       common.StringUPPER(t),
 					TaskMode:         r.Cfg.TaskMode,
 					GlobalScnS:       globalSCN,
+					ConsistentRead:   isConsistentRead,
 					TableNumRows:     uint64(tableRowsByStatistics),
 					ChunkTotalNums:   1,
 					ChunkSuccessNums: 0,
@@ -712,17 +722,18 @@ func (r *Migrate) InitWaitSyncTableChunk(csvWaitTables []string, oracleCollation
 			// 判断数据是否存在
 			if len(chunkRes) == 0 {
 				err = meta.NewCommonModel(r.MetaDB).CreateFullSyncMetaAndUpdateWaitSyncMeta(r.Ctx, &meta.FullSyncMeta{
-					DBTypeS:       r.Cfg.DBTypeS,
-					DBTypeT:       r.Cfg.DBTypeT,
-					SchemaNameS:   common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
-					TableNameS:    common.StringUPPER(t),
-					SchemaNameT:   common.StringUPPER(r.Cfg.MySQLConfig.SchemaName),
-					TableNameT:    common.StringUPPER(targetTableName),
-					GlobalScnS:    globalSCN,
-					ColumnDetailS: sourceColumnInfo,
-					ChunkDetailS:  "1 = 1",
-					TaskMode:      r.Cfg.TaskMode,
-					TaskStatus:    common.TaskStatusWaiting,
+					DBTypeS:        r.Cfg.DBTypeS,
+					DBTypeT:        r.Cfg.DBTypeT,
+					SchemaNameS:    common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
+					TableNameS:     common.StringUPPER(t),
+					SchemaNameT:    common.StringUPPER(r.Cfg.MySQLConfig.SchemaName),
+					TableNameT:     common.StringUPPER(targetTableName),
+					GlobalScnS:     globalSCN,
+					ConsistentRead: isConsistentRead,
+					ColumnDetailS:  sourceColumnInfo,
+					ChunkDetailS:   "1 = 1",
+					TaskMode:       r.Cfg.TaskMode,
+					TaskStatus:     common.TaskStatusWaiting,
 				}, &meta.WaitSyncMeta{
 					DBTypeS:          r.Cfg.DBTypeS,
 					DBTypeT:          r.Cfg.DBTypeT,
@@ -731,6 +742,7 @@ func (r *Migrate) InitWaitSyncTableChunk(csvWaitTables []string, oracleCollation
 					TaskMode:         r.Cfg.TaskMode,
 					TableNumRows:     uint64(tableRowsByStatistics),
 					GlobalScnS:       globalSCN,
+					ConsistentRead:   isConsistentRead,
 					ChunkTotalNums:   1,
 					ChunkSuccessNums: 0,
 					ChunkFailedNums:  0,
@@ -746,17 +758,18 @@ func (r *Migrate) InitWaitSyncTableChunk(csvWaitTables []string, oracleCollation
 			var fullMetas []meta.FullSyncMeta
 			for _, res := range chunkRes {
 				fullMetas = append(fullMetas, meta.FullSyncMeta{
-					DBTypeS:       r.Cfg.DBTypeS,
-					DBTypeT:       r.Cfg.DBTypeT,
-					SchemaNameS:   common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
-					TableNameS:    common.StringUPPER(t),
-					SchemaNameT:   common.StringUPPER(r.Cfg.MySQLConfig.SchemaName),
-					TableNameT:    common.StringUPPER(targetTableName),
-					GlobalScnS:    globalSCN,
-					ColumnDetailS: sourceColumnInfo,
-					ChunkDetailS:  res["CMD"],
-					TaskMode:      r.Cfg.TaskMode,
-					TaskStatus:    common.TaskStatusWaiting,
+					DBTypeS:        r.Cfg.DBTypeS,
+					DBTypeT:        r.Cfg.DBTypeT,
+					SchemaNameS:    common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
+					TableNameS:     common.StringUPPER(t),
+					SchemaNameT:    common.StringUPPER(r.Cfg.MySQLConfig.SchemaName),
+					TableNameT:     common.StringUPPER(targetTableName),
+					GlobalScnS:     globalSCN,
+					ConsistentRead: isConsistentRead,
+					ColumnDetailS:  sourceColumnInfo,
+					ChunkDetailS:   res["CMD"],
+					TaskMode:       r.Cfg.TaskMode,
+					TaskStatus:     common.TaskStatusWaiting,
 				})
 			}
 
@@ -776,6 +789,7 @@ func (r *Migrate) InitWaitSyncTableChunk(csvWaitTables []string, oracleCollation
 			}, map[string]interface{}{
 				"TableNumRows":     uint64(tableRowsByStatistics),
 				"GlobalScnS":       globalSCN,
+				"ConsistentRead":   isConsistentRead,
 				"ChunkTotalNums":   len(chunkRes),
 				"ChunkSuccessNums": 0,
 				"ChunkFailedNums":  0,

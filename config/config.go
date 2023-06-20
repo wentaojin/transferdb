@@ -92,6 +92,7 @@ type CSVConfig struct {
 	TableThreads     int    `toml:"table-threads" json:"table-threads"`
 	SQLThreads       int    `toml:"sql-threads" json:"sql-threads"`
 	EnableCheckpoint bool   `toml:"enable-checkpoint" json:"enable-checkpoint"`
+	ConsistentRead   bool   `toml:"consistent-read" json:"consistent-read"`
 }
 
 type FullConfig struct {
@@ -101,6 +102,7 @@ type FullConfig struct {
 	SQLThreads       int  `toml:"sql-threads" json:"sql-threads"`
 	ApplyThreads     int  `toml:"apply-threads" json:"apply-threads"`
 	EnableCheckpoint bool `toml:"enable-checkpoint" json:"enable-checkpoint"`
+	ConsistentRead   bool `toml:"consistent-read" json:"consistent-read"`
 }
 
 type AllConfig struct {

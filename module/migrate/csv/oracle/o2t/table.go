@@ -27,6 +27,7 @@ import (
 	"go.uber.org/zap"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -66,8 +67,12 @@ func NewRows(ctx context.Context, syncMeta meta.FullSyncMeta,
 
 func (t *Rows) ReadData() error {
 	startTime := time.Now()
-
-	querySQL := common.StringsBuilder(`SELECT `, t.SyncMeta.ColumnDetailS, ` FROM `, t.SyncMeta.SchemaNameS, `.`, t.SyncMeta.TableNameS, ` WHERE `, t.SyncMeta.ChunkDetailS)
+	var querySQL string
+	if strings.EqualFold(t.SyncMeta.ConsistentRead, "YES") {
+		querySQL = common.StringsBuilder(`SELECT `, t.SyncMeta.ColumnDetailS, ` FROM `, t.SyncMeta.SchemaNameS, `.`, t.SyncMeta.TableNameS, ` AS OF SCN `, strconv.FormatUint(t.SyncMeta.GlobalScnS, 10), ` WHERE `, t.SyncMeta.ChunkDetailS)
+	} else {
+		querySQL = common.StringsBuilder(`SELECT `, t.SyncMeta.ColumnDetailS, ` FROM `, t.SyncMeta.SchemaNameS, `.`, t.SyncMeta.TableNameS, ` WHERE `, t.SyncMeta.ChunkDetailS)
+	}
 
 	err := t.Oracle.GetOracleTableRowsDataCSV(querySQL, t.DBCharsetS, t.DBCharsetT, t.Cfg, t.ReadChannel)
 	if err != nil {

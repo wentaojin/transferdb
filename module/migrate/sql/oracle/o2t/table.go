@@ -25,6 +25,8 @@ import (
 	"github.com/wentaojin/transferdb/database/oracle"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -70,7 +72,12 @@ func NewRows(ctx context.Context, syncMeta meta.FullSyncMeta,
 
 func (t *Rows) ReadData() error {
 	startTime := time.Now()
-	querySQL := common.StringsBuilder(`SELECT `, t.SyncMeta.ColumnDetailS, ` FROM `, t.SyncMeta.SchemaNameS, `.`, t.SyncMeta.TableNameS, ` WHERE `, t.SyncMeta.ChunkDetailS)
+	var querySQL string
+	if strings.EqualFold(t.SyncMeta.ConsistentRead, "YES") {
+		querySQL = common.StringsBuilder(`SELECT `, t.SyncMeta.ColumnDetailS, ` FROM `, t.SyncMeta.SchemaNameS, `.`, t.SyncMeta.TableNameS, ` AS OF SCN `, strconv.FormatUint(t.SyncMeta.GlobalScnS, 10), ` WHERE `, t.SyncMeta.ChunkDetailS)
+	} else {
+		querySQL = common.StringsBuilder(`SELECT `, t.SyncMeta.ColumnDetailS, ` FROM `, t.SyncMeta.SchemaNameS, `.`, t.SyncMeta.TableNameS, ` WHERE `, t.SyncMeta.ChunkDetailS)
+	}
 
 	err := t.Oracle.GetOracleTableRowsData(querySQL, t.BatchSize, t.SourceDBCharset, t.TargetDBCharset, t.ReadChannel)
 	if err != nil {
@@ -113,7 +120,7 @@ func (t *Rows) ProcessData() error {
 				// 通道关闭
 				close(t.WriteChannel)
 				return fmt.Errorf("source schema table column counts vs data counts isn't match")
-				
+
 			} else {
 				batchRows = append(batchRows, common.StringsBuilder("(", exstrings.Join(rowsTMP, ","), ")"))
 			}

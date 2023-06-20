@@ -32,6 +32,7 @@ type WaitSyncMeta struct {
 	TaskMode         string `gorm:"type:varchar(30);not null;index:idx_dbtype_st_map,unique;comment:'任务模式'" json:"task_mode"`
 	TaskStatus       string `gorm:"type:varchar(30);not null;comment:'任务状态'" json:"task_status"`
 	GlobalScnS       uint64 `gorm:"comment:'全量任务 full_sync_meta 全局 SCN'" json:"global_scn_s"`
+	ConsistentRead   string `gorm:"type:varchar(10);not null;comment:'一致性读'" json:"consistent_read"`
 	TableNumRows     uint64 `gorm:"comment:'全量任务源端表数据行数'" json:"table_num_rows"`
 	ChunkTotalNums   int64  `gorm:"comment:'全量任务 full_sync_meta 任务切分 chunk 数'" json:"chunk_total_nums"`
 	ChunkSuccessNums int64  `gorm:"comment:'全量任务 full_sync_meta 执行成功 chunk 数'" json:"chunk_success_nums"`
