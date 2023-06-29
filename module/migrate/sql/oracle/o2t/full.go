@@ -442,7 +442,7 @@ func (r *Migrate) FullPartSyncTable(fullPartTables []string) error {
 				m := fullMeta
 				g1.Go(func() error {
 					// 数据写入
-					err = public.IMigrate(NewRows(r.Ctx, m, r.Oracle, r.Mysql, r.MetaDB,
+					err = public.IMigrate(NewRows(r.Ctx, m, r.Oracle, r.Mysql,
 						common.MigrateStringDataTypeDatabaseCharsetMap[common.TaskTypeOracle2TiDB][common.StringUPPER(r.Cfg.OracleConfig.Charset)],
 						common.StringUPPER(r.Cfg.MySQLConfig.Charset),
 						r.Cfg.FullConfig.ApplyThreads, r.Cfg.AppConfig.InsertBatchSize, true, columnNameS))

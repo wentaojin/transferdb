@@ -443,7 +443,7 @@ func (r *CSV) csvPartSyncTable(csvPartTables []string, sourceDBCharset string) e
 			for _, fullSyncMeta := range waitFullMetas {
 				m := fullSyncMeta
 				g1.Go(func() error {
-					err = public.IMigrate(NewRows(r.Ctx, m, r.Oracle, r.MetaDB, r.Cfg, columnNameS, common.MigrateStringDataTypeDatabaseCharsetMap[common.TaskTypeOracle2TiDB][sourceDBCharset]))
+					err = public.IMigrate(NewRows(r.Ctx, m, r.Oracle, r.Cfg, columnNameS, common.MigrateStringDataTypeDatabaseCharsetMap[common.TaskTypeOracle2TiDB][sourceDBCharset]))
 					if err != nil {
 						var (
 							errorSQL string

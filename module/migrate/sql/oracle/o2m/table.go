@@ -35,7 +35,6 @@ type Rows struct {
 	SyncMeta        meta.FullSyncMeta
 	Oracle          *oracle.Oracle
 	MySQL           *mysql.MySQL
-	Meta            *meta.Meta
 	SourceDBCharset string
 	TargetDBCharset string
 	ApplyThreads    int
@@ -47,7 +46,7 @@ type Rows struct {
 }
 
 func NewRows(ctx context.Context, syncMeta meta.FullSyncMeta,
-	oracle *oracle.Oracle, mysql *mysql.MySQL, meta *meta.Meta, sourceDBCharset string, targetDBCharset string, applyThreads, batchSize int, safeMode bool,
+	oracle *oracle.Oracle, mysql *mysql.MySQL, sourceDBCharset string, targetDBCharset string, applyThreads, batchSize int, safeMode bool,
 	columnNameS []string) *Rows {
 
 	readChannel := make(chan []map[string]string, common.ChannelBufferSize)
@@ -58,7 +57,6 @@ func NewRows(ctx context.Context, syncMeta meta.FullSyncMeta,
 		SyncMeta:        syncMeta,
 		Oracle:          oracle,
 		MySQL:           mysql,
-		Meta:            meta,
 		SourceDBCharset: sourceDBCharset,
 		TargetDBCharset: targetDBCharset,
 		ApplyThreads:    applyThreads,

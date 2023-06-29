@@ -27,6 +27,7 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -381,6 +382,9 @@ func (r *CSV) CSV() error {
 func (r *CSV) csvPartSyncTable(csvPartTables []string, sourceDBCharset string) error {
 	startTime := time.Now()
 
+	// 获取报错 sql
+	re := regexp.MustCompile("sql \\[(?s).*] execute")
+
 	g := &errgroup.Group{}
 	g.SetLimit(r.Cfg.CSVConfig.TableThreads)
 
@@ -439,8 +443,19 @@ func (r *CSV) csvPartSyncTable(csvPartTables []string, sourceDBCharset string) e
 			for _, fullSyncMeta := range waitFullMetas {
 				m := fullSyncMeta
 				g1.Go(func() error {
-					err = public.IMigrate(NewRows(r.Ctx, m, r.Oracle, r.MetaDB, r.Cfg, columnNameS, common.MigrateStringDataTypeDatabaseCharsetMap[common.TaskTypeOracle2MySQL][sourceDBCharset]))
+					err = public.IMigrate(NewRows(r.Ctx, m, r.Oracle, r.Cfg, columnNameS, common.MigrateStringDataTypeDatabaseCharsetMap[common.TaskTypeOracle2MySQL][sourceDBCharset]))
 					if err != nil {
+						var (
+							errorSQL string
+							errMsg   string
+						)
+						errMsg = err.Error()
+
+						if re.MatchString(errMsg) {
+							errorSQL = re.FindStringSubmatch(errMsg)[0]
+							errMsg = re.ReplaceAllString(errMsg, "sql execute")
+						}
+
 						// record error, skip error
 						errf := meta.NewCommonModel(r.MetaDB).UpdateFullSyncMetaChunkAndCreateChunkErrorDetail(r.Ctx, &meta.FullSyncMeta{
 							DBTypeS:      m.DBTypeS,
@@ -461,7 +476,8 @@ func (r *CSV) csvPartSyncTable(csvPartTables []string, sourceDBCharset string) e
 							TaskMode:     m.TaskMode,
 							ChunkDetailS: m.ChunkDetailS,
 							InfoDetail:   m.String(),
-							ErrorDetail:  err.Error(),
+							ErrorSQL:     errorSQL,
+							ErrorDetail:  errMsg,
 						})
 						if errf != nil {
 							return fmt.Errorf("get oracle schema table [%v] IMigrate failed: %v", m.String(), errf)

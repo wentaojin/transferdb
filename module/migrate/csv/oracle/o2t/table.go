@@ -37,7 +37,6 @@ type Rows struct {
 	SyncMeta     meta.FullSyncMeta
 	Oracle       *oracle.Oracle
 	Cfg          *config.Config
-	Meta         *meta.Meta
 	DBCharsetS   string
 	DBCharsetT   string
 	ColumnNameS  []string
@@ -46,7 +45,7 @@ type Rows struct {
 }
 
 func NewRows(ctx context.Context, syncMeta meta.FullSyncMeta,
-	oracle *oracle.Oracle, meta *meta.Meta, cfg *config.Config, columnNameS []string, sourceDBCharset string) *Rows {
+	oracle *oracle.Oracle, cfg *config.Config, columnNameS []string, sourceDBCharset string) *Rows {
 
 	writeChannel := make(chan string, common.ChannelBufferSize)
 	readChannel := make(chan []map[string]string, common.ChannelBufferSize)
@@ -55,7 +54,6 @@ func NewRows(ctx context.Context, syncMeta meta.FullSyncMeta,
 		Ctx:          ctx,
 		SyncMeta:     syncMeta,
 		Oracle:       oracle,
-		Meta:         meta,
 		Cfg:          cfg,
 		DBCharsetS:   sourceDBCharset,
 		DBCharsetT:   common.StringUPPER(cfg.CSVConfig.Charset),
