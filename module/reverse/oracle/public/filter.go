@@ -39,20 +39,20 @@ func FilterCFGTable(cfg *config.Config, oracle *oracle.Oracle) ([]string, error)
 		return nil, err
 	}
 
-	if !common.IsContainString(allOraSchemas, common.StringUPPER(cfg.OracleConfig.SchemaName)) {
-		return nil, fmt.Errorf("oracle schema [%s] isn't exist in the database", cfg.OracleConfig.SchemaName)
+	if !common.IsContainString(allOraSchemas, common.StringUPPER(cfg.SchemaConfig.SourceSchema)) {
+		return nil, fmt.Errorf("oracle schema [%s] isn't exist in the database", cfg.SchemaConfig.SourceSchema)
 	}
 
 	// 获取 oracle 所有数据表
-	allTables, err := oracle.GetOracleSchemaTable(common.StringUPPER(cfg.OracleConfig.SchemaName))
+	allTables, err := oracle.GetOracleSchemaTable(common.StringUPPER(cfg.SchemaConfig.SourceSchema))
 	if err != nil {
 		return exporterTableSlice, err
 	}
 
 	switch {
-	case len(cfg.OracleConfig.IncludeTable) != 0 && len(cfg.OracleConfig.ExcludeTable) == 0:
+	case len(cfg.SchemaConfig.SourceIncludeTable) != 0 && len(cfg.SchemaConfig.SourceExcludeTable) == 0:
 		// 过滤规则加载
-		f, err := filter.Parse(cfg.OracleConfig.IncludeTable)
+		f, err := filter.Parse(cfg.SchemaConfig.SourceIncludeTable)
 		if err != nil {
 			panic(err)
 		}
@@ -62,9 +62,9 @@ func FilterCFGTable(cfg *config.Config, oracle *oracle.Oracle) ([]string, error)
 				exporterTableSlice = append(exporterTableSlice, t)
 			}
 		}
-	case len(cfg.OracleConfig.IncludeTable) == 0 && len(cfg.OracleConfig.ExcludeTable) != 0:
+	case len(cfg.SchemaConfig.SourceIncludeTable) == 0 && len(cfg.SchemaConfig.SourceExcludeTable) != 0:
 		// 过滤规则加载
-		f, err := filter.Parse(cfg.OracleConfig.ExcludeTable)
+		f, err := filter.Parse(cfg.SchemaConfig.SourceExcludeTable)
 		if err != nil {
 			panic(err)
 		}
@@ -76,7 +76,7 @@ func FilterCFGTable(cfg *config.Config, oracle *oracle.Oracle) ([]string, error)
 		}
 		exporterTableSlice = common.FilterDifferenceStringItems(allTables, excludeTables)
 
-	case len(cfg.OracleConfig.IncludeTable) == 0 && len(cfg.OracleConfig.ExcludeTable) == 0:
+	case len(cfg.SchemaConfig.SourceIncludeTable) == 0 && len(cfg.SchemaConfig.SourceExcludeTable) == 0:
 		exporterTableSlice = allTables
 
 	default:
@@ -89,7 +89,7 @@ func FilterCFGTable(cfg *config.Config, oracle *oracle.Oracle) ([]string, error)
 
 	endTime := time.Now()
 	zap.L().Info("get oracle to mysql all tables",
-		zap.String("schema", cfg.OracleConfig.SchemaName),
+		zap.String("schema", cfg.SchemaConfig.SourceSchema),
 		zap.Strings("exporter tables list", exporterTableSlice),
 		zap.Int("include table counts", len(exporterTableSlice)),
 		zap.Int("exclude table counts", len(excludeTables)),
@@ -122,19 +122,19 @@ func FilterOracleCompatibleTable(cfg *config.Config, oracle *oracle.Oracle, expo
 
 	if len(partitionTables) != 0 {
 		zap.L().Warn("partition tables",
-			zap.String("schema", cfg.OracleConfig.SchemaName),
+			zap.String("schema", cfg.SchemaConfig.SourceSchema),
 			zap.String("partition table list", fmt.Sprintf("%v", partitionTables)),
 			zap.String("suggest", "if necessary, please manually convert and process the tables in the above list"))
 	}
 	if len(temporaryTables) != 0 {
 		zap.L().Warn("temporary tables",
-			zap.String("schema", cfg.OracleConfig.SchemaName),
+			zap.String("schema", cfg.SchemaConfig.SourceSchema),
 			zap.String("temporary table list", fmt.Sprintf("%v", temporaryTables)),
 			zap.String("suggest", "if necessary, please manually process the tables in the above list"))
 	}
 	if len(clusteredTables) != 0 {
 		zap.L().Warn("clustered tables",
-			zap.String("schema", cfg.OracleConfig.SchemaName),
+			zap.String("schema", cfg.SchemaConfig.SourceSchema),
 			zap.String("clustered table list", fmt.Sprintf("%v", clusteredTables)),
 			zap.String("suggest", "if necessary, please manually process the tables in the above list"))
 	}
@@ -142,7 +142,7 @@ func FilterOracleCompatibleTable(cfg *config.Config, oracle *oracle.Oracle, expo
 	var exporterTables []string
 	if len(materializedView) != 0 {
 		zap.L().Warn("materialized views",
-			zap.String("schema", cfg.OracleConfig.SchemaName),
+			zap.String("schema", cfg.SchemaConfig.SourceSchema),
 			zap.String("materialized view list", fmt.Sprintf("%v", materializedView)),
 			zap.String("suggest", "if necessary, please manually process the tables in the above list"))
 
@@ -155,7 +155,7 @@ func FilterOracleCompatibleTable(cfg *config.Config, oracle *oracle.Oracle, expo
 }
 
 func filterOraclePartitionTable(cfg *config.Config, oracle *oracle.Oracle, exporters []string) ([]string, error) {
-	tables, err := oracle.GetOracleSchemaPartitionTable(common.StringUPPER(cfg.OracleConfig.SchemaName))
+	tables, err := oracle.GetOracleSchemaPartitionTable(common.StringUPPER(cfg.SchemaConfig.SourceSchema))
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +163,7 @@ func filterOraclePartitionTable(cfg *config.Config, oracle *oracle.Oracle, expor
 }
 
 func filterOracleTemporaryTable(cfg *config.Config, oracle *oracle.Oracle, exporters []string) ([]string, error) {
-	tables, err := oracle.GetOracleSchemaTemporaryTable(common.StringUPPER(cfg.OracleConfig.SchemaName))
+	tables, err := oracle.GetOracleSchemaTemporaryTable(common.StringUPPER(cfg.SchemaConfig.SourceSchema))
 	if err != nil {
 		return nil, err
 	}
@@ -171,7 +171,7 @@ func filterOracleTemporaryTable(cfg *config.Config, oracle *oracle.Oracle, expor
 }
 
 func filterOracleClusteredTable(cfg *config.Config, oracle *oracle.Oracle, exporters []string) ([]string, error) {
-	tables, err := oracle.GetOracleSchemaClusteredTable(common.StringUPPER(cfg.OracleConfig.SchemaName))
+	tables, err := oracle.GetOracleSchemaClusteredTable(common.StringUPPER(cfg.SchemaConfig.SourceSchema))
 	if err != nil {
 		return nil, err
 	}
@@ -179,7 +179,7 @@ func filterOracleClusteredTable(cfg *config.Config, oracle *oracle.Oracle, expor
 }
 
 func filterOracleMaterializedView(cfg *config.Config, oracle *oracle.Oracle, exporters []string) ([]string, error) {
-	tables, err := oracle.GetOracleSchemaMaterializedView(common.StringUPPER(cfg.OracleConfig.SchemaName))
+	tables, err := oracle.GetOracleSchemaMaterializedView(common.StringUPPER(cfg.SchemaConfig.SourceSchema))
 	if err != nil {
 		return nil, err
 	}

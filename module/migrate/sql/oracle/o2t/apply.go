@@ -77,7 +77,7 @@ func applyOracleIncrRecord(metaDB *meta.Meta, mysqlDB *mysql.MySQL, cfg *config.
 					defer func() {
 						if err := recover(); err != nil {
 							zap.L().Fatal("translatorAndApplyOracleIncrementRecord",
-								zap.String("oracle schema", cfg.OracleConfig.SchemaName),
+								zap.String("oracle schema", cfg.SchemaConfig.SourceSchema),
 								zap.String("oracle table", sourceTable),
 								zap.Error(fmt.Errorf("%v", err)))
 						}
@@ -93,7 +93,7 @@ func applyOracleIncrRecord(metaDB *meta.Meta, mysqlDB *mysql.MySQL, cfg *config.
 						rowsResult, taskQueue); err != nil {
 						return
 					}
-				}(mysqlDB, cfg.OracleConfig.SchemaName, sourceTable, rowsResult, taskQueue)
+				}(mysqlDB, cfg.SchemaConfig.SourceSchema, sourceTable, rowsResult, taskQueue)
 
 				// 必须在任务分配和获取结果后创建工作池
 				go createWorkerPool(cfg.AllConfig.WorkerThreads, taskQueue, resultQueue)
@@ -103,7 +103,7 @@ func applyOracleIncrRecord(metaDB *meta.Meta, mysqlDB *mysql.MySQL, cfg *config.
 				return nil
 			}
 			zap.L().Warn("increment table log file logminer null data, transferdb will continue to capture",
-				zap.String("oracle schema", cfg.OracleConfig.SchemaName),
+				zap.String("oracle schema", cfg.SchemaConfig.SourceSchema),
 				zap.String("oracle table", sourceTable),
 				zap.String("status", "success"))
 			return nil

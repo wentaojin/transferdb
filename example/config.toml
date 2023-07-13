@@ -61,16 +61,6 @@ ignore-struct-check = true
 # 差异修复 SQL 文件输出目录, ONLY 用于下游数据库变更修复
 fix-sql-dir = "/users/marvin/gostore/transferdb/data"
 
-# diff 某些表单独配置 -> 源端表
-#[[table-config]]
-# 源端表
-#source-table = "marvin"
-# 指定 NUMBER 类型字段，必须带索引且是 NUMBER 类型
-#index-fields = "id"
-# 指定检查数据范围或者查询条件
-# range 优先级高于 index-fields
-#range = "age > 10 AND age< 20"
-
 [csv]
 # CSV 文件是否包含表头
 header = true
@@ -106,6 +96,8 @@ sql-threads = 64
 enable-checkpoint = true
 # 是否一致性读 ORA
 consistent-read = false
+# 指定分片 chunk sql 查询 hint
+sql-hint = "/*+ PARALLEL(8) */"
 
 [full]
 # 表间串行，表内并发
@@ -128,6 +120,8 @@ apply-threads = 64
 enable-checkpoint = true
 # 是否一致性读 ORA
 consistent-read = false
+# 指定分片 chunk sql 查询 hint
+sql-hint = "/*+ PARALLEL(8) */"
 
 [all]
 # logminer 单次挖掘最长耗时，单位: 秒
@@ -141,20 +135,63 @@ worker-queue = 128
 # apply-threads 每个表并发处理最大任务分发数
 worker-threads = 64
 
+[schema-config]
+# 源端 schema
+# assess 阶段可设置可不设置，不设置则表示 assess 库内所有 schema，其他阶段必须设置
+source-schema = "marvin"
+# 目前 only support oracle 作为源端
+# 源端迁移任务表（只用于 prepare/reverse/check/all/full 阶段，assess 阶段不适用，assess 只适用于 schema 级别）
+# include-table 和 exclude-table 不能同时配置，两者只能配置一个,如果两个都没配置则 Schema 内表全迁移
+# include-table 和 exclude-table 支持正则表达式以及通配符（tab_*/tab*）
+source-include-table = ["ganyq0"]
+source-exclude-table = []
+# 目标端 schema
+target-schema = "marvin"
+# 某些源库源表单独配置 -> 源端表
+# 数据校验自定义
+#[[schema-config.compare-config]]
+# 源端表
+#source-table = "marvin"
+# 指定 NUMBER 类型字段，必须带索引且是 NUMBER 类型
+#index-fields = "id"
+# 指定检查数据范围或者查询条件
+# range 优先级高于 index-fields
+#range = "age > 10 AND age< 20"
+
+# 数据迁移自定义 full/csv
+#[[schema-config.migrate-config]]
+# 源端表
+#source-table = "marvin"
+# 指定分片 chunk 数，即将查询范围 rang 切分 chunk 数
+#chunks = 8
+# 指定数据迁移表的查询范围
+# 注意自定义数据迁移表之后，对应表将只迁移该部分数据
+#range = "age > 10 AND age< 20"
+# 指定分片 chunk sql 查询 hint
+#sql-hint = ""
+
 [oracle]
 # 特别说明
 # - CDB 架构
-# 1、需要指定 c## 开头的用户
-# 2、参数 service-name 需要指定 cdb 级别 service-name
-# 3、需要指定 ${schema-name} 所在的 pdb container
+# 连接方式 1:
+#   1、需要指定 c## 开头的用户
+#   2、参数 service-name 需要指定 cdb 级别 service-name
+#   3、需要指定 ${schema-name} 所在的 pdb container
+# 连接方式 2:
+#   1、不指定 c## 开头的用户，指定 pdb 用户
+#   2、无需指定 pdb-name，置空
+#   3、参数 service-name 指定 pdb servicename
 # - NonCDB 架构
-# 1、无需指定 pdb-name，需置空，其他正常设置
+# 连接方式:
+#   1、指定数据库用户
+#   2、无需指定 pdb-name，置空
+#   3、参数 service-name 指定对应数据库 servicename
 username = "marvin"
 password = "marvin"
 host = "192.168.0.1"
 port = 1521
-service-name = "gbk"
-# CDB 架构需指定 ${schema-name} 所在的 pdb container
+service-name = "orclpdb1"
+# CDB 架构采用 c## 用户连接需指定 ${schema-name} 所在的 pdb container
 # NONCDB 架构无须指定，需置空
 pdb-name = ""
 # oracle instance client dir -> 该配置文件 lib-dir 参数 only windows/macOS 生效, 对于 linux 操作系统，需要手工设置环境变量 LD_LIBRARY_PATH
@@ -162,22 +199,13 @@ lib-dir = "/Users/marvin/storehouse/oracle/instantclient_19_8"
 # 设置 transferdb 运行环境所在 client 字符集参数，需保持跟 oracle server 一致
 # select userenv('language') from dual;
 # 常见的 ZHS16GBK 或 AL32UTF8
-charset = "ZHS16GBK"
-# 配置 oracle 连接参数
-#connect-params = "poolMinSessions=50&poolMaxSessions=100&poolWaitTimeout=360s&poolSessionMaxLifetime=2h&poolSessionTimeout=2h&poolIncrement=30&timezone=Local&connect_timeout=15"
+charset = "AL32UTF8"
 # 配置 oracle 连接会话 session 变量
 # All/Full/CSV 模式内置 Date/Timestamp/Interval Year/Day 数据类型格式化
 # Date 'yyyy-mm-dd hh24:mi:ss'
 # Timestamp 'yyyy-mm-dd hh24:mi:ss.ffx', x 根据 timestamp 精度格式化, 如果超过 6, 按精度 6 格式化字符
 # Interval Year/Day 数据字符 TO_CHAR 格式化
 session-params = []
-# 配置 oracle 迁移 schema（assess 阶段可设置可不设置，不设置则表示 assess 库内所有 schema，其他阶段必须设置）
-schema-name = "marvin"
-# 源端迁移任务表（只用于 prepare/reverse/check/all/full 阶段，assess 阶段不适用，assess 只适用于 schema 级别）
-# include-table 和 exclude-table 不能同时配置，两者只能配置一个,如果两个都没配置则 Schema 内表全迁移
-# include-table 和 exclude-table 支持正则表达式以及通配符（tab_*/tab*）
-include-table = ["marvin"]
-exclude-table = []
 
 # 只用于 reverse/check/all/full 阶段，assess 阶段不适用
 [mysql]
@@ -190,11 +218,9 @@ port = 5500
 connect-params = "multiStatements=true&parseTime=True&loc=Local"
 # 设置目标端数据库连接字符集，默认字符集 utf8mb4 (tidb 表结构 only utf8mb4, mysql 表结构 utf8mb4、gbk、gb18030 自适应)
 # AL32UTF8(UTF8MB4) -> UTF8MB4/GBK/GB18030
-# ZHS16GBK(GBK) -> UTF8MB/GBK/GB18030
-# ZHS32GB18030(GB18030) -> UTF8MB/GBK/GB18030
+# ZHS16GBK(GBK) -> UTF8MB4/GBK/GB18030
+# ZHS16GB18030(GB18030) -> UTF8MB4/GBK/GB18030
 charset = "UTF8MB4"
-# 目标端 schema
-schema-name = "marvin"
 # 表后缀可选项 - Only 适用于 Oracle -> TiDB
 # TiDB 数据库全局生效（自动读取下游数据参数判定生效与否）：
 # tidb_enable_clustered_index = on 全局聚簇索引，table-option 不生效

@@ -34,6 +34,7 @@ type FullSyncMeta struct {
 	TableNameT     string `gorm:"type:varchar(100);not null;comment:'目标端表名'" json:"table_name_t"`
 	GlobalScnS     uint64 `gorm:"comment:'源端全局 SCN'" json:"global_scn_s"`
 	ConsistentRead string `gorm:"type:varchar(10);not null;comment:'一致性读'" json:"consistent_read"`
+	SQLHint        string `gorm:"type:varchar(300);comment:'sql hint'" json:"sql_hint"`
 	ColumnDetailS  string `gorm:"type:text;comment:'源端查询字段信息'" json:"column_detail_s"`
 	ChunkDetailS   string `gorm:"type:varchar(300);not null;index:idx_dbtype_st_map,unique;comment:'表 chunk 切分信息'" json:"chunk_detail_s"`
 	TaskMode       string `gorm:"type:varchar(30);not null;index:idx_dbtype_st_map,unique;index:idx_schema_mode;comment:'任务模式'" json:"task_mode"`

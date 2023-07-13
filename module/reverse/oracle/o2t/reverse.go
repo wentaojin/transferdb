@@ -41,7 +41,7 @@ type Reverse struct {
 }
 
 func NewReverse(ctx context.Context, cfg *config.Config) (*Reverse, error) {
-	oracleDB, err := oracle.NewOracleDBEngine(ctx, cfg.OracleConfig)
+	oracleDB, err := oracle.NewOracleDBEngine(ctx, cfg.OracleConfig, cfg.SchemaConfig.SourceSchema)
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +54,7 @@ func NewReverse(ctx context.Context, cfg *config.Config) (*Reverse, error) {
 		return nil, err
 	}
 	if cfg.ReverseConfig.DirectWrite {
-		createSchema := fmt.Sprintf(`CREATE DATABASE IF NOT EXISTS %s`, cfg.MySQLConfig.SchemaName)
+		createSchema := fmt.Sprintf(`CREATE DATABASE IF NOT EXISTS %s`, cfg.SchemaConfig.TargetSchema)
 		_, err = mysqlDB.MySQLDB.ExecContext(ctx, createSchema)
 		if err != nil {
 			return nil, fmt.Errorf("error on exec target database sql [%v]: %v", createSchema, err)
@@ -72,7 +72,7 @@ func NewReverse(ctx context.Context, cfg *config.Config) (*Reverse, error) {
 func (r *Reverse) Reverse() error {
 	startTime := time.Now()
 	zap.L().Info("reverse table oracle to tidb start",
-		zap.String("schema", r.Cfg.OracleConfig.SchemaName))
+		zap.String("schema", r.Cfg.SchemaConfig.SourceSchema))
 
 	// 获取配置文件待同步表列表
 	exporters, err := public.FilterCFGTable(r.Cfg, r.Oracle)
@@ -82,7 +82,7 @@ func (r *Reverse) Reverse() error {
 
 	if len(exporters) == 0 {
 		zap.L().Warn("there are no table objects in the oracle schema",
-			zap.String("schema", r.Cfg.OracleConfig.SchemaName))
+			zap.String("schema", r.Cfg.SchemaConfig.SourceSchema))
 		return nil
 	}
 
@@ -90,11 +90,11 @@ func (r *Reverse) Reverse() error {
 	errTotals, err := meta.NewErrorLogDetailModel(r.MetaDB).CountsErrorLogBySchema(r.Ctx, &meta.ErrorLogDetail{
 		DBTypeS:     r.Cfg.DBTypeS,
 		DBTypeT:     r.Cfg.DBTypeT,
-		SchemaNameS: common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
+		SchemaNameS: common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema),
 		TaskMode:    r.Cfg.TaskMode,
 	})
 	if errTotals > 0 || err != nil {
-		return fmt.Errorf("reverse schema [%s] table mode [%s] task failed: %v, table [error_log_detail] exist failed error, please clear and rerunning", r.Cfg.OracleConfig.SchemaName, r.Cfg.TaskMode, err)
+		return fmt.Errorf("reverse schema [%s] table mode [%s] task failed: %v, table [error_log_detail] exist failed error, please clear and rerunning", r.Cfg.SchemaConfig.SourceSchema, r.Cfg.TaskMode, err)
 	}
 
 	// 获取 oracle 数据库字符集以及排序规则
@@ -147,8 +147,8 @@ func (r *Reverse) Reverse() error {
 		Ctx:              r.Ctx,
 		DBTypeS:          r.Cfg.DBTypeS,
 		DBTypeT:          r.Cfg.DBTypeT,
-		SourceSchemaName: common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
-		TargetSchemaName: common.StringUPPER(r.Cfg.MySQLConfig.SchemaName),
+		SourceSchemaName: common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema),
+		TargetSchemaName: common.StringUPPER(r.Cfg.SchemaConfig.TargetSchema),
 		SourceTables:     exporterTables,
 		OracleCollation:  oracleCollation,
 		Threads:          r.Cfg.ReverseConfig.ReverseThreads,
@@ -159,7 +159,7 @@ func (r *Reverse) Reverse() error {
 		return err
 	}
 	zap.L().Warn("get all rules",
-		zap.String("schema", r.Cfg.OracleConfig.SchemaName),
+		zap.String("schema", r.Cfg.SchemaConfig.SourceSchema),
 		zap.String("cost", time.Now().Sub(ruleTime).String()))
 
 	// 获取 reverse 表任务列表
@@ -177,8 +177,8 @@ func (r *Reverse) Reverse() error {
 	if err != nil {
 		return err
 	}
-	reverseFile := filepath.Join(r.Cfg.ReverseConfig.DDLReverseDir, fmt.Sprintf("reverse_%s.sql", r.Cfg.OracleConfig.SchemaName))
-	compFile := filepath.Join(r.Cfg.ReverseConfig.DDLCompatibleDir, fmt.Sprintf("compatibility_%s.sql", r.Cfg.OracleConfig.SchemaName))
+	reverseFile := filepath.Join(r.Cfg.ReverseConfig.DDLReverseDir, fmt.Sprintf("reverse_%s.sql", r.Cfg.SchemaConfig.SourceSchema))
+	compFile := filepath.Join(r.Cfg.ReverseConfig.DDLCompatibleDir, fmt.Sprintf("compatibility_%s.sql", r.Cfg.SchemaConfig.SourceSchema))
 
 	f, err := reverse.NewWriter(r.Cfg, r.Mysql, r.Oracle, reverseFile, compFile)
 	if err != nil {
@@ -187,13 +187,13 @@ func (r *Reverse) Reverse() error {
 
 	// schema create
 	err = GenCreateSchema(f,
-		r.Cfg.OracleConfig.SchemaName, r.Cfg.MySQLConfig.SchemaName, oracleDBCharset, nlsComp, r.Cfg.ReverseConfig.DirectWrite)
+		r.Cfg.SchemaConfig.SourceSchema, r.Cfg.SchemaConfig.TargetSchema, oracleDBCharset, nlsComp, r.Cfg.ReverseConfig.DirectWrite)
 	if err != nil {
 		return err
 	}
 
 	// 表类型不兼容项输出
-	err = GenCompatibilityTable(f, common.StringUPPER(r.Cfg.OracleConfig.SchemaName), partitionTables, temporaryTables, clusteredTables, materializedView)
+	err = GenCompatibilityTable(f, common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema), partitionTables, temporaryTables, clusteredTables, materializedView)
 	if err != nil {
 		return err
 	}
@@ -297,7 +297,7 @@ func (r *Reverse) Reverse() error {
 	errTotals, err = meta.NewErrorLogDetailModel(r.MetaDB).CountsErrorLogBySchema(r.Ctx, &meta.ErrorLogDetail{
 		DBTypeS:     r.Cfg.DBTypeS,
 		DBTypeT:     r.Cfg.DBTypeT,
-		SchemaNameS: common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
+		SchemaNameS: common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema),
 		TaskMode:    r.Cfg.TaskMode,
 	})
 	if err != nil {
@@ -307,10 +307,10 @@ func (r *Reverse) Reverse() error {
 	endTime := time.Now()
 	if !r.Cfg.ReverseConfig.DirectWrite {
 		zap.L().Info("reverse", zap.String("create table and index output", filepath.Join(r.Cfg.ReverseConfig.DDLReverseDir,
-			fmt.Sprintf("reverse_%s.sql", r.Cfg.OracleConfig.SchemaName))))
+			fmt.Sprintf("reverse_%s.sql", r.Cfg.SchemaConfig.SourceSchema))))
 	}
 	zap.L().Info("compatibility", zap.String("maybe exist compatibility output", filepath.Join(r.Cfg.ReverseConfig.DDLCompatibleDir,
-		fmt.Sprintf("compatibility_%s.sql", r.Cfg.OracleConfig.SchemaName))))
+		fmt.Sprintf("compatibility_%s.sql", r.Cfg.SchemaConfig.SourceSchema))))
 	if errTotals == 0 {
 		zap.L().Info("reverse table oracle to tidb finished",
 			zap.Int("table totals", len(exporters)),

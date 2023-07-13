@@ -91,7 +91,7 @@ func PreTableStructCheck(ctx context.Context, cfg *config.Config, metaDB *meta.M
 	// 表结构检查
 	if !cfg.DiffConfig.IgnoreStructCheck {
 		startTime := time.Now()
-		cfg.OracleConfig.IncludeTable = exporters
+		cfg.SchemaConfig.SourceIncludeTable = exporters
 
 		var (
 			r   check.Reporter
@@ -111,17 +111,17 @@ func PreTableStructCheck(ctx context.Context, cfg *config.Config, metaDB *meta.M
 		errTotals, err := meta.NewErrorLogDetailModel(metaDB).CountsErrorLogBySchema(ctx, &meta.ErrorLogDetail{
 			DBTypeS:     cfg.DBTypeS,
 			DBTypeT:     cfg.DBTypeT,
-			SchemaNameS: common.StringUPPER(cfg.OracleConfig.SchemaName),
+			SchemaNameS: common.StringUPPER(cfg.SchemaConfig.SourceSchema),
 			TaskMode:    cfg.TaskMode,
 		})
 
 		if errTotals != 0 || err != nil {
-			return fmt.Errorf("compare schema [%s] mode [%s] table structure task failed: %v, please check log, error: %v", strings.ToUpper(cfg.OracleConfig.SchemaName), cfg.TaskMode, err)
+			return fmt.Errorf("compare schema [%s] mode [%s] table structure task failed: %v, please check log, error: %v", strings.ToUpper(cfg.SchemaConfig.SourceSchema), cfg.TaskMode, err)
 		}
 		endTime := time.Now()
 		zap.L().Info("pre check schema oracle to mysql finished",
 			zap.String("table structure check", "equal"),
-			zap.String("schema", strings.ToUpper(cfg.OracleConfig.SchemaName)),
+			zap.String("schema", strings.ToUpper(cfg.SchemaConfig.SourceSchema)),
 			zap.String("cost", endTime.Sub(startTime).String()))
 	}
 
@@ -135,7 +135,7 @@ func (t *Task) AdjustDBSelectColumn() (sourceColumnInfo string, targetColumnInfo
 	var (
 		sourceColumnInfos, targetColumnInfos []string
 	)
-	columnInfo, err := t.oracle.GetOracleSchemaTableColumn(t.cfg.OracleConfig.SchemaName, t.sourceTableName, t.oracleCollation)
+	columnInfo, err := t.oracle.GetOracleSchemaTableColumn(t.cfg.SchemaConfig.SourceSchema, t.sourceTableName, t.oracleCollation)
 	if err != nil {
 		return sourceColumnInfo, targetColumnInfo, err
 	}
@@ -196,7 +196,7 @@ func (t *Task) FilterDBWhereColumn() (string, error) {
 	// 字段筛选优先级：配置文件优先级 > PK > UK > Index > Distinct Value
 
 	// 获取表字段
-	columnInfo, err := t.oracle.GetOracleSchemaTableColumn(t.cfg.OracleConfig.SchemaName, t.sourceTableName, t.oracleCollation)
+	columnInfo, err := t.oracle.GetOracleSchemaTableColumn(t.cfg.SchemaConfig.SourceSchema, t.sourceTableName, t.oracleCollation)
 	if err != nil {
 		return "", err
 	}
@@ -211,12 +211,12 @@ func (t *Task) FilterDBWhereColumn() (string, error) {
 	}
 
 	if len(integerColumns) == 0 {
-		return "", fmt.Errorf("oracle schema [%s] table [%s] number column isn't exist, not support, pelase exclude skip or add number column index", t.cfg.OracleConfig.SchemaName, t.sourceTableName)
+		return "", fmt.Errorf("oracle schema [%s] table [%s] number column isn't exist, not support, pelase exclude skip or add number column index", t.cfg.SchemaConfig.SourceSchema, t.sourceTableName)
 	}
 
 	// PK、UK
 	var puConstraints []public.ConstraintPUKey
-	pkInfo, err := t.oracle.GetOracleSchemaTablePrimaryKey(t.cfg.OracleConfig.SchemaName, t.sourceTableName)
+	pkInfo, err := t.oracle.GetOracleSchemaTablePrimaryKey(t.cfg.SchemaConfig.SourceSchema, t.sourceTableName)
 	if err != nil {
 		return "", err
 	}
@@ -227,7 +227,7 @@ func (t *Task) FilterDBWhereColumn() (string, error) {
 		})
 	}
 
-	ukInfo, err := t.oracle.GetOracleSchemaTableUniqueKey(t.cfg.OracleConfig.SchemaName, t.sourceTableName)
+	ukInfo, err := t.oracle.GetOracleSchemaTableUniqueKey(t.cfg.SchemaConfig.SourceSchema, t.sourceTableName)
 	if err != nil {
 		return "", err
 	}
@@ -256,7 +256,7 @@ func (t *Task) FilterDBWhereColumn() (string, error) {
 
 	// index
 	var indexes []public.Index
-	indexInfo, err := t.oracle.GetOracleSchemaTableNormalIndex(t.cfg.OracleConfig.SchemaName, t.sourceTableName)
+	indexInfo, err := t.oracle.GetOracleSchemaTableNormalIndex(t.cfg.SchemaConfig.SourceSchema, t.sourceTableName)
 	if err != nil {
 		return "", err
 	}
@@ -274,7 +274,7 @@ func (t *Task) FilterDBWhereColumn() (string, error) {
 		})
 	}
 
-	indexInfo, err = t.oracle.GetOracleSchemaTableUniqueIndex(t.cfg.OracleConfig.SchemaName, t.sourceTableName)
+	indexInfo, err = t.oracle.GetOracleSchemaTableUniqueIndex(t.cfg.SchemaConfig.SourceSchema, t.sourceTableName)
 	if err != nil {
 		return "", err
 	}
@@ -319,15 +319,15 @@ func (t *Task) FilterDBWhereColumn() (string, error) {
 
 	// 如果表不存在主键/唯一键/唯一索引，直接返回报错中断，因为可能导致数据校验不准
 	if len(puConstraints) == 0 && len(ukIndex) == 0 {
-		return "", fmt.Errorf("oracle schema [%s] table [%s] pk/uk/unique index isn't exist, it's not support, please skip", t.cfg.OracleConfig.SchemaName, t.sourceTableName)
+		return "", fmt.Errorf("oracle schema [%s] table [%s] pk/uk/unique index isn't exist, it's not support, please skip", t.cfg.SchemaConfig.SourceSchema, t.sourceTableName)
 	}
 
 	// 普通索引、联合主键/联合唯一键/联合唯一索引，选择 number distinct 高的字段
 	indexArr = append(indexArr, nonUkIndex...)
 
-	orderCols, err := t.oracle.GetOracleTableColumnDistinctValue(t.cfg.OracleConfig.SchemaName, t.sourceTableName, integerColumns)
+	orderCols, err := t.oracle.GetOracleTableColumnDistinctValue(t.cfg.SchemaConfig.SourceSchema, t.sourceTableName, integerColumns)
 	if err != nil {
-		return "", fmt.Errorf("get oracle schema [%s] table [%s] column distinct values failed: %v", t.cfg.OracleConfig.SchemaName, t.sourceTableName, err)
+		return "", fmt.Errorf("get oracle schema [%s] table [%s] column distinct values failed: %v", t.cfg.SchemaConfig.SourceSchema, t.sourceTableName, err)
 	}
 
 	if len(indexArr) > 0 {
@@ -339,11 +339,11 @@ func (t *Task) FilterDBWhereColumn() (string, error) {
 			}
 		}
 	}
-	return "", fmt.Errorf("oracle schema [%s] table [%s] pk/uk/index number datatype column isn't exist, please skip or fixed", t.cfg.OracleConfig.SchemaName, t.sourceTableName)
+	return "", fmt.Errorf("oracle schema [%s] table [%s] pk/uk/index number datatype column isn't exist, please skip or fixed", t.cfg.SchemaConfig.SourceSchema, t.sourceTableName)
 }
 
 func (t *Task) IsPartitionTable() (string, error) {
-	isOK, err := t.oracle.IsOraclePartitionTable(t.cfg.OracleConfig.SchemaName, t.sourceTableName)
+	isOK, err := t.oracle.IsOraclePartitionTable(t.cfg.SchemaConfig.SourceSchema, t.sourceTableName)
 	if err != nil {
 		return "", err
 	}

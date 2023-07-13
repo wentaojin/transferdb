@@ -31,7 +31,7 @@ import (
 )
 
 func NewIncr(ctx context.Context, cfg *config.Config) (*Migrate, error) {
-	oracleDB, err := oracle.NewOracleDBEngine(ctx, cfg.OracleConfig)
+	oracleDB, err := oracle.NewOracleDBEngine(ctx, cfg.OracleConfig, cfg.SchemaConfig.SourceSchema)
 	if err != nil {
 		return nil, err
 	}
@@ -59,7 +59,7 @@ func NewIncr(ctx context.Context, cfg *config.Config) (*Migrate, error) {
 }
 
 func (r *Migrate) Incr() error {
-	zap.L().Info("oracle to mysql increment sync table data start", zap.String("schema", r.Cfg.OracleConfig.SchemaName))
+	zap.L().Info("oracle to mysql increment sync table data start", zap.String("schema", r.Cfg.SchemaConfig.SourceSchema))
 
 	// 判断上游 Oracle 数据库版本
 	// 需要 oracle 11g 及以上
@@ -101,12 +101,12 @@ func (r *Migrate) Incr() error {
 	errTotals, err := meta.NewWaitSyncMetaModel(r.MetaDB).CountsErrWaitSyncMetaBySchema(r.Ctx, &meta.WaitSyncMeta{
 		DBTypeS:     r.Cfg.DBTypeS,
 		DBTypeT:     r.Cfg.DBTypeT,
-		SchemaNameS: common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
+		SchemaNameS: common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema),
 		TaskMode:    r.Cfg.TaskMode,
 		TaskStatus:  common.TaskStatusFailed,
 	})
 	if errTotals > 0 || err != nil {
-		return fmt.Errorf(`csv schema [%s] mode [%s] table task failed: %v, meta table [wait_sync_meta] exist failed error, please firstly check log and deal, secondly clear or update meta table [wait_sync_meta] column [task_status] table status WAITING (Need UPPER), thirdly clear meta table [full_sync_meta] error table record, fively clear target schema error table record, finally rerunning`, strings.ToUpper(r.Cfg.OracleConfig.SchemaName), r.Cfg.TaskMode, err)
+		return fmt.Errorf(`csv schema [%s] mode [%s] table task failed: %v, meta table [wait_sync_meta] exist failed error, please firstly check log and deal, secondly clear or update meta table [wait_sync_meta] column [task_status] table status WAITING (Need UPPER), thirdly clear meta table [full_sync_meta] error table record, fively clear target schema error table record, finally rerunning`, strings.ToUpper(r.Cfg.SchemaConfig.SourceSchema), r.Cfg.TaskMode, err)
 	}
 
 	// 全量数据导出导入，初始化全量元数据表以及导入完成初始化增量元数据表
@@ -117,7 +117,7 @@ func (r *Migrate) Incr() error {
 		counts, err := meta.NewIncrSyncMetaModel(r.MetaDB).CountsIncrSyncMetaBySchemaTable(r.Ctx, &meta.IncrSyncMeta{
 			DBTypeS:     r.Cfg.DBTypeS,
 			DBTypeT:     r.Cfg.DBTypeT,
-			SchemaNameS: common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
+			SchemaNameS: common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema),
 			TableNameS:  tbl,
 		})
 		if err != nil {
@@ -142,7 +142,7 @@ func (r *Migrate) Incr() error {
 				waitSyncMetas, err := meta.NewWaitSyncMetaModel(r.MetaDB).DetailWaitSyncMetaBySchemaTableSCN(r.Ctx, &meta.WaitSyncMeta{
 					DBTypeS:     r.Cfg.DBTypeS,
 					DBTypeT:     r.Cfg.DBTypeT,
-					SchemaNameS: common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
+					SchemaNameS: common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema),
 					TableNameS:  common.StringUPPER(t),
 					TaskMode:    r.Cfg.TaskMode,
 					TaskStatus:  common.TaskStatusSuccess,
@@ -191,7 +191,7 @@ func (r *Migrate) Incr() error {
 		tableMetas, err := meta.NewWaitSyncMetaModel(r.MetaDB).DetailWaitSyncMetaBySchema(r.Ctx, &meta.WaitSyncMeta{
 			DBTypeS:     r.Cfg.DBTypeS,
 			DBTypeT:     r.Cfg.DBTypeT,
-			SchemaNameS: r.Cfg.OracleConfig.SchemaName,
+			SchemaNameS: r.Cfg.SchemaConfig.SourceSchema,
 			TaskMode:    r.Cfg.TaskMode,
 			TaskStatus:  common.TaskStatusSuccess})
 		if err != nil {
@@ -221,7 +221,7 @@ func (r *Migrate) Incr() error {
 					GlobalScnS:  table.GlobalScnS,
 					SchemaNameS: common.StringUPPER(table.SchemaNameS),
 					TableNameS:  common.StringUPPER(table.TableNameS),
-					SchemaNameT: common.StringUPPER(r.Cfg.MySQLConfig.SchemaName),
+					SchemaNameT: common.StringUPPER(r.Cfg.SchemaConfig.TargetSchema),
 					TableNameT:  common.StringUPPER(targetTableName),
 					TableScnS:   table.GlobalScnS,
 					IsPartition: table.IsPartition,
@@ -285,7 +285,7 @@ func (r *Migrate) syncTableIncrRecord() error {
 		incrSyncMetas, err := meta.NewIncrSyncMetaModel(r.MetaDB).DetailIncrSyncMetaBySchema(r.Ctx, &meta.IncrSyncMeta{
 			DBTypeS:     r.Cfg.DBTypeS,
 			DBTypeT:     r.Cfg.DBTypeT,
-			SchemaNameS: r.Cfg.OracleConfig.SchemaName,
+			SchemaNameS: r.Cfg.SchemaConfig.SourceSchema,
 		})
 		if err != nil {
 			return err
@@ -308,7 +308,7 @@ func (r *Migrate) syncTableIncrRecord() error {
 		minSourceTableSCN, err := meta.NewIncrSyncMetaModel(r.MetaDB).GetIncrSyncMetaMinTableScnSBySchema(r.Ctx, &meta.IncrSyncMeta{
 			DBTypeS:     r.Cfg.DBTypeS,
 			DBTypeT:     r.Cfg.DBTypeT,
-			SchemaNameS: r.Cfg.OracleConfig.SchemaName})
+			SchemaNameS: r.Cfg.SchemaConfig.SourceSchema})
 		if err != nil {
 			return err
 		}
@@ -324,8 +324,8 @@ func (r *Migrate) syncTableIncrRecord() error {
 
 		// 捕获数据
 		rowsResult, err := public.GetOracleIncrRecord(r.Ctx, r.OracleMiner,
-			common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
-			common.StringUPPER(r.Cfg.MySQLConfig.SchemaName),
+			common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema),
+			common.StringUPPER(r.Cfg.SchemaConfig.TargetSchema),
 			common.StringArrayToCapitalChar(syncSourceTables),
 			tableNameRule,
 			strconv.FormatUint(minSourceTableSCN, 10),
@@ -400,7 +400,7 @@ func (r *Migrate) syncTableIncrRecord() error {
 						err = meta.NewCommonModel(r.MetaDB).UpdateIncrSyncMetaSCNByCurrentRedo(r.Ctx,
 							r.Cfg.DBTypeS,
 							r.Cfg.DBTypeT,
-							r.Cfg.OracleConfig.SchemaName,
+							r.Cfg.SchemaConfig.SourceSchema,
 							currentRedoLogMaxSCN,
 							logFileStartSCN,
 							logFileEndSCN)
@@ -412,7 +412,7 @@ func (r *Migrate) syncTableIncrRecord() error {
 						err = meta.NewCommonModel(r.MetaDB).UpdateIncrSyncMetaSCNByNonCurrentRedo(r.Ctx,
 							r.Cfg.DBTypeS,
 							r.Cfg.DBTypeT,
-							r.Cfg.OracleConfig.SchemaName,
+							r.Cfg.SchemaConfig.SourceSchema,
 							currentRedoLogMaxSCN,
 							logFileStartSCN,
 							logFileEndSCN,
@@ -446,7 +446,7 @@ func (r *Migrate) syncTableIncrRecord() error {
 				err = meta.NewCommonModel(r.MetaDB).UpdateIncrSyncMetaSCNByArchivedLog(r.Ctx,
 					r.Cfg.DBTypeS,
 					r.Cfg.DBTypeT,
-					r.Cfg.OracleConfig.SchemaName,
+					r.Cfg.SchemaConfig.SourceSchema,
 					logFileEndSCN,
 					syncSourceTables)
 				if err != nil {
@@ -465,7 +465,7 @@ func (r *Migrate) syncTableIncrRecord() error {
 				err = meta.NewCommonModel(r.MetaDB).UpdateIncrSyncMetaSCNByCurrentRedo(r.Ctx,
 					r.Cfg.DBTypeS,
 					r.Cfg.DBTypeT,
-					r.Cfg.OracleConfig.SchemaName,
+					r.Cfg.SchemaConfig.SourceSchema,
 					currentRedoLogMaxSCN,
 					logFileStartSCN,
 					logFileEndSCN)
@@ -477,7 +477,7 @@ func (r *Migrate) syncTableIncrRecord() error {
 				err = meta.NewCommonModel(r.MetaDB).UpdateIncrSyncMetaSCNByNonCurrentRedo(r.Ctx,
 					r.Cfg.DBTypeS,
 					r.Cfg.DBTypeT,
-					r.Cfg.OracleConfig.SchemaName,
+					r.Cfg.SchemaConfig.SourceSchema,
 					currentRedoLogMaxSCN,
 					logFileStartSCN,
 					logFileEndSCN,
@@ -491,7 +491,7 @@ func (r *Migrate) syncTableIncrRecord() error {
 			err = meta.NewCommonModel(r.MetaDB).UpdateIncrSyncMetaSCNByArchivedLog(r.Ctx,
 				r.Cfg.DBTypeS,
 				r.Cfg.DBTypeT,
-				r.Cfg.OracleConfig.SchemaName,
+				r.Cfg.SchemaConfig.SourceSchema,
 				logFileEndSCN,
 				syncSourceTables)
 			if err != nil {
@@ -511,7 +511,7 @@ func (r *Migrate) getTableIncrRecordLogfile() ([]map[string]string, error) {
 	globalSCN, err := meta.NewIncrSyncMetaModel(r.MetaDB).GetIncrSyncMetaMinGlobalScnSBySchema(r.Ctx, &meta.IncrSyncMeta{
 		DBTypeS:     r.Cfg.DBTypeS,
 		DBTypeT:     r.Cfg.DBTypeT,
-		SchemaNameS: r.Cfg.OracleConfig.SchemaName,
+		SchemaNameS: r.Cfg.SchemaConfig.SourceSchema,
 	})
 	if err != nil {
 		return logFiles, err

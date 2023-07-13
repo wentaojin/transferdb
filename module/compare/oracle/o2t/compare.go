@@ -41,7 +41,7 @@ type Compare struct {
 }
 
 func NewCompare(ctx context.Context, cfg *config.Config) (*Compare, error) {
-	oracleDB, err := oracle.NewOracleDBEngine(ctx, cfg.OracleConfig)
+	oracleDB, err := oracle.NewOracleDBEngine(ctx, cfg.OracleConfig, cfg.SchemaConfig.SourceSchema)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +65,7 @@ func NewCompare(ctx context.Context, cfg *config.Config) (*Compare, error) {
 func (r *Compare) NewCompare() error {
 	startTime := time.Now()
 	zap.L().Info("diff table oracle to tidb start",
-		zap.String("schema", r.cfg.OracleConfig.SchemaName))
+		zap.String("schema", r.cfg.SchemaConfig.SourceSchema))
 
 	// 判断上游 Oracle 数据库版本
 	// 需要 oracle 11g 及以上
@@ -98,7 +98,7 @@ func (r *Compare) NewCompare() error {
 
 	if len(exporters) == 0 {
 		zap.L().Warn("there are no table objects in the oracle schema",
-			zap.String("schema", r.cfg.OracleConfig.SchemaName))
+			zap.String("schema", r.cfg.SchemaConfig.SourceSchema))
 		return nil
 	}
 
@@ -113,7 +113,7 @@ func (r *Compare) NewCompare() error {
 			err = meta.NewWaitSyncMetaModel(r.metaDB).DeleteWaitSyncMeta(r.ctx, &meta.WaitSyncMeta{
 				DBTypeS:     r.cfg.DBTypeS,
 				DBTypeT:     r.cfg.DBTypeT,
-				SchemaNameS: r.cfg.OracleConfig.SchemaName,
+				SchemaNameS: r.cfg.SchemaConfig.SourceSchema,
 				TableNameS:  tableName,
 				TaskMode:    r.cfg.TaskMode,
 			})
@@ -125,7 +125,7 @@ func (r *Compare) NewCompare() error {
 			waitSyncMetas, err := meta.NewWaitSyncMetaModel(r.metaDB).DetailWaitSyncMeta(r.ctx, &meta.WaitSyncMeta{
 				DBTypeS:     r.cfg.DBTypeS,
 				DBTypeT:     r.cfg.DBTypeT,
-				SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+				SchemaNameS: common.StringUPPER(r.cfg.SchemaConfig.SourceSchema),
 				TableNameS:  tableName,
 				TaskMode:    r.cfg.TaskMode,
 			})
@@ -136,7 +136,7 @@ func (r *Compare) NewCompare() error {
 				err = meta.NewWaitSyncMetaModel(r.metaDB).CreateWaitSyncMeta(r.ctx, &meta.WaitSyncMeta{
 					DBTypeS:        r.cfg.DBTypeS,
 					DBTypeT:        r.cfg.DBTypeT,
-					SchemaNameS:    common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+					SchemaNameS:    common.StringUPPER(r.cfg.SchemaConfig.SourceSchema),
 					TableNameS:     common.StringUPPER(tableName),
 					TaskStatus:     common.TaskStatusWaiting,
 					GlobalScnS:     common.TaskTableDefaultSourceGlobalSCN,
@@ -154,7 +154,7 @@ func (r *Compare) NewCompare() error {
 	tablesByMeta, err := meta.NewWaitSyncMetaModel(r.metaDB).DetailWaitSyncMetaSuccessTables(r.ctx, &meta.WaitSyncMeta{
 		DBTypeS:     r.cfg.DBTypeS,
 		DBTypeT:     r.cfg.DBTypeT,
-		SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+		SchemaNameS: common.StringUPPER(r.cfg.SchemaConfig.SourceSchema),
 		TaskMode:    r.cfg.TaskMode,
 		TaskStatus:  common.TaskStatusSuccess,
 	})
@@ -168,7 +168,7 @@ func (r *Compare) NewCompare() error {
 		err = meta.NewWaitSyncMetaModel(r.metaDB).DeleteWaitSyncMetaSuccessTables(r.ctx, &meta.WaitSyncMeta{
 			DBTypeS:     r.cfg.DBTypeS,
 			DBTypeT:     r.cfg.DBTypeT,
-			SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+			SchemaNameS: common.StringUPPER(r.cfg.SchemaConfig.SourceSchema),
 			TaskMode:    r.cfg.TaskMode,
 			TaskStatus:  common.TaskStatusSuccess,
 		}, clearTables)
@@ -186,7 +186,7 @@ func (r *Compare) NewCompare() error {
 	errTotals, err := meta.NewWaitSyncMetaModel(r.metaDB).CountsErrWaitSyncMetaBySchema(r.ctx, &meta.WaitSyncMeta{
 		DBTypeS:     r.cfg.DBTypeS,
 		DBTypeT:     r.cfg.DBTypeT,
-		SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+		SchemaNameS: common.StringUPPER(r.cfg.SchemaConfig.SourceSchema),
 		TaskMode:    r.cfg.TaskMode,
 		TaskStatus:  common.TaskStatusFailed,
 	})
@@ -194,7 +194,7 @@ func (r *Compare) NewCompare() error {
 		return err
 	}
 	if errTotals > 0 {
-		return fmt.Errorf(`compare schema [%s] mode [%s] table task failed: meta table [wait_sync_meta] exist failed error, please: firstly check meta table [wait_sync_meta] and [full_sync_meta] log record; secondly if need resume, update meta table [wait_sync_meta] column [task_status] table status RUNNING (Need UPPER); finally rerunning`, strings.ToUpper(r.cfg.OracleConfig.SchemaName), r.cfg.TaskMode)
+		return fmt.Errorf(`compare schema [%s] mode [%s] table task failed: meta table [wait_sync_meta] exist failed error, please: firstly check meta table [wait_sync_meta] and [full_sync_meta] log record; secondly if need resume, update meta table [wait_sync_meta] column [task_status] table status RUNNING (Need UPPER); finally rerunning`, strings.ToUpper(r.cfg.SchemaConfig.SourceSchema), r.cfg.TaskMode)
 	}
 
 	// 判断并记录待同步表列表
@@ -202,7 +202,7 @@ func (r *Compare) NewCompare() error {
 		waitSyncMetas, err := meta.NewWaitSyncMetaModel(r.metaDB).DetailWaitSyncMeta(r.ctx, &meta.WaitSyncMeta{
 			DBTypeS:     r.cfg.DBTypeS,
 			DBTypeT:     r.cfg.DBTypeT,
-			SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+			SchemaNameS: common.StringUPPER(r.cfg.SchemaConfig.SourceSchema),
 			TableNameS:  tableName,
 			TaskMode:    r.cfg.TaskMode,
 		})
@@ -213,7 +213,7 @@ func (r *Compare) NewCompare() error {
 			err = meta.NewWaitSyncMetaModel(r.metaDB).CreateWaitSyncMeta(r.ctx, &meta.WaitSyncMeta{
 				DBTypeS:        r.cfg.DBTypeS,
 				DBTypeT:        r.cfg.DBTypeT,
-				SchemaNameS:    common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+				SchemaNameS:    common.StringUPPER(r.cfg.SchemaConfig.SourceSchema),
 				TableNameS:     common.StringUPPER(tableName),
 				TaskMode:       r.cfg.TaskMode,
 				TaskStatus:     common.TaskStatusWaiting,
@@ -235,7 +235,7 @@ func (r *Compare) NewCompare() error {
 	waitSyncDetails, err := meta.NewWaitSyncMetaModel(r.metaDB).DetailWaitSyncMeta(r.ctx, &meta.WaitSyncMeta{
 		DBTypeS:        r.cfg.DBTypeS,
 		DBTypeT:        r.cfg.DBTypeT,
-		SchemaNameS:    common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+		SchemaNameS:    common.StringUPPER(r.cfg.SchemaConfig.SourceSchema),
 		TaskMode:       r.cfg.TaskMode,
 		TaskStatus:     common.TaskStatusWaiting,
 		GlobalScnS:     common.TaskTableDefaultSourceGlobalSCN,
@@ -259,7 +259,7 @@ func (r *Compare) NewCompare() error {
 	partWaitSyncMetas, err := meta.NewWaitSyncMetaModel(r.metaDB).QueryWaitSyncMetaByPartTask(r.ctx, &meta.WaitSyncMeta{
 		DBTypeS:     r.cfg.DBTypeS,
 		DBTypeT:     r.cfg.DBTypeT,
-		SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+		SchemaNameS: common.StringUPPER(r.cfg.SchemaConfig.SourceSchema),
 		TaskMode:    r.cfg.TaskMode,
 		TaskStatus:  common.TaskStatusRunning,
 	})
@@ -290,7 +290,7 @@ func (r *Compare) NewCompare() error {
 	if len(panicTblFullSlice) > 0 {
 		endTime := time.Now()
 		zap.L().Error("all oracle table data csv error",
-			zap.String("schema", r.cfg.OracleConfig.SchemaName),
+			zap.String("schema", r.cfg.SchemaConfig.SourceSchema),
 			zap.String("cost", endTime.Sub(startTime).String()),
 			zap.Int("part sync tables", len(partSyncTables)),
 			zap.Strings("panic tables", panicTblFullSlice))
@@ -333,7 +333,7 @@ func (r *Compare) NewCompare() error {
 	}
 	finishTime := time.Now()
 	zap.L().Info("get oracle db character and version finished",
-		zap.String("schema", r.cfg.OracleConfig.SchemaName),
+		zap.String("schema", r.cfg.SchemaConfig.SourceSchema),
 		zap.String("db version", oraDBVersion),
 		zap.String("db character", oracleDBCharacterSet),
 		zap.Int("table totals", len(exporters)),
@@ -345,7 +345,7 @@ func (r *Compare) NewCompare() error {
 	for _, t := range exporters {
 		tables = append(tables, common.StringsBuilder("'", t, "'"))
 	}
-	mysqlTables, err := r.mysql.GetMySQLTableName(r.cfg.MySQLConfig.SchemaName, strings.Join(tables, ","))
+	mysqlTables, err := r.mysql.GetMySQLTableName(r.cfg.SchemaConfig.TargetSchema, strings.Join(tables, ","))
 	if err != nil {
 		return err
 	}
@@ -360,8 +360,8 @@ func (r *Compare) NewCompare() error {
 	tableNameRules, err := meta.NewTableNameRuleModel(r.metaDB).DetailTableNameRule(r.ctx, &meta.TableNameRule{
 		DBTypeS:     r.cfg.DBTypeS,
 		DBTypeT:     r.cfg.DBTypeT,
-		SchemaNameS: r.cfg.OracleConfig.SchemaName,
-		SchemaNameT: r.cfg.MySQLConfig.SchemaName,
+		SchemaNameS: r.cfg.SchemaConfig.SourceSchema,
+		SchemaNameT: r.cfg.SchemaConfig.TargetSchema,
 	})
 	if err != nil {
 		return err
@@ -383,7 +383,7 @@ func (r *Compare) NewCompare() error {
 		return err
 	}
 
-	checkFile := filepath.Join(r.cfg.DiffConfig.FixSqlDir, fmt.Sprintf("compare_%s.sql", r.cfg.OracleConfig.SchemaName))
+	checkFile := filepath.Join(r.cfg.DiffConfig.FixSqlDir, fmt.Sprintf("compare_%s.sql", r.cfg.SchemaConfig.SourceSchema))
 
 	// file writer
 	f, err := compare.NewWriter(checkFile)
@@ -423,7 +423,7 @@ func (r *Compare) NewCompare() error {
 	succTotals, err := meta.NewWaitSyncMetaModel(r.metaDB).DetailWaitSyncMeta(r.ctx, &meta.WaitSyncMeta{
 		DBTypeS:     r.cfg.DBTypeS,
 		DBTypeT:     r.cfg.DBTypeT,
-		SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+		SchemaNameS: common.StringUPPER(r.cfg.SchemaConfig.SourceSchema),
 		TaskMode:    r.cfg.TaskMode,
 		TaskStatus:  common.TaskStatusSuccess,
 	})
@@ -433,7 +433,7 @@ func (r *Compare) NewCompare() error {
 	failedTotals, err := meta.NewWaitSyncMetaModel(r.metaDB).DetailWaitSyncMeta(r.ctx, &meta.WaitSyncMeta{
 		DBTypeS:     r.cfg.DBTypeS,
 		DBTypeT:     r.cfg.DBTypeT,
-		SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+		SchemaNameS: common.StringUPPER(r.cfg.SchemaConfig.SourceSchema),
 		TaskMode:    r.cfg.TaskMode,
 		TaskStatus:  common.TaskStatusFailed,
 	})
@@ -467,7 +467,7 @@ func (r *Compare) comparePartTableTasks(f *compare.File, partTableTasks []*Task)
 		err := meta.NewWaitSyncMetaModel(r.metaDB).UpdateWaitSyncMeta(r.ctx, &meta.WaitSyncMeta{
 			DBTypeS:     r.cfg.DBTypeS,
 			DBTypeT:     r.cfg.DBTypeT,
-			SchemaNameS: r.cfg.OracleConfig.SchemaName,
+			SchemaNameS: r.cfg.SchemaConfig.SourceSchema,
 			TableNameS:  task.sourceTableName,
 			TaskMode:    r.cfg.TaskMode,
 		}, map[string]interface{}{
@@ -480,7 +480,7 @@ func (r *Compare) comparePartTableTasks(f *compare.File, partTableTasks []*Task)
 		waitCompareMetas, err := meta.NewDataCompareMetaModel(r.metaDB).DetailDataCompareMeta(r.ctx, &meta.DataCompareMeta{
 			DBTypeS:     r.cfg.DBTypeS,
 			DBTypeT:     r.cfg.DBTypeT,
-			SchemaNameS: r.cfg.OracleConfig.SchemaName,
+			SchemaNameS: r.cfg.SchemaConfig.SourceSchema,
 			TableNameS:  task.sourceTableName,
 			TaskMode:    r.cfg.TaskMode,
 			TaskStatus:  common.TaskStatusWaiting,
@@ -491,7 +491,7 @@ func (r *Compare) comparePartTableTasks(f *compare.File, partTableTasks []*Task)
 		failedCompareMetas, err := meta.NewDataCompareMetaModel(r.metaDB).DetailDataCompareMeta(r.ctx, &meta.DataCompareMeta{
 			DBTypeS:     r.cfg.DBTypeS,
 			DBTypeT:     r.cfg.DBTypeT,
-			SchemaNameS: r.cfg.OracleConfig.SchemaName,
+			SchemaNameS: r.cfg.SchemaConfig.SourceSchema,
 			TableNameS:  task.sourceTableName,
 			TaskMode:    r.cfg.TaskMode,
 			TaskStatus:  common.TaskStatusFailed,
@@ -585,7 +585,7 @@ func (r *Compare) comparePartTableTasks(f *compare.File, partTableTasks []*Task)
 		failedTotalErrs, err := meta.NewDataCompareMetaModel(r.metaDB).CountsErrorDataCompareMeta(r.ctx, &meta.DataCompareMeta{
 			DBTypeS:     r.cfg.DBTypeS,
 			DBTypeT:     r.cfg.DBTypeT,
-			SchemaNameS: r.cfg.OracleConfig.SchemaName,
+			SchemaNameS: r.cfg.SchemaConfig.SourceSchema,
 			TableNameS:  task.sourceTableName,
 			TaskMode:    r.cfg.TaskMode,
 			TaskStatus:  common.TaskStatusFailed,
@@ -597,7 +597,7 @@ func (r *Compare) comparePartTableTasks(f *compare.File, partTableTasks []*Task)
 		successTotalErrs, err := meta.NewDataCompareMetaModel(r.metaDB).CountsErrorDataCompareMeta(r.ctx, &meta.DataCompareMeta{
 			DBTypeS:     r.cfg.DBTypeS,
 			DBTypeT:     r.cfg.DBTypeT,
-			SchemaNameS: r.cfg.OracleConfig.SchemaName,
+			SchemaNameS: r.cfg.SchemaConfig.SourceSchema,
 			TableNameS:  task.sourceTableName,
 			TaskMode:    r.cfg.TaskMode,
 			TaskStatus:  common.TaskStatusSuccess,
@@ -612,13 +612,13 @@ func (r *Compare) comparePartTableTasks(f *compare.File, partTableTasks []*Task)
 				&meta.DataCompareMeta{
 					DBTypeS:     r.cfg.DBTypeS,
 					DBTypeT:     r.cfg.DBTypeT,
-					SchemaNameS: r.cfg.OracleConfig.SchemaName,
+					SchemaNameS: r.cfg.SchemaConfig.SourceSchema,
 					TableNameS:  task.sourceTableName,
 					TaskMode:    r.cfg.TaskMode,
 				}, &meta.WaitSyncMeta{
 					DBTypeS:          r.cfg.DBTypeS,
 					DBTypeT:          r.cfg.DBTypeT,
-					SchemaNameS:      r.cfg.OracleConfig.SchemaName,
+					SchemaNameS:      r.cfg.SchemaConfig.SourceSchema,
 					TableNameS:       task.sourceTableName,
 					TaskMode:         r.cfg.TaskMode,
 					TaskStatus:       common.TaskStatusSuccess,
@@ -629,7 +629,7 @@ func (r *Compare) comparePartTableTasks(f *compare.File, partTableTasks []*Task)
 				return err
 			}
 			zap.L().Info("diff single table oracle to mysql finished",
-				zap.String("schema", r.cfg.OracleConfig.SchemaName),
+				zap.String("schema", r.cfg.SchemaConfig.SourceSchema),
 				zap.String("table", task.sourceTableName),
 				zap.String("cost", time.Now().Sub(diffStartTime).String()))
 			// 继续
@@ -640,7 +640,7 @@ func (r *Compare) comparePartTableTasks(f *compare.File, partTableTasks []*Task)
 		err = meta.NewWaitSyncMetaModel(r.metaDB).UpdateWaitSyncMeta(r.ctx, &meta.WaitSyncMeta{
 			DBTypeS:     r.cfg.DBTypeS,
 			DBTypeT:     r.cfg.DBTypeT,
-			SchemaNameS: r.cfg.OracleConfig.SchemaName,
+			SchemaNameS: r.cfg.SchemaConfig.SourceSchema,
 			TableNameS:  task.sourceTableName,
 			TaskMode:    r.cfg.TaskMode,
 		}, map[string]interface{}{
@@ -652,7 +652,7 @@ func (r *Compare) comparePartTableTasks(f *compare.File, partTableTasks []*Task)
 			return err
 		}
 		zap.L().Warn("update mysql [wait_sync_meta] meta",
-			zap.String("schema", r.cfg.OracleConfig.SchemaName),
+			zap.String("schema", r.cfg.SchemaConfig.SourceSchema),
 			zap.String("table", task.sourceTableName),
 			zap.String("mode", r.cfg.TaskMode),
 			zap.String("updated", "table check exist error, skip"),

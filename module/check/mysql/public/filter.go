@@ -25,30 +25,30 @@ import (
 
 func FilterCFGTable(cfg *config.Config, mysql *mysql.MySQL) ([]string, []string, error) {
 	startTime := time.Now()
-	ok, err := mysql.IsExistMySQLSchema(cfg.MySQLConfig.SchemaName)
+	ok, err := mysql.IsExistMySQLSchema(cfg.SchemaConfig.SourceSchema)
 	if err != nil {
 		return []string{}, []string{}, err
 	}
 
 	if !ok {
-		return []string{}, []string{}, fmt.Errorf("filter cfg mysql schema [%v] tables isn't exists", cfg.MySQLConfig.SchemaName)
+		return []string{}, []string{}, fmt.Errorf("filter cfg mysql schema [%v] tables isn't exists", cfg.SchemaConfig.SourceSchema)
 	}
 
 	// 获取 mysql 所有数据表
 	// ToDO: 表过滤 include-table/exclude-table
-	normalTables, err := mysql.GetMySQLNormalTable(cfg.MySQLConfig.SchemaName)
+	normalTables, err := mysql.GetMySQLNormalTable(cfg.SchemaConfig.SourceSchema)
 	if err != nil {
 		return normalTables, []string{}, err
 	}
 
-	viewTables, err := mysql.GetMySQLViewTable(cfg.MySQLConfig.SchemaName)
+	viewTables, err := mysql.GetMySQLViewTable(cfg.SchemaConfig.SourceSchema)
 	if err != nil {
 		return normalTables, viewTables, err
 	}
 
 	endTime := time.Now()
 	zap.L().Info("get mysql to oracle all tables",
-		zap.String("schema", cfg.MySQLConfig.SchemaName),
+		zap.String("schema", cfg.SchemaConfig.SourceSchema),
 		//zap.Strings("exporter tables list", allTables),
 		zap.Int("all table counts", len(normalTables)+len(viewTables)),
 		zap.String("cost", endTime.Sub(startTime).String()))

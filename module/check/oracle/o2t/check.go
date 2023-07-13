@@ -45,7 +45,7 @@ func NewCheck(ctx context.Context, cfg *config.Config) (*Check, error) {
 	if err != nil {
 		return nil, err
 	}
-	oracleDB, err := oracle.NewOracleDBEngine(ctx, cfg.OracleConfig)
+	oracleDB, err := oracle.NewOracleDBEngine(ctx, cfg.OracleConfig, cfg.SchemaConfig.SourceSchema)
 	if err != nil {
 		return nil, err
 	}
@@ -65,8 +65,8 @@ func NewCheck(ctx context.Context, cfg *config.Config) (*Check, error) {
 func (r *Check) Check() error {
 	startTime := time.Now()
 	zap.L().Info("check oracle and tidb table start",
-		zap.String("oracleSchema", r.cfg.OracleConfig.SchemaName),
-		zap.String("mysqlSchema", r.cfg.MySQLConfig.SchemaName))
+		zap.String("oracleSchema", r.cfg.SchemaConfig.SourceSchema),
+		zap.String("mysqlSchema", r.cfg.SchemaConfig.TargetSchema))
 
 	tablesByCfg, err := public.FilterCFGTable(r.cfg, r.oracle)
 	if err != nil {
@@ -77,8 +77,8 @@ func (r *Check) Check() error {
 	sourceTableNameRules, err := meta.NewTableNameRuleModel(r.metaDB).DetailTableNameRule(r.ctx, &meta.TableNameRule{
 		DBTypeS:     r.cfg.DBTypeS,
 		DBTypeT:     r.cfg.DBTypeT,
-		SchemaNameS: r.cfg.OracleConfig.SchemaName,
-		SchemaNameT: r.cfg.MySQLConfig.SchemaName,
+		SchemaNameS: r.cfg.SchemaConfig.SourceSchema,
+		SchemaNameT: r.cfg.SchemaConfig.TargetSchema,
 	})
 	if err != nil {
 		return err
@@ -94,7 +94,7 @@ func (r *Check) Check() error {
 	}
 
 	// 判断下游数据库是否存在 oracle 表
-	mysqlTables, err := r.mysql.GetMySQLTable(r.cfg.MySQLConfig.SchemaName)
+	mysqlTables, err := r.mysql.GetMySQLTable(r.cfg.SchemaConfig.TargetSchema)
 	if err != nil {
 		return err
 	}
@@ -108,7 +108,7 @@ func (r *Check) Check() error {
 	}
 	ok, noExistTables := common.IsSubsetString(targetTableNameRules, tablesByCfg)
 	if !ok {
-		return fmt.Errorf("oracle tables %v isn't exist in the mysqldb schema [%v], please create", noExistTables, r.cfg.MySQLConfig.SchemaName)
+		return fmt.Errorf("oracle tables %v isn't exist in the mysqldb schema [%v], please create", noExistTables, r.cfg.SchemaConfig.TargetSchema)
 	}
 
 	// 清理非当前任务 SUCCESS 表元数据记录 wait_sync_meta (用于统计 SUCCESS 准备)
@@ -116,7 +116,7 @@ func (r *Check) Check() error {
 	tablesByMeta, err := meta.NewWaitSyncMetaModel(r.metaDB).DetailWaitSyncMetaSuccessTables(r.ctx, &meta.WaitSyncMeta{
 		DBTypeS:     r.cfg.DBTypeS,
 		DBTypeT:     r.cfg.DBTypeT,
-		SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+		SchemaNameS: common.StringUPPER(r.cfg.SchemaConfig.SourceSchema),
 		TaskMode:    r.cfg.TaskMode,
 		TaskStatus:  common.TaskStatusSuccess,
 	})
@@ -130,7 +130,7 @@ func (r *Check) Check() error {
 		err = meta.NewWaitSyncMetaModel(r.metaDB).DeleteWaitSyncMetaSuccessTables(r.ctx, &meta.WaitSyncMeta{
 			DBTypeS:     r.cfg.DBTypeS,
 			DBTypeT:     r.cfg.DBTypeT,
-			SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+			SchemaNameS: common.StringUPPER(r.cfg.SchemaConfig.SourceSchema),
 			TaskMode:    r.cfg.TaskMode,
 			TaskStatus:  common.TaskStatusSuccess,
 		}, clearTables)
@@ -148,14 +148,14 @@ func (r *Check) Check() error {
 	errTotals, err := meta.NewErrorLogDetailModel(r.metaDB).CountsErrorLogBySchema(r.ctx, &meta.ErrorLogDetail{
 		DBTypeS:     r.cfg.DBTypeS,
 		DBTypeT:     r.cfg.DBTypeT,
-		SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+		SchemaNameS: common.StringUPPER(r.cfg.SchemaConfig.SourceSchema),
 		TaskMode:    r.cfg.TaskMode,
 	})
 	if err != nil {
 		return err
 	}
 	if errTotals > 0 {
-		return fmt.Errorf(`check schema [%s] mode [%s] table task failed: table [error_log_detail] exist failed error, please firstly check log and deal, secondly clear table [error_log_detail], thirdly update meta table [wait_sync_meta] column [task_status] table status WAITING (Need UPPER), finally rerunning`, strings.ToUpper(r.cfg.OracleConfig.SchemaName), r.cfg.TaskMode)
+		return fmt.Errorf(`check schema [%s] mode [%s] table task failed: table [error_log_detail] exist failed error, please firstly check log and deal, secondly clear table [error_log_detail], thirdly update meta table [wait_sync_meta] column [task_status] table status WAITING (Need UPPER), finally rerunning`, strings.ToUpper(r.cfg.SchemaConfig.SourceSchema), r.cfg.TaskMode)
 	}
 
 	// 判断并记录待同步表列表
@@ -163,7 +163,7 @@ func (r *Check) Check() error {
 		waitSyncMetas, err := meta.NewWaitSyncMetaModel(r.metaDB).DetailWaitSyncMeta(r.ctx, &meta.WaitSyncMeta{
 			DBTypeS:     r.cfg.DBTypeS,
 			DBTypeT:     r.cfg.DBTypeT,
-			SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+			SchemaNameS: common.StringUPPER(r.cfg.SchemaConfig.SourceSchema),
 			TableNameS:  tableName,
 			TaskMode:    r.cfg.TaskMode,
 		})
@@ -174,7 +174,7 @@ func (r *Check) Check() error {
 			err = meta.NewWaitSyncMetaModel(r.metaDB).CreateWaitSyncMeta(r.ctx, &meta.WaitSyncMeta{
 				DBTypeS:     r.cfg.DBTypeS,
 				DBTypeT:     r.cfg.DBTypeT,
-				SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+				SchemaNameS: common.StringUPPER(r.cfg.SchemaConfig.SourceSchema),
 				TableNameS:  common.StringUPPER(tableName),
 				TaskMode:    r.cfg.TaskMode,
 				TaskStatus:  common.TaskStatusWaiting,
@@ -189,7 +189,7 @@ func (r *Check) Check() error {
 	waitSyncMetas, err := meta.NewWaitSyncMetaModel(r.metaDB).DetailWaitSyncMeta(r.ctx, &meta.WaitSyncMeta{
 		DBTypeS:     r.cfg.DBTypeS,
 		DBTypeT:     r.cfg.DBTypeT,
-		SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+		SchemaNameS: common.StringUPPER(r.cfg.SchemaConfig.SourceSchema),
 		TaskMode:    r.cfg.TaskMode,
 		TaskStatus:  common.TaskStatusWaiting,
 	})
@@ -238,7 +238,7 @@ func (r *Check) Check() error {
 	}
 	finishTime := time.Now()
 	zap.L().Info("get oracle db character and version finished",
-		zap.String("schema", r.cfg.OracleConfig.SchemaName),
+		zap.String("schema", r.cfg.SchemaConfig.SourceSchema),
 		zap.String("db version", oracleDBVersion),
 		zap.String("db character", oracleDBCharacterSet),
 		zap.Int("table totals", len(waitSyncMetas)),
@@ -252,17 +252,17 @@ func (r *Check) Check() error {
 
 	if oracleDBCollation {
 		beginTime = time.Now()
-		oracleSchemaCollation, err = r.oracle.GetOracleSchemaCollation(strings.ToUpper(r.cfg.OracleConfig.SchemaName))
+		oracleSchemaCollation, err = r.oracle.GetOracleSchemaCollation(strings.ToUpper(r.cfg.SchemaConfig.SourceSchema))
 		if err != nil {
 			return err
 		}
-		oracleTableCollation, err = r.oracle.GetOracleSchemaTableCollation(strings.ToUpper(r.cfg.OracleConfig.SchemaName), oracleSchemaCollation)
+		oracleTableCollation, err = r.oracle.GetOracleSchemaTableCollation(strings.ToUpper(r.cfg.SchemaConfig.SourceSchema), oracleSchemaCollation)
 		if err != nil {
 			return err
 		}
 		finishTime = time.Now()
 		zap.L().Info("get oracle schema and table collation finished",
-			zap.String("schema", r.cfg.OracleConfig.SchemaName),
+			zap.String("schema", r.cfg.SchemaConfig.SourceSchema),
 			zap.String("db version", oracleDBVersion),
 			zap.String("db character", oracleDBCharacterSet),
 			zap.Int("table totals", len(waitSyncMetas)),
@@ -271,7 +271,7 @@ func (r *Check) Check() error {
 	}
 
 	// 任务检查表
-	tasks := GenCheckTaskTable(r.cfg.OracleConfig.SchemaName, r.cfg.MySQLConfig.SchemaName, oracleDBCharacterSet,
+	tasks := GenCheckTaskTable(r.cfg.SchemaConfig.SourceSchema, r.cfg.SchemaConfig.TargetSchema, oracleDBCharacterSet,
 		nlsSort, nlsComp, oracleTableCollation, oracleSchemaCollation, oracleDBCollation,
 		r.oracle, r.mysql, sourceTableNameRuleMap, waitSyncMetas)
 
@@ -280,7 +280,7 @@ func (r *Check) Check() error {
 		return err
 	}
 
-	checkFile := filepath.Join(r.cfg.CheckConfig.CheckSQLDir, fmt.Sprintf("check_%s.sql", r.cfg.OracleConfig.SchemaName))
+	checkFile := filepath.Join(r.cfg.CheckConfig.CheckSQLDir, fmt.Sprintf("check_%s.sql", r.cfg.SchemaConfig.SourceSchema))
 
 	// file writer
 	f, err := check.NewWriter(checkFile)
@@ -371,7 +371,7 @@ func (r *Check) Check() error {
 	succTotals, err := meta.NewWaitSyncMetaModel(r.metaDB).DetailWaitSyncMeta(r.ctx, &meta.WaitSyncMeta{
 		DBTypeS:     r.cfg.DBTypeS,
 		DBTypeT:     r.cfg.DBTypeT,
-		SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+		SchemaNameS: common.StringUPPER(r.cfg.SchemaConfig.SourceSchema),
 		TaskMode:    r.cfg.TaskMode,
 		TaskStatus:  common.TaskStatusSuccess,
 	})
@@ -381,7 +381,7 @@ func (r *Check) Check() error {
 	failedTotals, err := meta.NewWaitSyncMetaModel(r.metaDB).DetailWaitSyncMeta(r.ctx, &meta.WaitSyncMeta{
 		DBTypeS:     r.cfg.DBTypeS,
 		DBTypeT:     r.cfg.DBTypeT,
-		SchemaNameS: common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+		SchemaNameS: common.StringUPPER(r.cfg.SchemaConfig.SourceSchema),
 		TaskMode:    r.cfg.TaskMode,
 		TaskStatus:  common.TaskStatusFailed,
 	})
@@ -389,7 +389,7 @@ func (r *Check) Check() error {
 		return err
 	}
 
-	zap.L().Info("check", zap.String("output", filepath.Join(r.cfg.CheckConfig.CheckSQLDir, fmt.Sprintf("check_%s.sql", r.cfg.OracleConfig.SchemaName))))
+	zap.L().Info("check", zap.String("output", filepath.Join(r.cfg.CheckConfig.CheckSQLDir, fmt.Sprintf("check_%s.sql", r.cfg.SchemaConfig.SourceSchema))))
 	if len(failedTotals) == 0 {
 		zap.L().Info("check table oracle to mysql finished",
 			zap.Int("table totals", len(waitSyncMetas)),

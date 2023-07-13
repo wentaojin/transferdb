@@ -33,6 +33,7 @@ type Config struct {
 	FullConfig    FullConfig    `toml:"full" json:"full"`
 	CSVConfig     CSVConfig     `toml:"csv" json:"csv"`
 	AllConfig     AllConfig     `toml:"all" json:"all"`
+	SchemaConfig  SchemaConfig  `toml:"schema-config" json:"schema-config"`
 	OracleConfig  OracleConfig  `toml:"oracle" json:"oracle"`
 	MySQLConfig   MySQLConfig   `toml:"mysql" json:"mysql"`
 	MetaConfig    MetaConfig    `toml:"meta" json:"meta"`
@@ -52,13 +53,12 @@ type AppConfig struct {
 }
 
 type DiffConfig struct {
-	ChunkSize         int           `toml:"chunk-size" json:"chunk-size"`
-	DiffThreads       int           `toml:"diff-threads" json:"diff-threads"`
-	OnlyCheckRows     bool          `toml:"only-check-rows" json:"only-check-rows"`
-	EnableCheckpoint  bool          `toml:"enable-checkpoint" json:"enable-checkpoint"`
-	IgnoreStructCheck bool          `toml:"ignore-struct-check" json:"ignore-struct-check"`
-	FixSqlDir         string        `toml:"fix-sql-dir" json:"fix-sql-dir"`
-	TableConfig       []TableConfig `toml:"table-config" json:"table-config"`
+	ChunkSize         int    `toml:"chunk-size" json:"chunk-size"`
+	DiffThreads       int    `toml:"diff-threads" json:"diff-threads"`
+	OnlyCheckRows     bool   `toml:"only-check-rows" json:"only-check-rows"`
+	EnableCheckpoint  bool   `toml:"enable-checkpoint" json:"enable-checkpoint"`
+	IgnoreStructCheck bool   `toml:"ignore-struct-check" json:"ignore-struct-check"`
+	FixSqlDir         string `toml:"fix-sql-dir" json:"fix-sql-dir"`
 }
 
 type ReverseConfig struct {
@@ -71,12 +71,6 @@ type ReverseConfig struct {
 type CheckConfig struct {
 	CheckThreads int    `toml:"check-threads" json:"check-threads"`
 	CheckSQLDir  string `toml:"check-sql-dir" json:"check-sql-dir"`
-}
-
-type TableConfig struct {
-	SourceTable string `toml:"source-table" json:"source-table"`
-	IndexFields string `toml:"index-fields" json:"index-fields"`
-	Range       string `toml:"range" json:"range"`
 }
 
 type CSVConfig struct {
@@ -93,16 +87,18 @@ type CSVConfig struct {
 	SQLThreads       int    `toml:"sql-threads" json:"sql-threads"`
 	EnableCheckpoint bool   `toml:"enable-checkpoint" json:"enable-checkpoint"`
 	ConsistentRead   bool   `toml:"consistent-read" json:"consistent-read"`
+	SQLHint          string `toml:"sql-hint" json:"sql-hint"`
 }
 
 type FullConfig struct {
-	ChunkSize        int  `toml:"chunk-size" json:"chunk-size"`
-	TaskThreads      int  `toml:"task-threads" json:"task-threads"`
-	TableThreads     int  `toml:"table-threads" json:"table-threads"`
-	SQLThreads       int  `toml:"sql-threads" json:"sql-threads"`
-	ApplyThreads     int  `toml:"apply-threads" json:"apply-threads"`
-	EnableCheckpoint bool `toml:"enable-checkpoint" json:"enable-checkpoint"`
-	ConsistentRead   bool `toml:"consistent-read" json:"consistent-read"`
+	ChunkSize        int    `toml:"chunk-size" json:"chunk-size"`
+	TaskThreads      int    `toml:"task-threads" json:"task-threads"`
+	TableThreads     int    `toml:"table-threads" json:"table-threads"`
+	SQLThreads       int    `toml:"sql-threads" json:"sql-threads"`
+	ApplyThreads     int    `toml:"apply-threads" json:"apply-threads"`
+	EnableCheckpoint bool   `toml:"enable-checkpoint" json:"enable-checkpoint"`
+	ConsistentRead   bool   `toml:"consistent-read" json:"consistent-read"`
+	SQLHint          string `toml:"sql-hint" json:"sql-hint"`
 }
 
 type AllConfig struct {
@@ -111,6 +107,28 @@ type AllConfig struct {
 	ApplyThreads         int `toml:"apply-threads" json:"apply-threads"`
 	WorkerQueue          int `toml:"worker-queue" json:"worker-queue"`
 	WorkerThreads        int `toml:"worker-threads" json:"worker-threads"`
+}
+
+type SchemaConfig struct {
+	SourceSchema       string          `toml:"source-schema" json:"source-schema"`
+	SourceIncludeTable []string        `toml:"source-include-table" json:"source-include-table"`
+	SourceExcludeTable []string        `toml:"source-exclude-table" json:"source-exclude-table"`
+	TargetSchema       string          `toml:"target-schema" json:"target-schema"`
+	CompareConfig      []CompareConfig `toml:"compare-config" json:"compare-config"`
+	MigrateConfig      []MigrateConfig `toml:"migrate-config" json:"migrate-config"`
+}
+
+type CompareConfig struct {
+	SourceTable string `toml:"source-table" json:"source-table"`
+	IndexFields string `toml:"index-fields" json:"index-fields"`
+	Range       string `toml:"range" json:"range"`
+}
+
+type MigrateConfig struct {
+	SourceTable string `toml:"source-table" json:"source-table"`
+	Chunks      int    `toml:"chunks" json:"chunks"`
+	Range       string `toml:"range" json:"range"`
+	SQLHint     string `toml:"sql-hint" json:"sql-hint"`
 }
 
 type OracleConfig struct {
@@ -124,9 +142,6 @@ type OracleConfig struct {
 	LibDir        string   `toml:"lib-dir" json:"lib-dir"`
 	ConnectParams string   `toml:"connect-params" json:"connect-params"`
 	SessionParams []string `toml:"session-params" json:"session-params"`
-	SchemaName    string   `toml:"schema-name" json:"schema-name"`
-	IncludeTable  []string `toml:"include-table" json:"include-table"`
-	ExcludeTable  []string `toml:"exclude-table" json:"exclude-table"`
 }
 
 type MySQLConfig struct {
@@ -136,7 +151,6 @@ type MySQLConfig struct {
 	Port          int    `toml:"port" json:"port"`
 	Charset       string `toml:"charset" json:"charset"`
 	ConnectParams string `toml:"connect-params" json:"connect-params"`
-	SchemaName    string `toml:"schema-name" json:"schema-name"`
 	TableOption   string `toml:"table-option" json:"table-option"`
 	Overwrite     bool   `toml:"overwrite" json:"overwrite"`
 }
@@ -217,9 +231,10 @@ func (c *Config) AdjustConfig() error {
 	c.DBTypeS = common.StringUPPER(c.DBTypeS)
 	c.DBTypeT = common.StringUPPER(c.DBTypeT)
 	c.TaskMode = common.StringUPPER(c.TaskMode)
-	c.OracleConfig.SchemaName = common.StringUPPER(c.OracleConfig.SchemaName)
 	c.OracleConfig.PDBName = common.StringUPPER(c.OracleConfig.PDBName)
-	c.MySQLConfig.SchemaName = common.StringUPPER(c.MySQLConfig.SchemaName)
+
+	c.SchemaConfig.SourceSchema = common.StringUPPER(c.SchemaConfig.SourceSchema)
+	c.SchemaConfig.TargetSchema = common.StringUPPER(c.SchemaConfig.TargetSchema)
 
 	return nil
 }

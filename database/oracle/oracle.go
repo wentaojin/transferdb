@@ -34,7 +34,7 @@ type Oracle struct {
 }
 
 // 创建 oracle 数据库引擎
-func NewOracleDBEngine(ctx context.Context, oraCfg config.OracleConfig) (*Oracle, error) {
+func NewOracleDBEngine(ctx context.Context, oraCfg config.OracleConfig, currentSchema string) (*Oracle, error) {
 	// https://pkg.go.dev/github.com/godror/godror
 	// https://github.com/godror/godror/blob/db9cd12d89cdc1c60758aa3f36ece36cf5a61814/doc/connection.md
 	// https://godror.github.io/godror/doc/connection.html
@@ -66,8 +66,8 @@ func NewOracleDBEngine(ctx context.Context, oraCfg config.OracleConfig) (*Oracle
 		oraCfg.SessionParams = append(oraCfg.SessionParams, fmt.Sprintf(`ALTER SESSION SET CONTAINER = %s`, oraCfg.PDBName))
 	}
 
-	if !strings.EqualFold(oraCfg.Username, oraCfg.SchemaName) && !strings.EqualFold(oraCfg.SchemaName, "") {
-		oraCfg.SessionParams = append(oraCfg.SessionParams, fmt.Sprintf(`ALTER SESSION SET CURRENT_SCHEMA = %s`, oraCfg.SchemaName))
+	if !strings.EqualFold(oraCfg.Username, currentSchema) && !strings.EqualFold(currentSchema, "") {
+		oraCfg.SessionParams = append(oraCfg.SessionParams, fmt.Sprintf(`ALTER SESSION SET CURRENT_SCHEMA = %s`, currentSchema))
 	}
 
 	// 关闭外部认证

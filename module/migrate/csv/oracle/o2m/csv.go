@@ -42,7 +42,7 @@ type CSV struct {
 }
 
 func NewCSV(ctx context.Context, cfg *config.Config) (*CSV, error) {
-	oracleDB, err := oracle.NewOracleDBEngine(ctx, cfg.OracleConfig)
+	oracleDB, err := oracle.NewOracleDBEngine(ctx, cfg.OracleConfig, cfg.SchemaConfig.SourceSchema)
 	if err != nil {
 		return nil, err
 	}
@@ -66,7 +66,7 @@ func NewCSV(ctx context.Context, cfg *config.Config) (*CSV, error) {
 func (r *CSV) CSV() error {
 	startTime := time.Now()
 	zap.L().Info("source schema full table data csv start",
-		zap.String("schema", r.Cfg.OracleConfig.SchemaName))
+		zap.String("schema", r.Cfg.SchemaConfig.SourceSchema))
 
 	// 判断上游 Oracle 数据库版本
 	// 需要 oracle 11g 及以上
@@ -107,7 +107,7 @@ func (r *CSV) CSV() error {
 		err = meta.NewFullSyncMetaModel(r.MetaDB).DeleteFullSyncMetaBySchemaSyncMode(r.Ctx, &meta.FullSyncMeta{
 			DBTypeS:     r.Cfg.DBTypeS,
 			DBTypeT:     r.Cfg.DBTypeT,
-			SchemaNameS: common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
+			SchemaNameS: common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema),
 			TaskMode:    common.StringUPPER(r.Cfg.TaskMode),
 		})
 		if err != nil {
@@ -117,7 +117,7 @@ func (r *CSV) CSV() error {
 		err = meta.NewChunkErrorDetailModel(r.MetaDB).DeleteChunkErrorDetailBySchemaTaskMode(r.Ctx, &meta.ChunkErrorDetail{
 			DBTypeS:     r.Cfg.DBTypeS,
 			DBTypeT:     r.Cfg.DBTypeT,
-			SchemaNameS: r.Cfg.OracleConfig.SchemaName,
+			SchemaNameS: r.Cfg.SchemaConfig.SourceSchema,
 			TaskMode:    r.Cfg.TaskMode,
 		})
 		if err != nil {
@@ -128,7 +128,7 @@ func (r *CSV) CSV() error {
 			err = meta.NewWaitSyncMetaModel(r.MetaDB).DeleteWaitSyncMeta(r.Ctx, &meta.WaitSyncMeta{
 				DBTypeS:     r.Cfg.DBTypeS,
 				DBTypeT:     r.Cfg.DBTypeT,
-				SchemaNameS: common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
+				SchemaNameS: common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema),
 				TableNameS:  tableName,
 				TaskMode:    r.Cfg.TaskMode,
 			})
@@ -140,7 +140,7 @@ func (r *CSV) CSV() error {
 			waitSyncMetas, err := meta.NewWaitSyncMetaModel(r.MetaDB).DetailWaitSyncMeta(r.Ctx, &meta.WaitSyncMeta{
 				DBTypeS:     r.Cfg.DBTypeS,
 				DBTypeT:     r.Cfg.DBTypeT,
-				SchemaNameS: common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
+				SchemaNameS: common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema),
 				TableNameS:  tableName,
 				TaskMode:    r.Cfg.TaskMode,
 			})
@@ -151,7 +151,7 @@ func (r *CSV) CSV() error {
 				err = meta.NewWaitSyncMetaModel(r.MetaDB).CreateWaitSyncMeta(r.Ctx, &meta.WaitSyncMeta{
 					DBTypeS:        r.Cfg.DBTypeS,
 					DBTypeT:        r.Cfg.DBTypeT,
-					SchemaNameS:    common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
+					SchemaNameS:    common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema),
 					TableNameS:     common.StringUPPER(tableName),
 					TaskMode:       r.Cfg.TaskMode,
 					TaskStatus:     common.TaskStatusWaiting,
@@ -170,7 +170,7 @@ func (r *CSV) CSV() error {
 	tablesByMeta, err := meta.NewWaitSyncMetaModel(r.MetaDB).DetailWaitSyncMetaSuccessTables(r.Ctx, &meta.WaitSyncMeta{
 		DBTypeS:     r.Cfg.DBTypeS,
 		DBTypeT:     r.Cfg.DBTypeT,
-		SchemaNameS: common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
+		SchemaNameS: common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema),
 		TaskMode:    r.Cfg.TaskMode,
 		TaskStatus:  common.TaskStatusSuccess,
 	})
@@ -184,7 +184,7 @@ func (r *CSV) CSV() error {
 		err = meta.NewWaitSyncMetaModel(r.MetaDB).DeleteWaitSyncMetaSuccessTables(r.Ctx, &meta.WaitSyncMeta{
 			DBTypeS:     r.Cfg.DBTypeS,
 			DBTypeT:     r.Cfg.DBTypeT,
-			SchemaNameS: common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
+			SchemaNameS: common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema),
 			TaskMode:    r.Cfg.TaskMode,
 			TaskStatus:  common.TaskStatusSuccess,
 		}, clearTables)
@@ -202,7 +202,7 @@ func (r *CSV) CSV() error {
 	errTotals, err := meta.NewWaitSyncMetaModel(r.MetaDB).CountsErrWaitSyncMetaBySchema(r.Ctx, &meta.WaitSyncMeta{
 		DBTypeS:     r.Cfg.DBTypeS,
 		DBTypeT:     r.Cfg.DBTypeT,
-		SchemaNameS: common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
+		SchemaNameS: common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema),
 		TaskMode:    r.Cfg.TaskMode,
 		TaskStatus:  common.TaskStatusFailed,
 	})
@@ -210,7 +210,7 @@ func (r *CSV) CSV() error {
 		return err
 	}
 	if errTotals > 0 {
-		return fmt.Errorf(`csv schema [%s] mode [%s] table task failed: meta table [wait_sync_meta] exist failed error, please: firstly check meta table [wait_sync_meta] and [full_sync_meta] log record; secondly if need resume, update meta table [wait_sync_meta] column [task_status] table status RUNNING (Need UPPER) and delete meta table [chunk_error_detail] current task all records; finally rerunning`, strings.ToUpper(r.Cfg.OracleConfig.SchemaName), r.Cfg.TaskMode)
+		return fmt.Errorf(`csv schema [%s] mode [%s] table task failed: meta table [wait_sync_meta] exist failed error, please: firstly check meta table [wait_sync_meta] and [full_sync_meta] log record; secondly if need resume, update meta table [wait_sync_meta] column [task_status] table status RUNNING (Need UPPER) and delete meta table [chunk_error_detail] current task all records; finally rerunning`, strings.ToUpper(r.Cfg.SchemaConfig.SourceSchema), r.Cfg.TaskMode)
 	}
 
 	// 判断并记录待同步表列表
@@ -218,7 +218,7 @@ func (r *CSV) CSV() error {
 		waitSyncMetas, err := meta.NewWaitSyncMetaModel(r.MetaDB).DetailWaitSyncMeta(r.Ctx, &meta.WaitSyncMeta{
 			DBTypeS:     r.Cfg.DBTypeS,
 			DBTypeT:     r.Cfg.DBTypeT,
-			SchemaNameS: common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
+			SchemaNameS: common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema),
 			TableNameS:  common.StringUPPER(tableName),
 			TaskMode:    r.Cfg.TaskMode,
 		})
@@ -229,7 +229,7 @@ func (r *CSV) CSV() error {
 			err = meta.NewWaitSyncMetaModel(r.MetaDB).CreateWaitSyncMeta(r.Ctx, &meta.WaitSyncMeta{
 				DBTypeS:        r.Cfg.DBTypeS,
 				DBTypeT:        r.Cfg.DBTypeT,
-				SchemaNameS:    common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
+				SchemaNameS:    common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema),
 				TableNameS:     common.StringUPPER(tableName),
 				TaskMode:       r.Cfg.TaskMode,
 				TaskStatus:     common.TaskStatusWaiting,
@@ -251,7 +251,7 @@ func (r *CSV) CSV() error {
 	waitSyncDetails, err := meta.NewWaitSyncMetaModel(r.MetaDB).DetailWaitSyncMeta(r.Ctx, &meta.WaitSyncMeta{
 		DBTypeS:        r.Cfg.DBTypeS,
 		DBTypeT:        r.Cfg.DBTypeT,
-		SchemaNameS:    common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
+		SchemaNameS:    common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema),
 		TaskMode:       r.Cfg.TaskMode,
 		TaskStatus:     common.TaskStatusWaiting,
 		GlobalScnS:     common.TaskTableDefaultSourceGlobalSCN,
@@ -275,7 +275,7 @@ func (r *CSV) CSV() error {
 	partSyncDetails, err := meta.NewWaitSyncMetaModel(r.MetaDB).QueryWaitSyncMetaByPartTask(r.Ctx, &meta.WaitSyncMeta{
 		DBTypeS:     r.Cfg.DBTypeS,
 		DBTypeT:     r.Cfg.DBTypeT,
-		SchemaNameS: common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
+		SchemaNameS: common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema),
 		TaskMode:    r.Cfg.TaskMode,
 		TaskStatus:  common.TaskStatusRunning,
 	})
@@ -306,7 +306,7 @@ func (r *CSV) CSV() error {
 	if len(panicTblFullSlice) > 0 {
 		endTime := time.Now()
 		zap.L().Error("oracle schema table data csv error",
-			zap.String("schema", r.Cfg.OracleConfig.SchemaName),
+			zap.String("schema", r.Cfg.SchemaConfig.SourceSchema),
 			zap.String("cost", endTime.Sub(startTime).String()),
 			zap.Int("part sync tables", len(partSyncTables)),
 			zap.Strings("panic tables", panicTblFullSlice))
@@ -327,8 +327,8 @@ func (r *CSV) CSV() error {
 		tableNameRules, err := meta.NewTableNameRuleModel(r.MetaDB).DetailTableNameRule(r.Ctx, &meta.TableNameRule{
 			DBTypeS:     r.Cfg.DBTypeS,
 			DBTypeT:     r.Cfg.DBTypeT,
-			SchemaNameS: r.Cfg.OracleConfig.SchemaName,
-			SchemaNameT: r.Cfg.MySQLConfig.SchemaName,
+			SchemaNameS: r.Cfg.SchemaConfig.SourceSchema,
+			SchemaNameT: r.Cfg.SchemaConfig.TargetSchema,
 		})
 		if err != nil {
 			return err
@@ -350,7 +350,7 @@ func (r *CSV) CSV() error {
 	succTotals, err := meta.NewWaitSyncMetaModel(r.MetaDB).DetailWaitSyncMeta(r.Ctx, &meta.WaitSyncMeta{
 		DBTypeS:     r.Cfg.DBTypeS,
 		DBTypeT:     r.Cfg.DBTypeT,
-		SchemaNameS: common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
+		SchemaNameS: common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema),
 		TaskMode:    r.Cfg.TaskMode,
 		TaskStatus:  common.TaskStatusSuccess,
 	})
@@ -360,7 +360,7 @@ func (r *CSV) CSV() error {
 	failedTotals, err := meta.NewWaitSyncMetaModel(r.MetaDB).DetailWaitSyncMeta(r.Ctx, &meta.WaitSyncMeta{
 		DBTypeS:     r.Cfg.DBTypeS,
 		DBTypeT:     r.Cfg.DBTypeT,
-		SchemaNameS: common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
+		SchemaNameS: common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema),
 		TaskMode:    r.Cfg.TaskMode,
 		TaskStatus:  common.TaskStatusFailed,
 	})
@@ -369,7 +369,7 @@ func (r *CSV) CSV() error {
 	}
 
 	zap.L().Info("source schema table data csv finished",
-		zap.String("schema", r.Cfg.OracleConfig.SchemaName),
+		zap.String("schema", r.Cfg.SchemaConfig.SourceSchema),
 		zap.Int("table totals", len(exporters)),
 		zap.Int("table success", len(succTotals)),
 		zap.Int("table failed", len(failedTotals)),
@@ -395,7 +395,7 @@ func (r *CSV) csvPartSyncTable(csvPartTables []string, sourceDBCharset string) e
 			err := meta.NewWaitSyncMetaModel(r.MetaDB).UpdateWaitSyncMeta(r.Ctx, &meta.WaitSyncMeta{
 				DBTypeS:     r.Cfg.DBTypeS,
 				DBTypeT:     r.Cfg.DBTypeT,
-				SchemaNameS: r.Cfg.OracleConfig.SchemaName,
+				SchemaNameS: r.Cfg.SchemaConfig.SourceSchema,
 				TableNameS:  common.StringUPPER(t),
 				TaskMode:    r.Cfg.TaskMode,
 			}, map[string]interface{}{
@@ -408,7 +408,7 @@ func (r *CSV) csvPartSyncTable(csvPartTables []string, sourceDBCharset string) e
 			waitFullMetas, err := meta.NewFullSyncMetaModel(r.MetaDB).DetailFullSyncMeta(r.Ctx, &meta.FullSyncMeta{
 				DBTypeS:     r.Cfg.DBTypeS,
 				DBTypeT:     r.Cfg.DBTypeT,
-				SchemaNameS: common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
+				SchemaNameS: common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema),
 				TableNameS:  common.StringUPPER(t),
 				TaskMode:    r.Cfg.TaskMode,
 				TaskStatus:  common.TaskStatusWaiting,
@@ -419,7 +419,7 @@ func (r *CSV) csvPartSyncTable(csvPartTables []string, sourceDBCharset string) e
 			failedFullMetas, err := meta.NewFullSyncMetaModel(r.MetaDB).DetailFullSyncMeta(r.Ctx, &meta.FullSyncMeta{
 				DBTypeS:     r.Cfg.DBTypeS,
 				DBTypeT:     r.Cfg.DBTypeT,
-				SchemaNameS: common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
+				SchemaNameS: common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema),
 				TableNameS:  common.StringUPPER(t),
 				TaskMode:    r.Cfg.TaskMode,
 				TaskStatus:  common.TaskStatusFailed,
@@ -432,7 +432,7 @@ func (r *CSV) csvPartSyncTable(csvPartTables []string, sourceDBCharset string) e
 
 			columnNameS, err := r.Oracle.GetOracleTableRowsColumnCSV(
 				common.StringsBuilder(`SELECT *`, ` FROM `,
-					common.StringUPPER(r.Cfg.OracleConfig.SchemaName), `.`, common.StringUPPER(t), ` WHERE ROWNUM = 1`))
+					common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema), `.`, common.StringUPPER(t), ` WHERE ROWNUM = 1`))
 			if err != nil {
 				return nil
 			}
@@ -512,7 +512,7 @@ func (r *CSV) csvPartSyncTable(csvPartTables []string, sourceDBCharset string) e
 			failedChunkTotalErrs, err := meta.NewFullSyncMetaModel(r.MetaDB).CountsErrorFullSyncMeta(r.Ctx, &meta.FullSyncMeta{
 				DBTypeS:     r.Cfg.DBTypeS,
 				DBTypeT:     r.Cfg.DBTypeT,
-				SchemaNameS: common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
+				SchemaNameS: common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema),
 				TableNameS:  common.StringUPPER(t),
 				TaskMode:    r.Cfg.TaskMode,
 				TaskStatus:  common.TaskStatusFailed,
@@ -524,7 +524,7 @@ func (r *CSV) csvPartSyncTable(csvPartTables []string, sourceDBCharset string) e
 			successChunkFullMeta, err := meta.NewFullSyncMetaModel(r.MetaDB).DetailFullSyncMeta(r.Ctx, &meta.FullSyncMeta{
 				DBTypeS:     r.Cfg.DBTypeS,
 				DBTypeT:     r.Cfg.DBTypeT,
-				SchemaNameS: common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
+				SchemaNameS: common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema),
 				TableNameS:  common.StringUPPER(t),
 				TaskMode:    r.Cfg.TaskMode,
 				TaskStatus:  common.TaskStatusSuccess,
@@ -539,13 +539,13 @@ func (r *CSV) csvPartSyncTable(csvPartTables []string, sourceDBCharset string) e
 					&meta.FullSyncMeta{
 						DBTypeS:     r.Cfg.DBTypeS,
 						DBTypeT:     r.Cfg.DBTypeT,
-						SchemaNameS: common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
+						SchemaNameS: common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema),
 						TableNameS:  common.StringUPPER(t),
 						TaskMode:    r.Cfg.TaskMode,
 					}, &meta.WaitSyncMeta{
 						DBTypeS:          r.Cfg.DBTypeS,
 						DBTypeT:          r.Cfg.DBTypeT,
-						SchemaNameS:      common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
+						SchemaNameS:      common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema),
 						TableNameS:       common.StringUPPER(t),
 						TaskMode:         r.Cfg.TaskMode,
 						TaskStatus:       common.TaskStatusSuccess,
@@ -556,7 +556,7 @@ func (r *CSV) csvPartSyncTable(csvPartTables []string, sourceDBCharset string) e
 					return err
 				}
 				zap.L().Info("csv single table oracle to mysql finished",
-					zap.String("schema", r.Cfg.OracleConfig.SchemaName),
+					zap.String("schema", r.Cfg.SchemaConfig.SourceSchema),
 					zap.String("table", common.StringUPPER(t)),
 					zap.String("cost", time.Now().Sub(taskTime).String()))
 
@@ -566,7 +566,7 @@ func (r *CSV) csvPartSyncTable(csvPartTables []string, sourceDBCharset string) e
 			err = meta.NewWaitSyncMetaModel(r.MetaDB).UpdateWaitSyncMeta(r.Ctx, &meta.WaitSyncMeta{
 				DBTypeS:     r.Cfg.DBTypeS,
 				DBTypeT:     r.Cfg.DBTypeT,
-				SchemaNameS: common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
+				SchemaNameS: common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema),
 				TableNameS:  common.StringUPPER(t),
 				TaskMode:    r.Cfg.TaskMode,
 			}, map[string]interface{}{
@@ -578,7 +578,7 @@ func (r *CSV) csvPartSyncTable(csvPartTables []string, sourceDBCharset string) e
 				return err
 			}
 			zap.L().Warn("update mysql [wait_sync_meta] meta",
-				zap.String("schema", r.Cfg.OracleConfig.SchemaName),
+				zap.String("schema", r.Cfg.SchemaConfig.SourceSchema),
 				zap.String("table", common.StringUPPER(t)),
 				zap.String("mode", r.Cfg.TaskMode),
 				zap.String("updated", "csv table exist error, skip"),
@@ -593,7 +593,7 @@ func (r *CSV) csvPartSyncTable(csvPartTables []string, sourceDBCharset string) e
 	}
 
 	zap.L().Info("source schema csv data sync finished",
-		zap.String("schema", r.Cfg.OracleConfig.SchemaName),
+		zap.String("schema", r.Cfg.SchemaConfig.SourceSchema),
 		zap.Int("table counts", len(csvPartTables)),
 		zap.String("cost", time.Now().Sub(startTime).String()))
 	return nil
@@ -619,7 +619,7 @@ func (r *CSV) initWaitSyncTableChunk(csvWaitTables []string, tableNameRule map[s
 	if err != nil {
 		return err
 	}
-	partitionTables, err := r.Oracle.GetOracleSchemaPartitionTable(r.Cfg.OracleConfig.SchemaName)
+	partitionTables, err := r.Oracle.GetOracleSchemaPartitionTable(r.Cfg.SchemaConfig.SourceSchema)
 	if err != nil {
 		return err
 	}
@@ -663,7 +663,7 @@ func (r *CSV) initWaitSyncTableChunk(csvWaitTables []string, tableNameRule map[s
 				isPartition = "NO"
 			}
 
-			tableRowsByStatistics, err := r.Oracle.GetOracleTableRowsByStatistics(r.Cfg.OracleConfig.SchemaName, t)
+			tableRowsByStatistics, err := r.Oracle.GetOracleTableRowsByStatistics(r.Cfg.SchemaConfig.SourceSchema, t)
 			if err != nil {
 				return err
 			}
@@ -673,9 +673,9 @@ func (r *CSV) initWaitSyncTableChunk(csvWaitTables []string, tableNameRule map[s
 				err = meta.NewCommonModel(r.MetaDB).CreateFullSyncMetaAndUpdateWaitSyncMeta(r.Ctx, &meta.FullSyncMeta{
 					DBTypeS:        r.Cfg.DBTypeS,
 					DBTypeT:        r.Cfg.DBTypeT,
-					SchemaNameS:    common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
+					SchemaNameS:    common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema),
 					TableNameS:     common.StringUPPER(t),
-					SchemaNameT:    common.StringUPPER(r.Cfg.MySQLConfig.SchemaName),
+					SchemaNameT:    common.StringUPPER(r.Cfg.SchemaConfig.TargetSchema),
 					TableNameT:     common.StringUPPER(targetTableName),
 					GlobalScnS:     globalSCN,
 					ConsistentRead: isConsistentRead,
@@ -684,13 +684,13 @@ func (r *CSV) initWaitSyncTableChunk(csvWaitTables []string, tableNameRule map[s
 					TaskMode:       r.Cfg.TaskMode,
 					TaskStatus:     common.TaskStatusWaiting,
 					CSVFile: filepath.Join(r.Cfg.CSVConfig.OutputDir,
-						common.StringUPPER(r.Cfg.OracleConfig.SchemaName), common.StringUPPER(t),
-						common.StringsBuilder(common.StringUPPER(r.Cfg.MySQLConfig.SchemaName),
+						common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema), common.StringUPPER(t),
+						common.StringsBuilder(common.StringUPPER(r.Cfg.SchemaConfig.TargetSchema),
 							`.`, common.StringUPPER(targetTableName), `.0.csv`)),
 				}, &meta.WaitSyncMeta{
 					DBTypeS:          r.Cfg.DBTypeS,
 					DBTypeT:          r.Cfg.DBTypeT,
-					SchemaNameS:      common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
+					SchemaNameS:      common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema),
 					TableNameS:       common.StringUPPER(t),
 					TaskMode:         r.Cfg.TaskMode,
 					GlobalScnS:       globalSCN,
@@ -707,13 +707,13 @@ func (r *CSV) initWaitSyncTableChunk(csvWaitTables []string, tableNameRule map[s
 				return nil
 			}
 
-			taskName := common.StringsBuilder(common.StringUPPER(r.Cfg.OracleConfig.SchemaName), `_`, common.StringUPPER(t), `_`, `TASK`, strconv.Itoa(workerID))
+			taskName := common.StringsBuilder(common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema), `_`, common.StringUPPER(t), `_`, `TASK`, strconv.Itoa(workerID))
 
 			if err = r.Oracle.StartOracleChunkCreateTask(taskName); err != nil {
 				return err
 			}
 
-			if err = r.Oracle.StartOracleCreateChunkByRowID(taskName, common.StringUPPER(r.Cfg.OracleConfig.SchemaName), common.StringUPPER(t), strconv.Itoa(r.Cfg.CSVConfig.Rows)); err != nil {
+			if err = r.Oracle.StartOracleCreateChunkByRowID(taskName, common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema), common.StringUPPER(t), strconv.Itoa(r.Cfg.CSVConfig.Rows)); err != nil {
 				return err
 			}
 
@@ -727,9 +727,9 @@ func (r *CSV) initWaitSyncTableChunk(csvWaitTables []string, tableNameRule map[s
 				err = meta.NewCommonModel(r.MetaDB).CreateFullSyncMetaAndUpdateWaitSyncMeta(r.Ctx, &meta.FullSyncMeta{
 					DBTypeS:        r.Cfg.DBTypeS,
 					DBTypeT:        r.Cfg.DBTypeT,
-					SchemaNameS:    common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
+					SchemaNameS:    common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema),
 					TableNameS:     common.StringUPPER(t),
-					SchemaNameT:    common.StringUPPER(r.Cfg.MySQLConfig.SchemaName),
+					SchemaNameT:    common.StringUPPER(r.Cfg.SchemaConfig.TargetSchema),
 					TableNameT:     common.StringUPPER(targetTableName),
 					GlobalScnS:     globalSCN,
 					ConsistentRead: isConsistentRead,
@@ -738,13 +738,13 @@ func (r *CSV) initWaitSyncTableChunk(csvWaitTables []string, tableNameRule map[s
 					TaskMode:       r.Cfg.TaskMode,
 					TaskStatus:     common.TaskStatusWaiting,
 					CSVFile: filepath.Join(r.Cfg.CSVConfig.OutputDir,
-						common.StringUPPER(r.Cfg.OracleConfig.SchemaName), common.StringUPPER(t),
-						common.StringsBuilder(common.StringUPPER(r.Cfg.MySQLConfig.SchemaName),
+						common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema), common.StringUPPER(t),
+						common.StringsBuilder(common.StringUPPER(r.Cfg.SchemaConfig.TargetSchema),
 							`.`, common.StringUPPER(targetTableName), `.0.csv`)),
 				}, &meta.WaitSyncMeta{
 					DBTypeS:          r.Cfg.DBTypeS,
 					DBTypeT:          r.Cfg.DBTypeT,
-					SchemaNameS:      common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
+					SchemaNameS:      common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema),
 					TableNameS:       common.StringUPPER(t),
 					TaskMode:         r.Cfg.TaskMode,
 					GlobalScnS:       globalSCN,
@@ -766,16 +766,16 @@ func (r *CSV) initWaitSyncTableChunk(csvWaitTables []string, tableNameRule map[s
 			for i, res := range chunkRes {
 				var csvFile string
 				csvFile = filepath.Join(r.Cfg.CSVConfig.OutputDir,
-					common.StringUPPER(r.Cfg.OracleConfig.SchemaName), common.StringUPPER(t),
-					common.StringsBuilder(common.StringUPPER(r.Cfg.MySQLConfig.SchemaName), `.`,
+					common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema), common.StringUPPER(t),
+					common.StringsBuilder(common.StringUPPER(r.Cfg.SchemaConfig.TargetSchema), `.`,
 						common.StringUPPER(targetTableName), `.`, strconv.Itoa(i), `.csv`))
 
 				fullMetas = append(fullMetas, meta.FullSyncMeta{
 					DBTypeS:        r.Cfg.DBTypeS,
 					DBTypeT:        r.Cfg.DBTypeT,
-					SchemaNameS:    common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
+					SchemaNameS:    common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema),
 					TableNameS:     common.StringUPPER(t),
-					SchemaNameT:    common.StringUPPER(r.Cfg.MySQLConfig.SchemaName),
+					SchemaNameT:    common.StringUPPER(r.Cfg.SchemaConfig.TargetSchema),
 					TableNameT:     common.StringUPPER(targetTableName),
 					GlobalScnS:     globalSCN,
 					ConsistentRead: isConsistentRead,
@@ -792,7 +792,7 @@ func (r *CSV) initWaitSyncTableChunk(csvWaitTables []string, tableNameRule map[s
 				fullMetas, r.Cfg.AppConfig.InsertBatchSize, &meta.WaitSyncMeta{
 					DBTypeS:          r.Cfg.DBTypeS,
 					DBTypeT:          r.Cfg.DBTypeT,
-					SchemaNameS:      common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
+					SchemaNameS:      common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema),
 					TableNameS:       common.StringUPPER(t),
 					TaskMode:         r.Cfg.TaskMode,
 					GlobalScnS:       globalSCN,
@@ -813,7 +813,7 @@ func (r *CSV) initWaitSyncTableChunk(csvWaitTables []string, tableNameRule map[s
 
 			endTime := time.Now()
 			zap.L().Info("init source single table wait_sync_meta and full_sync_meta finished",
-				zap.String("schema", r.Cfg.OracleConfig.SchemaName),
+				zap.String("schema", r.Cfg.SchemaConfig.SourceSchema),
 				zap.String("table", t),
 				zap.String("cost", endTime.Sub(startTime).String()))
 			return nil
@@ -825,7 +825,7 @@ func (r *CSV) initWaitSyncTableChunk(csvWaitTables []string, tableNameRule map[s
 	}
 
 	zap.L().Info("init source schema table wait_sync_meta and full_sync_meta finished",
-		zap.String("schema", r.Cfg.OracleConfig.SchemaName),
+		zap.String("schema", r.Cfg.SchemaConfig.SourceSchema),
 		zap.String("cost", time.Now().Sub(startTask).String()))
 	return nil
 }
@@ -833,7 +833,7 @@ func (r *CSV) initWaitSyncTableChunk(csvWaitTables []string, tableNameRule map[s
 func (r *CSV) AdjustTableSelectColumn(sourceTable string, oracleCollation bool) (string, error) {
 	// Date/Timestamp 字段类型格式化
 	// Interval Year/Day 数据字符 TO_CHAR 格式化
-	columnsINFO, err := r.Oracle.GetOracleSchemaTableColumn(r.Cfg.OracleConfig.SchemaName, sourceTable, oracleCollation)
+	columnsINFO, err := r.Oracle.GetOracleSchemaTableColumn(r.Cfg.SchemaConfig.SourceSchema, sourceTable, oracleCollation)
 	if err != nil {
 		return "", err
 	}

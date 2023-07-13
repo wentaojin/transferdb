@@ -63,14 +63,14 @@ func GenReverseTableTask(r *Reverse, tableNameRule map[string]string, tableColum
 	defer func() {
 		endTime := time.Now()
 		zap.L().Info("gen oracle table list finished",
-			zap.String("schema", r.Cfg.OracleConfig.SchemaName),
+			zap.String("schema", r.Cfg.SchemaConfig.SourceSchema),
 			zap.Int("table totals", len(exporters)),
 			zap.Int("table gens", len(tables)),
 			zap.String("cost", endTime.Sub(beginTime).String()))
 	}()
 
 	zap.L().Info("get oracle db character and version finished",
-		zap.String("schema", r.Cfg.OracleConfig.SchemaName),
+		zap.String("schema", r.Cfg.SchemaConfig.SourceSchema),
 		zap.String("db version", oracleDBVersion),
 		zap.String("db character", oracleDBCharset),
 		zap.Int("table totals", len(exporters)),
@@ -83,17 +83,17 @@ func GenReverseTableTask(r *Reverse, tableNameRule map[string]string, tableColum
 
 	if oracleCollation {
 		startTime := time.Now()
-		schemaCollation, err := r.Oracle.GetOracleSchemaCollation(common.StringUPPER(r.Cfg.OracleConfig.SchemaName))
+		schemaCollation, err := r.Oracle.GetOracleSchemaCollation(common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema))
 		if err != nil {
 			return tables, err
 		}
-		tblCollation, err = r.Oracle.GetOracleSchemaTableCollation(common.StringUPPER(r.Cfg.OracleConfig.SchemaName), schemaCollation)
+		tblCollation, err = r.Oracle.GetOracleSchemaTableCollation(common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema), schemaCollation)
 		if err != nil {
 			return tables, err
 		}
 		endTime := time.Now()
 		zap.L().Info("get oracle schema and table collation finished",
-			zap.String("schema", r.Cfg.OracleConfig.SchemaName),
+			zap.String("schema", r.Cfg.SchemaConfig.SourceSchema),
 			zap.String("db version", oracleDBVersion),
 			zap.String("db character", oracleDBCharset),
 			zap.Int("table totals", len(exporters)),
@@ -102,13 +102,13 @@ func GenReverseTableTask(r *Reverse, tableNameRule map[string]string, tableColum
 	}
 
 	startTime := time.Now()
-	tablesMap, err := r.Oracle.GetOracleSchemaTableType(common.StringUPPER(r.Cfg.OracleConfig.SchemaName))
+	tablesMap, err := r.Oracle.GetOracleSchemaTableType(common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema))
 	if err != nil {
 		return tables, err
 	}
 	endTime := time.Now()
 	zap.L().Info("get oracle table type finished",
-		zap.String("schema", r.Cfg.OracleConfig.SchemaName),
+		zap.String("schema", r.Cfg.SchemaConfig.SourceSchema),
 		zap.String("db version", oracleDBVersion),
 		zap.String("db character", oracleDBCharset),
 		zap.Int("table totals", len(exporters)),
@@ -141,8 +141,8 @@ func GenReverseTableTask(r *Reverse, tableNameRule map[string]string, tableColum
 
 				tbl := &Table{
 					Ctx:                       r.Ctx,
-					SourceSchemaName:          common.StringUPPER(r.Cfg.OracleConfig.SchemaName),
-					TargetSchemaName:          common.StringUPPER(r.Cfg.MySQLConfig.SchemaName),
+					SourceSchemaName:          common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema),
+					TargetSchemaName:          common.StringUPPER(r.Cfg.SchemaConfig.TargetSchema),
 					SourceTableName:           common.StringUPPER(t),
 					TargetDBVersion:           mysqlVersion,
 					TargetTableName:           targetTableName,
@@ -189,7 +189,7 @@ func GenReverseTableTask(r *Reverse, tableNameRule map[string]string, tableColum
 
 	endTime = time.Now()
 	zap.L().Info("gen oracle slice table finished",
-		zap.String("schema", r.Cfg.OracleConfig.SchemaName),
+		zap.String("schema", r.Cfg.SchemaConfig.SourceSchema),
 		zap.Int("table totals", len(exporters)),
 		zap.Int("table gens", len(tables)),
 		zap.String("cost", endTime.Sub(startTime).String()))

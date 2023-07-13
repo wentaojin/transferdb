@@ -38,7 +38,7 @@ type Assess struct {
 }
 
 func NewAssess(ctx context.Context, cfg *config.Config) (*Assess, error) {
-	oracleDB, err := oracle.NewOracleDBEngine(ctx, cfg.OracleConfig)
+	oracleDB, err := oracle.NewOracleDBEngine(ctx, cfg.OracleConfig, cfg.SchemaConfig.SourceSchema)
 	if err != nil {
 		return nil, err
 	}
@@ -57,15 +57,15 @@ func NewAssess(ctx context.Context, cfg *config.Config) (*Assess, error) {
 func (r *Assess) Assess() error {
 	startTime := time.Now()
 	zap.L().Info("assess oracle migrate mysql cost start",
-		zap.String("oracle Schema", r.cfg.OracleConfig.SchemaName),
-		zap.String("mysql Schema", r.cfg.MySQLConfig.SchemaName))
+		zap.String("oracle Schema", r.cfg.SchemaConfig.SourceSchema),
+		zap.String("mysql Schema", r.cfg.SchemaConfig.TargetSchema))
 
 	var (
 		usernameSQL   string
 		fileName      string
 		usernameArray []string
 	)
-	if r.cfg.OracleConfig.SchemaName == "" {
+	if r.cfg.SchemaConfig.SourceSchema == "" {
 		usernameSQL = `select username from dba_users where username NOT IN (
 			'HR',
 			'DVF',
@@ -118,7 +118,7 @@ func (r *Assess) Assess() error {
 
 		fileName = "report_all.html"
 	} else {
-		usernameSQL = fmt.Sprintf(`select username from dba_users where username = '%s'`, strings.ToUpper(r.cfg.OracleConfig.SchemaName))
+		usernameSQL = fmt.Sprintf(`select username from dba_users where username = '%s'`, strings.ToUpper(r.cfg.SchemaConfig.SourceSchema))
 		fileName = fmt.Sprintf("report_%s.html", r.cfg.OracleConfig.ServiceName)
 	}
 	_, usernameMapArray, err := oracle.Query(r.ctx, r.oracle.OracleDB, usernameSQL)
@@ -127,7 +127,7 @@ func (r *Assess) Assess() error {
 	}
 
 	if len(usernameMapArray) == 0 {
-		return fmt.Errorf("oracle schema [%v] not exist", strings.ToUpper(r.cfg.OracleConfig.SchemaName))
+		return fmt.Errorf("oracle schema [%v] not exist", strings.ToUpper(r.cfg.SchemaConfig.SourceSchema))
 	}
 
 	for _, usernameMap := range usernameMapArray {

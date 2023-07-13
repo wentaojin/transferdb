@@ -71,12 +71,12 @@ func PreCheckCompatibility(cfg *config.Config, mysql *mysql.MySQL, exporters []s
 		)
 
 		// 检查表级别字符集以及排序规则
-		sourceTableCharacterSet, sourceTableCollation, err := mysql.GetMySQLTableCharacterSetAndCollation(cfg.MySQLConfig.SchemaName, t)
+		sourceTableCharacterSet, sourceTableCollation, err := mysql.GetMySQLTableCharacterSetAndCollation(cfg.SchemaConfig.SourceSchema, t)
 		if err != nil {
 			return []string{}, errCompatibilityTable, errCompatibilityColumn, tableCharSetMap, tableCollationMap, fmt.Errorf("get mysql table characterSet and collation falied: %v", err)
 		}
 
-		sourceSchemaTableName := fmt.Sprintf("%s.%s", cfg.MySQLConfig.SchemaName, t)
+		sourceSchemaTableName := fmt.Sprintf("%s.%s", cfg.SchemaConfig.SourceSchema, t)
 
 		targetTableCharset, okTableCharacterSet := common.MigrateTableStructureDatabaseCharsetMap[common.TaskTypeMySQL2Oracle][strings.ToUpper(sourceTableCharacterSet)]
 		targetTableCollation, okTableCollation := common.MigrateTableStructureDatabaseCollationMap[common.TaskTypeMySQL2Oracle][strings.ToUpper(sourceTableCollation)][common.MigrateTableStructureDatabaseCharsetMap[common.TaskTypeMySQL2Oracle][strings.ToUpper(sourceTableCharacterSet)]]
@@ -106,7 +106,7 @@ func PreCheckCompatibility(cfg *config.Config, mysql *mysql.MySQL, exporters []s
 
 		// 检查表字段级别字符集以及排序规则
 		// 如果表级别字符集与字段级别字符集不一样，oracle 不支持
-		columnsMap, err := mysql.GetMySQLTableColumn(cfg.MySQLConfig.SchemaName, t)
+		columnsMap, err := mysql.GetMySQLTableColumn(cfg.SchemaConfig.SourceSchema, t)
 		if err != nil {
 			return []string{}, errCompatibilityTable, errCompatibilityColumn, tableCharSetMap, tableCollationMap, fmt.Errorf("get mysql table column characterSet and collation falied: %v", err)
 		}
@@ -288,7 +288,7 @@ func GenReverseTableTask(r *Reverse, tableNameRule map[string]string, tableColum
 		tables []*Table
 	)
 
-	sourceSchema := common.StringUPPER(r.cfg.MySQLConfig.SchemaName)
+	sourceSchema := common.StringUPPER(r.cfg.SchemaConfig.SourceSchema)
 	beginTime := time.Now()
 	defer func() {
 		endTime := time.Now()
@@ -301,7 +301,7 @@ func GenReverseTableTask(r *Reverse, tableNameRule map[string]string, tableColum
 
 	startTime := time.Now()
 
-	partitionTables, err := r.mysql.GetMySQLPartitionTable(r.cfg.MySQLConfig.SchemaName)
+	partitionTables, err := r.mysql.GetMySQLPartitionTable(r.cfg.SchemaConfig.SourceSchema)
 	if err != nil {
 		return tables, err
 	}
@@ -328,7 +328,7 @@ func GenReverseTableTask(r *Reverse, tableNameRule map[string]string, tableColum
 					OracleExtendedMode:        isExtended,
 					SourceSchemaName:          common.StringUPPER(sourceSchema),
 					SourceTableName:           common.StringUPPER(ts),
-					TargetSchemaName:          common.StringUPPER(r.cfg.OracleConfig.SchemaName),
+					TargetSchemaName:          common.StringUPPER(r.cfg.SchemaConfig.TargetSchema),
 					TargetTableName:           targetTableName,
 					IsPartition:               common.IsContainString(partitionTables, common.StringUPPER(ts)),
 					SourceTableCharacterSet:   tableCharSetMap[ts],
