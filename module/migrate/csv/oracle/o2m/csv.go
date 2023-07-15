@@ -323,24 +323,7 @@ func (r *CSV) CSV() error {
 		}
 	}
 	if len(waitSyncTables) > 0 {
-		// 获取表名自定义规则
-		tableNameRules, err := meta.NewTableNameRuleModel(r.MetaDB).DetailTableNameRule(r.Ctx, &meta.TableNameRule{
-			DBTypeS:     r.Cfg.DBTypeS,
-			DBTypeT:     r.Cfg.DBTypeT,
-			SchemaNameS: r.Cfg.SchemaConfig.SourceSchema,
-			SchemaNameT: r.Cfg.SchemaConfig.TargetSchema,
-		})
-		if err != nil {
-			return err
-		}
-		tableNameRuleMap := make(map[string]string)
-
-		if len(tableNameRules) > 0 {
-			for _, tr := range tableNameRules {
-				tableNameRuleMap[common.StringUPPER(tr.TableNameS)] = common.StringUPPER(tr.TableNameT)
-			}
-		}
-		err = r.csvWaitSyncTable(waitSyncTables, tableNameRuleMap, sourceDBCharset, oracleCollation)
+		err = r.csvWaitSyncTable(waitSyncTables, sourceDBCharset, oracleCollation)
 		if err != nil {
 			return err
 		}
@@ -599,8 +582,8 @@ func (r *CSV) csvPartSyncTable(csvPartTables []string, sourceDBCharset string) e
 	return nil
 }
 
-func (r *CSV) csvWaitSyncTable(csvWaitTables []string, tableNameRule map[string]string, sourceDBCharset string, oracleCollation bool) error {
-	err := r.initWaitSyncTableChunk(csvWaitTables, tableNameRule, oracleCollation)
+func (r *CSV) csvWaitSyncTable(csvWaitTables []string, sourceDBCharset string, oracleCollation bool) error {
+	err := r.initWaitSyncTableChunk(csvWaitTables, oracleCollation)
 	if err != nil {
 		return err
 	}
@@ -611,14 +594,22 @@ func (r *CSV) csvWaitSyncTable(csvWaitTables []string, tableNameRule map[string]
 	return nil
 }
 
-func (r *CSV) initWaitSyncTableChunk(csvWaitTables []string, tableNameRule map[string]string, oracleCollation bool) error {
+func (r *CSV) initWaitSyncTableChunk(csvWaitTables []string, oracleCollation bool) error {
 	startTask := time.Now()
+	// 获取自定义库表名规则
+	tableNameRule, err := r.getTableNameRule()
+	if err != nil {
+		return err
+	}
 
 	// 全量同步前，获取 SCN 以及初始化元数据表
 	globalSCN, err := r.Oracle.GetOracleCurrentSnapshotSCN()
 	if err != nil {
 		return err
 	}
+	// 获取自定义库表迁移配置
+	tableMigrateRule := r.getCustomMigrateConfig()
+
 	partitionTables, err := r.Oracle.GetOracleSchemaPartitionTable(r.Cfg.SchemaConfig.SourceSchema)
 	if err != nil {
 		return err
@@ -649,6 +640,19 @@ func (r *CSV) initWaitSyncTableChunk(csvWaitTables []string, tableNameRule map[s
 				targetTableName = common.StringUPPER(t)
 			}
 
+			// 自定义迁移配置
+			var (
+				sqlHint     string
+				wherePrefix string
+				whereRange  string
+			)
+			if val, ok := tableMigrateRule[common.StringUPPER(t)]; ok {
+				sqlHint = val.SQLHint
+				wherePrefix = val.Range
+			} else {
+				sqlHint = r.Cfg.FullConfig.SQLHint
+			}
+
 			sourceColumnInfo, err := r.AdjustTableSelectColumn(t, oracleCollation)
 			if err != nil {
 				return err
@@ -669,6 +673,11 @@ func (r *CSV) initWaitSyncTableChunk(csvWaitTables []string, tableNameRule map[s
 			}
 			// 统计信息数据行数 0，直接全表扫
 			if tableRowsByStatistics == 0 {
+				if strings.EqualFold(wherePrefix, "") {
+					whereRange = `1 = 1`
+				} else {
+					whereRange = common.StringsBuilder(`1 = 1 AND `, wherePrefix)
+				}
 
 				err = meta.NewCommonModel(r.MetaDB).CreateFullSyncMetaAndUpdateWaitSyncMeta(r.Ctx, &meta.FullSyncMeta{
 					DBTypeS:        r.Cfg.DBTypeS,
@@ -679,8 +688,9 @@ func (r *CSV) initWaitSyncTableChunk(csvWaitTables []string, tableNameRule map[s
 					TableNameT:     common.StringUPPER(targetTableName),
 					GlobalScnS:     globalSCN,
 					ConsistentRead: isConsistentRead,
+					SQLHint:        sqlHint,
 					ColumnDetailS:  sourceColumnInfo,
-					ChunkDetailS:   "1 = 1",
+					ChunkDetailS:   whereRange,
 					TaskMode:       r.Cfg.TaskMode,
 					TaskStatus:     common.TaskStatusWaiting,
 					CSVFile: filepath.Join(r.Cfg.CSVConfig.OutputDir,
@@ -724,6 +734,12 @@ func (r *CSV) initWaitSyncTableChunk(csvWaitTables []string, tableNameRule map[s
 
 			// 判断数据是否存在
 			if len(chunkRes) == 0 {
+				if strings.EqualFold(wherePrefix, "") {
+					whereRange = `1 = 1`
+				} else {
+					whereRange = common.StringsBuilder(`1 = 1 AND `, wherePrefix)
+				}
+
 				err = meta.NewCommonModel(r.MetaDB).CreateFullSyncMetaAndUpdateWaitSyncMeta(r.Ctx, &meta.FullSyncMeta{
 					DBTypeS:        r.Cfg.DBTypeS,
 					DBTypeT:        r.Cfg.DBTypeT,
@@ -733,8 +749,9 @@ func (r *CSV) initWaitSyncTableChunk(csvWaitTables []string, tableNameRule map[s
 					TableNameT:     common.StringUPPER(targetTableName),
 					GlobalScnS:     globalSCN,
 					ConsistentRead: isConsistentRead,
+					SQLHint:        sqlHint,
 					ColumnDetailS:  sourceColumnInfo,
-					ChunkDetailS:   "1 = 1",
+					ChunkDetailS:   whereRange,
 					TaskMode:       r.Cfg.TaskMode,
 					TaskStatus:     common.TaskStatusWaiting,
 					CSVFile: filepath.Join(r.Cfg.CSVConfig.OutputDir,
@@ -770,6 +787,12 @@ func (r *CSV) initWaitSyncTableChunk(csvWaitTables []string, tableNameRule map[s
 					common.StringsBuilder(common.StringUPPER(r.Cfg.SchemaConfig.TargetSchema), `.`,
 						common.StringUPPER(targetTableName), `.`, strconv.Itoa(i), `.csv`))
 
+				if strings.EqualFold(wherePrefix, "") {
+					whereRange = res["CMD"]
+				} else {
+					whereRange = common.StringsBuilder(res["CMD"], ` AND `, wherePrefix)
+				}
+
 				fullMetas = append(fullMetas, meta.FullSyncMeta{
 					DBTypeS:        r.Cfg.DBTypeS,
 					DBTypeT:        r.Cfg.DBTypeT,
@@ -779,8 +802,9 @@ func (r *CSV) initWaitSyncTableChunk(csvWaitTables []string, tableNameRule map[s
 					TableNameT:     common.StringUPPER(targetTableName),
 					GlobalScnS:     globalSCN,
 					ConsistentRead: isConsistentRead,
+					SQLHint:        sqlHint,
 					ColumnDetailS:  sourceColumnInfo,
-					ChunkDetailS:   res["CMD"],
+					ChunkDetailS:   whereRange,
 					TaskMode:       r.Cfg.TaskMode,
 					TaskStatus:     common.TaskStatusWaiting,
 					CSVFile:        csvFile,
@@ -830,6 +854,35 @@ func (r *CSV) initWaitSyncTableChunk(csvWaitTables []string, tableNameRule map[s
 	return nil
 }
 
+func (r *CSV) getCustomMigrateConfig() map[string]config.MigrateConfig {
+	tableMigrateMap := make(map[string]config.MigrateConfig)
+	for _, t := range r.Cfg.SchemaConfig.MigrateConfig {
+		tableMigrateMap[common.StringUPPER(t.SourceTable)] = t
+	}
+	return tableMigrateMap
+}
+
+func (r *CSV) getTableNameRule() (map[string]string, error) {
+	// 获取表名自定义规则
+	tableNameRules, err := meta.NewTableNameRuleModel(r.MetaDB).DetailTableNameRule(r.Ctx, &meta.TableNameRule{
+		DBTypeS:     r.Cfg.DBTypeS,
+		DBTypeT:     r.Cfg.DBTypeT,
+		SchemaNameS: r.Cfg.SchemaConfig.SourceSchema,
+		SchemaNameT: r.Cfg.SchemaConfig.TargetSchema,
+	})
+	if err != nil {
+		return nil, err
+	}
+	tableNameRuleMap := make(map[string]string)
+
+	if len(tableNameRules) > 0 {
+		for _, tr := range tableNameRules {
+			tableNameRuleMap[common.StringUPPER(tr.TableNameS)] = common.StringUPPER(tr.TableNameT)
+		}
+	}
+	return tableNameRuleMap, nil
+}
+
 func (r *CSV) AdjustTableSelectColumn(sourceTable string, oracleCollation bool) (string, error) {
 	// Date/Timestamp 字段类型格式化
 	// Interval Year/Day 数据字符 TO_CHAR 格式化
@@ -858,7 +911,7 @@ func (r *CSV) AdjustTableSelectColumn(sourceTable string, oracleCollation bool) 
 			columnNames = append(columnNames, common.StringsBuilder(`"`, rowCol["COLUMN_NAME"], `"`))
 		// 时间
 		case "DATE":
-			columnNames = append(columnNames, common.StringsBuilder(`TO_CHAR("`, rowCol["COLUMN_NAME"], `",'yyyy-MM-dd HH24:mi:ss') AS "`, rowCol["COLUMN_NAME"], `"`))
+			columnNames = append(columnNames, common.StringsBuilder(`TO_CHAR("`, rowCol["COLUMN_NAME"], `",'yyyy-mm-dd hh24:mi:ss') AS "`, rowCol["COLUMN_NAME"], `"`))
 		// 默认其他类型
 		default:
 			if strings.Contains(rowCol["DATA_TYPE"], "INTERVAL") {
@@ -869,7 +922,7 @@ func (r *CSV) AdjustTableSelectColumn(sourceTable string, oracleCollation bool) 
 					return "", fmt.Errorf("aujust oracle timestamp datatype scale [%s] strconv.Atoi failed: %v", rowCol["DATA_SCALE"], err)
 				}
 				if dataScale == 0 {
-					columnNames = append(columnNames, common.StringsBuilder(`TO_CHAR("`, rowCol["COLUMN_NAME"], `",'yyyy-MM-dd HH24:mi:ss') AS "`, rowCol["COLUMN_NAME"], `"`))
+					columnNames = append(columnNames, common.StringsBuilder(`TO_CHAR("`, rowCol["COLUMN_NAME"], `",'yyyy-mm-dd hh24:mi:ss') AS "`, rowCol["COLUMN_NAME"], `"`))
 				} else if dataScale < 0 && dataScale <= 6 {
 					columnNames = append(columnNames, common.StringsBuilder(`TO_CHAR("`, rowCol["COLUMN_NAME"],
 						`",'yyyy-mm-dd hh24:mi:ss.ff`, rowCol["DATA_SCALE"], `') AS "`, rowCol["COLUMN_NAME"], `"`))

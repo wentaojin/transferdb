@@ -162,8 +162,6 @@ target-schema = "marvin"
 #[[schema-config.migrate-config]]
 # 源端表
 #source-table = "marvin"
-# 指定分片 chunk 数，即将查询范围 rang 切分 chunk 数
-#chunks = 8
 # 指定数据迁移表的查询范围
 # 注意自定义数据迁移表之后，对应表将只迁移该部分数据
 #range = "age > 10 AND age< 20"

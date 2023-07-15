@@ -66,9 +66,14 @@ func NewRows(ctx context.Context, syncMeta meta.FullSyncMeta,
 func (t *Rows) ReadData() error {
 	startTime := time.Now()
 	var querySQL string
-	if strings.EqualFold(t.SyncMeta.ConsistentRead, "YES") {
+	switch {
+	case strings.EqualFold(t.SyncMeta.ConsistentRead, "YES") && strings.EqualFold(t.SyncMeta.SQLHint, ""):
 		querySQL = common.StringsBuilder(`SELECT `, t.SyncMeta.ColumnDetailS, ` FROM `, t.SyncMeta.SchemaNameS, `.`, t.SyncMeta.TableNameS, ` AS OF SCN `, strconv.FormatUint(t.SyncMeta.GlobalScnS, 10), ` WHERE `, t.SyncMeta.ChunkDetailS)
-	} else {
+	case strings.EqualFold(t.SyncMeta.ConsistentRead, "YES") && !strings.EqualFold(t.SyncMeta.SQLHint, ""):
+		querySQL = common.StringsBuilder(`SELECT `, t.SyncMeta.SQLHint, ` `, t.SyncMeta.ColumnDetailS, ` FROM `, t.SyncMeta.SchemaNameS, `.`, t.SyncMeta.TableNameS, ` AS OF SCN `, strconv.FormatUint(t.SyncMeta.GlobalScnS, 10), ` WHERE `, t.SyncMeta.ChunkDetailS)
+	case strings.EqualFold(t.SyncMeta.ConsistentRead, "NO") && !strings.EqualFold(t.SyncMeta.SQLHint, ""):
+		querySQL = common.StringsBuilder(`SELECT `, t.SyncMeta.SQLHint, ` `, t.SyncMeta.ColumnDetailS, ` FROM `, t.SyncMeta.SchemaNameS, `.`, t.SyncMeta.TableNameS, ` WHERE `, t.SyncMeta.ChunkDetailS)
+	default:
 		querySQL = common.StringsBuilder(`SELECT `, t.SyncMeta.ColumnDetailS, ` FROM `, t.SyncMeta.SchemaNameS, `.`, t.SyncMeta.TableNameS, ` WHERE `, t.SyncMeta.ChunkDetailS)
 	}
 

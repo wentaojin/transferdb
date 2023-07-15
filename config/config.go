@@ -126,7 +126,6 @@ type CompareConfig struct {
 
 type MigrateConfig struct {
 	SourceTable string `toml:"source-table" json:"source-table"`
-	Chunks      int    `toml:"chunks" json:"chunks"`
 	Range       string `toml:"range" json:"range"`
 	SQLHint     string `toml:"sql-hint" json:"sql-hint"`
 }

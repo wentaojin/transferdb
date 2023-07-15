@@ -610,13 +610,16 @@ func (r *Migrate) FullWaitSyncTable(fullWaitTables []string, oracleCollation boo
 	return nil
 }
 
-func (r *Migrate) InitWaitSyncTableChunk(csvWaitTables []string, oracleCollation bool) error {
+func (r *Migrate) InitWaitSyncTableChunk(fullWaitTables []string, oracleCollation bool) error {
 	startTask := time.Now()
 	// 获取自定义库表名规则
 	tableNameRule, err := r.GetTableNameRule()
 	if err != nil {
 		return err
 	}
+
+	// 获取自定义库表迁移配置
+	tableMigrateRule := r.GetCustomMigrateConfig()
 
 	// 全量同步前，获取 SCN 以及初始化元数据表
 	globalSCN, err := r.Oracle.GetOracleCurrentSnapshotSCN()
@@ -639,7 +642,7 @@ func (r *Migrate) InitWaitSyncTableChunk(csvWaitTables []string, oracleCollation
 	g := &errgroup.Group{}
 	g.SetLimit(r.Cfg.FullConfig.TaskThreads)
 
-	for idx, table := range csvWaitTables {
+	for idx, table := range fullWaitTables {
 		t := table
 		workerID := idx
 		g.Go(func() error {
@@ -650,6 +653,19 @@ func (r *Migrate) InitWaitSyncTableChunk(csvWaitTables []string, oracleCollation
 				targetTableName = val
 			} else {
 				targetTableName = common.StringUPPER(t)
+			}
+
+			// 自定义迁移配置
+			var (
+				sqlHint     string
+				wherePrefix string
+				whereRange  string
+			)
+			if val, ok := tableMigrateRule[common.StringUPPER(t)]; ok {
+				sqlHint = val.SQLHint
+				wherePrefix = val.Range
+			} else {
+				sqlHint = r.Cfg.FullConfig.SQLHint
 			}
 
 			sourceColumnInfo, err := r.AdjustTableSelectColumn(t, oracleCollation)
@@ -672,6 +688,11 @@ func (r *Migrate) InitWaitSyncTableChunk(csvWaitTables []string, oracleCollation
 			}
 			// 统计信息数据行数 0，直接全表扫
 			if tableRowsByStatistics == 0 {
+				if strings.EqualFold(wherePrefix, "") {
+					whereRange = `1 = 1`
+				} else {
+					whereRange = common.StringsBuilder(`1 = 1 AND `, wherePrefix)
+				}
 				err = meta.NewCommonModel(r.MetaDB).CreateFullSyncMetaAndUpdateWaitSyncMeta(r.Ctx, &meta.FullSyncMeta{
 					DBTypeS:        r.Cfg.DBTypeS,
 					DBTypeT:        r.Cfg.DBTypeT,
@@ -681,8 +702,9 @@ func (r *Migrate) InitWaitSyncTableChunk(csvWaitTables []string, oracleCollation
 					TableNameT:     common.StringUPPER(targetTableName),
 					GlobalScnS:     globalSCN,
 					ConsistentRead: isConsistentRead,
+					SQLHint:        sqlHint,
 					ColumnDetailS:  sourceColumnInfo,
-					ChunkDetailS:   "1 = 1",
+					ChunkDetailS:   whereRange,
 					TaskMode:       r.Cfg.TaskMode,
 					TaskStatus:     common.TaskStatusWaiting,
 				}, &meta.WaitSyncMeta{
@@ -722,6 +744,11 @@ func (r *Migrate) InitWaitSyncTableChunk(csvWaitTables []string, oracleCollation
 
 			// 判断数据是否存在
 			if len(chunkRes) == 0 {
+				if strings.EqualFold(wherePrefix, "") {
+					whereRange = `1 = 1`
+				} else {
+					whereRange = common.StringsBuilder(`1 = 1 AND `, wherePrefix)
+				}
 				err = meta.NewCommonModel(r.MetaDB).CreateFullSyncMetaAndUpdateWaitSyncMeta(r.Ctx, &meta.FullSyncMeta{
 					DBTypeS:        r.Cfg.DBTypeS,
 					DBTypeT:        r.Cfg.DBTypeT,
@@ -731,8 +758,9 @@ func (r *Migrate) InitWaitSyncTableChunk(csvWaitTables []string, oracleCollation
 					TableNameT:     common.StringUPPER(targetTableName),
 					GlobalScnS:     globalSCN,
 					ConsistentRead: isConsistentRead,
+					SQLHint:        sqlHint,
 					ColumnDetailS:  sourceColumnInfo,
-					ChunkDetailS:   "1 = 1",
+					ChunkDetailS:   whereRange,
 					TaskMode:       r.Cfg.TaskMode,
 					TaskStatus:     common.TaskStatusWaiting,
 				}, &meta.WaitSyncMeta{
@@ -758,6 +786,11 @@ func (r *Migrate) InitWaitSyncTableChunk(csvWaitTables []string, oracleCollation
 
 			var fullMetas []meta.FullSyncMeta
 			for _, res := range chunkRes {
+				if strings.EqualFold(wherePrefix, "") {
+					whereRange = res["CMD"]
+				} else {
+					whereRange = common.StringsBuilder(res["CMD"], ` AND `, wherePrefix)
+				}
 				fullMetas = append(fullMetas, meta.FullSyncMeta{
 					DBTypeS:        r.Cfg.DBTypeS,
 					DBTypeT:        r.Cfg.DBTypeT,
@@ -767,8 +800,9 @@ func (r *Migrate) InitWaitSyncTableChunk(csvWaitTables []string, oracleCollation
 					TableNameT:     common.StringUPPER(targetTableName),
 					GlobalScnS:     globalSCN,
 					ConsistentRead: isConsistentRead,
+					SQLHint:        sqlHint,
 					ColumnDetailS:  sourceColumnInfo,
-					ChunkDetailS:   res["CMD"],
+					ChunkDetailS:   whereRange,
 					TaskMode:       r.Cfg.TaskMode,
 					TaskStatus:     common.TaskStatusWaiting,
 				})
@@ -821,6 +855,14 @@ func (r *Migrate) InitWaitSyncTableChunk(csvWaitTables []string, oracleCollation
 		zap.String("schema", r.Cfg.SchemaConfig.SourceSchema),
 		zap.String("cost", time.Now().Sub(startTask).String()))
 	return nil
+}
+
+func (r *Migrate) GetCustomMigrateConfig() map[string]config.MigrateConfig {
+	tableMigrateMap := make(map[string]config.MigrateConfig)
+	for _, t := range r.Cfg.SchemaConfig.MigrateConfig {
+		tableMigrateMap[common.StringUPPER(t.SourceTable)] = t
+	}
+	return tableMigrateMap
 }
 
 func (r *Migrate) GetTableNameRule() (map[string]string, error) {
