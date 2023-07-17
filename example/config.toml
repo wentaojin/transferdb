@@ -162,6 +162,8 @@ target-schema = "marvin"
 #[[schema-config.migrate-config]]
 # 源端表
 #source-table = "marvin"
+# 基于数据切分策略，获取指定数据迁移表的查询范围
+#enable-split = true
 # 指定数据迁移表的查询范围
 # 注意自定义数据迁移表之后，对应表将只迁移该部分数据
 #range = "age > 10 AND age< 20"

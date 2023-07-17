@@ -126,6 +126,7 @@ type CompareConfig struct {
 
 type MigrateConfig struct {
 	SourceTable string `toml:"source-table" json:"source-table"`
+	EnableSplit bool   `toml:"enable-split" json:"enable-split"`
 	Range       string `toml:"range" json:"range"`
 	SQLHint     string `toml:"sql-hint" json:"sql-hint"`
 }

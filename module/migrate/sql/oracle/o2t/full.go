@@ -660,10 +660,12 @@ func (r *Migrate) InitWaitSyncTableChunk(fullWaitTables []string, oracleCollatio
 				sqlHint     string
 				wherePrefix string
 				whereRange  string
+				enableSplit bool
 			)
 			if val, ok := tableMigrateRule[common.StringUPPER(t)]; ok {
 				sqlHint = val.SQLHint
 				wherePrefix = val.Range
+				enableSplit = val.EnableSplit
 			} else {
 				sqlHint = r.Cfg.FullConfig.SQLHint
 			}
@@ -686,8 +688,10 @@ func (r *Migrate) InitWaitSyncTableChunk(fullWaitTables []string, oracleCollatio
 			if err != nil {
 				return err
 			}
-			// 统计信息数据行数 0，直接全表扫
-			if tableRowsByStatistics == 0 {
+
+			// 1、统计信息数据行数 0，直接全表扫
+			// 2、基于数据切分策略，获取指定数据迁移表的查询范围
+			if tableRowsByStatistics == 0 || !enableSplit {
 				if strings.EqualFold(wherePrefix, "") {
 					whereRange = `1 = 1`
 				} else {
