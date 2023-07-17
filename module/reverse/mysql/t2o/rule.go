@@ -402,7 +402,7 @@ func (r *Rule) GenTableColumnComment() (columnComments []string, err error) {
 	if len(r.TableColumnINFO) > 0 {
 		for _, rowCol := range r.TableColumnINFO {
 			if rowCol["COMMENTS"] != "" {
-				convertUtf8Raw, err := common.CharsetConvert([]byte(rowCol["COMMENTS"]), common.MigrateTableStructureDatabaseCharsetMap[common.TaskTypeMySQL2Oracle][common.StringUPPER(r.SourceDBCharset)], common.MYSQLCharsetUTF8MB4)
+				convertUtf8Raw, err := common.CharsetConvert([]byte(rowCol["COMMENTS"]), common.MigrateTableStructureDatabaseCharsetMap[common.TaskTypeTiDB2Oracle][common.StringUPPER(r.SourceDBCharset)], common.MYSQLCharsetUTF8MB4)
 				if err != nil {
 					return nil, fmt.Errorf("column [%s] charset convert failed, %v", rowCol["COLUMN_NAME"], err)
 				}
