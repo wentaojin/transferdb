@@ -283,7 +283,17 @@ func (r *Rule) GenTableNormalIndex() (normalIndexes []string, compatibilityIndex
 
 func (r *Rule) GenTableComment() (tableComment string, err error) {
 	if len(r.TableColumnINFO) > 0 && r.TableCommentINFO[0]["TABLE_COMMENT"] != "" {
-		tableComment = fmt.Sprintf(`COMMENT ON TABLE %s.%s IS '%s';`, r.TargetSchemaName, r.TargetTableName, r.TableCommentINFO[0]["TABLE_COMMENT"])
+		convertUtf8Raw, err := common.CharsetConvert([]byte(r.TableCommentINFO[0]["TABLE_COMMENT"]), common.MigrateTableStructureDatabaseCharsetMap[common.TaskTypeTiDB2Oracle][common.StringUPPER(r.SourceDBCharset)], common.MYSQLCharsetUTF8MB4)
+		if err != nil {
+			return tableComment, fmt.Errorf("column [%s] charset convert failed, %v", r.TableCommentINFO[0]["TABLE_COMMENT"], err)
+		}
+
+		convertTargetRaw, err := common.CharsetConvert([]byte(common.SpecialLettersUsingMySQL(convertUtf8Raw)), common.MYSQLCharsetUTF8MB4, common.StringUPPER(r.TargetDBCharset))
+		if err != nil {
+			return tableComment, fmt.Errorf("column [%s] charset convert failed, %v", r.TableCommentINFO[0]["TABLE_COMMENT"], err)
+		}
+
+		tableComment = fmt.Sprintf(`COMMENT ON TABLE %s.%s IS '%s';`, r.TargetSchemaName, r.TargetTableName, string(convertTargetRaw))
 	}
 	return tableComment, nil
 }
@@ -392,7 +402,18 @@ func (r *Rule) GenTableColumnComment() (columnComments []string, err error) {
 	if len(r.TableColumnINFO) > 0 {
 		for _, rowCol := range r.TableColumnINFO {
 			if rowCol["COMMENTS"] != "" {
-				columnComments = append(columnComments, fmt.Sprintf(`COMMENT ON COLUMN %s.%s.%s IS '%s';`, r.TargetSchemaName, r.TargetTableName, rowCol["COLUMN_NAME"], common.SpecialLettersUsingOracle([]byte(rowCol["COMMENTS"]))))
+				convertUtf8Raw, err := common.CharsetConvert([]byte(rowCol["COMMENTS"]), common.MigrateTableStructureDatabaseCharsetMap[common.TaskTypeMySQL2Oracle][common.StringUPPER(r.SourceDBCharset)], common.MYSQLCharsetUTF8MB4)
+				if err != nil {
+					return nil, fmt.Errorf("column [%s] charset convert failed, %v", rowCol["COLUMN_NAME"], err)
+				}
+
+				convertTargetRaw, err := common.CharsetConvert([]byte(common.SpecialLettersUsingMySQL(convertUtf8Raw)), common.MYSQLCharsetUTF8MB4, common.StringUPPER(r.TargetDBCharset))
+				if err != nil {
+					return nil, fmt.Errorf("column [%s] charset convert failed, %v", rowCol["COLUMN_NAME"], err)
+				}
+
+				columnComments = append(columnComments, fmt.Sprintf(`COMMENT ON COLUMN %s.%s.%s IS '%s';`, r.TargetSchemaName, r.TargetTableName, rowCol["COLUMN_NAME"], string(convertTargetRaw)))
+
 			}
 		}
 	}

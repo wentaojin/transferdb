@@ -43,6 +43,8 @@ type Table struct {
 	IsPartition             bool            `json:"is_partition"`
 	SourceTableCharacterSet string          `json:"source_table_character_set"`
 	SourceTableCollation    string          `json:"source_table_collation"`
+	SourceDBCharset         string          `json:"sourcedb_charset"`
+	TargetDBCharset         string          `json:"targetdb_charset"`
 
 	TableColumnDatatypeRule   map[string]string `json:"table_column_datatype_rule"`
 	TableColumnDefaultValRule map[string]string `json:"table_column_default_val_rule"`
@@ -333,6 +335,8 @@ func GenReverseTableTask(r *Reverse, tableNameRule map[string]string, tableColum
 					IsPartition:               common.IsContainString(partitionTables, common.StringUPPER(ts)),
 					SourceTableCharacterSet:   tableCharSetMap[ts],
 					SourceTableCollation:      tableCollationMap[ts],
+					SourceDBCharset:           r.cfg.MySQLConfig.Charset,
+					TargetDBCharset:           r.cfg.OracleConfig.Charset,
 					TableColumnDatatypeRule:   tableColumnRule[common.StringUPPER(ts)],
 					TableColumnDefaultValRule: tableDefaultRule[common.StringUPPER(ts)],
 					Overwrite:                 r.cfg.MySQLConfig.Overwrite,

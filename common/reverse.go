@@ -325,6 +325,18 @@ var MigrateStringDataTypeDatabaseCharsetMap = map[string]map[string]string{
 		ORACLECharsetZHS16GBK:     MYSQLCharsetGBK,
 		ORACLECharsetZHS32GB18030: MYSQLCharsetGB18030,
 	},
+	TaskTypeMySQL2Oracle: {
+		MYSQLCharsetUTF8MB4: ORACLECharsetAL32UTF8,
+		MYSQLCharsetBIG5:    ORACLECharsetZHT16BIG5,
+		MYSQLCharsetGBK:     ORACLECharsetZHS16GBK,
+		MYSQLCharsetGB18030: ORACLECharsetZHS32GB18030,
+	},
+	TaskTypeTiDB2Oracle: {
+		MYSQLCharsetUTF8MB4: ORACLECharsetAL32UTF8,
+		MYSQLCharsetBIG5:    ORACLECharsetZHT16BIG5,
+		MYSQLCharsetGBK:     ORACLECharsetZHS16GBK,
+		MYSQLCharsetGB18030: ORACLECharsetZHS32GB18030,
+	},
 }
 
 var MigrateDataSupportCharset = []string{MYSQLCharsetUTF8MB4, MYSQLCharsetGBK, MYSQLCharsetBIG5, MYSQLCharsetGB18030}

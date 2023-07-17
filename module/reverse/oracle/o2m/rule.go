@@ -559,7 +559,7 @@ func (r *Rule) GenTableNormalIndex() (normalIndexes []string, compatibilityIndex
 
 func (r *Rule) GenTableComment() (tableComment string, err error) {
 	if len(r.TableColumnINFO) > 0 && r.TableCommentINFO[0]["COMMENTS"] != "" {
-		convertUtf8Raw, err := common.CharsetConvert([]byte(r.TableCommentINFO[0]["COMMENTS"]), common.MigrateStringDataTypeDatabaseCharsetMap[common.TaskTypeOracle2MySQL][common.StringUPPER(r.SourceDBCharset)], common.MYSQLCharsetUTF8MB4)
+		convertUtf8Raw, err := common.CharsetConvert([]byte(r.TableCommentINFO[0]["COMMENTS"]), common.MigrateTableStructureDatabaseCharsetMap[common.TaskTypeOracle2MySQL][common.StringUPPER(r.SourceDBCharset)], common.MYSQLCharsetUTF8MB4)
 		if err != nil {
 			return tableComment, fmt.Errorf("column [%s] charset convert failed, %v", r.TableCommentINFO[0]["COMMENTS"], err)
 		}
@@ -611,7 +611,7 @@ func (r *Rule) GenTableColumn() (tableColumns []string, err error) {
 		}
 
 		if !strings.EqualFold(rowCol["COMMENTS"], "") {
-			convertUtf8Raw, err := common.CharsetConvert([]byte(rowCol["COMMENTS"]), common.MigrateStringDataTypeDatabaseCharsetMap[common.TaskTypeOracle2MySQL][common.StringUPPER(r.SourceDBCharset)], common.MYSQLCharsetUTF8MB4)
+			convertUtf8Raw, err := common.CharsetConvert([]byte(rowCol["COMMENTS"]), common.MigrateTableStructureDatabaseCharsetMap[common.TaskTypeOracle2MySQL][common.StringUPPER(r.SourceDBCharset)], common.MYSQLCharsetUTF8MB4)
 			if err != nil {
 				return tableColumns, fmt.Errorf("column [%s] charset convert failed, %v", rowCol["COLUMN_NAME"], err)
 			}
