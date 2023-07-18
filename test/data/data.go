@@ -52,11 +52,8 @@ func main() {
 		ServiceName:   "oracl",
 		ConnectParams: "poolMinSessions=10&poolMaxSessions=1000&poolWaitTimeout=60s&poolSessionMaxLifetime=1h&poolSessionTimeout=5m&poolIncrement=1&timezone=Local",
 		SessionParams: []string{},
-		SchemaName:    "marvin",
-		IncludeTable:  nil,
-		ExcludeTable:  nil,
 	}
-	oracle, err := oracle.NewOracleDBEngine(context.Background(), oraCfg)
+	oracle, err := oracle.NewOracleDBEngine(context.Background(), oraCfg, *schemaName)
 	if err != nil {
 		panic(err)
 	}

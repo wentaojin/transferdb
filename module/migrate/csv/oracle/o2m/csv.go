@@ -18,6 +18,7 @@ package o2m
 import (
 	"context"
 	"fmt"
+	"github.com/google/uuid"
 	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/config"
 	"github.com/wentaojin/transferdb/database/meta"
@@ -626,9 +627,8 @@ func (r *CSV) initWaitSyncTableChunk(csvWaitTables []string, oracleCollation boo
 	g := &errgroup.Group{}
 	g.SetLimit(r.Cfg.CSVConfig.TaskThreads)
 
-	for idx, tbl := range csvWaitTables {
+	for _, tbl := range csvWaitTables {
 		t := tbl
-		workerID := idx
 		g.Go(func() error {
 			startTime := time.Now()
 
@@ -720,7 +720,7 @@ func (r *CSV) initWaitSyncTableChunk(csvWaitTables []string, oracleCollation boo
 				return nil
 			}
 
-			taskName := common.StringsBuilder(common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema), `_`, common.StringUPPER(t), `_`, `TASK`, strconv.Itoa(workerID))
+			taskName := uuid.New().String()
 
 			if err = r.Oracle.StartOracleChunkCreateTask(taskName); err != nil {
 				return err

@@ -60,12 +60,10 @@ func main() {
 		Port:          *port,
 		ServiceName:   *serviceName,
 		ConnectParams: "",
-		SchemaName:    *schemaName,
-		IncludeTable:  []string{*tableName},
 	}
 
 	ctx := context.Background()
-	oraConn, err := newOracleDBEngine(ctx, oraCfg, *charsetS)
+	oraConn, err := newOracleDBEngine(ctx, oraCfg, *charsetS, *schemaName)
 	if err != nil {
 		panic(err)
 	}
@@ -140,12 +138,11 @@ func main() {
 	//}
 
 	myCfg := config.MySQLConfig{
-		Username:   "root",
-		Password:   "",
-		Host:       "10.2.14.60",
-		Port:       5000,
-		Charset:    *charsetT,
-		SchemaName: "findpt",
+		Username: "root",
+		Password: "",
+		Host:     "10.2.14.60",
+		Port:     5000,
+		Charset:  *charsetT,
 	}
 
 	my, err := mysql.NewMySQLDBEngine(ctx, myCfg)
@@ -169,7 +166,7 @@ func main() {
 
 }
 
-func newOracleDBEngine(ctx context.Context, oraCfg config.OracleConfig, charset string) (*oracle.Oracle, error) {
+func newOracleDBEngine(ctx context.Context, oraCfg config.OracleConfig, currentSchema, charset string) (*oracle.Oracle, error) {
 	// https://pkg.go.dev/github.com/godror/godror
 	// https://github.com/godror/godror/blob/db9cd12d89cdc1c60758aa3f36ece36cf5a61814/doc/connection.md
 	// https://godror.github.io/godror/doc/connection.html
@@ -196,8 +193,8 @@ func newOracleDBEngine(ctx context.Context, oraCfg config.OracleConfig, charset 
 		oraCfg.SessionParams = append(oraCfg.SessionParams, fmt.Sprintf(`ALTER SESSION SET CONTAINER = %s`, oraCfg.PDBName))
 	}
 
-	if !strings.EqualFold(oraCfg.Username, oraCfg.SchemaName) && !strings.EqualFold(oraCfg.SchemaName, "") {
-		oraCfg.SessionParams = append(oraCfg.SessionParams, fmt.Sprintf(`ALTER SESSION SET CURRENT_SCHEMA = %s`, oraCfg.SchemaName))
+	if !strings.EqualFold(oraCfg.Username, currentSchema) && !strings.EqualFold(currentSchema, "") {
+		oraCfg.SessionParams = append(oraCfg.SessionParams, fmt.Sprintf(`ALTER SESSION SET CURRENT_SCHEMA = %s`, currentSchema))
 	}
 
 	// ????????

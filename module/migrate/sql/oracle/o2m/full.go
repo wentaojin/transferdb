@@ -18,6 +18,7 @@ package o2m
 import (
 	"context"
 	"fmt"
+	"github.com/google/uuid"
 	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/config"
 	"github.com/wentaojin/transferdb/database/meta"
@@ -641,9 +642,8 @@ func (r *Migrate) InitWaitSyncTableChunk(fullWaitTables []string, oracleCollatio
 	g := &errgroup.Group{}
 	g.SetLimit(r.Cfg.FullConfig.TaskThreads)
 
-	for idx, table := range fullWaitTables {
+	for _, table := range fullWaitTables {
 		t := table
-		workerID := idx
 		g.Go(func() error {
 			startTime := time.Now()
 			// 库名、表名规则
@@ -729,7 +729,7 @@ func (r *Migrate) InitWaitSyncTableChunk(fullWaitTables []string, oracleCollatio
 				return nil
 			}
 
-			taskName := common.StringsBuilder(common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema), `_`, common.StringUPPER(t), `_`, `TASK`, strconv.Itoa(workerID))
+			taskName := uuid.New().String()
 
 			if err = r.Oracle.StartOracleChunkCreateTask(taskName); err != nil {
 				return err

@@ -40,16 +40,13 @@ func main() {
 	flag.Parse()
 
 	oraCfg := config.OracleConfig{
-		Username:     "marvin",
-		Password:     "marvin",
-		Host:         "13.21.143.126",
-		Port:         1521,
-		ServiceName:  "orclpdb1",
-		SchemaName:   "marvin",
-		IncludeTable: nil,
-		ExcludeTable: nil,
+		Username:    "marvin",
+		Password:    "marvin",
+		Host:        "13.21.143.126",
+		Port:        1521,
+		ServiceName: "orclpdb1",
 	}
-	ora, err := oracle.NewOracleDBEngine(context.Background(), oraCfg)
+	ora, err := oracle.NewOracleDBEngine(context.Background(), oraCfg, *schema)
 	if err != nil {
 		panic(err)
 	}
