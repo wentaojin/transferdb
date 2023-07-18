@@ -113,7 +113,6 @@ func (c *Diff) CheckTableCharacterSetAndCollation() string {
 	zap.L().Info("check table",
 		zap.String("table character set and collation check", fmt.Sprintf("%s.%s", c.OracleTableINFO.SchemaName, c.OracleTableINFO.TableName)))
 
-	// 统一 UTF8MB4 处理
 	mysqlTableCharset := common.MigrateTableStructureDatabaseCharsetMap[common.TaskTypeOracle2TiDB][c.OracleTableINFO.TableCharacterSet]
 	mysqlTableCollation := common.MigrateTableStructureDatabaseCollationMap[common.TaskTypeOracle2TiDB][c.OracleTableINFO.TableCollation][mysqlTableCharset]
 
@@ -160,7 +159,6 @@ func (c *Diff) CheckColumnCharacterSetAndCollation() string {
 	for mysqlColName, mysqlColInfo := range c.MySQLTableINFO.Columns {
 		if _, ok := c.OracleTableINFO.Columns[strings.ToUpper(mysqlColName)]; ok {
 			if mysqlColInfo.CharacterSet != "UNKNOWN" || mysqlColInfo.Collation != "UNKNOWN" {
-				// 统一 UTF8MB4 处理
 				mysqlColumnCharset := common.MigrateTableStructureDatabaseCharsetMap[common.TaskTypeOracle2TiDB][c.OracleTableINFO.Columns[strings.ToUpper(mysqlColName)].CharacterSet]
 				mysqlColumnCollation := common.MigrateTableStructureDatabaseCollationMap[common.TaskTypeOracle2TiDB][c.OracleTableINFO.Columns[strings.ToUpper(mysqlColName)].Collation][mysqlColumnCharset]
 
@@ -188,7 +186,6 @@ func (c *Diff) CheckColumnCharacterSetAndCollation() string {
 					fmt.Sprintf("%s(%s)", mysqlColInfo.DataType, mysqlColInfo.DataLength), "Create Table Column Character Collation"},
 			})
 
-			// 统一 UTF8MB4 处理
 			mysqlColumnCharset := common.MigrateTableStructureDatabaseCharsetMap[common.TaskTypeOracle2TiDB][c.OracleTableINFO.Columns[strings.ToUpper(mysqlColName)].CharacterSet]
 			mysqlColumnCollation := common.MigrateTableStructureDatabaseCollationMap[common.TaskTypeOracle2TiDB][c.OracleTableINFO.Columns[strings.ToUpper(mysqlColName)].Collation][mysqlColumnCharset]
 

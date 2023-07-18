@@ -81,7 +81,6 @@ func OracleTableColumnMapRuleCheck(
 		oracleColumnCharUsed = "unknown"
 	}
 
-	// 统一 UTF8MB4 处理
 	// 字符集以及排序规则
 	var (
 		mysqlCharacterSet string

@@ -66,7 +66,8 @@ var (
 	ORACLECharsetZHS32GB18030 = "ZHS32GB18030"
 )
 
-// 表结构迁移以及表结构校验字符集、排序规则 MAP
+// 表结构迁移以及表结构校验字符集、排序规则
+// 用于表结构以及字段属性字符集映射规则
 var MigrateTableStructureDatabaseCharsetMap = map[string]map[string]string{
 	TaskTypeOracle2MySQL: {
 		ORACLECharsetAL32UTF8:     MYSQLCharsetUTF8MB4,
@@ -74,7 +75,7 @@ var MigrateTableStructureDatabaseCharsetMap = map[string]map[string]string{
 		ORACLECharsetZHS16GBK:     MYSQLCharsetGBK,
 		ORACLECharsetZHS32GB18030: MYSQLCharsetGB18030,
 	},
-	// TiDB 统一使用 UTF8MB4 字符集
+	// TiDB 表结构以及字段属性统一使用 UTF8MB4 字符集，适用于 check、compare、reverse 模式下 o2t、t2o
 	TaskTypeOracle2TiDB: {
 		ORACLECharsetAL32UTF8:     MYSQLCharsetUTF8MB4,
 		ORACLECharsetZHT16BIG5:    MYSQLCharsetUTF8MB4,
@@ -310,8 +311,10 @@ var MigrateTableStructureDatabaseCollationMap = map[string]map[string]map[string
 	},
 }
 
-// 数据迁移以及数据校验
-// 字符类型数据映射规则 -> 用于程序连接源端数据库读取数据字符类型数据，以对应字符集写入下游数据库
+// 数据迁移、数据校验、表结构默认值、注释
+// 字符类型数据映射规则
+// 1、用于程序连接源端数据库读取数据字符类型数据，以对应字符集写入下游数据库
+// 2、用于数据表默认值或者注释
 var MigrateStringDataTypeDatabaseCharsetMap = map[string]map[string]string{
 	TaskTypeOracle2MySQL: {
 		ORACLECharsetAL32UTF8:     MYSQLCharsetUTF8MB4,
