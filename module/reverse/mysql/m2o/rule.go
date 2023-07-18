@@ -353,7 +353,16 @@ func (r *Rule) GenTableColumn() (columnMetas []string, err error) {
 		columnName = rowCol["COLUMN_NAME"]
 
 		if val, ok := r.TableColumnDefaultValRule[columnName]; ok {
-			dataDefault = val
+			convertUtf8Raw, err := common.CharsetConvert([]byte(val), common.MigrateTableStructureDatabaseCharsetMap[common.TaskTypeMySQL2Oracle][common.StringUPPER(r.SourceDBCharset)], common.MYSQLCharsetUTF8MB4)
+			if err != nil {
+				return columnMetas, fmt.Errorf("column [%s] data default charset convert failed, %v", r.TableCommentINFO[0]["TABLE_COMMENT"], err)
+			}
+
+			convertTargetRaw, err := common.CharsetConvert([]byte(common.SpecialLettersUsingMySQL(convertUtf8Raw)), common.MYSQLCharsetUTF8MB4, common.StringUPPER(r.TargetDBCharset))
+			if err != nil {
+				return columnMetas, fmt.Errorf("column [%s] data default charset convert failed, %v", r.TableCommentINFO[0]["TABLE_COMMENT"], err)
+			}
+			dataDefault = string(convertTargetRaw)
 		} else {
 			return columnMetas, fmt.Errorf("mysql table [%s.%s] column [%s] default value isn't exist", r.SourceSchemaName, r.SourceTableName, columnName)
 		}

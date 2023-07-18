@@ -765,7 +765,16 @@ func (r *Rule) GenTableColumn() (tableColumns []string, err error) {
 		}
 
 		if val, ok := r.TableColumnDefaultValRule[rowCol["COLUMN_NAME"]]; ok {
-			dataDefault = val
+			convertUtf8Raw, err := common.CharsetConvert([]byte(val), common.MigrateTableStructureDatabaseCharsetMap[common.TaskTypeOracle2TiDB][common.StringUPPER(r.SourceDBCharset)], common.MYSQLCharsetUTF8MB4)
+			if err != nil {
+				return tableColumns, fmt.Errorf("column [%s] data default charset convert failed, %v", r.TableCommentINFO[0]["TABLE_COMMENT"], err)
+			}
+
+			convertTargetRaw, err := common.CharsetConvert([]byte(common.SpecialLettersUsingMySQL(convertUtf8Raw)), common.MYSQLCharsetUTF8MB4, common.StringUPPER(r.TargetDBCharset))
+			if err != nil {
+				return tableColumns, fmt.Errorf("column [%s] data default charset convert failed, %v", r.TableCommentINFO[0]["TABLE_COMMENT"], err)
+			}
+			dataDefault = string(convertTargetRaw)
 		} else {
 			return tableColumns, fmt.Errorf("oracle table [%s.%s] column [%s] default value isn't exist", r.SourceSchemaName, r.SourceTableName, rowCol["COLUMN_NAME"])
 		}
