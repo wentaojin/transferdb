@@ -663,6 +663,26 @@ func (r *Rule) GenTableNormalIndex() (normalIndexes []string, compatibilityIndex
 						zap.String("warn", "mysql not support"))
 					continue
 
+				case "NORMAL/REV":
+					sql := fmt.Sprintf("CREATE INDEX %s ON %s.%s (%s) REVERSE;",
+						strings.ToUpper(idxMeta["INDEX_NAME"]), r.TargetSchemaName, r.TargetTableName,
+						idxMeta["COLUMN_LIST"])
+
+					compatibilityIndexSQL = append(compatibilityIndexSQL, sql)
+
+					zap.L().Warn("reverse normal index",
+						zap.String("schema", r.SourceSchemaName),
+						zap.String("table", idxMeta["TABLE_NAME"]),
+						zap.String("index name", idxMeta["INDEX_NAME"]),
+						zap.String("index type", idxMeta["INDEX_TYPE"]),
+						zap.String("index column list", idxMeta["COLUMN_LIST"]),
+						zap.String("domain owner", idxMeta["ITYP_OWNER"]),
+						zap.String("domain index name", idxMeta["ITYP_NAME"]),
+						zap.String("domain parameters", idxMeta["PARAMETERS"]),
+						zap.String("create normal index sql", sql),
+						zap.String("warn", "mysql not support"))
+					continue
+
 				default:
 					zap.L().Error("reverse normal index",
 						zap.String("schema", r.SourceSchemaName),
@@ -778,7 +798,7 @@ func (r *Rule) GenTableColumn() (tableColumns []string, err error) {
 				return tableColumns, fmt.Errorf("column [%s] data default charset convert failed, %v", rowCol["COLUMN_NAME"], err)
 			}
 
-			convertTargetRaw, err := common.CharsetConvert([]byte(common.SpecialLettersUsingMySQL(convertUtf8Raw)), common.MYSQLCharsetUTF8MB4, common.StringUPPER(r.TargetDBCharset))
+			convertTargetRaw, err := common.CharsetConvert(convertUtf8Raw, common.MYSQLCharsetUTF8MB4, common.StringUPPER(r.TargetDBCharset))
 			if err != nil {
 				return tableColumns, fmt.Errorf("column [%s] data default charset convert failed, %v", rowCol["COLUMN_NAME"], err)
 			}

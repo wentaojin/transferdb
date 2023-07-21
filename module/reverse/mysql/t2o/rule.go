@@ -358,7 +358,7 @@ func (r *Rule) GenTableColumn() (columnMetas []string, err error) {
 				return columnMetas, fmt.Errorf("column [%s] data default charset convert failed, %v", columnName, err)
 			}
 
-			convertTargetRaw, err := common.CharsetConvert([]byte(common.SpecialLettersUsingMySQL(convertUtf8Raw)), common.MYSQLCharsetUTF8MB4, common.StringUPPER(r.TargetDBCharset))
+			convertTargetRaw, err := common.CharsetConvert(convertUtf8Raw, common.MYSQLCharsetUTF8MB4, common.StringUPPER(r.TargetDBCharset))
 			if err != nil {
 				return columnMetas, fmt.Errorf("column [%s] data default charset convert failed, %v", columnName, err)
 			}

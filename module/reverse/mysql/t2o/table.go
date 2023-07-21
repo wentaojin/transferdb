@@ -488,7 +488,7 @@ func (t *Table) GetTableOriginDDL() (string, error) {
 		return ddl, fmt.Errorf("table [%v] ddl charset convert failed, %v", t.SourceTableName, err)
 	}
 
-	convertTargetRaw, err := common.CharsetConvert([]byte(common.SpecialLettersUsingMySQL(convertUtf8Raw)), common.MYSQLCharsetUTF8MB4, common.StringUPPER(t.TargetDBCharset))
+	convertTargetRaw, err := common.CharsetConvert(convertUtf8Raw, common.MYSQLCharsetUTF8MB4, common.StringUPPER(t.TargetDBCharset))
 	if err != nil {
 		return ddl, fmt.Errorf("table [%v] ddl charset convert failed, %v", t.SourceTableName, err)
 	}

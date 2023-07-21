@@ -47,7 +47,13 @@ func LoadColumnDefaultValueRule(columnName, defaultValue string, defaultValueCol
 			return dv.DefaultValueT
 		}
 	}
-	return defaultValue
+	// 去除首尾空格以及换行
+	// default('0'  )
+	// default('') default(sysdate )
+	// default(0 ) default(0.1 )
+	// default('0'
+	//)
+	return strings.TrimSpace(defaultValue)
 }
 
 func LoadDataTypeRuleUsingTableOrSchema(originColumnType string, buildInColumnType string, tableDataTypeMapSlice []meta.TableDatatypeRule,
