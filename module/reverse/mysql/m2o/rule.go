@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/wentaojin/transferdb/common"
+	"regexp"
 	"strings"
 )
 
@@ -54,7 +55,7 @@ func (r *Rule) GenCreateTableDDL() (interface{}, error) {
 		return nil, err
 	}
 
-	tablePrefix := fmt.Sprintf("CREATE TABLE %s.%s", r.TargetSchemaName, r.TargetTableName)
+	tablePrefix := fmt.Sprintf("CREATE TABLE %s.%s", r.GenSchemaName(), r.GenTableName())
 
 	tableSuffix, err := r.GenTableSuffix()
 	if err != nil {
@@ -147,9 +148,18 @@ func (r *Rule) GenTableKeys() (tableKeyMetas []string, compatibilityIndexSQL []s
 func (r *Rule) GenTablePrimaryKey() (primaryKeys []string, err error) {
 	if len(r.PrimaryKeyINFO) > 0 {
 		for _, rowUKCol := range r.PrimaryKeyINFO {
-			var uk string
-			if rowUKCol["CONSTRAINT_TYPE"] == "PK" {
-				uk = fmt.Sprintf("PRIMARY KEY (%s)", strings.ToUpper(rowUKCol["COLUMN_LIST"]))
+			var uk, columnList string
+			if strings.EqualFold(r.LowerCaseFieldName, common.MigrateTableStructFieldNameLowerCase) {
+				columnList = strings.ToLower(rowUKCol["COLUMN_LIST"])
+			}
+			if strings.EqualFold(r.LowerCaseFieldName, common.MigrateTableStructFieldNameUpperCase) {
+				columnList = strings.ToUpper(rowUKCol["COLUMN_LIST"])
+			}
+			if strings.EqualFold(r.LowerCaseFieldName, common.MigrateTableStructFieldNameOriginCase) {
+				columnList = rowUKCol["COLUMN_LIST"]
+			}
+			if strings.EqualFold(rowUKCol["CONSTRAINT_TYPE"], "PK") {
+				uk = fmt.Sprintf("PRIMARY KEY (%s)", columnList)
 			} else {
 				return primaryKeys, fmt.Errorf("table json [%v], error on get table primary key: %v", r.String(), err)
 			}
@@ -162,12 +172,21 @@ func (r *Rule) GenTablePrimaryKey() (primaryKeys []string, err error) {
 func (r *Rule) GenTableUniqueKey() (uniqueKeys []string, err error) {
 	if len(r.UniqueKeyINFO) > 0 {
 		for _, rowUKCol := range r.UniqueKeyINFO {
-			var uk string
-			if rowUKCol["CONSTRAINT_TYPE"] == "PK" {
+			var uk, columnList string
+			if strings.EqualFold(r.LowerCaseFieldName, common.MigrateTableStructFieldNameLowerCase) {
+				columnList = strings.ToLower(rowUKCol["COLUMN_LIST"])
+			}
+			if strings.EqualFold(r.LowerCaseFieldName, common.MigrateTableStructFieldNameUpperCase) {
+				columnList = strings.ToUpper(rowUKCol["COLUMN_LIST"])
+			}
+			if strings.EqualFold(r.LowerCaseFieldName, common.MigrateTableStructFieldNameOriginCase) {
+				columnList = rowUKCol["COLUMN_LIST"]
+			}
+			if strings.EqualFold(rowUKCol["CONSTRAINT_TYPE"], "PK") {
 				return uniqueKeys, fmt.Errorf("table json [%v], error on get table primary key: %v", r.String(), err)
 			} else {
 				uk = fmt.Sprintf("CONSTRAINT %s UNIQUE (%s)",
-					strings.ToUpper(rowUKCol["CONSTRAINT_NAME"]), strings.ToUpper(rowUKCol["COLUMN_LIST"]))
+					rowUKCol["CONSTRAINT_NAME"], columnList)
 			}
 			uniqueKeys = append(uniqueKeys, uk)
 		}
@@ -177,61 +196,85 @@ func (r *Rule) GenTableUniqueKey() (uniqueKeys []string, err error) {
 
 func (r *Rule) GenTableForeignKey() (foreignKeys []string, err error) {
 	if len(r.ForeignKeyINFO) > 0 {
+		var (
+			columnList  string
+			rOwner      string
+			rTable      string
+			rColumnList string
+		)
 		for _, rowFKCol := range r.ForeignKeyINFO {
-			if rowFKCol["DELETE_RULE"] == "" || rowFKCol["DELETE_RULE"] == "NO ACTION" || rowFKCol["DELETE_RULE"] == "RESTRICT" {
+			if strings.EqualFold(r.LowerCaseFieldName, common.MigrateTableStructFieldNameLowerCase) {
+				columnList = strings.ToLower(rowFKCol["COLUMN_LIST"])
+				rOwner = strings.ToLower(rowFKCol["R_OWNER"])
+				rTable = strings.ToLower(rowFKCol["RTABLE_NAME"])
+				rColumnList = strings.ToLower(rowFKCol["RCOLUMN_LIST"])
+			}
+			if strings.EqualFold(r.LowerCaseFieldName, common.MigrateTableStructFieldNameUpperCase) {
+				columnList = strings.ToUpper(rowFKCol["COLUMN_LIST"])
+				rOwner = strings.ToUpper(rowFKCol["R_OWNER"])
+				rTable = strings.ToUpper(rowFKCol["RTABLE_NAME"])
+				rColumnList = strings.ToUpper(rowFKCol["RCOLUMN_LIST"])
+			}
+			if strings.EqualFold(r.LowerCaseFieldName, common.MigrateTableStructFieldNameOriginCase) {
+				columnList = rowFKCol["COLUMN_LIST"]
+				rOwner = rowFKCol["R_OWNER"]
+				rTable = rowFKCol["RTABLE_NAME"]
+				rColumnList = rowFKCol["RCOLUMN_LIST"]
+			}
+			if strings.EqualFold(rowFKCol["DELETE_RULE"], "") || strings.EqualFold(rowFKCol["DELETE_RULE"], "NO ACTION") || strings.EqualFold(rowFKCol["DELETE_RULE"], "RESTRICT") {
 				fk := fmt.Sprintf("CONSTRAINT %s FOREIGN KEY (%s) REFERENCES %s.%s (%s)",
-					strings.ToUpper(rowFKCol["CONSTRAINT_NAME"]),
-					strings.ToUpper(rowFKCol["COLUMN_LIST"]),
-					strings.ToUpper(rowFKCol["R_OWNER"]),
-					strings.ToUpper(rowFKCol["RTABLE_NAME"]),
-					strings.ToUpper(rowFKCol["RCOLUMN_LIST"]))
+					rowFKCol["CONSTRAINT_NAME"],
+					columnList,
+					rOwner,
+					rTable,
+					rColumnList)
 				foreignKeys = append(foreignKeys, fk)
 			}
 			if rowFKCol["DELETE_RULE"] == "CASCADE" {
 				fk := fmt.Sprintf("CONSTRAINT %s FOREIGN KEY (%s) REFERENCES %s.%s (%s) ON DELETE CASCADE",
-					strings.ToUpper(rowFKCol["CONSTRAINT_NAME"]),
-					strings.ToUpper(rowFKCol["COLUMN_LIST"]),
-					strings.ToUpper(rowFKCol["R_OWNER"]),
-					strings.ToUpper(rowFKCol["RTABLE_NAME"]),
-					strings.ToUpper(rowFKCol["RCOLUMN_LIST"]))
+					rowFKCol["CONSTRAINT_NAME"],
+					columnList,
+					rOwner,
+					rTable,
+					rColumnList)
 				foreignKeys = append(foreignKeys, fk)
 			}
 			if rowFKCol["DELETE_RULE"] == "SET NULL" {
 				fk := fmt.Sprintf("CONSTRAINT %s FOREIGN KEY(%s) REFERENCES %s.%s (%s) ON DELETE SET NULL",
-					strings.ToUpper(rowFKCol["CONSTRAINT_NAME"]),
-					strings.ToUpper(rowFKCol["COLUMN_LIST"]),
-					strings.ToUpper(rowFKCol["R_OWNER"]),
-					strings.ToUpper(rowFKCol["RTABLE_NAME"]),
-					strings.ToUpper(rowFKCol["RCOLUMN_LIST"]))
+					rowFKCol["CONSTRAINT_NAME"],
+					columnList,
+					rOwner,
+					rTable,
+					rColumnList)
 				foreignKeys = append(foreignKeys, fk)
 			}
-			if rowFKCol["UPDATE_RULE"] == "" || rowFKCol["UPDATE_RULE"] == "NO ACTION" || rowFKCol["UPDATE_RULE"] == "RESTRICT" {
+			if strings.EqualFold(rowFKCol["UPDATE_RULE"], "") || strings.EqualFold(rowFKCol["UPDATE_RULE"], "NO ACTION") || strings.EqualFold(rowFKCol["UPDATE_RULE"], "RESTRICT") {
 				fk := fmt.Sprintf("CONSTRAINT %s FOREIGN KEY (%s) REFERENCES `%s`.%s (%s) ON UPDATE %s",
-					strings.ToUpper(rowFKCol["CONSTRAINT_NAME"]),
-					strings.ToUpper(rowFKCol["COLUMN_LIST"]),
-					strings.ToUpper(rowFKCol["R_OWNER"]),
-					strings.ToUpper(rowFKCol["RTABLE_NAME"]),
-					strings.ToUpper(rowFKCol["RCOLUMN_LIST"]),
+					rowFKCol["CONSTRAINT_NAME"],
+					columnList,
+					rOwner,
+					rTable,
+					rColumnList,
 					strings.ToUpper(rowFKCol["UPDATE_RULE"]),
 				)
 				foreignKeys = append(foreignKeys, fk)
 			}
-			if rowFKCol["UPDATE_RULE"] == "CASCADE" {
+			if strings.EqualFold(rowFKCol["UPDATE_RULE"], "CASCADE") {
 				fk := fmt.Sprintf("CONSTRAINT %s FOREIGN KEY (%s) REFERENCES %s.%s (%s) ON UPDATE CASCADE",
-					strings.ToUpper(rowFKCol["CONSTRAINT_NAME"]),
-					strings.ToUpper(rowFKCol["COLUMN_LIST"]),
-					strings.ToUpper(rowFKCol["R_OWNER"]),
-					strings.ToUpper(rowFKCol["RTABLE_NAME"]),
-					strings.ToUpper(rowFKCol["RCOLUMN_LIST"]))
+					rowFKCol["CONSTRAINT_NAME"],
+					columnList,
+					rOwner,
+					rTable,
+					rColumnList)
 				foreignKeys = append(foreignKeys, fk)
 			}
-			if rowFKCol["UPDATE_RULE"] == "SET NULL" {
+			if strings.EqualFold(rowFKCol["UPDATE_RULE"], "SET NULL") {
 				fk := fmt.Sprintf("CONSTRAINT %s FOREIGN KEY(%s) REFERENCES %s.%s (%s) ON UPDATE SET NULL",
-					strings.ToUpper(rowFKCol["CONSTRAINT_NAME"]),
-					strings.ToUpper(rowFKCol["COLUMN_LIST"]),
-					strings.ToUpper(rowFKCol["R_OWNER"]),
-					strings.ToUpper(rowFKCol["RTABLE_NAME"]),
-					strings.ToUpper(rowFKCol["RCOLUMN_LIST"]))
+					rowFKCol["CONSTRAINT_NAME"],
+					columnList,
+					rOwner,
+					rTable,
+					rColumnList)
 				foreignKeys = append(foreignKeys, fk)
 			}
 		}
@@ -242,9 +285,28 @@ func (r *Rule) GenTableForeignKey() (foreignKeys []string, err error) {
 func (r *Rule) GenTableCheckKey() (checkKeys []string, err error) {
 	if len(r.CheckKeyINFO) > 0 {
 		for _, rowFKCol := range r.CheckKeyINFO {
+			searchCond := rowFKCol["SEARCH_CONDITION"]
+			constraintName := rowFKCol["CONSTRAINT_NAME"]
+
+			// 匹配替换
+			for _, rowCol := range r.TableColumnINFO {
+				replaceRex, err := regexp.Compile(fmt.Sprintf("(?i)%v", rowCol["COLUMN_NAME"]))
+				if err != nil {
+					return checkKeys, err
+				}
+				if strings.EqualFold(r.LowerCaseFieldName, common.MigrateTableStructFieldNameLowerCase) {
+					searchCond = replaceRex.ReplaceAllString(searchCond, strings.ToLower(rowCol["COLUMN_NAME"]))
+				}
+				if strings.EqualFold(r.LowerCaseFieldName, common.MigrateTableStructFieldNameUpperCase) {
+					searchCond = replaceRex.ReplaceAllString(searchCond, strings.ToUpper(rowCol["COLUMN_NAME"]))
+				}
+				if strings.EqualFold(r.LowerCaseFieldName, common.MigrateTableStructFieldNameOriginCase) {
+					searchCond = replaceRex.ReplaceAllString(searchCond, rowCol["COLUMN_NAME"])
+				}
+			}
 			ck := fmt.Sprintf("CONSTRAINT %s CHECK (%s)",
-				strings.ToUpper(rowFKCol["CONSTRAINT_NAME"]),
-				strings.ToUpper(rowFKCol["SEARCH_CONDITION"]))
+				constraintName,
+				searchCond)
 			checkKeys = append(checkKeys, ck)
 		}
 	}
@@ -259,21 +321,28 @@ func (r *Rule) GenTableUniqueIndex() (uniqueIndexes []string, compatibilityIndex
 func (r *Rule) GenTableNormalIndex() (normalIndexes []string, compatibilityIndexSQL []string, err error) {
 	if len(r.NormalIndexINFO) > 0 {
 		for _, kv := range r.NormalIndexINFO {
-			var idx string
-			if kv["UNIQUENESS"] == "UNIQUE" {
+			var idx, columnList string
+			if strings.EqualFold(r.LowerCaseFieldName, common.MigrateTableStructFieldNameLowerCase) {
+				columnList = strings.ToLower(kv["COLUMN_LIST"])
+			}
+			if strings.EqualFold(r.LowerCaseFieldName, common.MigrateTableStructFieldNameUpperCase) {
+				columnList = strings.ToUpper(kv["COLUMN_LIST"])
+			}
+			if strings.EqualFold(r.LowerCaseFieldName, common.MigrateTableStructFieldNameOriginCase) {
+				columnList = kv["COLUMN_LIST"]
+			}
+			if strings.EqualFold(kv["UNIQUENESS"], "UNIQUE") {
 				idx = fmt.Sprintf("CREATE UNIQUE INDEX %s ON %s.%s (%s);",
 					strings.ToUpper(kv["INDEX_NAME"]),
-					r.TargetSchemaName,
-					r.TargetTableName,
-					strings.ToUpper(kv["COLUMN_LIST"]),
-				)
+					r.GenSchemaName(),
+					r.GenTableName(),
+					columnList)
 			} else {
 				idx = fmt.Sprintf("CREATE INDEX %s ON %s.%s (%s);",
 					strings.ToUpper(kv["INDEX_NAME"]),
-					r.TargetSchemaName,
-					r.TargetTableName,
-					strings.ToUpper(kv["COLUMN_LIST"]),
-				)
+					r.GenSchemaName(),
+					r.GenTableName(),
+					columnList)
 			}
 			normalIndexes = append(normalIndexes, idx)
 		}
@@ -293,7 +362,7 @@ func (r *Rule) GenTableComment() (tableComment string, err error) {
 			return tableComment, fmt.Errorf("table comments [%s] charset convert failed, %v", r.TableCommentINFO[0]["TABLE_COMMENT"], err)
 		}
 
-		tableComment = fmt.Sprintf(`COMMENT ON TABLE %s.%s IS '%s';`, r.TargetSchemaName, r.TargetTableName, string(convertTargetRaw))
+		tableComment = fmt.Sprintf(`COMMENT ON TABLE %s.%s IS '%s';`, r.GenSchemaName(), r.GenTableName(), string(convertTargetRaw))
 	}
 	return tableComment, nil
 }
@@ -373,6 +442,14 @@ func (r *Rule) GenTableColumn() (columnMetas []string, err error) {
 			return columnMetas, fmt.Errorf("mysql table [%s.%s] column [%s] data type isn't exist", r.SourceSchemaName, r.SourceTableName, columnName)
 		}
 
+		// 字段名大小写
+		if strings.EqualFold(r.LowerCaseFieldName, common.MigrateTableStructFieldNameLowerCase) {
+			columnName = strings.ToLower(columnName)
+		}
+		if strings.EqualFold(r.LowerCaseFieldName, common.MigrateTableStructFieldNameUpperCase) {
+			columnName = strings.ToUpper(columnName)
+		}
+
 		if strings.EqualFold(nullable, "NULL") {
 			// M2O
 			switch {
@@ -410,7 +487,7 @@ func (r *Rule) GenTableColumn() (columnMetas []string, err error) {
 func (r *Rule) GenTableColumnComment() (columnComments []string, err error) {
 	if len(r.TableColumnINFO) > 0 {
 		for _, rowCol := range r.TableColumnINFO {
-			if rowCol["COMMENTS"] != "" {
+			if !strings.EqualFold(rowCol["COMMENTS"], "") {
 				convertUtf8Raw, err := common.CharsetConvert([]byte(rowCol["COMMENTS"]), common.MigrateStringDataTypeDatabaseCharsetMap[common.TaskTypeMySQL2Oracle][common.StringUPPER(r.SourceDBCharset)], common.MYSQLCharsetUTF8MB4)
 				if err != nil {
 					return nil, fmt.Errorf("column [%s] charset convert failed, %v", rowCol["COLUMN_NAME"], err)
@@ -421,7 +498,16 @@ func (r *Rule) GenTableColumnComment() (columnComments []string, err error) {
 					return nil, fmt.Errorf("column [%s] charset convert failed, %v", rowCol["COLUMN_NAME"], err)
 				}
 
-				columnComments = append(columnComments, fmt.Sprintf(`COMMENT ON COLUMN %s.%s.%s IS '%s';`, r.TargetSchemaName, r.TargetTableName, rowCol["COLUMN_NAME"], string(convertTargetRaw)))
+				// 字段名大小写
+				columnName := rowCol["COLUMN_NAME"]
+				if strings.EqualFold(r.LowerCaseFieldName, common.MigrateTableStructFieldNameLowerCase) {
+					columnName = strings.ToLower(columnName)
+				}
+				if strings.EqualFold(r.LowerCaseFieldName, common.MigrateTableStructFieldNameUpperCase) {
+					columnName = strings.ToUpper(columnName)
+				}
+
+				columnComments = append(columnComments, fmt.Sprintf(`COMMENT ON COLUMN %s.%s.%s IS '%s';`, r.GenSchemaName(), r.GenTableName(), columnName, string(convertTargetRaw)))
 
 			}
 		}
@@ -442,23 +528,54 @@ func (r *Rule) GenTableSuffix() (string, error) {
 }
 
 func (r *Rule) GenSchemaName() string {
-	if r.TargetSchemaName == "" {
-		return r.SourceSchemaName
+	var sourceSchema, targetSchema string
+	if strings.EqualFold(r.LowerCaseFieldName, common.MigrateTableStructFieldNameLowerCase) {
+		sourceSchema = strings.ToLower(r.SourceSchemaName)
+		targetSchema = strings.ToLower(r.TargetSchemaName)
 	}
-	if r.TargetSchemaName != "" {
-		return r.TargetSchemaName
+
+	if strings.EqualFold(r.LowerCaseFieldName, common.MigrateTableStructFieldNameUpperCase) {
+		sourceSchema = strings.ToUpper(r.SourceSchemaName)
+		targetSchema = strings.ToUpper(r.TargetSchemaName)
 	}
-	return r.SourceSchemaName
+
+	if strings.EqualFold(r.LowerCaseFieldName, common.MigrateTableStructFieldNameUpperCase) {
+		sourceSchema = r.SourceSchemaName
+		targetSchema = r.TargetSchemaName
+	}
+
+	if targetSchema == "" {
+		return sourceSchema
+	}
+	if targetSchema != "" {
+		return targetSchema
+	}
+	return sourceSchema
 }
 
 func (r *Rule) GenTableName() string {
-	if r.TargetTableName == "" {
-		return r.SourceTableName
+	var sourceTable, targetTable string
+
+	if strings.EqualFold(r.LowerCaseFieldName, common.MigrateTableStructFieldNameLowerCase) {
+		sourceTable = strings.ToLower(r.SourceTableName)
+		targetTable = strings.ToLower(r.TargetTableName)
 	}
-	if r.TargetTableName != "" {
-		return r.TargetTableName
+	if strings.EqualFold(r.LowerCaseFieldName, common.MigrateTableStructFieldNameUpperCase) {
+		sourceTable = strings.ToUpper(r.SourceTableName)
+		targetTable = strings.ToUpper(r.TargetTableName)
 	}
-	return r.SourceTableName
+	if strings.EqualFold(r.LowerCaseFieldName, common.MigrateTableStructFieldNameUpperCase) {
+		sourceTable = r.SourceTableName
+		targetTable = r.TargetTableName
+	}
+
+	if targetTable == "" {
+		return sourceTable
+	}
+	if targetTable != "" {
+		return targetTable
+	}
+	return sourceTable
 }
 
 func (r *Rule) String() string {

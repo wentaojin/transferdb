@@ -45,6 +45,7 @@ type Table struct {
 	SourceDBCharset         string          `json:"sourcedb_charset"`
 	TargetDBCharset         string          `json:"targetdb_charset"`
 	SourceTableCollation    string          `json:"source_table_collation"`
+	LowerCaseFieldName      string          `json:"lower_case_field_name"`
 
 	TableColumnDatatypeRule   map[string]string `json:"table_column_datatype_rule"`
 	TableColumnDefaultValRule map[string]string `json:"table_column_default_val_rule"`
@@ -285,7 +286,7 @@ func PreCheckCompatibility(cfg *config.Config, mysql *mysql.MySQL, exporters []s
 	return reverseTaskTables, errCompatibilityTable, errCompatibilityColumn, tableCharSetMap, tableCollationMap, nil
 }
 
-func GenReverseTableTask(r *Reverse, tableNameRule map[string]string, tableColumnRule, tableDefaultRule map[string]map[string]string, exporters []string, oracleDBVersion string, isExtended bool, tableCharSetMap map[string]string, tableCollationMap map[string]string) ([]*Table, error) {
+func GenReverseTableTask(r *Reverse, lowerCaseFieldName string, tableNameRule map[string]string, tableColumnRule, tableDefaultRule map[string]map[string]string, exporters []string, oracleDBVersion string, isExtended bool, tableCharSetMap map[string]string, tableCollationMap map[string]string) ([]*Table, error) {
 	var (
 		tables []*Table
 	)
@@ -337,6 +338,7 @@ func GenReverseTableTask(r *Reverse, tableNameRule map[string]string, tableColum
 					SourceTableCollation:      tableCollationMap[ts],
 					SourceDBCharset:           r.cfg.MySQLConfig.Charset,
 					TargetDBCharset:           r.cfg.OracleConfig.Charset,
+					LowerCaseFieldName:        lowerCaseFieldName,
 					TableColumnDatatypeRule:   tableColumnRule[common.StringUPPER(ts)],
 					TableColumnDefaultValRule: tableDefaultRule[common.StringUPPER(ts)],
 					Overwrite:                 r.cfg.MySQLConfig.Overwrite,
@@ -524,7 +526,7 @@ func (t *Table) String() string {
 	return string(jsonStr)
 }
 
-func GenCreateSchema(w *reverse.Write, sourceSchema, targetSchema string, directWrite bool) error {
+func GenCreateSchema(w *reverse.Write, lowerCaseFieldName, sourceSchema, targetSchema string, directWrite bool) error {
 	startTime := time.Now()
 	var (
 		sqlRev strings.Builder
@@ -541,7 +543,14 @@ func GenCreateSchema(w *reverse.Write, sourceSchema, targetSchema string, direct
 	sqlRev.WriteString(t.Render() + "\n")
 	sqlRev.WriteString("*/\n")
 
-	sqlRev.WriteString(fmt.Sprintf("CREATE USER %s IDENTIFIED BY %s;\n\n", common.StringUPPER(targetSchema), common.StringUPPER(targetSchema)))
+	// 库名大小写
+	if strings.EqualFold(lowerCaseFieldName, common.MigrateTableStructFieldNameLowerCase) {
+		targetSchema = strings.ToLower(targetSchema)
+	}
+	if strings.EqualFold(lowerCaseFieldName, common.MigrateTableStructFieldNameUpperCase) {
+		targetSchema = strings.ToUpper(targetSchema)
+	}
+	sqlRev.WriteString(fmt.Sprintf("CREATE USER %s IDENTIFIED BY %s;\n\n", targetSchema, targetSchema))
 
 	if directWrite {
 		if err := w.RWriteDB(sqlRev.String()); err != nil {

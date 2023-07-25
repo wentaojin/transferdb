@@ -47,6 +47,7 @@ type Table struct {
 	SourceDBNLSSort       string          `json:"sourcedb_nlssort"`
 	SourceDBNLSComp       string          `json:"sourcedb_nlscomp"`
 	SourceTableType       string          `json:"source_table_type"`
+	LowerCaseFieldName    string          `json:"lower_case_field_name"`
 
 	TableColumnDatatypeRule   map[string]string `json:"table_column_datatype_rule"`
 	TableColumnDefaultValRule map[string]string `json:"table_column_default_val_rule"`
@@ -56,7 +57,7 @@ type Table struct {
 	MetaDB                    *meta.Meta        `json:"-"`
 }
 
-func GenReverseTableTask(r *Reverse, tableNameRule map[string]string, tableColumnRule, tableDefaultRule map[string]map[string]string, oracleDBVersion string, oracleDBCharset, targetDBCharset string, oracleCollation bool, exporters []string, nlsSort, nlsComp string) ([]*Table, error) {
+func GenReverseTableTask(r *Reverse, tableNameRule map[string]string, tableColumnRule, tableDefaultRule map[string]map[string]string, oracleDBVersion string, oracleDBCharset, targetDBCharset string, oracleCollation bool, lowerCaseFieldName string, exporters []string, nlsSort, nlsComp string) ([]*Table, error) {
 	var tables []*Table
 
 	beginTime := time.Now()
@@ -152,6 +153,7 @@ func GenReverseTableTask(r *Reverse, tableNameRule map[string]string, tableColum
 					SourceTableType:           tablesMap[t],
 					SourceDBNLSSort:           nlsSort,
 					SourceDBNLSComp:           nlsComp,
+					LowerCaseFieldName:        lowerCaseFieldName,
 					TableColumnDatatypeRule:   tableColumnRule[common.StringUPPER(t)],
 					TableColumnDefaultValRule: tableDefaultRule[common.StringUPPER(t)],
 					Overwrite:                 r.Cfg.MySQLConfig.Overwrite,
@@ -318,7 +320,7 @@ func (t *Table) String() string {
 	return string(jsonStr)
 }
 
-func GenCreateSchema(w *reverse.Write, sourceSchema, targetSchema, sourceDBCharset string, nlsComp string, directWrite bool) error {
+func GenCreateSchema(w *reverse.Write, lowerCaseFieldName, sourceSchema, targetSchema, sourceDBCharset string, nlsComp string, directWrite bool) error {
 	startTime := time.Now()
 	var (
 		sqlRev          strings.Builder
@@ -354,18 +356,26 @@ func GenCreateSchema(w *reverse.Write, sourceSchema, targetSchema, sourceDBChars
 
 	targetDBCharset := common.MigrateTableStructureDatabaseCharsetMap[common.TaskTypeOracle2TiDB][sourceDBCharset]
 
+	// 库名大小写
+	if strings.EqualFold(lowerCaseFieldName, common.MigrateTableStructFieldNameLowerCase) {
+		targetSchema = strings.ToLower(targetSchema)
+	}
+	if strings.EqualFold(lowerCaseFieldName, common.MigrateTableStructFieldNameUpperCase) {
+		targetSchema = strings.ToUpper(targetSchema)
+	}
+
 	if oraCollation {
 		targetSchemaCollation, ok := common.MigrateTableStructureDatabaseCollationMap[common.TaskTypeOracle2TiDB][common.StringUPPER(schemaCollation)][targetDBCharset]
 		if !ok {
 			return fmt.Errorf("oracle schema collation [%s] isn't support", schemaCollation)
 		}
-		sqlRev.WriteString(fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s DEFAULT CHARACTER SET %s COLLATE %s;\n\n", common.StringUPPER(targetSchema), strings.ToLower(targetDBCharset), strings.ToLower(targetSchemaCollation)))
+		sqlRev.WriteString(fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s DEFAULT CHARACTER SET %s COLLATE %s;\n\n", targetSchema, targetDBCharset, targetSchemaCollation))
 	} else {
 		targetSchemaCollation, ok := common.MigrateTableStructureDatabaseCollationMap[common.TaskTypeOracle2TiDB][common.StringUPPER(nlsComp)][targetDBCharset]
 		if !ok {
 			return fmt.Errorf("oracle db nls_comp collation [%s] isn't support", nlsComp)
 		}
-		sqlRev.WriteString(fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s DEFAULT CHARACTER SET %s COLLATE %s;\n\n", common.StringUPPER(targetSchema), strings.ToLower(targetDBCharset), strings.ToLower(targetSchemaCollation)))
+		sqlRev.WriteString(fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s DEFAULT CHARACTER SET %s COLLATE %s;\n\n", targetSchema, targetDBCharset, targetSchemaCollation))
 	}
 
 	if directWrite {

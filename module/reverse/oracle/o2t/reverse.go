@@ -163,7 +163,7 @@ func (r *Reverse) Reverse() error {
 		zap.String("cost", time.Now().Sub(ruleTime).String()))
 
 	// 获取 reverse 表任务列表
-	tables, err := GenReverseTableTask(r, tableNameRuleMap, tableColumnRuleMap, tableDefaultRuleMap, oracleDBVersion, oracleDBCharset, r.Cfg.MySQLConfig.Charset, oracleCollation, exporterTables, nlsSort, nlsComp)
+	tables, err := GenReverseTableTask(r, tableNameRuleMap, tableColumnRuleMap, tableDefaultRuleMap, oracleDBVersion, oracleDBCharset, r.Cfg.MySQLConfig.Charset, oracleCollation, common.MigrateTableStructFieldNameUpperCase, exporterTables, nlsSort, nlsComp)
 	if err != nil {
 		return err
 	}
@@ -186,7 +186,7 @@ func (r *Reverse) Reverse() error {
 	}
 
 	// schema create
-	err = GenCreateSchema(f,
+	err = GenCreateSchema(f, common.MigrateTableStructFieldNameUpperCase,
 		r.Cfg.SchemaConfig.SourceSchema, r.Cfg.SchemaConfig.TargetSchema, oracleDBCharset, nlsComp, r.Cfg.ReverseConfig.DirectWrite)
 	if err != nil {
 		return err

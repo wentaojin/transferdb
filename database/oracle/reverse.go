@@ -285,7 +285,7 @@ select x.constraint_name,
 }
 
 func (o *Oracle) GetOracleSchemaTableCheckKey(schemaName string, tableName string) ([]map[string]string, error) {
-	querySQL := fmt.Sprintf(`select cu.constraint_name,SEARCH_CONDITION
+	querySQL := fmt.Sprintf(`select cu.constraint_name,au.SEARCH_CONDITION
           from dba_cons_columns cu, dba_constraints au
          where cu.owner=au.owner
            and cu.table_name=au.table_name

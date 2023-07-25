@@ -344,6 +344,13 @@ var MigrateStringDataTypeDatabaseCharsetMap = map[string]map[string]string{
 
 var MigrateDataSupportCharset = []string{MYSQLCharsetUTF8MB4, MYSQLCharsetGBK, MYSQLCharsetBIG5, MYSQLCharsetGB18030}
 
+// 表结构迁移大小写
+const (
+	MigrateTableStructFieldNameOriginCase = "0"
+	MigrateTableStructFieldNameLowerCase  = "1"
+	MigrateTableStructFieldNameUpperCase  = "2"
+)
+
 // Oracle 不支持数据类型 -> M2O
 var OracleIsNotSupportDataType = []string{"ENUM", "SET"}
 
