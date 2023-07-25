@@ -21,30 +21,71 @@ import (
 	"strings"
 )
 
-func LoadColumnDefaultValueRule(columnName, defaultValue string, defaultValueColumnMapSlice []meta.BuildinColumnDefaultval, defaultValueGlobalMapSlice []meta.BuildinGlobalDefaultval) string {
+func LoadColumnDefaultValueRule(columnName, defaultValue string, defaultValueColumnMapSlice []meta.BuildinColumnDefaultval, defaultValueGlobalMapSlice []meta.BuildinGlobalDefaultval) (string, error) {
 	// 额外处理 Oracle 默认值 ('6') 或者 (5) 或者 ('xsddd') 等包含小括号的默认值，而非 '(xxxx)' 之类的默认值
 	// Oracle 对于同类型 ('xxx') 或者 (xxx) 内部会自动处理，所以 O2M/O2T 需要处理成 'xxx' 或者 xxx
-	if strings.HasPrefix(defaultValue, "(") && strings.HasSuffix(defaultValue, ")") {
-		defaultValue = strings.TrimLeft(defaultValue, "(")
-		defaultValue = strings.TrimRight(defaultValue, ")")
+
+	var defaultVal string
+
+	defaultValLen := len(defaultValue)
+
+	rightBracketsIndex := strings.Index(defaultValue, "(")
+	leftBracketsIndex := strings.LastIndex(defaultValue, ")")
+
+	if rightBracketsIndex == -1 || leftBracketsIndex == -1 {
+		defaultVal = defaultValue
+	}
+
+	// 如果首位是左括号，末尾要么是右括号)或者右括号+随意空格) ，不能是其他
+	if rightBracketsIndex == 0 {
+		diffK := defaultValLen - leftBracketsIndex
+		if diffK == 0 {
+			defaultVal = defaultValue[1:leftBracketsIndex]
+		} else {
+			// 去除末尾)空格
+			diffV := strings.TrimSpace(defaultValue[leftBracketsIndex:])
+			if len(diffV) == 1 {
+				defaultVal = defaultValue[1:leftBracketsIndex]
+			} else {
+				return defaultVal, fmt.Errorf("load column first [%s] default value [%s] rule failed", columnName, defaultValue)
+			}
+		}
+	} else {
+		// 如果数据长度 0 特殊处理
+		if defaultValLen == 0 {
+			defaultVal = defaultValue
+		} else {
+			// 如果首位非左括号，那么首位要么是空格要么是单引号，不能是其他
+			if defaultValue[0] == '\'' {
+				defaultVal = defaultValue[0:defaultValLen]
+			} else {
+				// 去除首位空格(
+				diffV := strings.TrimSpace(defaultValue[:rightBracketsIndex+1])
+				if len(diffV) == 1 {
+					defaultVal = defaultValue[rightBracketsIndex+1 : leftBracketsIndex]
+				} else {
+					return defaultVal, fmt.Errorf("load column second [%s] default value [%s] rule failed", columnName, defaultValue)
+				}
+			}
+		}
 	}
 
 	if len(defaultValueColumnMapSlice) == 0 && len(defaultValueGlobalMapSlice) == 0 {
-		return defaultValue
+		return defaultVal, nil
 	}
 
 	// 默认值优先级: 字段级别默认值 > 全局级别默认值
 	if len(defaultValueColumnMapSlice) > 0 {
 		for _, dv := range defaultValueColumnMapSlice {
-			if strings.EqualFold(columnName, dv.ColumnNameS) && strings.EqualFold(strings.TrimSpace(dv.DefaultValueS), strings.TrimSpace(defaultValue)) {
-				return dv.DefaultValueT
+			if strings.EqualFold(columnName, dv.ColumnNameS) && strings.EqualFold(strings.TrimSpace(dv.DefaultValueS), strings.TrimSpace(defaultVal)) {
+				return dv.DefaultValueT, nil
 			}
 		}
 	}
 
 	for _, dv := range defaultValueGlobalMapSlice {
-		if strings.EqualFold(strings.TrimSpace(dv.DefaultValueS), strings.TrimSpace(defaultValue)) && dv.DefaultValueT != "" {
-			return dv.DefaultValueT
+		if strings.EqualFold(strings.TrimSpace(dv.DefaultValueS), strings.TrimSpace(defaultVal)) && dv.DefaultValueT != "" {
+			return dv.DefaultValueT, nil
 		}
 	}
 	// 去除首尾空格以及换行
@@ -53,7 +94,7 @@ func LoadColumnDefaultValueRule(columnName, defaultValue string, defaultValueCol
 	// default(0 ) default(0.1 )
 	// default('0'
 	//)
-	return strings.TrimSpace(defaultValue)
+	return strings.TrimSpace(defaultVal), nil
 }
 
 func LoadDataTypeRuleUsingTableOrSchema(originColumnType string, buildInColumnType string, tableDataTypeMapSlice []meta.TableDatatypeRule,

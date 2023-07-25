@@ -295,8 +295,11 @@ func (r *Change) ChangeTableColumnDefaultValue() (map[string]map[string]string, 
 			for _, rowCol := range tableColumnINFO {
 				// 优先级
 				// column > global
-				columnDataDefaultValMap[rowCol["COLUMN_NAME"]] = LoadColumnDefaultValueRule(
+				columnDataDefaultValMap[rowCol["COLUMN_NAME"]], err = LoadColumnDefaultValueRule(
 					rowCol["COLUMN_NAME"], rowCol["DATA_DEFAULT"], columnDefaultValueMapSlice, globalDefaultValueMapSlice)
+				if err != nil {
+					return err
+				}
 			}
 
 			tableDefaultValTempMap[sourceTable] = columnDataDefaultValMap
