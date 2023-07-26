@@ -26,6 +26,8 @@ slowlog-threshold = 1024
 pprof-port = ":9696"
 
 [reverse]
+# 表结构大小写, 0 表示默认，2 表示大写，1 表示小写
+lower-case-field-name = "2"
 # 任务表并发
 reverse-threads = 128
 # 是否直接写下游

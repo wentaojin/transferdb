@@ -62,10 +62,11 @@ type DiffConfig struct {
 }
 
 type ReverseConfig struct {
-	ReverseThreads   int    `toml:"reverse-threads" json:"reverse-threads"`
-	DirectWrite      bool   `toml:"direct-write" json:"direct-write"`
-	DDLReverseDir    string `toml:"ddl-reverse-dir" json:"ddl-reverse-dir"`
-	DDLCompatibleDir string `toml:"ddl-compatible-dir" json:"ddl-compatible-dir"`
+	LowerCaseFieldName string `toml:"lower-case-field-name" json:"lower-case-field-name"`
+	ReverseThreads     int    `toml:"reverse-threads" json:"reverse-threads"`
+	DirectWrite        bool   `toml:"direct-write" json:"direct-write"`
+	DDLReverseDir      string `toml:"ddl-reverse-dir" json:"ddl-reverse-dir"`
+	DDLCompatibleDir   string `toml:"ddl-compatible-dir" json:"ddl-compatible-dir"`
 }
 
 type CheckConfig struct {

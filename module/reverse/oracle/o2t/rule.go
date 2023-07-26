@@ -943,20 +943,37 @@ func (r *Rule) GenTableColumn() (tableColumns []string, err error) {
 		} else {
 			switch {
 			case columnCollation != "" && comment != "" && dataDefault != "":
-				tableColumns = append(tableColumns, fmt.Sprintf("`%s` %s COLLATE %s %s DEFAULT %s COMMENT %s",
-					columnName, columnType, columnCollation, nullable, dataDefault, comment))
+				if strings.EqualFold(dataDefault, "NULL") {
+					tableColumns = append(tableColumns, fmt.Sprintf("`%s` %s COLLATE %s %s COMMENT %s",
+						columnName, columnType, columnCollation, nullable, comment))
+				} else {
+					tableColumns = append(tableColumns, fmt.Sprintf("`%s` %s COLLATE %s %s DEFAULT %s COMMENT %s",
+						columnName, columnType, columnCollation, nullable, dataDefault, comment))
+				}
 			case columnCollation != "" && comment != "" && dataDefault == "":
 				tableColumns = append(tableColumns, fmt.Sprintf("`%s` %s COLLATE %s %s COMMENT %s", columnName, columnType, columnCollation, nullable, comment))
 			case columnCollation != "" && comment == "" && dataDefault != "":
-				tableColumns = append(tableColumns, fmt.Sprintf("`%s` %s COLLATE %s %s DEFAULT %s", columnName, columnType, columnCollation, nullable, dataDefault))
+				if strings.EqualFold(dataDefault, "NULL") {
+					tableColumns = append(tableColumns, fmt.Sprintf("`%s` %s COLLATE %s %s", columnName, columnType, columnCollation, nullable))
+				} else {
+					tableColumns = append(tableColumns, fmt.Sprintf("`%s` %s COLLATE %s %s DEFAULT %s", columnName, columnType, columnCollation, nullable, dataDefault))
+				}
 			case columnCollation != "" && comment == "" && dataDefault == "":
 				tableColumns = append(tableColumns, fmt.Sprintf("`%s` %s COLLATE %s %s", columnName, columnType, columnCollation, nullable))
 			case columnCollation == "" && comment != "" && dataDefault != "":
-				tableColumns = append(tableColumns, fmt.Sprintf("`%s` %s %s DEFAULT %s COMMENT %s", columnName, columnType, nullable, dataDefault, comment))
+				if strings.EqualFold(dataDefault, "NULL") {
+					tableColumns = append(tableColumns, fmt.Sprintf("`%s` %s %s COMMENT %s", columnName, columnType, nullable, comment))
+				} else {
+					tableColumns = append(tableColumns, fmt.Sprintf("`%s` %s %s DEFAULT %s COMMENT %s", columnName, columnType, nullable, dataDefault, comment))
+				}
 			case columnCollation == "" && comment != "" && dataDefault == "":
 				tableColumns = append(tableColumns, fmt.Sprintf("`%s` %s %s COMMENT %s", columnName, columnType, nullable, comment))
 			case columnCollation == "" && comment == "" && dataDefault != "":
-				tableColumns = append(tableColumns, fmt.Sprintf("`%s` %s %s DEFAULT %s", columnName, columnType, nullable, dataDefault))
+				if strings.EqualFold(dataDefault, "NULL") {
+					tableColumns = append(tableColumns, fmt.Sprintf("`%s` %s %s", columnName, columnType, nullable))
+				} else {
+					tableColumns = append(tableColumns, fmt.Sprintf("`%s` %s %s DEFAULT %s", columnName, columnType, nullable, dataDefault))
+				}
 			case columnCollation == "" && comment == "" && dataDefault == "":
 				tableColumns = append(tableColumns, fmt.Sprintf("`%s` %s %s", columnName, columnType, nullable))
 			default:

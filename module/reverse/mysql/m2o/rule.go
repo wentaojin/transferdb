@@ -468,11 +468,19 @@ func (r *Rule) GenTableColumn() (columnMetas []string, err error) {
 			// M2O
 			switch {
 			case columnCollation != "" && dataDefault != "":
-				columnMetas = append(columnMetas, fmt.Sprintf("%s %s COLLATE %s DEFAULT %s %s", columnName, columnType, columnCollation, dataDefault, nullable))
+				if strings.EqualFold(dataDefault, "NULL") {
+					columnMetas = append(columnMetas, fmt.Sprintf("%s %s COLLATE %s %s", columnName, columnType, columnCollation, nullable))
+				} else {
+					columnMetas = append(columnMetas, fmt.Sprintf("%s %s COLLATE %s DEFAULT %s %s", columnName, columnType, columnCollation, dataDefault, nullable))
+				}
 			case columnCollation != "" && dataDefault == "":
 				columnMetas = append(columnMetas, fmt.Sprintf("%s %s COLLATE %s %s", columnName, columnType, columnCollation, nullable))
 			case columnCollation == "" && dataDefault != "":
-				columnMetas = append(columnMetas, fmt.Sprintf("%s %s DEFAULT %s %s", columnName, columnType, dataDefault, nullable))
+				if strings.EqualFold(dataDefault, "NULL") {
+					columnMetas = append(columnMetas, fmt.Sprintf("%s %s %s", columnName, columnType, nullable))
+				} else {
+					columnMetas = append(columnMetas, fmt.Sprintf("%s %s DEFAULT %s %s", columnName, columnType, dataDefault, nullable))
+				}
 			case columnCollation == "" && dataDefault == "":
 				columnMetas = append(columnMetas, fmt.Sprintf("%s %s %s", columnName, columnType, nullable))
 			default:

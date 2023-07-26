@@ -34,37 +34,37 @@ func LoadColumnDefaultValueRule(columnName, defaultValue string, defaultValueCol
 
 	if rightBracketsIndex == -1 || leftBracketsIndex == -1 {
 		defaultVal = defaultValue
-	}
-
-	// 如果首位是左括号，末尾要么是右括号)或者右括号+随意空格) ，不能是其他
-	if rightBracketsIndex == 0 {
-		diffK := defaultValLen - leftBracketsIndex
-		if diffK == 0 {
-			defaultVal = defaultValue[1:leftBracketsIndex]
-		} else {
-			// 去除末尾)空格
-			diffV := strings.TrimSpace(defaultValue[leftBracketsIndex:])
-			if len(diffV) == 1 {
+	} else {
+		// 如果首位是左括号，末尾要么是右括号)或者右括号+随意空格) ，不能是其他
+		if rightBracketsIndex == 0 {
+			diffK := defaultValLen - leftBracketsIndex
+			if diffK == 0 {
 				defaultVal = defaultValue[1:leftBracketsIndex]
 			} else {
-				return defaultVal, fmt.Errorf("load column first [%s] default value [%s] rule failed", columnName, defaultValue)
-			}
-		}
-	} else {
-		// 如果数据长度 0 特殊处理
-		if defaultValLen == 0 {
-			defaultVal = defaultValue
-		} else {
-			// 如果首位非左括号，那么首位要么是空格要么是单引号，不能是其他
-			if defaultValue[0] == '\'' {
-				defaultVal = defaultValue[0:defaultValLen]
-			} else {
-				// 去除首位空格(
-				diffV := strings.TrimSpace(defaultValue[:rightBracketsIndex+1])
+				// 去除末尾)空格
+				diffV := strings.TrimSpace(defaultValue[leftBracketsIndex:])
 				if len(diffV) == 1 {
-					defaultVal = defaultValue[rightBracketsIndex+1 : leftBracketsIndex]
+					defaultVal = defaultValue[1:leftBracketsIndex]
 				} else {
-					return defaultVal, fmt.Errorf("load column second [%s] default value [%s] rule failed", columnName, defaultValue)
+					return defaultVal, fmt.Errorf("load column first [%s] default value [%s] rule failed", columnName, defaultValue)
+				}
+			}
+		} else {
+			// 如果数据长度 0 特殊处理
+			if defaultValLen == 0 {
+				defaultVal = defaultValue
+			} else {
+				// 如果首位非左括号，那么首位要么是空格要么是单引号，不能是其他
+				if defaultValue[0] == '\'' {
+					defaultVal = defaultValue[0:defaultValLen]
+				} else {
+					// 去除首位空格(
+					diffV := strings.TrimSpace(defaultValue[:rightBracketsIndex+1])
+					if len(diffV) == 1 {
+						defaultVal = defaultValue[rightBracketsIndex+1 : leftBracketsIndex]
+					} else {
+						return defaultVal, fmt.Errorf("load column second [%s] default value [%s] rule failed", columnName, defaultValue)
+					}
 				}
 			}
 		}

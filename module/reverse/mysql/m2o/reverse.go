@@ -145,7 +145,7 @@ func (r *Reverse) Reverse() error {
 		zap.String("schema", r.cfg.SchemaConfig.SourceSchema),
 		zap.String("cost", time.Now().Sub(ruleTime).String()))
 
-	tables, err := GenReverseTableTask(r, common.MigrateTableStructFieldNameUpperCase, tableNameRuleMap, tableColumnRuleMap, tableDefaultRuleMap, reverseTaskTables, oracleDBVersion, isExtended, tableCharSetMap, tableCollationMap)
+	tables, err := GenReverseTableTask(r, r.cfg.ReverseConfig.LowerCaseFieldName, tableNameRuleMap, tableColumnRuleMap, tableDefaultRuleMap, reverseTaskTables, oracleDBVersion, isExtended, tableCharSetMap, tableCollationMap)
 	if err != nil {
 		return err
 	}
@@ -168,7 +168,7 @@ func (r *Reverse) Reverse() error {
 	}
 
 	// schema create
-	err = GenCreateSchema(f, common.MigrateTableStructFieldNameUpperCase,
+	err = GenCreateSchema(f, r.cfg.ReverseConfig.LowerCaseFieldName,
 		common.StringUPPER(r.cfg.SchemaConfig.SourceSchema), common.StringUPPER(r.cfg.SchemaConfig.TargetSchema), r.cfg.ReverseConfig.DirectWrite)
 	if err != nil {
 		return err
