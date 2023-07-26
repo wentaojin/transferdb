@@ -461,7 +461,25 @@ func (r *Rule) GenTableUniqueIndex() (uniqueIndexes []string, compatibilityIndex
 
 				case "FUNCTION-BASED NORMAL":
 					sql := fmt.Sprintf("CREATE UNIQUE INDEX `%s` ON `%s`.`%s` (%s);",
-						strings.ToUpper(idxMeta["INDEX_NAME"]), r.GenSchemaName(), r.GenTableName(),
+						idxMeta["INDEX_NAME"], r.GenSchemaName(), r.GenTableName(),
+						columnList)
+
+					compatibilityIndexSQL = append(compatibilityIndexSQL, sql)
+
+					zap.L().Warn("reverse unique key",
+						zap.String("schema", r.SourceSchemaName),
+						zap.String("table", idxMeta["TABLE_NAME"]),
+						zap.String("index name", idxMeta["INDEX_NAME"]),
+						zap.String("index type", idxMeta["INDEX_TYPE"]),
+						zap.String("index column list", idxMeta["COLUMN_LIST"]),
+						zap.String("create unique index sql", sql),
+						zap.String("warn", "mysql not support"))
+
+					continue
+
+				case "NORMAL/REV":
+					sql := fmt.Sprintf("CREATE UNIQUE INDEX `%s` ON `%s`.`%s` (%s) REVERSE;",
+						idxMeta["INDEX_NAME"], r.GenSchemaName(), r.GenTableName(),
 						columnList)
 
 					compatibilityIndexSQL = append(compatibilityIndexSQL, sql)
