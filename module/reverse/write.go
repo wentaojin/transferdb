@@ -72,7 +72,17 @@ func (w *Write) RWriteDB(s string) error {
 		if err != nil {
 			return err
 		}
+	case strings.EqualFold(w.Cfg.DBTypeS, common.DatabaseTypeOracle) && strings.EqualFold(w.Cfg.DBTypeT, common.DatabaseTypeTiDB):
+		err := w.MySQL.WriteMySQLTable(s)
+		if err != nil {
+			return err
+		}
 	case strings.EqualFold(w.Cfg.DBTypeS, common.DatabaseTypeMySQL) && strings.EqualFold(w.Cfg.DBTypeT, common.DatabaseTypeOracle):
+		err := w.Oracle.WriteOracleTable(s)
+		if err != nil {
+			return err
+		}
+	case strings.EqualFold(w.Cfg.DBTypeS, common.DatabaseTypeTiDB) && strings.EqualFold(w.Cfg.DBTypeT, common.DatabaseTypeOracle):
 		err := w.Oracle.WriteOracleTable(s)
 		if err != nil {
 			return err
