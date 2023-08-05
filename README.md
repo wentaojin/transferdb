@@ -43,6 +43,16 @@ CSV 数据导出 make csvO2M/csvO2T
 
 程序编译 make build
 
+TechExchange
+------------
+If you like the project and want to buy me a cola or have tech exchange, you can button sponsor or join tech group:
+
+| TransferDB TechExchange QQ Group |
+|----------------------------------|
+|<img src="image/tech-exchange.jpg" height="200" width="200"/>|
+
+
+
 License
 -------
 This software is free to use under the Apache License.
