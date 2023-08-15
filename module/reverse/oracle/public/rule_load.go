@@ -21,7 +21,7 @@ import (
 	"strings"
 )
 
-func LoadColumnDefaultValueRule(columnName, defaultValue string, defaultValueColumnMapSlice []meta.BuildinColumnDefaultval, defaultValueGlobalMapSlice []meta.BuildinGlobalDefaultval) (string, error) {
+func LoadColumnDefaultValueRule(columnName, defaultValue string, defaultValueColumnMapSlice []meta.BuildinColumnDefaultval, defaultValueGlobalMapSlice []meta.BuildinGlobalDefaultval) (bool, string, error) {
 	// 额外处理 Oracle 默认值 ('6') 或者 (5) 或者 ('xsddd') 等包含小括号的默认值，而非 '(xxxx)' 之类的默认值
 	// Oracle 对于同类型 ('xxx') 或者 (xxx) 内部会自动处理，所以 O2M/O2T 需要处理成 'xxx' 或者 xxx
 
@@ -46,7 +46,7 @@ func LoadColumnDefaultValueRule(columnName, defaultValue string, defaultValueCol
 				if len(diffV) == 1 && strings.EqualFold(diffV, ")") {
 					defaultVal = defaultValue[1:leftBracketsIndex]
 				} else {
-					return defaultVal, fmt.Errorf("load column first [%s] default value [%s] rule failed", columnName, defaultValue)
+					return true, defaultVal, fmt.Errorf("load column first [%s] default value [%s] rule failed", columnName, defaultValue)
 				}
 			}
 		} else {
@@ -67,21 +67,23 @@ func LoadColumnDefaultValueRule(columnName, defaultValue string, defaultValueCol
 	}
 
 	if len(defaultValueColumnMapSlice) == 0 && len(defaultValueGlobalMapSlice) == 0 {
-		return defaultVal, nil
+		return true, defaultVal, nil
 	}
 
 	// 默认值优先级: 字段级别默认值 > 全局级别默认值
 	if len(defaultValueColumnMapSlice) > 0 {
 		for _, dv := range defaultValueColumnMapSlice {
+			// 当前创建表结构字段 A varchar2(10) 不带任何属性，如果需要指定变更，需要指定 defaultValueS 值是 NULLSTRING
+			// 当前创建表结构字段 A varchar2(10) default NULL 不带任何属性，如果需要指定变更，需要指定 defaultValueS 值是 NULL
 			if strings.EqualFold(columnName, dv.ColumnNameS) && strings.EqualFold(strings.TrimSpace(dv.DefaultValueS), strings.TrimSpace(defaultVal)) {
-				return dv.DefaultValueT, nil
+				return false, dv.DefaultValueT, nil
 			}
 		}
 	}
 
 	for _, dv := range defaultValueGlobalMapSlice {
-		if strings.EqualFold(strings.TrimSpace(dv.DefaultValueS), strings.TrimSpace(defaultVal)) && dv.DefaultValueT != "" {
-			return dv.DefaultValueT, nil
+		if strings.EqualFold(strings.TrimSpace(dv.DefaultValueS), strings.TrimSpace(defaultVal)) {
+			return false, dv.DefaultValueT, nil
 		}
 	}
 	// 去除首尾空格以及换行
@@ -90,7 +92,7 @@ func LoadColumnDefaultValueRule(columnName, defaultValue string, defaultValueCol
 	// default(0 ) default(0.1 )
 	// default('0'
 	//)
-	return strings.TrimSpace(defaultVal), nil
+	return true, strings.TrimSpace(defaultVal), nil
 }
 
 func LoadDataTypeRuleUsingTableOrSchema(originColumnType string, buildInColumnType string, tableDataTypeMapSlice []meta.TableDatatypeRule,

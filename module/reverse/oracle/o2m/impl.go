@@ -19,20 +19,20 @@ import (
 	"github.com/wentaojin/transferdb/module/reverse"
 )
 
-func IChanger(c reverse.Changer) (map[string]string, map[string]map[string]string, map[string]map[string]string, error) {
+func IChanger(c reverse.Changer) (map[string]string, map[string]map[string]string, map[string]map[string]bool, map[string]map[string]string, error) {
 	tableNameRuleMap, err := c.ChangeTableName()
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	tableColumnDatatypeMap, err := c.ChangeTableColumnDatatype()
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
-	tableDefaultValueMap, err := c.ChangeTableColumnDefaultValue()
+	tableDefaultValueSourceMap, tableDefaultValueMap, err := c.ChangeTableColumnDefaultValue()
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
-	return tableNameRuleMap, tableColumnDatatypeMap, tableDefaultValueMap, nil
+	return tableNameRuleMap, tableColumnDatatypeMap, tableDefaultValueSourceMap, tableDefaultValueMap, nil
 }
 
 func IReader(r reverse.Reader) (*Rule, error) {

@@ -421,8 +421,19 @@ func (r *Rule) GenTableColumn() (columnMetas []string, err error) {
 
 		columnName = rowCol["COLUMN_NAME"]
 
-		if val, ok := r.TableColumnDefaultValRule[columnName]; ok {
-			convertUtf8Raw, err := common.CharsetConvert([]byte(val), common.MigrateTableStructureDatabaseCharsetMap[common.TaskTypeTiDB2Oracle][common.StringUPPER(r.SourceDBCharset)], common.MYSQLCharsetUTF8MB4)
+		fromSource, okFromSource := r.TableColumnDefaultValSourceRule[columnName]
+		defaultVal, okDefaultVal := r.TableColumnDefaultValRule[columnName]
+		if !okFromSource || !okDefaultVal {
+			return columnMetas, fmt.Errorf("mysql table [%s.%s] column [%s] default value isn't exist or default value from source panic", r.SourceSchemaName, r.SourceTableName, columnName)
+		}
+
+		if fromSource {
+			isTrunc := false
+			if strings.HasPrefix(defaultVal, "'") && strings.HasSuffix(defaultVal, "'") {
+				isTrunc = true
+				defaultVal = defaultVal[1 : len(defaultVal)-1]
+			}
+			convertUtf8Raw, err := common.CharsetConvert([]byte(defaultVal), common.MigrateStringDataTypeDatabaseCharsetMap[common.TaskTypeTiDB2Oracle][common.StringUPPER(r.SourceDBCharset)], common.MYSQLCharsetUTF8MB4)
 			if err != nil {
 				return columnMetas, fmt.Errorf("column [%s] data default charset convert failed, %v", columnName, err)
 			}
@@ -431,9 +442,40 @@ func (r *Rule) GenTableColumn() (columnMetas []string, err error) {
 			if err != nil {
 				return columnMetas, fmt.Errorf("column [%s] data default charset convert failed, %v", columnName, err)
 			}
-			dataDefault = string(convertTargetRaw)
+			if isTrunc {
+				dataDefault = "'" + string(convertTargetRaw) + "'"
+			} else {
+				if strings.EqualFold(string(convertTargetRaw), common.OracleNULLSTRINGTableAttrWithCustom) {
+					dataDefault = "'" + string(convertTargetRaw) + "'"
+				} else {
+					dataDefault = string(convertTargetRaw)
+				}
+			}
 		} else {
-			return columnMetas, fmt.Errorf("mysql table [%s.%s] column [%s] default value isn't exist", r.SourceSchemaName, r.SourceTableName, columnName)
+			isTrunc := false
+			if strings.HasPrefix(defaultVal, "'") && strings.HasSuffix(defaultVal, "'") {
+				isTrunc = true
+				defaultVal = defaultVal[1 : len(defaultVal)-1]
+			}
+			// meta database data utf8mb4
+			convertUtf8Raw, err := common.CharsetConvert([]byte(defaultVal), common.MYSQLCharsetUTF8MB4, common.MYSQLCharsetUTF8MB4)
+			if err != nil {
+				return columnMetas, fmt.Errorf("column [%s] data default charset convert failed, %v", columnName, err)
+			}
+
+			convertTargetRaw, err := common.CharsetConvert(convertUtf8Raw, common.MYSQLCharsetUTF8MB4, common.StringUPPER(r.TargetDBCharset))
+			if err != nil {
+				return columnMetas, fmt.Errorf("column [%s] data default charset convert failed, %v", columnName, err)
+			}
+			if isTrunc {
+				dataDefault = "'" + string(convertTargetRaw) + "'"
+			} else {
+				if strings.EqualFold(string(convertTargetRaw), common.OracleNULLSTRINGTableAttrWithCustom) {
+					dataDefault = "'" + string(convertTargetRaw) + "'"
+				} else {
+					dataDefault = string(convertTargetRaw)
+				}
+			}
 		}
 
 		if val, ok := r.TableColumnDatatypeRule[columnName]; ok {

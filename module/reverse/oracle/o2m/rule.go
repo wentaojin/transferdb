@@ -761,15 +761,22 @@ func (r *Rule) GenTableColumn() (tableColumns []string, err error) {
 			comment = rowCol["COMMENTS"]
 		}
 
-		if val, ok := r.TableColumnDefaultValRule[rowCol["COLUMN_NAME"]]; ok {
+		// 判断表字段值来源
+		fromSource, okFromSource := r.TableColumnDefaultValSourceRule[rowCol["COLUMN_NAME"]]
+		defaultVal, okDefaultVal := r.TableColumnDefaultValRule[rowCol["COLUMN_NAME"]]
+		if !okFromSource || !okDefaultVal {
+			return tableColumns, fmt.Errorf("oracle table [%s.%s] column [%s] default value isn't exist or default value from source panic", r.SourceSchemaName, r.SourceTableName, rowCol["COLUMN_NAME"])
+		}
+
+		if fromSource {
 			// 截取数据
 			// 字符数据处理 MigrateStringDataTypeDatabaseCharsetMap
 			isTrunc := false
-			if strings.HasPrefix(val, "'") && strings.HasSuffix(val, "'") {
+			if strings.HasPrefix(defaultVal, "'") && strings.HasSuffix(defaultVal, "'") {
 				isTrunc = true
-				val = val[1 : len(val)-1]
+				defaultVal = defaultVal[1 : len(defaultVal)-1]
 			}
-			convertUtf8Raw, err := common.CharsetConvert([]byte(val), common.MigrateStringDataTypeDatabaseCharsetMap[common.TaskTypeOracle2MySQL][common.StringUPPER(r.SourceDBCharset)], common.MYSQLCharsetUTF8MB4)
+			convertUtf8Raw, err := common.CharsetConvert([]byte(defaultVal), common.MigrateStringDataTypeDatabaseCharsetMap[common.TaskTypeOracle2MySQL][common.StringUPPER(r.SourceDBCharset)], common.MYSQLCharsetUTF8MB4)
 			if err != nil {
 				return tableColumns, fmt.Errorf("column [%s] data default charset convert failed, %v", rowCol["COLUMN_NAME"], err)
 			}
@@ -781,10 +788,39 @@ func (r *Rule) GenTableColumn() (tableColumns []string, err error) {
 			if isTrunc {
 				dataDefault = "'" + string(convertTargetRaw) + "'"
 			} else {
-				dataDefault = string(convertTargetRaw)
+				if strings.EqualFold(string(convertTargetRaw), common.OracleNULLSTRINGTableAttrWithCustom) {
+					dataDefault = "'" + string(convertTargetRaw) + "'"
+				} else {
+					dataDefault = string(convertTargetRaw)
+				}
 			}
 		} else {
-			return tableColumns, fmt.Errorf("oracle table [%s.%s] column [%s] default value isn't exist", r.SourceSchemaName, r.SourceTableName, rowCol["COLUMN_NAME"])
+			// 截取数据
+			// 字符数据处理 MigrateStringDataTypeDatabaseCharsetMap
+			isTrunc := false
+			if strings.HasPrefix(defaultVal, "'") && strings.HasSuffix(defaultVal, "'") {
+				isTrunc = true
+				defaultVal = defaultVal[1 : len(defaultVal)-1]
+			}
+			// meta database 数据字符集 utf8mb4
+			convertUtf8Raw, err := common.CharsetConvert([]byte(defaultVal), common.MYSQLCharsetUTF8MB4, common.MYSQLCharsetUTF8MB4)
+			if err != nil {
+				return tableColumns, fmt.Errorf("column [%s] data default charset convert failed, %v", rowCol["COLUMN_NAME"], err)
+			}
+
+			convertTargetRaw, err := common.CharsetConvert(convertUtf8Raw, common.MYSQLCharsetUTF8MB4, common.StringUPPER(r.TargetDBCharset))
+			if err != nil {
+				return tableColumns, fmt.Errorf("column [%s] data default charset convert failed, %v", rowCol["COLUMN_NAME"], err)
+			}
+			if isTrunc {
+				dataDefault = "'" + string(convertTargetRaw) + "'"
+			} else {
+				if strings.EqualFold(string(convertTargetRaw), common.OracleNULLSTRINGTableAttrWithCustom) {
+					dataDefault = "'" + string(convertTargetRaw) + "'"
+				} else {
+					dataDefault = string(convertTargetRaw)
+				}
+			}
 		}
 
 		// 字段名大小写
@@ -798,61 +834,59 @@ func (r *Rule) GenTableColumn() (tableColumns []string, err error) {
 
 		if strings.EqualFold(nullable, "NULL") {
 			switch {
-			case columnCollation != "" && comment != "" && dataDefault != "":
-				tableColumns = append(tableColumns, fmt.Sprintf("`%s` %s COLLATE %s DEFAULT %s COMMENT %s", columnName, columnType, columnCollation, dataDefault, comment))
-			case columnCollation != "" && comment == "" && dataDefault != "":
-				tableColumns = append(tableColumns, fmt.Sprintf("`%s` %s COLLATE %s DEFAULT %s", columnName, columnType, columnCollation, dataDefault))
-			case columnCollation != "" && comment == "" && dataDefault == "":
-				tableColumns = append(tableColumns, fmt.Sprintf("`%s` %s COLLATE %s", columnName, columnType, columnCollation))
-			case columnCollation != "" && comment != "" && dataDefault == "":
-				tableColumns = append(tableColumns, fmt.Sprintf("`%s` %s COLLATE %s COMMENT %s", columnName, columnType, columnCollation, comment))
-			case columnCollation == "" && comment != "" && dataDefault != "":
-				tableColumns = append(tableColumns, fmt.Sprintf("`%s` %s DEFAULT %s COMMENT %s", columnName, columnType, dataDefault, comment))
-			case columnCollation == "" && comment == "" && dataDefault != "":
-				tableColumns = append(tableColumns, fmt.Sprintf("`%s` %s DEFAULT %s", columnName, columnType, dataDefault))
-			case columnCollation == "" && comment == "" && dataDefault == "":
-				tableColumns = append(tableColumns, fmt.Sprintf("`%s` %s", columnName, columnType))
-			case columnCollation == "" && comment != "" && dataDefault == "":
-				tableColumns = append(tableColumns, fmt.Sprintf("`%s` %s COMMENT %s", columnName, columnType, comment))
+			case columnCollation != "" && comment != "":
+				if strings.EqualFold(dataDefault, common.OracleNULLSTRINGTableAttrWithoutNULL) {
+					tableColumns = append(tableColumns, fmt.Sprintf("`%s` %s COLLATE %s COMMENT %s", columnName, columnType, columnCollation, comment))
+				} else {
+					tableColumns = append(tableColumns, fmt.Sprintf("`%s` %s COLLATE %s DEFAULT %s COMMENT %s", columnName, columnType, columnCollation, dataDefault, comment))
+				}
+			case columnCollation != "" && comment == "":
+				if strings.EqualFold(dataDefault, common.OracleNULLSTRINGTableAttrWithoutNULL) {
+					tableColumns = append(tableColumns, fmt.Sprintf("`%s` %s COLLATE %s", columnName, columnType, columnCollation))
+				} else {
+					tableColumns = append(tableColumns, fmt.Sprintf("`%s` %s COLLATE %s DEFAULT %s", columnName, columnType, columnCollation, dataDefault))
+				}
+			case columnCollation == "" && comment != "":
+				if strings.EqualFold(dataDefault, common.OracleNULLSTRINGTableAttrWithoutNULL) {
+					tableColumns = append(tableColumns, fmt.Sprintf("`%s` %s COMMENT %s", columnName, columnType, comment))
+				} else {
+					tableColumns = append(tableColumns, fmt.Sprintf("`%s` %s DEFAULT %s COMMENT %s", columnName, columnType, dataDefault, comment))
+				}
+			case columnCollation == "" && comment == "":
+				if strings.EqualFold(dataDefault, common.OracleNULLSTRINGTableAttrWithoutNULL) {
+					tableColumns = append(tableColumns, fmt.Sprintf("`%s` %s", columnName, columnType))
+				} else {
+					tableColumns = append(tableColumns, fmt.Sprintf("`%s` %s DEFAULT %s", columnName, columnType, dataDefault))
+				}
 			default:
 				return tableColumns, fmt.Errorf("error on gen oracle schema table column meta with nullable, rule: %v", r.String())
 			}
 		} else {
 			switch {
-			case columnCollation != "" && comment != "" && dataDefault != "":
-				if strings.EqualFold(dataDefault, "NULL") {
-					tableColumns = append(tableColumns, fmt.Sprintf("`%s` %s COLLATE %s %s COMMENT %s",
-						columnName, columnType, columnCollation, nullable, comment))
+			case columnCollation != "" && comment != "":
+				if strings.EqualFold(dataDefault, common.OracleNULLSTRINGTableAttrWithoutNULL) {
+					tableColumns = append(tableColumns, fmt.Sprintf("`%s` %s COLLATE %s %s COMMENT %s", columnName, columnType, columnCollation, nullable, comment))
 				} else {
-					tableColumns = append(tableColumns, fmt.Sprintf("`%s` %s COLLATE %s %s DEFAULT %s COMMENT %s",
-						columnName, columnType, columnCollation, nullable, dataDefault, comment))
+					tableColumns = append(tableColumns, fmt.Sprintf("`%s` %s COLLATE %s %s DEFAULT %s COMMENT %s", columnName, columnType, columnCollation, nullable, dataDefault, comment))
 				}
-			case columnCollation != "" && comment != "" && dataDefault == "":
-				tableColumns = append(tableColumns, fmt.Sprintf("`%s` %s COLLATE %s %s COMMENT %s", columnName, columnType, columnCollation, nullable, comment))
-			case columnCollation != "" && comment == "" && dataDefault != "":
-				if strings.EqualFold(dataDefault, "NULL") {
+			case columnCollation != "" && comment == "":
+				if strings.EqualFold(dataDefault, common.OracleNULLSTRINGTableAttrWithoutNULL) {
 					tableColumns = append(tableColumns, fmt.Sprintf("`%s` %s COLLATE %s %s", columnName, columnType, columnCollation, nullable))
 				} else {
 					tableColumns = append(tableColumns, fmt.Sprintf("`%s` %s COLLATE %s %s DEFAULT %s", columnName, columnType, columnCollation, nullable, dataDefault))
 				}
-			case columnCollation != "" && comment == "" && dataDefault == "":
-				tableColumns = append(tableColumns, fmt.Sprintf("`%s` %s COLLATE %s %s", columnName, columnType, columnCollation, nullable))
-			case columnCollation == "" && comment != "" && dataDefault != "":
-				if strings.EqualFold(dataDefault, "NULL") {
+			case columnCollation == "" && comment != "":
+				if strings.EqualFold(dataDefault, common.OracleNULLSTRINGTableAttrWithoutNULL) {
 					tableColumns = append(tableColumns, fmt.Sprintf("`%s` %s %s COMMENT %s", columnName, columnType, nullable, comment))
 				} else {
 					tableColumns = append(tableColumns, fmt.Sprintf("`%s` %s %s DEFAULT %s COMMENT %s", columnName, columnType, nullable, dataDefault, comment))
 				}
-			case columnCollation == "" && comment != "" && dataDefault == "":
-				tableColumns = append(tableColumns, fmt.Sprintf("`%s` %s %s COMMENT %s", columnName, columnType, nullable, comment))
-			case columnCollation == "" && comment == "" && dataDefault != "":
-				if strings.EqualFold(dataDefault, "NULL") {
+			case columnCollation == "" && comment == "":
+				if strings.EqualFold(dataDefault, common.OracleNULLSTRINGTableAttrWithoutNULL) {
 					tableColumns = append(tableColumns, fmt.Sprintf("`%s` %s %s", columnName, columnType, nullable))
 				} else {
 					tableColumns = append(tableColumns, fmt.Sprintf("`%s` %s %s DEFAULT %s", columnName, columnType, nullable, dataDefault))
 				}
-			case columnCollation == "" && comment == "" && dataDefault == "":
-				tableColumns = append(tableColumns, fmt.Sprintf("`%s` %s %s", columnName, columnType, nullable))
 			default:
 				return tableColumns, fmt.Errorf("error on gen oracle schema table column meta without nullable, rule: %v", r.String())
 			}

@@ -533,46 +533,78 @@ func (o *Oracle) GetOracleSchemaTableColumn(schemaName string, tableName string,
 			- number(x,y) -> number(x,y)
 	*/
 	if oraCollation {
-		querySQL = fmt.Sprintf(`select t.COLUMN_NAME,
+		querySQL = fmt.Sprintf(`SELECT 
+	t.COLUMN_NAME,
 	    t.DATA_TYPE,
 		 t.CHAR_LENGTH,
-		 NVL(t.CHAR_USED,'UNKNOWN') CHAR_USED,
-	    NVL(t.DATA_LENGTH,0) AS DATA_LENGTH,
-	    DECODE(NVL(TO_CHAR(t.DATA_PRECISION),'*'),'*','38',TO_CHAR(t.DATA_PRECISION)) AS DATA_PRECISION,
-	    DECODE(NVL(TO_CHAR(t.DATA_SCALE),'*'),'*','127',TO_CHAR(t.DATA_SCALE)) AS DATA_SCALE,
+		 NVL(t.CHAR_USED, 'UNKNOWN') CHAR_USED,
+	    NVL(t.DATA_LENGTH, 0) AS DATA_LENGTH,
+	    DECODE(NVL(TO_CHAR(t.DATA_PRECISION), '*'), '*', '38', TO_CHAR(t.DATA_PRECISION)) AS DATA_PRECISION,
+	    DECODE(NVL(TO_CHAR(t.DATA_SCALE), '*'), '*', '127', TO_CHAR(t.DATA_SCALE)) AS DATA_SCALE,
 		t.NULLABLE,
-	    t.DATA_DEFAULT,
-		DECODE(t.COLLATION,'USING_NLS_COMP',(SELECT VALUE from NLS_DATABASE_PARAMETERS WHERE PARAMETER = 'NLS_COMP'),t.COLLATION) COLLATION,
+	    NVL(s.DATA_DEFAULT, 'NULLSTRING') DATA_DEFAULT,
+		DECODE(t.COLLATION, 'USING_NLS_COMP',(SELECT VALUE FROM NLS_DATABASE_PARAMETERS WHERE PARAMETER = 'NLS_COMP'), t.COLLATION) COLLATION,
 	    c.COMMENTS
-	from dba_tab_columns t, dba_col_comments c
-	where t.table_name = c.table_name
-	and t.column_name = c.column_name
-	and t.owner = c.owner
-	and upper(t.owner) = upper('%s')
-	and upper(t.table_name) = upper('%s')
-	order by t.COLUMN_ID`,
-			strings.ToUpper(schemaName),
-			strings.ToUpper(tableName))
+FROM
+	dba_tab_columns t,
+	dba_col_comments c,
+	(
+	SELECT xs.OWNER,xs.TABLE_NAME,xs.COLUMN_NAME,xs.DATA_DEFAULT FROM
+	XMLTABLE (
+		'/ROWSET/ROW' PASSING (
+	SELECT
+		DBMS_XMLGEN.GETXMLTYPE (
+				q'[SELECT d.OWNER,d.TABLE_NAME,d.COLUMN_NAME,d.DATA_DEFAULT FROM DBA_TAB_COLUMNS d WHERE upper(d.owner) = upper('%s') AND upper(d.table_name) = upper('%s')]')
+	FROM
+		DUAL ) COLUMNS OWNER VARCHAR2 (300) PATH 'OWNER', TABLE_NAME VARCHAR2(300) PATH 'TABLE_NAME', COLUMN_NAME VARCHAR2(300) PATH 'COLUMN_NAME', DATA_DEFAULT VARCHAR2(4000) PATH 'DATA_DEFAULT') xs
+		) s
+WHERE
+	t.table_name = c.table_name
+	AND t.column_name = c.column_name
+	AND t.owner = c.owner
+	AND c.owner = s.owner
+	AND c.table_name = s.table_name
+	AND c.column_name = s.column_name
+	AND upper(t.owner) = upper('%s')
+	AND upper(t.table_name) = upper('%s')
+ORDER BY
+	t.COLUMN_ID`, schemaName, tableName, schemaName, tableName)
 	} else {
-		querySQL = fmt.Sprintf(`select t.COLUMN_NAME,
+		querySQL = fmt.Sprintf(`SELECT 
+	t.COLUMN_NAME,
 	    t.DATA_TYPE,
 		 t.CHAR_LENGTH,
-		 NVL(t.CHAR_USED,'UNKNOWN') CHAR_USED,
-	    NVL(t.DATA_LENGTH,0) AS DATA_LENGTH,
-	    DECODE(NVL(TO_CHAR(t.DATA_PRECISION),'*'),'*','38',TO_CHAR(t.DATA_PRECISION)) AS DATA_PRECISION,
-	    DECODE(NVL(TO_CHAR(t.DATA_SCALE),'*'),'*','127',TO_CHAR(t.DATA_SCALE)) AS DATA_SCALE,
+		 NVL(t.CHAR_USED, 'UNKNOWN') CHAR_USED,
+	    NVL(t.DATA_LENGTH, 0) AS DATA_LENGTH,
+	    DECODE(NVL(TO_CHAR(t.DATA_PRECISION), '*'), '*', '38', TO_CHAR(t.DATA_PRECISION)) AS DATA_PRECISION,
+	    DECODE(NVL(TO_CHAR(t.DATA_SCALE), '*'), '*', '127', TO_CHAR(t.DATA_SCALE)) AS DATA_SCALE,
 		t.NULLABLE,
-	    t.DATA_DEFAULT,
+	    NVL(s.DATA_DEFAULT, 'NULLSTRING') DATA_DEFAULT,
 	    c.COMMENTS
-	from dba_tab_columns t, dba_col_comments c
-	where t.table_name = c.table_name
-	and t.column_name = c.column_name
-	and t.owner = c.owner
-	and upper(t.owner) = upper('%s')
-	and upper(t.table_name) = upper('%s')
-	order by t.COLUMN_ID`,
-			strings.ToUpper(schemaName),
-			strings.ToUpper(tableName))
+FROM
+	dba_tab_columns t,
+	dba_col_comments c,
+	(
+	SELECT xs.OWNER,xs.TABLE_NAME,xs.COLUMN_NAME,xs.DATA_DEFAULT FROM
+	XMLTABLE (
+		'/ROWSET/ROW' PASSING (
+	SELECT
+		DBMS_XMLGEN.GETXMLTYPE (
+				q'[SELECT d.OWNER,d.TABLE_NAME,d.COLUMN_NAME,d.DATA_DEFAULT FROM DBA_TAB_COLUMNS d WHERE upper(d.owner) = upper('%s') AND upper(d.table_name) = upper('%s')]')
+	FROM
+		DUAL ) COLUMNS OWNER VARCHAR2 (300) PATH 'OWNER', TABLE_NAME VARCHAR2(300) PATH 'TABLE_NAME', COLUMN_NAME VARCHAR2(300) PATH 'COLUMN_NAME', DATA_DEFAULT VARCHAR2(4000) PATH 'DATA_DEFAULT') xs
+		) s
+WHERE
+	t.table_name = c.table_name
+	AND t.column_name = c.column_name
+	AND t.owner = c.owner
+	AND c.owner = s.owner
+	AND c.table_name = s.table_name
+	AND c.column_name = s.column_name
+	AND upper(t.owner) = upper('%s')
+	AND upper(t.table_name) = upper('%s')
+ORDER BY
+	t.COLUMN_ID`, schemaName, tableName, schemaName, tableName)
 	}
 
 	_, queryRes, err := Query(o.Ctx, o.OracleDB, querySQL)

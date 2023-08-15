@@ -242,8 +242,9 @@ func (r *Change) ChangeTableColumnDatatype() (map[string]map[string]string, erro
 	return tableDatatypeMap, nil
 }
 
-func (r *Change) ChangeTableColumnDefaultValue() (map[string]map[string]string, error) {
+func (r *Change) ChangeTableColumnDefaultValue() (map[string]map[string]bool, map[string]map[string]string, error) {
 	startTime := time.Now()
+	tableDefaultValSource := make(map[string]map[string]bool)
 	tableDefaultValMap := make(map[string]map[string]string)
 	// 获取内置字段默认值映射规则 -> global
 	globalDefaultValueMapSlice, err := meta.NewBuildinGlobalDefaultvalModel(r.MetaDB).DetailGlobalDefaultVal(r.Ctx, &meta.BuildinGlobalDefaultval{
@@ -251,7 +252,7 @@ func (r *Change) ChangeTableColumnDefaultValue() (map[string]map[string]string, 
 		DBTypeT: r.DBTypeT,
 	})
 	if err != nil {
-		return tableDefaultValMap, err
+		return tableDefaultValSource, tableDefaultValMap, err
 	}
 	// 获取自定义字段默认值映射规则
 	columnDefaultValueMapSlice, err := meta.NewBuildinColumnDefaultvalModel(r.MetaDB).DetailColumnDefaultVal(r.Ctx, &meta.BuildinColumnDefaultval{
@@ -260,14 +261,17 @@ func (r *Change) ChangeTableColumnDefaultValue() (map[string]map[string]string, 
 		SchemaNameS: r.SourceSchemaName,
 	})
 	if err != nil {
-		return tableDefaultValMap, err
+		return tableDefaultValSource, tableDefaultValMap, err
 	}
 
 	wg := &errgroup.Group{}
 	wg.SetLimit(r.Threads)
 
 	columnDefaultChan := make(chan map[string]map[string]string, common.ChannelBufferSize)
-	done := make(chan struct{})
+	columnDefaultSourceChan := make(chan map[string]map[string]bool, common.ChannelBufferSize)
+
+	doneC := make(chan struct{})
+	doneS := make(chan struct{})
 
 	go func(done func()) {
 		for c := range columnDefaultChan {
@@ -277,7 +281,18 @@ func (r *Change) ChangeTableColumnDefaultValue() (map[string]map[string]string, 
 		}
 		done()
 	}(func() {
-		done <- struct{}{}
+		doneC <- struct{}{}
+	})
+
+	go func(done func()) {
+		for c := range columnDefaultSourceChan {
+			for key, val := range c {
+				tableDefaultValSource[key] = val
+			}
+		}
+		done()
+	}(func() {
+		doneS <- struct{}{}
 	})
 
 	for _, table := range r.SourceTables {
@@ -289,32 +304,50 @@ func (r *Change) ChangeTableColumnDefaultValue() (map[string]map[string]string, 
 				return err
 			}
 
+			var (
+				fromDB      bool
+				errMsg      error
+				dataDefault string
+			)
+
+			columnDataDefaultValSource := make(map[string]bool, 1)
 			columnDataDefaultValMap := make(map[string]string, 1)
 			tableDefaultValTempMap := make(map[string]map[string]string, 1)
+			tableDefaultValSourceTempMap := make(map[string]map[string]bool, 1)
 
 			for _, rowCol := range tableColumnINFO {
 				// 优先级
 				// column > global
-				columnDataDefaultValMap[rowCol["COLUMN_NAME"]], err = LoadColumnDefaultValueRule(
+				fromDB, dataDefault, errMsg = LoadColumnDefaultValueRule(
 					rowCol["COLUMN_NAME"], rowCol["DATA_DEFAULT"], columnDefaultValueMapSlice, globalDefaultValueMapSlice)
-				if err != nil {
-					return err
+				if errMsg != nil {
+					return errMsg
 				}
+
+				columnDataDefaultValSource[rowCol["COLUMN_NAME"]] = fromDB
+				columnDataDefaultValMap[rowCol["COLUMN_NAME"]] = dataDefault
 			}
 
 			tableDefaultValTempMap[sourceTable] = columnDataDefaultValMap
+			tableDefaultValSourceTempMap[sourceTable] = columnDataDefaultValSource
+
 			columnDefaultChan <- tableDefaultValTempMap
+			columnDefaultSourceChan <- tableDefaultValSourceTempMap
 			return nil
 		})
 	}
 	if err = wg.Wait(); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
+
 	close(columnDefaultChan)
-	<-done
+	<-doneC
+
+	close(columnDefaultSourceChan)
+	<-doneS
 
 	zap.L().Warn("get source table column default value mapping rules",
 		zap.String("schema", r.SourceSchemaName),
 		zap.String("cost", time.Now().Sub(startTime).String()))
-	return tableDefaultValMap, nil
+	return tableDefaultValSource, tableDefaultValMap, nil
 }

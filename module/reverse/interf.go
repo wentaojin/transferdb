@@ -18,7 +18,7 @@ package reverse
 type Changer interface {
 	ChangeTableName() (map[string]string, error)
 	ChangeTableColumnDatatype() (map[string]map[string]string, error)
-	ChangeTableColumnDefaultValue() (map[string]map[string]string, error)
+	ChangeTableColumnDefaultValue() (map[string]map[string]bool, map[string]map[string]string, error)
 }
 
 type Reader interface {

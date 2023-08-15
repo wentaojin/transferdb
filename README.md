@@ -47,9 +47,9 @@ TechExchange
 ------------
 If you like the project and want to buy me a cola or have tech exchange, you can button sponsor or join tech group:
 
-| TransferDB TechExchange QQ Group |
-|----------------------------------|
-|<img src="image/tech-exchange.jpg" height="200" width="200"/>|
+| QQ Group                                      |
+|-----------------------------------------------|
+| <img src="image/tech-exchange.jpg" height="200" width="200"/> |
 
 
 

@@ -47,12 +47,14 @@ type Table struct {
 	TargetDBCharset         string          `json:"targetdb_charset"`
 	LowerCaseFieldName      string          `json:"lower_case_field_name"`
 
-	TableColumnDatatypeRule   map[string]string `json:"table_column_datatype_rule"`
-	TableColumnDefaultValRule map[string]string `json:"table_column_default_val_rule"`
-	Overwrite                 bool              `json:"overwrite"`
-	Oracle                    *oracle.Oracle    `json:"-"`
-	MySQL                     *mysql.MySQL      `json:"-"`
-	MetaDB                    *meta.Meta        `json:"-"`
+	TableColumnDatatypeRule         map[string]string `json:"table_column_datatype_rule"`
+	TableColumnDefaultValRule       map[string]string `json:"table_column_default_val_rule"`
+	TableColumnDefaultValSourceRule map[string]bool   `json:"table_column_default_val_source_rule"` // 判断表字段 defaultVal 来源于 database or custom
+
+	Overwrite bool           `json:"overwrite"`
+	Oracle    *oracle.Oracle `json:"-"`
+	MySQL     *mysql.MySQL   `json:"-"`
+	MetaDB    *meta.Meta     `json:"-"`
 }
 
 func PreCheckCompatibility(cfg *config.Config, mysql *mysql.MySQL, exporters []string, oracleDBVersion, oracleDBCharset string, isExtended bool) ([]string, map[string][]map[string]string, map[string][]map[string]string, map[string]string, map[string]string, error) {
@@ -286,7 +288,7 @@ func PreCheckCompatibility(cfg *config.Config, mysql *mysql.MySQL, exporters []s
 	return reverseTaskTables, errCompatibilityTable, errCompatibilityColumn, tableCharSetMap, tableCollationMap, nil
 }
 
-func GenReverseTableTask(r *Reverse, lowerCaseFieldName string, tableNameRule map[string]string, tableColumnRule, tableDefaultRule map[string]map[string]string, exporters []string, oracleDBVersion string, isExtended bool, tableCharSetMap map[string]string, tableCollationMap map[string]string) ([]*Table, error) {
+func GenReverseTableTask(r *Reverse, lowerCaseFieldName string, tableNameRule map[string]string, tableColumnRule map[string]map[string]string, tableDefaultRuleSource map[string]map[string]bool, tableDefaultRule map[string]map[string]string, exporters []string, oracleDBVersion string, isExtended bool, tableCharSetMap map[string]string, tableCollationMap map[string]string) ([]*Table, error) {
 	var (
 		tables []*Table
 	)
@@ -327,24 +329,25 @@ func GenReverseTableTask(r *Reverse, lowerCaseFieldName string, tableNameRule ma
 				}
 
 				tbl := &Table{
-					OracleDBVersion:           oracleDBVersion,
-					OracleExtendedMode:        isExtended,
-					SourceSchemaName:          common.StringUPPER(sourceSchema),
-					SourceTableName:           common.StringUPPER(ts),
-					TargetSchemaName:          common.StringUPPER(r.cfg.SchemaConfig.TargetSchema),
-					TargetTableName:           targetTableName,
-					IsPartition:               common.IsContainString(partitionTables, common.StringUPPER(ts)),
-					SourceTableCharacterSet:   tableCharSetMap[ts],
-					SourceTableCollation:      tableCollationMap[ts],
-					SourceDBCharset:           r.cfg.MySQLConfig.Charset,
-					TargetDBCharset:           r.cfg.OracleConfig.Charset,
-					LowerCaseFieldName:        lowerCaseFieldName,
-					TableColumnDatatypeRule:   tableColumnRule[common.StringUPPER(ts)],
-					TableColumnDefaultValRule: tableDefaultRule[common.StringUPPER(ts)],
-					Overwrite:                 r.cfg.MySQLConfig.Overwrite,
-					MySQL:                     r.mysql,
-					Oracle:                    r.oracle,
-					MetaDB:                    r.metaDB,
+					OracleDBVersion:                 oracleDBVersion,
+					OracleExtendedMode:              isExtended,
+					SourceSchemaName:                common.StringUPPER(sourceSchema),
+					SourceTableName:                 common.StringUPPER(ts),
+					TargetSchemaName:                common.StringUPPER(r.cfg.SchemaConfig.TargetSchema),
+					TargetTableName:                 targetTableName,
+					IsPartition:                     common.IsContainString(partitionTables, common.StringUPPER(ts)),
+					SourceTableCharacterSet:         tableCharSetMap[ts],
+					SourceTableCollation:            tableCollationMap[ts],
+					SourceDBCharset:                 r.cfg.MySQLConfig.Charset,
+					TargetDBCharset:                 r.cfg.OracleConfig.Charset,
+					LowerCaseFieldName:              lowerCaseFieldName,
+					TableColumnDatatypeRule:         tableColumnRule[common.StringUPPER(ts)],
+					TableColumnDefaultValRule:       tableDefaultRule[common.StringUPPER(ts)],
+					TableColumnDefaultValSourceRule: tableDefaultRuleSource[common.StringUPPER(ts)],
+					Overwrite:                       r.cfg.MySQLConfig.Overwrite,
+					MySQL:                           r.mysql,
+					Oracle:                          r.oracle,
+					MetaDB:                          r.metaDB,
 				}
 				tableChan <- tbl
 				return nil
@@ -485,12 +488,12 @@ func (t *Table) GetTableOriginDDL() (string, error) {
 	if err != nil {
 		return ddl, err
 	}
-	convertUtf8Raw, err := common.CharsetConvert([]byte(ddl), common.MigrateStringDataTypeDatabaseCharsetMap[common.TaskTypeTiDB2Oracle][common.StringUPPER(t.SourceDBCharset)], common.MYSQLCharsetUTF8MB4)
+	convertUtf8Raw, err := common.CharsetConvert([]byte(ddl), common.StringUPPER(t.SourceDBCharset), common.MYSQLCharsetUTF8MB4)
 	if err != nil {
 		return ddl, fmt.Errorf("table [%v] ddl charset convert failed, %v", t.SourceTableName, err)
 	}
 
-	convertTargetRaw, err := common.CharsetConvert(convertUtf8Raw, common.MYSQLCharsetUTF8MB4, common.StringUPPER(t.TargetDBCharset))
+	convertTargetRaw, err := common.CharsetConvert(convertUtf8Raw, common.MYSQLCharsetUTF8MB4, common.OracleCharsetStringConvertMapping[common.StringUPPER(t.TargetDBCharset)])
 	if err != nil {
 		return ddl, fmt.Errorf("table [%v] ddl charset convert failed, %v", t.SourceTableName, err)
 	}

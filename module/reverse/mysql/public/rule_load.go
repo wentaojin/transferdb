@@ -21,26 +21,26 @@ import (
 	"strings"
 )
 
-func LoadColumnDefaultValueRule(columnName string, defaultValue string, columnDefaultValueMapSlice []meta.BuildinColumnDefaultval, globalDefaultValueMapSlice []meta.BuildinGlobalDefaultval) string {
+func LoadColumnDefaultValueRule(columnName string, defaultValue string, columnDefaultValueMapSlice []meta.BuildinColumnDefaultval, globalDefaultValueMapSlice []meta.BuildinGlobalDefaultval) (bool, string) {
 	if len(columnDefaultValueMapSlice) == 0 && len(globalDefaultValueMapSlice) == 0 {
-		return defaultValue
+		return true, defaultValue
 	}
 
 	// 默认值优先级: 字段级别默认值 > 全局级别默认值
 	if len(columnDefaultValueMapSlice) > 0 {
 		for _, dv := range columnDefaultValueMapSlice {
 			if strings.EqualFold(columnName, dv.ColumnNameS) && strings.EqualFold(strings.TrimSpace(dv.DefaultValueS), strings.TrimSpace(defaultValue)) {
-				return dv.DefaultValueT
+				return false, dv.DefaultValueT
 			}
 		}
 	}
 
 	for _, dv := range globalDefaultValueMapSlice {
-		if strings.EqualFold(strings.TrimSpace(dv.DefaultValueS), strings.TrimSpace(defaultValue)) && dv.DefaultValueT != "" {
-			return dv.DefaultValueT
+		if strings.EqualFold(strings.TrimSpace(dv.DefaultValueS), strings.TrimSpace(defaultValue)) {
+			return false, dv.DefaultValueT
 		}
 	}
-	return defaultValue
+	return true, defaultValue
 }
 
 func LoadDataTypeRuleUsingTableOrSchema(originColumnType string, buildInColumnType string, tableDataTypeMapSlice []meta.TableDatatypeRule, schemaDataTypeMapSlice []meta.SchemaDatatypeRule) string {

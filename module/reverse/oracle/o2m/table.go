@@ -49,15 +49,17 @@ type Table struct {
 	SourceTableType       string          `json:"source_table_type"`
 	LowerCaseFieldName    string          `json:"lower_case_field_name"`
 
-	TableColumnDatatypeRule   map[string]string `json:"table_column_datatype_rule"`
-	TableColumnDefaultValRule map[string]string `json:"table_column_default_val_rule"`
-	Overwrite                 bool              `json:"overwrite"`
-	Oracle                    *oracle.Oracle    `json:"-"`
-	MySQL                     *mysql.MySQL      `json:"-"`
-	MetaDB                    *meta.Meta        `json:"-"`
+	TableColumnDatatypeRule         map[string]string `json:"table_column_datatype_rule"`
+	TableColumnDefaultValRule       map[string]string `json:"table_column_default_val_rule"`
+	TableColumnDefaultValSourceRule map[string]bool   `json:"table_column_default_val_source_rule"` // 判断表字段 defaultVal 来源于 database or custom
+
+	Overwrite bool           `json:"overwrite"`
+	Oracle    *oracle.Oracle `json:"-"`
+	MySQL     *mysql.MySQL   `json:"-"`
+	MetaDB    *meta.Meta     `json:"-"`
 }
 
-func GenReverseTableTask(r *Reverse, tableNameRule map[string]string, tableColumnRule, tableDefaultRule map[string]map[string]string, oracleDBVersion, oracleDBCharset, targetDBCharset string, oracleCollation bool, lowerCaseFieldName string, exporters []string, nlsSort, nlsComp string) ([]*Table, error) {
+func GenReverseTableTask(r *Reverse, tableNameRule map[string]string, tableColumnRule map[string]map[string]string, tableDefaultSourceRule map[string]map[string]bool, tableDefaultRule map[string]map[string]string, oracleDBVersion, oracleDBCharset, targetDBCharset string, oracleCollation bool, lowerCaseFieldName string, exporters []string, nlsSort, nlsComp string) ([]*Table, error) {
 	var tables []*Table
 
 	beginTime := time.Now()
@@ -151,25 +153,26 @@ func GenReverseTableTask(r *Reverse, tableNameRule map[string]string, tableColum
 				}
 
 				tbl := &Table{
-					Ctx:                       r.Ctx,
-					SourceSchemaName:          common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema),
-					TargetSchemaName:          common.StringUPPER(r.Cfg.SchemaConfig.TargetSchema),
-					SourceTableName:           common.StringUPPER(t),
-					TargetDBVersion:           dbVersion,
-					TargetTableName:           targetTableName,
-					TargetTableOption:         common.StringUPPER(r.Cfg.MySQLConfig.TableOption),
-					SourceTableType:           tablesMap[t],
-					SourceDBCharset:           oracleDBCharset,
-					TargetDBCharset:           targetDBCharset,
-					SourceDBNLSSort:           nlsSort,
-					SourceDBNLSComp:           nlsComp,
-					LowerCaseFieldName:        lowerCaseFieldName,
-					TableColumnDatatypeRule:   tableColumnRule[common.StringUPPER(t)],
-					TableColumnDefaultValRule: tableDefaultRule[common.StringUPPER(t)],
-					Overwrite:                 r.Cfg.MySQLConfig.Overwrite,
-					Oracle:                    r.Oracle,
-					MySQL:                     r.Mysql,
-					MetaDB:                    r.MetaDB,
+					Ctx:                             r.Ctx,
+					SourceSchemaName:                common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema),
+					TargetSchemaName:                common.StringUPPER(r.Cfg.SchemaConfig.TargetSchema),
+					SourceTableName:                 common.StringUPPER(t),
+					TargetDBVersion:                 dbVersion,
+					TargetTableName:                 targetTableName,
+					TargetTableOption:               common.StringUPPER(r.Cfg.MySQLConfig.TableOption),
+					SourceTableType:                 tablesMap[t],
+					SourceDBCharset:                 oracleDBCharset,
+					TargetDBCharset:                 targetDBCharset,
+					SourceDBNLSSort:                 nlsSort,
+					SourceDBNLSComp:                 nlsComp,
+					LowerCaseFieldName:              lowerCaseFieldName,
+					TableColumnDatatypeRule:         tableColumnRule[common.StringUPPER(t)],
+					TableColumnDefaultValRule:       tableDefaultRule[common.StringUPPER(t)],
+					TableColumnDefaultValSourceRule: tableDefaultSourceRule[common.StringUPPER(t)],
+					Overwrite:                       r.Cfg.MySQLConfig.Overwrite,
+					Oracle:                          r.Oracle,
+					MySQL:                           r.Mysql,
+					MetaDB:                          r.MetaDB,
 				}
 				tbl.OracleCollation = oracleCollation
 				if oracleCollation {

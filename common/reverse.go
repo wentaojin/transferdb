@@ -66,6 +66,21 @@ var (
 	ORACLECharsetZHS32GB18030 = "ZHS32GB18030"
 )
 
+// Oracle 字符集转换映射程序字符集
+const (
+	CharsetUTF8MB4 = "UTF8MB4"
+	CharsetGB18030 = "GB18030"
+	CharsetBIG5    = "BIG5"
+	CharsetGBK     = "GBK"
+)
+
+var OracleCharsetStringConvertMapping = map[string]string{
+	ORACLECharsetAL32UTF8:     CharsetUTF8MB4,
+	ORACLECharsetZHT16BIG5:    CharsetBIG5,
+	ORACLECharsetZHS16GBK:     CharsetGBK,
+	ORACLECharsetZHS32GB18030: CharsetGB18030,
+}
+
 // 表结构迁移以及表结构校验字符集、排序规则
 // 用于表结构以及字段属性字符集映射规则
 var MigrateTableStructureDatabaseCharsetMap = map[string]map[string]string{
@@ -349,6 +364,12 @@ const (
 	MigrateTableStructFieldNameOriginCase = "0"
 	MigrateTableStructFieldNameLowerCase  = "1"
 	MigrateTableStructFieldNameUpperCase  = "2"
+)
+
+// Oracle Table Attr Null 特殊处理
+const (
+	OracleNULLSTRINGTableAttrWithoutNULL = "NULLSTRING"
+	OracleNULLSTRINGTableAttrWithCustom  = ""
 )
 
 // Oracle 不支持数据类型 -> M2O

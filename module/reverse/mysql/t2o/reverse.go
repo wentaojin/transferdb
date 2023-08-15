@@ -127,7 +127,7 @@ func (r *Reverse) Reverse() error {
 
 	// 获取规则
 	ruleTime := time.Now()
-	tableNameRuleMap, tableColumnRuleMap, tableDefaultRuleMap, err := IChanger(&public.Change{
+	tableNameRuleMap, tableColumnRuleMap, tableDefaultRuleSource, tableDefaultRuleMap, err := IChanger(&public.Change{
 		Ctx:              r.ctx,
 		DBTypeS:          r.cfg.DBTypeS,
 		DBTypeT:          r.cfg.DBTypeT,
@@ -145,7 +145,7 @@ func (r *Reverse) Reverse() error {
 		zap.String("schema", r.cfg.SchemaConfig.SourceSchema),
 		zap.String("cost", time.Now().Sub(ruleTime).String()))
 
-	tables, err := GenReverseTableTask(r, r.cfg.ReverseConfig.LowerCaseFieldName, tableNameRuleMap, tableColumnRuleMap, tableDefaultRuleMap, reverseTaskTables, oracleDBVersion, isExtended, tableCharSetMap, tableCollationMap)
+	tables, err := GenReverseTableTask(r, r.cfg.ReverseConfig.LowerCaseFieldName, tableNameRuleMap, tableColumnRuleMap, tableDefaultRuleSource, tableDefaultRuleMap, reverseTaskTables, oracleDBVersion, isExtended, tableCharSetMap, tableCollationMap)
 	if err != nil {
 		return err
 	}
