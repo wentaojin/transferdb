@@ -21,6 +21,7 @@ import (
 	"github.com/wentaojin/transferdb/database/mysql"
 	"github.com/wentaojin/transferdb/database/oracle"
 	"github.com/wentaojin/transferdb/module/check/oracle/public"
+	"regexp"
 	"strings"
 )
 
@@ -104,8 +105,8 @@ func GetOracleTableColumn(schemaName, tableName string, oracle *oracle.Oracle, s
 
 	for _, rowCol := range columnInfo {
 		var (
-			nullable    string
-			dataDefault string
+			nullable     string
+			defaultValue string
 		)
 		if strings.ToUpper(rowCol["NULLABLE"]) == "Y" {
 			nullable = "NULL"
@@ -113,23 +114,55 @@ func GetOracleTableColumn(schemaName, tableName string, oracle *oracle.Oracle, s
 			nullable = "NOT NULL"
 		}
 
-		dataDefault = strings.TrimSpace(rowCol["DATA_DEFAULT"])
+		defaultValue = rowCol["DATA_DEFAULT"]
 
 		// 处理 oracle 默认值 ('xxx') 或者 (xxx)
-		if strings.HasPrefix(dataDefault, "(") && strings.HasSuffix(dataDefault, ")") {
-			dataDefault = strings.TrimLeft(dataDefault, "(")
-			dataDefault = strings.TrimRight(dataDefault, ")")
+		var defaultVal string
+
+		defaultValLen := len(defaultValue)
+
+		rightBracketsIndex := strings.Index(defaultValue, "(")
+		leftBracketsIndex := strings.LastIndex(defaultValue, ")")
+
+		if rightBracketsIndex == -1 || leftBracketsIndex == -1 {
+			defaultVal = defaultValue
+		} else {
+			// 如果首位是左括号，末尾要么是右括号)或者右括号+随意空格) ，不能是其他
+			if rightBracketsIndex == 0 {
+				diffK := defaultValLen - leftBracketsIndex
+				if diffK == 0 {
+					defaultVal = defaultValue[1:leftBracketsIndex]
+				} else {
+					// 去除末尾)空格
+					diffV := strings.TrimSpace(defaultValue[leftBracketsIndex:])
+					if len(diffV) == 1 && strings.EqualFold(diffV, ")") {
+						defaultVal = defaultValue[1:leftBracketsIndex]
+					} else {
+						return nil, defaultVal, fmt.Errorf("load column first [%s] default value [%s] rule failed", rowCol["COLUMN_NAME"], defaultValue)
+					}
+				}
+			} else {
+				// 如果左括号非首位，去除空格
+				diffLeft := strings.TrimSpace(defaultValue[:rightBracketsIndex+1])
+				//  (xxxx)
+				if len(diffLeft) == 1 && strings.EqualFold(diffLeft, "(") && strings.LastIndex(defaultValue, ")") != -1 {
+					defaultVal = defaultValue[rightBracketsIndex:leftBracketsIndex]
+				} else if len(diffLeft) == 1 && strings.EqualFold(diffLeft, "'(") && strings.LastIndex(defaultValue, "'") != -1 {
+					// ' xxx(sd)' 或者 'xxx(ssd '
+					defaultVal = defaultValue
+				} else {
+					// ' (xxxs) '、sys_guid()、'xss()'、'x''()x)'、''
+					defaultVal = defaultValue
+				}
+
+			}
 		}
 
-		// 修复 mysql 默认值存在单引号问题
-		// oracle 单引号默认值 '''PC''' , mysql 单引号默认值 'PC'
-		// 对比 oracle 会去掉前后一个单引号 ''PC'', mysql 增加前后单引号 ''PC''
-		if strings.HasPrefix(dataDefault, "'") {
-			dataDefault = strings.TrimPrefix(dataDefault, "'")
-		}
-
-		if strings.HasSuffix(dataDefault, "'") {
-			dataDefault = strings.TrimSuffix(dataDefault, "'")
+		// 特殊处理
+		if strings.EqualFold(defaultVal, common.OracleNULLSTRINGTableAttrWithoutNULL) {
+			defaultVal = "NULL"
+		} else if strings.EqualFold(defaultVal, common.OracleNULLSTRINGTableAttrWithCustom) {
+			defaultVal = "''"
 		}
 
 		column := public.Column{
@@ -142,11 +175,11 @@ func GetOracleTableColumn(schemaName, tableName string, oracle *oracle.Oracle, s
 				DataScale:         strings.ToUpper(rowCol["DATA_SCALE"]),
 				DatetimePrecision: "", // only mysql
 				NULLABLE:          nullable,
-				DataDefault:       dataDefault,
+				DataDefault:       defaultVal,
 				Comment:           strings.ToUpper(rowCol["COMMENTS"]),
 			},
 			CharacterSet:            strings.ToUpper(sourceDBCharacterSet), // oracle db characterSet only one
-			OracleOriginDataDefault: strings.TrimSpace(rowCol["DATA_DEFAULT"]),
+			OracleOriginDataDefault: defaultVal,
 			MySQLOriginDataDefault:  "", // only mysql
 		}
 
@@ -368,10 +401,15 @@ func getMySQLTableColumn(schemaName, tableName string, mysql *mysql.MySQL) (map[
 	}
 	columns := make(map[string]public.Column, len(columnInfo))
 
+	reg, err := regexp.Compile(`^.+\(\)$`)
+	if err != nil {
+		return nil, err
+	}
+
 	for _, rowCol := range columnInfo {
 		var (
-			nullable    string
-			dataDefault string
+			nullable       string
+			regDataDefault string
 		)
 		if strings.ToUpper(rowCol["NULLABLE"]) == "Y" {
 			nullable = "NULL"
@@ -379,17 +417,35 @@ func getMySQLTableColumn(schemaName, tableName string, mysql *mysql.MySQL) (map[
 			nullable = "NOT NULL"
 		}
 
-		// 修复 mysql 默认值存在单引号问题
-		// oracle 单引号默认值 '''PC''' , mysql 单引号默认值 'PC'
-		// 对比 oracle 会去掉前后一个单引号 ''PC'', mysql 增加前后单引号 ''PC''
-		dataDefault = strings.TrimSpace(rowCol["DATA_DEFAULT"])
-
-		if strings.HasPrefix(dataDefault, "'") {
-			dataDefault = fmt.Sprintf("'%s", dataDefault)
-		}
-
-		if strings.HasSuffix(dataDefault, "'") {
-			dataDefault = fmt.Sprintf("%s'", dataDefault)
+		// Special M2O
+		// MySQL/TiDB default value character insensitive
+		if common.IsContainString(common.SpecialMySQLDataDefaultsWithDataTYPE, common.StringUPPER(rowCol["DATA_TYPE"])) {
+			if reg.MatchString(rowCol["DATA_DEFAULT"]) || strings.EqualFold(rowCol["DATA_DEFAULT"], "CURRENT_TIMESTAMP") {
+				regDataDefault = rowCol["DATA_DEFAULT"]
+			} else {
+				// 修复默认值类似 'PC' 数据单引号问题
+				// oracle 单引号默认值 '''PC''' , mysql 单引号默认值 'PC'，对于字符数据非默认值带单引号的是 PC
+				// mysql 前后再增加两个单引号，输出 '''PC'''
+				if strings.HasPrefix(rowCol["DATA_DEFAULT"], "'") && strings.HasSuffix(rowCol["DATA_DEFAULT"], "'") {
+					regDataDefault = fmt.Sprintf("''%s", rowCol["DATA_DEFAULT"])
+					regDataDefault = fmt.Sprintf("%s''", rowCol["DATA_DEFAULT"])
+					// 特殊数据处理
+				} else if strings.EqualFold(rowCol["DATA_DEFAULT"], common.OracleNULLSTRINGTableAttrWithoutNULL) {
+					regDataDefault = "NULL"
+				} else if strings.EqualFold(rowCol["DATA_DEFAULT"], common.OracleNULLSTRINGTableAttrWithCustom) {
+					regDataDefault = "''"
+				} else {
+					regDataDefault = common.StringsBuilder(`'`, rowCol["DATA_DEFAULT"], `'`)
+				}
+			}
+		} else {
+			if strings.EqualFold(rowCol["DATA_DEFAULT"], common.OracleNULLSTRINGTableAttrWithoutNULL) {
+				regDataDefault = "NULL"
+			} else if strings.EqualFold(rowCol["DATA_DEFAULT"], common.OracleNULLSTRINGTableAttrWithCustom) {
+				regDataDefault = "''"
+			} else {
+				regDataDefault = rowCol["DATA_DEFAULT"]
+			}
 		}
 
 		columns[strings.ToUpper(rowCol["COLUMN_NAME"])] = public.Column{
@@ -400,13 +456,13 @@ func getMySQLTableColumn(schemaName, tableName string, mysql *mysql.MySQL) (map[
 				DataScale:         strings.ToUpper(rowCol["DATA_SCALE"]),
 				DatetimePrecision: strings.ToUpper(rowCol["DATETIME_PRECISION"]),
 				NULLABLE:          nullable,
-				DataDefault:       dataDefault,
+				DataDefault:       regDataDefault,
 				Comment:           strings.ToUpper(rowCol["COMMENTS"]),
 			},
 			CharacterSet:            strings.ToUpper(rowCol["CHARACTER_SET_NAME"]),
 			Collation:               strings.ToUpper(rowCol["COLLATION_NAME"]),
 			OracleOriginDataDefault: "", // only oracle
-			MySQLOriginDataDefault:  strings.TrimSpace(rowCol["DATA_DEFAULT"]),
+			MySQLOriginDataDefault:  regDataDefault,
 		}
 	}
 

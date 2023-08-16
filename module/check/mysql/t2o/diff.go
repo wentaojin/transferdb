@@ -23,7 +23,6 @@ import (
 	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/database/meta"
 	"github.com/wentaojin/transferdb/module/check"
-	"github.com/wentaojin/transferdb/module/check/mysql/m2o"
 	"github.com/wentaojin/transferdb/module/check/mysql/public"
 	"go.uber.org/zap"
 	"reflect"
@@ -143,8 +142,8 @@ func (c *Diff) CheckTableCharacterSetAndCollation() string {
 
 		// 统一 AL32UTF8 处理, 取第一个 collation
 		builder.WriteString(fmt.Sprintf("ALTER TABLE %s.%s CHARACTER SET %s COLLATE %s;\n\n", c.OracleTableINFO.SchemaName, c.OracleTableINFO.TableName,
-			strings.ToLower(oracleTableCharset),
-			strings.ToLower(oracleTableCollations[0])))
+			oracleTableCharset,
+			oracleTableCollations[0]))
 	}
 
 	return builder.String()
@@ -199,8 +198,8 @@ func (c *Diff) CheckColumnCharacterSetAndCollation() string {
 			// 取第一个 collation
 			sqlStrings = append(sqlStrings, fmt.Sprintf("ALTER TABLE %s.%s MODIFY %s %s(%s) CHARACTER SET %s COLLATE %s;",
 				c.OracleTableINFO.SchemaName, c.OracleTableINFO.TableName, oraColName, oraColInfo.DataType, oraColInfo.DataLength,
-				strings.ToLower(oracleColumnCharset),
-				strings.ToLower(oracleColumnCollations[0])))
+				oracleColumnCharset,
+				oracleColumnCollations[0]))
 		}
 
 		builder.WriteString(fmt.Sprintf("%v\n", t.Render()))
@@ -275,7 +274,7 @@ func (c *Diff) CheckColumnCounts() (string, error) {
 				columnMeta string
 				err        error
 			)
-			columnMeta, err = m2o.GenOracleTableColumnMeta(c.Ctx, c.MetaDB, c.DBTypeS, c.DBTypeT, c.OracleTableINFO.SchemaName, c.OracleTableINFO.TableName, mysqlColName, c.OracleDBVersion, mysqlColInfo, c.OracleDBExtendMode)
+			columnMeta, err = public.GenOracleTableColumnMeta(c.Ctx, c.MetaDB, c.DBTypeS, c.DBTypeT, c.OracleTableINFO.SchemaName, c.OracleTableINFO.TableName, mysqlColName, c.OracleDBVersion, mysqlColInfo, c.OracleDBExtendMode)
 			if err != nil {
 				return columnMeta, err
 			}

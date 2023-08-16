@@ -69,8 +69,9 @@ func GenOracleTableColumnMeta(ctx context.Context, metaDB *meta.Meta, dbTypeS, d
 		columnCharacter = ""
 		columnCollation = ""
 	} else {
-		columnCharacter = columnINFO.CharacterSet
-		columnCollation = columnINFO.Collation
+		dbCovert := common.StringsBuilder(dbTypeS, "2", dbTypeT)
+		columnCharacter = common.MigrateTableStructureDatabaseCharsetMap[dbCovert][columnINFO.CharacterSet]
+		columnCollation = common.MigrateTableStructureDatabaseCollationMap[dbCovert][columnINFO.Collation][columnCharacter]
 	}
 	if (columnCharacter == "" && columnCollation != "") || (columnCharacter != "" && columnCollation == "") {
 		return columnMeta, fmt.Errorf(`oracle table column meta generate failed, column [%v] json: [%v]`, columnName, columnINFO.String())
@@ -117,11 +118,19 @@ func GenOracleTableColumnMeta(ctx context.Context, metaDB *meta.Meta, dbTypeS, d
 	case nullable != "NULL" && columnCharacter == "" && columnCollation == "":
 		switch {
 		case comment != "" && dataDefault != "":
-			columnMeta = fmt.Sprintf("`%s` %s %s DEFAULT %s COMMENT %s", columnName, columnType, nullable, dataDefault, comment)
+			if strings.EqualFold(dataDefault, common.OracleNULLSTRINGTableAttrWithNULL) {
+				columnMeta = fmt.Sprintf("`%s` %s %s COMMENT %s", columnName, columnType, nullable, comment)
+			} else {
+				columnMeta = fmt.Sprintf("`%s` %s %s DEFAULT %s COMMENT %s", columnName, columnType, nullable, dataDefault, comment)
+			}
 		case comment != "" && dataDefault == "":
 			columnMeta = fmt.Sprintf("`%s` %s %s COMMENT %s", columnName, columnType, nullable, comment)
 		case comment == "" && dataDefault != "":
-			columnMeta = fmt.Sprintf("`%s` %s %s DEFAULT %s", columnName, columnType, nullable, dataDefault)
+			if strings.EqualFold(dataDefault, common.OracleNULLSTRINGTableAttrWithNULL) {
+				columnMeta = fmt.Sprintf("`%s` %s %s", columnName, columnType, nullable)
+			} else {
+				columnMeta = fmt.Sprintf("`%s` %s %s DEFAULT %s", columnName, columnType, nullable, dataDefault)
+			}
 		case comment == "" && dataDefault == "":
 			columnMeta = fmt.Sprintf("`%s` %s %s", columnName, columnType, nullable)
 		default:
@@ -130,11 +139,19 @@ func GenOracleTableColumnMeta(ctx context.Context, metaDB *meta.Meta, dbTypeS, d
 	case nullable != "NULL" && columnCharacter != "" && columnCollation != "":
 		switch {
 		case comment != "" && dataDefault != "":
-			columnMeta = fmt.Sprintf("`%s` %s CHARACTER SET %s COLLATE %s %s DEFAULT %s COMMENT %s", columnName, columnType, columnCharacter, columnCollation, nullable, dataDefault, comment)
+			if strings.EqualFold(dataDefault, common.OracleNULLSTRINGTableAttrWithNULL) {
+				columnMeta = fmt.Sprintf("`%s` %s CHARACTER SET %s COLLATE %s %s COMMENT %s", columnName, columnType, columnCharacter, columnCollation, nullable, comment)
+			} else {
+				columnMeta = fmt.Sprintf("`%s` %s CHARACTER SET %s COLLATE %s %s DEFAULT %s COMMENT %s", columnName, columnType, columnCharacter, columnCollation, nullable, dataDefault, comment)
+			}
 		case comment != "" && dataDefault == "":
 			columnMeta = fmt.Sprintf("`%s` %s CHARACTER SET %s COLLATE %s %s COMMENT %s", columnName, columnType, columnCharacter, columnCollation, nullable, comment)
 		case comment == "" && dataDefault != "":
-			columnMeta = fmt.Sprintf("`%s` %s CHARACTER SET %s COLLATE %s %s DEFAULT %s", columnName, columnType, columnCharacter, columnCollation, nullable, dataDefault)
+			if strings.EqualFold(dataDefault, common.OracleNULLSTRINGTableAttrWithNULL) {
+				columnMeta = fmt.Sprintf("`%s` %s CHARACTER SET %s COLLATE %s %s", columnName, columnType, columnCharacter, columnCollation, nullable)
+			} else {
+				columnMeta = fmt.Sprintf("`%s` %s CHARACTER SET %s COLLATE %s %s DEFAULT %s", columnName, columnType, columnCharacter, columnCollation, nullable, dataDefault)
+			}
 		case comment == "" && dataDefault == "":
 			columnMeta = fmt.Sprintf("`%s` %s CHARACTER SET %s COLLATE %s %s", columnName, columnType, columnCharacter, columnCollation, nullable)
 		default:

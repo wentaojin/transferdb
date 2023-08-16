@@ -1072,11 +1072,19 @@ func genColumnNullCommentDefaultMeta(dataNullable, comments, dataDefault string)
 	} else {
 		switch {
 		case comments != "" && dataDefault != "":
-			colMeta = fmt.Sprintf("%s DEFAULT %s COMMENT '%s'", dataNullable, dataDefault, comments)
+			if strings.EqualFold(dataDefault, common.OracleNULLSTRINGTableAttrWithNULL) {
+				colMeta = fmt.Sprintf("%s COMMENT '%s'", dataNullable, comments)
+			} else {
+				colMeta = fmt.Sprintf("%s DEFAULT %s COMMENT '%s'", dataNullable, dataDefault, comments)
+			}
 		case comments != "" && dataDefault == "":
 			colMeta = fmt.Sprintf("%s COMMENT '%s'", dataNullable, comments)
 		case comments == "" && dataDefault != "":
-			colMeta = fmt.Sprintf("%s DEFAULT %s", dataNullable, dataDefault)
+			if strings.EqualFold(dataDefault, common.OracleNULLSTRINGTableAttrWithNULL) {
+				colMeta = fmt.Sprintf("%s", dataNullable)
+			} else {
+				colMeta = fmt.Sprintf("%s DEFAULT %s", dataNullable, dataDefault)
+			}
 		case comments == "" && dataDefault == "":
 			colMeta = fmt.Sprintf("%s", dataNullable)
 		}

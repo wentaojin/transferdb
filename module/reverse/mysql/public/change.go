@@ -17,6 +17,7 @@ package public
 
 import (
 	"context"
+	"fmt"
 	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/database/meta"
 	"github.com/wentaojin/transferdb/database/mysql"
@@ -327,10 +328,29 @@ func (r *Change) ChangeTableColumnDefaultValue() (map[string]map[string]bool, ma
 					if reg.MatchString(rowCol["DATA_DEFAULT"]) || strings.EqualFold(rowCol["DATA_DEFAULT"], "CURRENT_TIMESTAMP") {
 						regDataDefault = rowCol["DATA_DEFAULT"]
 					} else {
-						regDataDefault = common.StringsBuilder(`'`, rowCol["DATA_DEFAULT"], `'`)
+						// 修复默认值类似 'PC' 数据单引号问题
+						// oracle 单引号默认值 '''PC''' , mysql 单引号默认值 'PC'，对于字符数据非默认值带单引号的是 PC
+						// mysql 前后再增加两个单引号，输出 '''PC'''
+						if strings.HasPrefix(rowCol["DATA_DEFAULT"], "'") && strings.HasSuffix(rowCol["DATA_DEFAULT"], "'") {
+							regDataDefault = fmt.Sprintf("''%s", rowCol["DATA_DEFAULT"])
+							regDataDefault = fmt.Sprintf("%s''", regDataDefault)
+							// 特殊数据处理
+						} else if strings.EqualFold(rowCol["DATA_DEFAULT"], common.OracleNULLSTRINGTableAttrWithoutNULL) {
+							regDataDefault = "NULL"
+						} else if strings.EqualFold(rowCol["DATA_DEFAULT"], common.OracleNULLSTRINGTableAttrWithCustom) {
+							regDataDefault = "''"
+						} else {
+							regDataDefault = common.StringsBuilder(`'`, rowCol["DATA_DEFAULT"], `'`)
+						}
 					}
 				} else {
-					regDataDefault = rowCol["DATA_DEFAULT"]
+					if strings.EqualFold(rowCol["DATA_DEFAULT"], common.OracleNULLSTRINGTableAttrWithoutNULL) {
+						regDataDefault = "NULL"
+					} else if strings.EqualFold(rowCol["DATA_DEFAULT"], common.OracleNULLSTRINGTableAttrWithCustom) {
+						regDataDefault = "''"
+					} else {
+						regDataDefault = rowCol["DATA_DEFAULT"]
+					}
 				}
 
 				// 优先级

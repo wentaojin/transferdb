@@ -109,7 +109,7 @@ func main() {
 
 		for fileScanner.Scan() {
 			queryS = fileScanner.Text()
-			_, err := getOracleTableRowsData(ctx, oraConn, queryS, common.MigrateStringDataTypeDatabaseCharsetMap[common.TaskTypeOracle2TiDB][common.StringUPPER(*charsetS)], common.StringUPPER(*charsetT))
+			_, err := getOracleTableRowsData(ctx, oraConn, queryS, common.MigrateOracleCharsetStringConvertMapping[common.StringUPPER(*charsetS)], common.StringUPPER(*charsetT))
 			if err != nil {
 				panic(fmt.Errorf("sql [%v] read failed: %v", queryS, err))
 			}
@@ -123,7 +123,7 @@ func main() {
 		}
 	}
 
-	res, err := getOracleTableRowsData(ctx, oraConn, queryS, common.MigrateStringDataTypeDatabaseCharsetMap[common.TaskTypeOracle2TiDB][common.StringUPPER(*charsetS)], common.StringUPPER(*charsetT))
+	res, err := getOracleTableRowsData(ctx, oraConn, queryS, common.MigrateOracleCharsetStringConvertMapping[common.StringUPPER(*charsetS)], common.StringUPPER(*charsetT))
 	if err != nil {
 		panic(fmt.Errorf("sql [%v] read failed: %v", queryS, err))
 	}
@@ -397,14 +397,14 @@ func getOracleTableRowsData(ctx context.Context, oraConn *oracle.Oracle, queryS 
 				default:
 					fmt.Printf("source charset data: %v\n", string(raw))
 
-					convert, err := common.CharsetConvert(raw, sourceDBCharset, common.MYSQLCharsetUTF8MB4)
+					convert, err := common.CharsetConvert(raw, sourceDBCharset, common.CharsetUTF8MB4)
 					if err != nil {
 						return nil, err
 					}
 
 					fmt.Printf("utf8mb4 charset data: %v\n", string(convert))
 
-					s, err := common.CharsetConvert([]byte(common.SpecialLettersUsingMySQL(convert)), common.MYSQLCharsetUTF8MB4, targetDBCharset)
+					s, err := common.CharsetConvert([]byte(common.SpecialLettersUsingMySQL(convert)), common.CharsetUTF8MB4, targetDBCharset)
 					if err != nil {
 						return nil, err
 					}

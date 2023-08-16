@@ -137,8 +137,8 @@ func (c *Diff) CheckTableCharacterSetAndCollation() string {
 		builder.WriteString("*/\n")
 
 		builder.WriteString(fmt.Sprintf("ALTER TABLE %s.%s CHARACTER SET %s COLLATE %s;\n\n", c.MySQLTableINFO.SchemaName, c.MySQLTableINFO.TableName,
-			strings.ToLower(mysqlTableCharacterSet),
-			strings.ToLower(mysqlTableCollation)))
+			mysqlTableCharacterSet,
+			mysqlTableCollation))
 	}
 
 	return builder.String()

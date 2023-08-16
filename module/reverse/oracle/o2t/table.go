@@ -305,12 +305,12 @@ func (t *Table) GetTableOriginDDL() (string, error) {
 	if err != nil {
 		return ddl, err
 	}
-	convertUtf8Raw, err := common.CharsetConvert([]byte(ddl), common.MigrateStringDataTypeDatabaseCharsetMap[common.TaskTypeOracle2MySQL][common.StringUPPER(t.SourceDBCharset)], common.MYSQLCharsetUTF8MB4)
+	convertUtf8Raw, err := common.CharsetConvert([]byte(ddl), common.MigrateOracleCharsetStringConvertMapping[common.StringUPPER(t.SourceDBCharset)], common.CharsetUTF8MB4)
 	if err != nil {
 		return ddl, fmt.Errorf("table [%v] ddl charset convert failed, %v", t.SourceTableName, err)
 	}
 
-	convertTargetRaw, err := common.CharsetConvert(convertUtf8Raw, common.MYSQLCharsetUTF8MB4, common.StringUPPER(t.TargetDBCharset))
+	convertTargetRaw, err := common.CharsetConvert(convertUtf8Raw, common.CharsetUTF8MB4, common.MigrateMYSQLCompatibleCharsetStringConvertMapping[common.StringUPPER(t.TargetDBCharset)])
 	if err != nil {
 		return ddl, fmt.Errorf("table [%v] ddl charset convert failed, %v", t.SourceTableName, err)
 	}

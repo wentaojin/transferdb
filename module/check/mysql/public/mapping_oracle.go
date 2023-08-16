@@ -13,14 +13,13 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package t2o
+package public
 
 import (
 	"context"
 	"fmt"
 	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/database/meta"
-	"github.com/wentaojin/transferdb/module/check/mysql/public"
 	reverseM2O "github.com/wentaojin/transferdb/module/reverse/mysql/public"
 	"regexp"
 	"strings"
@@ -29,7 +28,7 @@ import (
 /*
 MySQL 表字段映射转换 -> Check 阶段
 */
-func GenOracleTableColumnMeta(ctx context.Context, metaDB *meta.Meta, dbTypeS, dbTypeT, sourceSchema, sourceTableName, columnName, oracleDBVersion string, columnINFO public.Column, oracleExtendedMode bool) (string, error) {
+func GenOracleTableColumnMeta(ctx context.Context, metaDB *meta.Meta, dbTypeS, dbTypeT, sourceSchema, sourceTableName, columnName, oracleDBVersion string, columnINFO Column, oracleExtendedMode bool) (string, error) {
 	var (
 		columnCollation string
 		nullable        string
@@ -69,7 +68,7 @@ func GenOracleTableColumnMeta(ctx context.Context, metaDB *meta.Meta, dbTypeS, d
 	}
 
 	// 字段排序规则检查
-	if columnCollationMapVal, ok := common.MigrateTableStructureDatabaseCollationMap[common.TaskTypeTiDB2Oracle][columnINFO.Collation][common.MigrateTableStructureDatabaseCharsetMap[common.TaskTypeTiDB2Oracle][columnINFO.CharacterSet]]; ok {
+	if columnCollationMapVal, ok := common.MigrateTableStructureDatabaseCollationMap[common.TaskTypeMySQL2Oracle][columnINFO.Collation][common.MigrateTableStructureDatabaseCharsetMap[common.TaskTypeMySQL2Oracle][columnINFO.CharacterSet]]; ok {
 		if common.VersionOrdinal(oracleDBVersion) >= common.VersionOrdinal(common.OracleTableColumnCollationDBVersion) {
 			// oracle 12.2 版本及以上，字符集 columnCollation 开启需激活 extended 特性
 			// columnCollation BINARY_CS : Both case and accent sensitive. This is default if no extension is used.
@@ -135,11 +134,19 @@ func GenOracleTableColumnMeta(ctx context.Context, metaDB *meta.Meta, dbTypeS, d
 		// M2O
 		switch {
 		case columnCollation != "" && dataDefault != "":
-			columnMeta = fmt.Sprintf("%s %s COLLATE %s DEFAULT %s %s", columnName, columnType, columnCollation, dataDefault, nullable)
+			if strings.EqualFold(dataDefault, common.OracleNULLSTRINGTableAttrWithNULL) {
+				columnMeta = fmt.Sprintf("%s %s COLLATE %s %s", columnName, columnType, columnCollation, nullable)
+			} else {
+				columnMeta = fmt.Sprintf("%s %s COLLATE %s DEFAULT %s %s", columnName, columnType, columnCollation, dataDefault, nullable)
+			}
 		case columnCollation != "" && dataDefault == "":
 			columnMeta = fmt.Sprintf("%s %s COLLATE %s %s", columnName, columnType, columnCollation, nullable)
 		case columnCollation == "" && dataDefault != "":
-			columnMeta = fmt.Sprintf("%s %s DEFAULT %s %s", columnName, columnType, dataDefault, nullable)
+			if strings.EqualFold(dataDefault, common.OracleNULLSTRINGTableAttrWithNULL) {
+				columnMeta = fmt.Sprintf("%s %s %s", columnName, columnType, nullable)
+			} else {
+				columnMeta = fmt.Sprintf("%s %s DEFAULT %s %s", columnName, columnType, dataDefault, nullable)
+			}
 		case columnCollation == "" && dataDefault == "":
 			columnMeta = fmt.Sprintf("%s %s %s", columnName, columnType, nullable)
 		default:
@@ -153,7 +160,7 @@ func GenOracleTableColumnMeta(ctx context.Context, metaDB *meta.Meta, dbTypeS, d
 // 数据库查询获取自定义表结构转换规则
 // 加载数据类型转换规则【处理字段级别、表级别、库级别数据类型映射规则】
 // 数据类型转换规则判断，未设置自定义规则，默认采用内置默认字段类型转换
-func ChangeTableColumnType(ctx context.Context, metaDB *meta.Meta, dbTypeS, dbTypeT, sourceSchema, sourceTableName, columnName string, columnINFO public.Column) (string, error) {
+func ChangeTableColumnType(ctx context.Context, metaDB *meta.Meta, dbTypeS, dbTypeT, sourceSchema, sourceTableName, columnName string, columnINFO Column) (string, error) {
 	var columnType string
 	// 获取内置映射规则
 	buildinDatatypeNames, err := meta.NewBuildinDatatypeRuleModel(metaDB).BatchQueryBuildinDatatype(ctx, &meta.BuildinDatatypeRule{

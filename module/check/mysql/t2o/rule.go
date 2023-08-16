@@ -86,9 +86,9 @@ func MySQLTableColumnMapRuleCheck(
 		oracleCharacterSet string
 		oracleCollation    string
 	)
-	oracleCharacterSet = strings.ToLower(common.MigrateTableStructureDatabaseCharsetMap[common.TaskTypeTiDB2Oracle][mysqlColInfo.CharacterSet])
+	oracleCharacterSet = common.MigrateTableStructureDatabaseCharsetMap[common.TaskTypeTiDB2Oracle][mysqlColInfo.CharacterSet]
 
-	oracleCollation = strings.Split(strings.ToLower(common.MigrateTableStructureDatabaseCollationMap[common.TaskTypeTiDB2Oracle][mysqlColInfo.Collation][common.StringUPPER(oracleCharacterSet)]), "/")[0]
+	oracleCollation = strings.Split(common.MigrateTableStructureDatabaseCollationMap[common.TaskTypeTiDB2Oracle][mysqlColInfo.Collation][common.StringUPPER(oracleCharacterSet)], "/")[0]
 
 	// 非加载 ORACLE 自定义规则，用于非设置自定义规则的表结构对比
 	oracleColumnComment := common.SpecialLettersUsingMySQL([]byte(oracleColInfo.Comment))
@@ -615,11 +615,19 @@ func genColumnNullCommentDefaultMeta(dataNullable, comments, dataDefault string)
 	} else {
 		switch {
 		case comments != "" && dataDefault != "":
-			colMeta = fmt.Sprintf("%s DEFAULT %s COMMENT '%s'", dataNullable, dataDefault, comments)
+			if strings.EqualFold(dataDefault, common.OracleNULLSTRINGTableAttrWithNULL) {
+				colMeta = fmt.Sprintf("%s COMMENT '%s'", dataNullable, comments)
+			} else {
+				colMeta = fmt.Sprintf("%s DEFAULT %s COMMENT '%s'", dataNullable, dataDefault, comments)
+			}
 		case comments != "" && dataDefault == "":
 			colMeta = fmt.Sprintf("%s COMMENT '%s'", dataNullable, comments)
 		case comments == "" && dataDefault != "":
-			colMeta = fmt.Sprintf("%s DEFAULT %s", dataNullable, dataDefault)
+			if strings.EqualFold(dataDefault, common.OracleNULLSTRINGTableAttrWithNULL) {
+				colMeta = fmt.Sprintf("%s", dataNullable)
+			} else {
+				colMeta = fmt.Sprintf("%s DEFAULT %s", dataNullable, dataDefault)
+			}
 		case comments == "" && dataDefault == "":
 			colMeta = fmt.Sprintf("%s", dataNullable)
 		}

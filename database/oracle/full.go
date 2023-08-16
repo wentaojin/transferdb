@@ -212,19 +212,19 @@ func (o *Oracle) GetOracleTableRowsDataCSV(querySQL, sourceDBCharset, targetDBCh
 				default:
 					var convertTargetRaw []byte
 
-					convertUtf8Raw, err := common.CharsetConvert(raw, sourceDBCharset, common.MYSQLCharsetUTF8MB4)
+					convertUtf8Raw, err := common.CharsetConvert(raw, sourceDBCharset, common.CharsetUTF8MB4)
 					if err != nil {
 						return fmt.Errorf("column [%s] charset convert failed, %v", columnNames[i], err)
 					}
 
 					// 处理字符集、特殊字符转义、字符串引用定界符
 					if cfg.CSVConfig.EscapeBackslash {
-						convertTargetRaw, err = common.CharsetConvert([]byte(common.SpecialLettersUsingMySQL(convertUtf8Raw)), common.MYSQLCharsetUTF8MB4, targetDBCharset)
+						convertTargetRaw, err = common.CharsetConvert([]byte(common.SpecialLettersUsingMySQL(convertUtf8Raw)), common.CharsetUTF8MB4, targetDBCharset)
 						if err != nil {
 							return fmt.Errorf("column [%s] charset convert failed, %v", columnNames[i], err)
 						}
 					} else {
-						convertTargetRaw, err = common.CharsetConvert(convertUtf8Raw, common.MYSQLCharsetUTF8MB4, targetDBCharset)
+						convertTargetRaw, err = common.CharsetConvert(convertUtf8Raw, common.CharsetUTF8MB4, targetDBCharset)
 						if err != nil {
 							return fmt.Errorf("column [%s] charset convert failed, %v", columnNames[i], err)
 						}
@@ -402,12 +402,12 @@ func (o *Oracle) GetOracleTableRowsData(querySQL string, insertBatchSize int, so
 					rowsMap[cols[i]] = fmt.Sprintf("%v", r)
 				default:
 					// 特殊字符
-					convertUtf8Raw, err := common.CharsetConvert(raw, sourceDBCharset, common.MYSQLCharsetUTF8MB4)
+					convertUtf8Raw, err := common.CharsetConvert(raw, sourceDBCharset, common.CharsetUTF8MB4)
 					if err != nil {
 						return fmt.Errorf("column [%s] charset convert failed, %v", columnNames[i], err)
 					}
 
-					convertTargetRaw, err := common.CharsetConvert([]byte(common.SpecialLettersUsingMySQL(convertUtf8Raw)), common.MYSQLCharsetUTF8MB4, targetDBCharset)
+					convertTargetRaw, err := common.CharsetConvert([]byte(common.SpecialLettersUsingMySQL(convertUtf8Raw)), common.CharsetUTF8MB4, targetDBCharset)
 					if err != nil {
 						return fmt.Errorf("column [%s] charset convert failed, %v", columnNames[i], err)
 					}

@@ -427,7 +427,7 @@ func (r *CSV) csvPartSyncTable(csvPartTables []string, sourceDBCharset string) e
 			for _, fullSyncMeta := range waitFullMetas {
 				m := fullSyncMeta
 				g1.Go(func() error {
-					err = public.IMigrate(NewRows(r.Ctx, m, r.Oracle, r.Cfg, columnNameS, common.MigrateStringDataTypeDatabaseCharsetMap[common.TaskTypeOracle2TiDB][sourceDBCharset]))
+					err = public.IMigrate(NewRows(r.Ctx, m, r.Oracle, r.Cfg, columnNameS, common.MigrateOracleCharsetStringConvertMapping[sourceDBCharset]))
 					if err != nil {
 						var (
 							errorSQL string
@@ -955,8 +955,8 @@ func (r *CSV) AdjustCSVConfig(sourceDBCharset string) error {
 			zap.String("oracle config charset", r.Cfg.OracleConfig.Charset))
 		return fmt.Errorf("oracle charset [%v] and oracle config charset [%v] aren't equal, please adjust oracle config charset", sourceDBCharset, r.Cfg.OracleConfig.Charset)
 	}
-	if _, ok := common.MigrateStringDataTypeDatabaseCharsetMap[common.TaskTypeOracle2TiDB][common.StringUPPER(r.Cfg.OracleConfig.Charset)]; !ok {
-		return fmt.Errorf("oracle current charset [%v] isn't support, support charset [%v]", r.Cfg.OracleConfig.Charset, common.MigrateStringDataTypeDatabaseCharsetMap[common.TaskTypeOracle2TiDB])
+	if _, ok := common.MigrateOracleCharsetStringConvertMapping[common.StringUPPER(r.Cfg.OracleConfig.Charset)]; !ok {
+		return fmt.Errorf("oracle current charset [%v] isn't support, support charset [%v]", r.Cfg.OracleConfig.Charset, common.MigrateOracleCharsetStringConvertMapping)
 	}
 
 	if r.Cfg.CSVConfig.Charset == "" || strings.EqualFold(r.Cfg.CSVConfig.Charset, common.MYSQLCharsetUTF8) {

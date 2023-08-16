@@ -381,7 +381,7 @@ func DiffStructArray(structA, structB interface{}) ([]interface{}, []interface{}
 
 func CharsetConvert(data []byte, fromCharset, toCharset string) ([]byte, error) {
 	switch {
-	case strings.EqualFold(fromCharset, MYSQLCharsetUTF8MB4) && strings.EqualFold(toCharset, MYSQLCharsetGBK):
+	case strings.EqualFold(fromCharset, CharsetUTF8MB4) && strings.EqualFold(toCharset, CharsetGBK):
 		reader := transform.NewReader(bytes.NewReader(data), encoding.ReplaceUnsupported(simplifiedchinese.GBK.NewEncoder()))
 		gbkBytes, err := io.ReadAll(reader)
 		if err != nil {
@@ -389,7 +389,7 @@ func CharsetConvert(data []byte, fromCharset, toCharset string) ([]byte, error) 
 		}
 		return gbkBytes, nil
 
-	case strings.EqualFold(fromCharset, MYSQLCharsetUTF8MB4) && strings.EqualFold(toCharset, MYSQLCharsetGB18030):
+	case strings.EqualFold(fromCharset, CharsetUTF8MB4) && strings.EqualFold(toCharset, CharsetGB18030):
 		reader := transform.NewReader(bytes.NewReader(data), encoding.ReplaceUnsupported(simplifiedchinese.GB18030.NewEncoder()))
 		gbk18030Bytes, err := io.ReadAll(reader)
 		if err != nil {
@@ -397,7 +397,7 @@ func CharsetConvert(data []byte, fromCharset, toCharset string) ([]byte, error) 
 		}
 		return gbk18030Bytes, nil
 
-	case strings.EqualFold(fromCharset, MYSQLCharsetUTF8MB4) && strings.EqualFold(toCharset, MYSQLCharsetBIG5):
+	case strings.EqualFold(fromCharset, CharsetUTF8MB4) && strings.EqualFold(toCharset, CharsetBIG5):
 		reader := transform.NewReader(bytes.NewReader(data), encoding.ReplaceUnsupported(traditionalchinese.Big5.NewEncoder()))
 		bigBytes, err := io.ReadAll(reader)
 		if err != nil {
@@ -405,10 +405,10 @@ func CharsetConvert(data []byte, fromCharset, toCharset string) ([]byte, error) 
 		}
 		return bigBytes, nil
 
-	case strings.EqualFold(fromCharset, MYSQLCharsetUTF8MB4) && strings.EqualFold(toCharset, MYSQLCharsetUTF8MB4):
+	case strings.EqualFold(fromCharset, CharsetUTF8MB4) && strings.EqualFold(toCharset, CharsetUTF8MB4):
 		return data, nil
 
-	case strings.EqualFold(fromCharset, MYSQLCharsetGBK) && strings.EqualFold(toCharset, MYSQLCharsetUTF8MB4):
+	case strings.EqualFold(fromCharset, CharsetGBK) && strings.EqualFold(toCharset, CharsetUTF8MB4):
 		decoder := simplifiedchinese.GBK.NewDecoder()
 		utf8Data, err := decoder.Bytes(data)
 		if err != nil {
@@ -417,7 +417,7 @@ func CharsetConvert(data []byte, fromCharset, toCharset string) ([]byte, error) 
 
 		return utf8Data, nil
 
-	case strings.EqualFold(fromCharset, MYSQLCharsetGB18030) && strings.EqualFold(toCharset, MYSQLCharsetUTF8MB4):
+	case strings.EqualFold(fromCharset, CharsetGB18030) && strings.EqualFold(toCharset, CharsetUTF8MB4):
 		decoder := simplifiedchinese.GB18030.NewDecoder()
 		utf8Data, err := decoder.Bytes(data)
 		if err != nil {
@@ -425,7 +425,7 @@ func CharsetConvert(data []byte, fromCharset, toCharset string) ([]byte, error) 
 		}
 		return utf8Data, nil
 
-	case strings.EqualFold(fromCharset, MYSQLCharsetBIG5) && strings.EqualFold(toCharset, MYSQLCharsetUTF8MB4):
+	case strings.EqualFold(fromCharset, CharsetBIG5) && strings.EqualFold(toCharset, CharsetUTF8MB4):
 		decoder := traditionalchinese.Big5.NewDecoder()
 		utf8Data, err := decoder.Bytes(data)
 		if err != nil {

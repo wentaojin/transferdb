@@ -352,12 +352,12 @@ func (r *Rule) GenTableNormalIndex() (normalIndexes []string, compatibilityIndex
 
 func (r *Rule) GenTableComment() (tableComment string, err error) {
 	if len(r.TableColumnINFO) > 0 && r.TableCommentINFO[0]["TABLE_COMMENT"] != "" {
-		convertUtf8Raw, err := common.CharsetConvert([]byte(r.TableCommentINFO[0]["TABLE_COMMENT"]), common.MigrateStringDataTypeDatabaseCharsetMap[common.TaskTypeMySQL2Oracle][common.StringUPPER(r.SourceDBCharset)], common.MYSQLCharsetUTF8MB4)
+		convertUtf8Raw, err := common.CharsetConvert([]byte(r.TableCommentINFO[0]["TABLE_COMMENT"]), common.MigrateMYSQLCompatibleCharsetStringConvertMapping[common.StringUPPER(r.SourceDBCharset)], common.CharsetUTF8MB4)
 		if err != nil {
 			return tableComment, fmt.Errorf("table comments [%s] charset convert failed, %v", r.TableCommentINFO[0]["TABLE_COMMENT"], err)
 		}
 
-		convertTargetRaw, err := common.CharsetConvert([]byte(common.SpecialLettersUsingMySQL(convertUtf8Raw)), common.MYSQLCharsetUTF8MB4, common.StringUPPER(r.TargetDBCharset))
+		convertTargetRaw, err := common.CharsetConvert([]byte(common.SpecialLettersUsingMySQL(convertUtf8Raw)), common.CharsetUTF8MB4, common.MigrateOracleCharsetStringConvertMapping[common.StringUPPER(r.TargetDBCharset)])
 		if err != nil {
 			return tableComment, fmt.Errorf("table comments [%s] charset convert failed, %v", r.TableCommentINFO[0]["TABLE_COMMENT"], err)
 		}
@@ -433,12 +433,12 @@ func (r *Rule) GenTableColumn() (columnMetas []string, err error) {
 				isTrunc = true
 				defaultVal = defaultVal[1 : len(defaultVal)-1]
 			}
-			convertUtf8Raw, err := common.CharsetConvert([]byte(defaultVal), common.MigrateStringDataTypeDatabaseCharsetMap[common.TaskTypeMySQL2Oracle][common.StringUPPER(r.SourceDBCharset)], common.MYSQLCharsetUTF8MB4)
+			convertUtf8Raw, err := common.CharsetConvert([]byte(defaultVal), common.MigrateMYSQLCompatibleCharsetStringConvertMapping[common.StringUPPER(r.SourceDBCharset)], common.CharsetUTF8MB4)
 			if err != nil {
 				return columnMetas, fmt.Errorf("column [%s] data default charset convert failed, %v", columnName, err)
 			}
 
-			convertTargetRaw, err := common.CharsetConvert(convertUtf8Raw, common.MYSQLCharsetUTF8MB4, common.StringUPPER(r.TargetDBCharset))
+			convertTargetRaw, err := common.CharsetConvert(convertUtf8Raw, common.CharsetUTF8MB4, common.MigrateOracleCharsetStringConvertMapping[common.StringUPPER(r.TargetDBCharset)])
 			if err != nil {
 				return columnMetas, fmt.Errorf("column [%s] data default charset convert failed, %v", columnName, err)
 			}
@@ -446,11 +446,7 @@ func (r *Rule) GenTableColumn() (columnMetas []string, err error) {
 			if isTrunc {
 				dataDefault = "'" + string(convertTargetRaw) + "'"
 			} else {
-				if strings.EqualFold(string(convertTargetRaw), common.OracleNULLSTRINGTableAttrWithCustom) {
-					dataDefault = "'" + string(convertTargetRaw) + "'"
-				} else {
-					dataDefault = string(convertTargetRaw)
-				}
+				dataDefault = string(convertTargetRaw)
 			}
 		} else {
 			isTrunc := false
@@ -459,12 +455,12 @@ func (r *Rule) GenTableColumn() (columnMetas []string, err error) {
 				defaultVal = defaultVal[1 : len(defaultVal)-1]
 			}
 			// meta database data utf8mb4
-			convertUtf8Raw, err := common.CharsetConvert([]byte(defaultVal), common.MYSQLCharsetUTF8MB4, common.MYSQLCharsetUTF8MB4)
+			convertUtf8Raw, err := common.CharsetConvert([]byte(defaultVal), common.CharsetUTF8MB4, common.CharsetUTF8MB4)
 			if err != nil {
 				return columnMetas, fmt.Errorf("column [%s] data default charset convert failed, %v", columnName, err)
 			}
 
-			convertTargetRaw, err := common.CharsetConvert(convertUtf8Raw, common.MYSQLCharsetUTF8MB4, common.StringUPPER(r.TargetDBCharset))
+			convertTargetRaw, err := common.CharsetConvert(convertUtf8Raw, common.CharsetUTF8MB4, common.MigrateOracleCharsetStringConvertMapping[common.StringUPPER(r.TargetDBCharset)])
 			if err != nil {
 				return columnMetas, fmt.Errorf("column [%s] data default charset convert failed, %v", columnName, err)
 			}
@@ -472,11 +468,7 @@ func (r *Rule) GenTableColumn() (columnMetas []string, err error) {
 			if isTrunc {
 				dataDefault = "'" + string(convertTargetRaw) + "'"
 			} else {
-				if strings.EqualFold(string(convertTargetRaw), common.OracleNULLSTRINGTableAttrWithCustom) {
-					dataDefault = "'" + string(convertTargetRaw) + "'"
-				} else {
-					dataDefault = string(convertTargetRaw)
-				}
+				dataDefault = string(convertTargetRaw)
 			}
 		}
 
@@ -512,7 +504,7 @@ func (r *Rule) GenTableColumn() (columnMetas []string, err error) {
 			// M2O
 			switch {
 			case columnCollation != "" && dataDefault != "":
-				if strings.EqualFold(dataDefault, "NULL") {
+				if strings.EqualFold(dataDefault, common.OracleNULLSTRINGTableAttrWithNULL) {
 					columnMetas = append(columnMetas, fmt.Sprintf("%s %s COLLATE %s %s", columnName, columnType, columnCollation, nullable))
 				} else {
 					columnMetas = append(columnMetas, fmt.Sprintf("%s %s COLLATE %s DEFAULT %s %s", columnName, columnType, columnCollation, dataDefault, nullable))
@@ -520,7 +512,7 @@ func (r *Rule) GenTableColumn() (columnMetas []string, err error) {
 			case columnCollation != "" && dataDefault == "":
 				columnMetas = append(columnMetas, fmt.Sprintf("%s %s COLLATE %s %s", columnName, columnType, columnCollation, nullable))
 			case columnCollation == "" && dataDefault != "":
-				if strings.EqualFold(dataDefault, "NULL") {
+				if strings.EqualFold(dataDefault, common.OracleNULLSTRINGTableAttrWithNULL) {
 					columnMetas = append(columnMetas, fmt.Sprintf("%s %s %s", columnName, columnType, nullable))
 				} else {
 					columnMetas = append(columnMetas, fmt.Sprintf("%s %s DEFAULT %s %s", columnName, columnType, dataDefault, nullable))
@@ -540,12 +532,12 @@ func (r *Rule) GenTableColumnComment() (columnComments []string, err error) {
 	if len(r.TableColumnINFO) > 0 {
 		for _, rowCol := range r.TableColumnINFO {
 			if !strings.EqualFold(rowCol["COMMENTS"], "") {
-				convertUtf8Raw, err := common.CharsetConvert([]byte(rowCol["COMMENTS"]), common.MigrateStringDataTypeDatabaseCharsetMap[common.TaskTypeMySQL2Oracle][common.StringUPPER(r.SourceDBCharset)], common.MYSQLCharsetUTF8MB4)
+				convertUtf8Raw, err := common.CharsetConvert([]byte(rowCol["COMMENTS"]), common.MigrateMYSQLCompatibleCharsetStringConvertMapping[common.StringUPPER(r.SourceDBCharset)], common.CharsetUTF8MB4)
 				if err != nil {
 					return nil, fmt.Errorf("column [%s] charset convert failed, %v", rowCol["COLUMN_NAME"], err)
 				}
 
-				convertTargetRaw, err := common.CharsetConvert([]byte(common.SpecialLettersUsingMySQL(convertUtf8Raw)), common.MYSQLCharsetUTF8MB4, common.StringUPPER(r.TargetDBCharset))
+				convertTargetRaw, err := common.CharsetConvert([]byte(common.SpecialLettersUsingMySQL(convertUtf8Raw)), common.CharsetUTF8MB4, common.MigrateOracleCharsetStringConvertMapping[common.StringUPPER(r.TargetDBCharset)])
 				if err != nil {
 					return nil, fmt.Errorf("column [%s] charset convert failed, %v", rowCol["COLUMN_NAME"], err)
 				}

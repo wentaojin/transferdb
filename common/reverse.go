@@ -66,7 +66,10 @@ var (
 	ORACLECharsetZHS32GB18030 = "ZHS32GB18030"
 )
 
-// Oracle 字符集转换映射程序字符集
+// 数据迁移、数据校验、表结构默认值、注释
+// 字符类型数据映射规则
+// 1、用于程序连接源端数据库读取数据字符类型数据，以对应字符集写入下游数据库
+// 2、用于数据表默认值或者注释
 const (
 	CharsetUTF8MB4 = "UTF8MB4"
 	CharsetGB18030 = "GB18030"
@@ -74,11 +77,21 @@ const (
 	CharsetGBK     = "GBK"
 )
 
-var OracleCharsetStringConvertMapping = map[string]string{
+var MigrateDataSupportCharset = []string{CharsetUTF8MB4, CharsetGBK, CharsetBIG5, CharsetGB18030}
+
+var MigrateOracleCharsetStringConvertMapping = map[string]string{
 	ORACLECharsetAL32UTF8:     CharsetUTF8MB4,
 	ORACLECharsetZHT16BIG5:    CharsetBIG5,
 	ORACLECharsetZHS16GBK:     CharsetGBK,
 	ORACLECharsetZHS32GB18030: CharsetGB18030,
+}
+
+var MigrateMYSQLCompatibleCharsetStringConvertMapping = map[string]string{
+	MYSQLCharsetUTF8MB4: CharsetUTF8MB4,
+	MYSQLCharsetUTF8:    CharsetUTF8MB4,
+	MYSQLCharsetBIG5:    CharsetBIG5,
+	MYSQLCharsetGBK:     CharsetGBK,
+	MYSQLCharsetGB18030: CharsetGB18030,
 }
 
 // 表结构迁移以及表结构校验字符集、排序规则
@@ -326,39 +339,6 @@ var MigrateTableStructureDatabaseCollationMap = map[string]map[string]map[string
 	},
 }
 
-// 数据迁移、数据校验、表结构默认值、注释
-// 字符类型数据映射规则
-// 1、用于程序连接源端数据库读取数据字符类型数据，以对应字符集写入下游数据库
-// 2、用于数据表默认值或者注释
-var MigrateStringDataTypeDatabaseCharsetMap = map[string]map[string]string{
-	TaskTypeOracle2MySQL: {
-		ORACLECharsetAL32UTF8:     MYSQLCharsetUTF8MB4,
-		ORACLECharsetZHT16BIG5:    MYSQLCharsetBIG5,
-		ORACLECharsetZHS16GBK:     MYSQLCharsetGBK,
-		ORACLECharsetZHS32GB18030: MYSQLCharsetGB18030,
-	},
-	TaskTypeOracle2TiDB: {
-		ORACLECharsetAL32UTF8:     MYSQLCharsetUTF8MB4,
-		ORACLECharsetZHT16BIG5:    MYSQLCharsetBIG5,
-		ORACLECharsetZHS16GBK:     MYSQLCharsetGBK,
-		ORACLECharsetZHS32GB18030: MYSQLCharsetGB18030,
-	},
-	TaskTypeMySQL2Oracle: {
-		MYSQLCharsetUTF8MB4: ORACLECharsetAL32UTF8,
-		MYSQLCharsetBIG5:    ORACLECharsetZHT16BIG5,
-		MYSQLCharsetGBK:     ORACLECharsetZHS16GBK,
-		MYSQLCharsetGB18030: ORACLECharsetZHS32GB18030,
-	},
-	TaskTypeTiDB2Oracle: {
-		MYSQLCharsetUTF8MB4: ORACLECharsetAL32UTF8,
-		MYSQLCharsetBIG5:    ORACLECharsetZHT16BIG5,
-		MYSQLCharsetGBK:     ORACLECharsetZHS16GBK,
-		MYSQLCharsetGB18030: ORACLECharsetZHS32GB18030,
-	},
-}
-
-var MigrateDataSupportCharset = []string{MYSQLCharsetUTF8MB4, MYSQLCharsetGBK, MYSQLCharsetBIG5, MYSQLCharsetGB18030}
-
 // 表结构迁移大小写
 const (
 	MigrateTableStructFieldNameOriginCase = "0"
@@ -366,10 +346,11 @@ const (
 	MigrateTableStructFieldNameUpperCase  = "2"
 )
 
-// Oracle Table Attr Null 特殊处理
+// Table Attr Null 以及空字符串特殊处理
 const (
 	OracleNULLSTRINGTableAttrWithoutNULL = "NULLSTRING"
 	OracleNULLSTRINGTableAttrWithCustom  = ""
+	OracleNULLSTRINGTableAttrWithNULL    = "NULL"
 )
 
 // Oracle 不支持数据类型 -> M2O
