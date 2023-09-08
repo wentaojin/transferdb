@@ -691,12 +691,14 @@ func (r *Migrate) InitWaitSyncTableChunk(fullWaitTables []string, oracleCollatio
 
 			// 1、统计信息数据行数 0，直接全表扫
 			// 2、基于数据切分策略，获取指定数据迁移表的查询范围
-			if tableRowsByStatistics == 0 || !enableSplit {
-				if strings.EqualFold(wherePrefix, "") {
-					whereRange = `1 = 1`
-				} else {
+			if tableRowsByStatistics == 0 {
+				switch {
+				case enableSplit && !strings.EqualFold(wherePrefix, ""):
 					whereRange = common.StringsBuilder(`1 = 1 AND `, wherePrefix)
+				default:
+					whereRange = `1 = 1`
 				}
+
 				err = meta.NewCommonModel(r.MetaDB).CreateFullSyncMetaAndUpdateWaitSyncMeta(r.Ctx, &meta.FullSyncMeta{
 					DBTypeS:        r.Cfg.DBTypeS,
 					DBTypeT:        r.Cfg.DBTypeT,
@@ -748,10 +750,11 @@ func (r *Migrate) InitWaitSyncTableChunk(fullWaitTables []string, oracleCollatio
 
 			// 判断数据是否存在
 			if len(chunkRes) == 0 {
-				if strings.EqualFold(wherePrefix, "") {
-					whereRange = `1 = 1`
-				} else {
+				switch {
+				case enableSplit && !strings.EqualFold(wherePrefix, ""):
 					whereRange = common.StringsBuilder(`1 = 1 AND `, wherePrefix)
+				default:
+					whereRange = `1 = 1`
 				}
 				err = meta.NewCommonModel(r.MetaDB).CreateFullSyncMetaAndUpdateWaitSyncMeta(r.Ctx, &meta.FullSyncMeta{
 					DBTypeS:        r.Cfg.DBTypeS,
@@ -790,10 +793,11 @@ func (r *Migrate) InitWaitSyncTableChunk(fullWaitTables []string, oracleCollatio
 
 			var fullMetas []meta.FullSyncMeta
 			for _, res := range chunkRes {
-				if strings.EqualFold(wherePrefix, "") {
-					whereRange = res["CMD"]
-				} else {
+				switch {
+				case enableSplit && !strings.EqualFold(wherePrefix, ""):
 					whereRange = common.StringsBuilder(res["CMD"], ` AND `, wherePrefix)
+				default:
+					whereRange = res["CMD"]
 				}
 				fullMetas = append(fullMetas, meta.FullSyncMeta{
 					DBTypeS:        r.Cfg.DBTypeS,
