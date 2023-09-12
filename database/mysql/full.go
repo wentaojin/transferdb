@@ -16,7 +16,9 @@ limitations under the License.
 package mysql
 
 import (
+	"context"
 	"fmt"
+	"time"
 )
 
 func (m *MySQL) TruncateMySQLTable(targetSchema string, targetTable string) error {
@@ -28,7 +30,10 @@ func (m *MySQL) TruncateMySQLTable(targetSchema string, targetTable string) erro
 }
 
 func (m *MySQL) WriteMySQLTable(sql string) error {
-	_, err := m.MySQLDB.ExecContext(m.Ctx, sql)
+	timeoutCtx, cancel := context.WithTimeout(m.Ctx, 30*time.Second)
+	defer cancel()
+
+	_, err := m.MySQLDB.ExecContext(timeoutCtx, sql)
 	if err != nil {
 		return err
 	}
