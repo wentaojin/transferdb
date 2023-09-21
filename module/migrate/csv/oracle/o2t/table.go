@@ -19,17 +19,18 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
+
 	"github.com/thinkeridea/go-extend/exstrings"
 	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/config"
 	"github.com/wentaojin/transferdb/database/meta"
 	"github.com/wentaojin/transferdb/database/oracle"
 	"go.uber.org/zap"
-	"os"
-	"path/filepath"
-	"strconv"
-	"strings"
-	"time"
 )
 
 type Rows struct {
@@ -107,7 +108,8 @@ func (t *Rows) ProcessData() error {
 				rowsTMP []string
 			)
 			for _, column := range t.ColumnNameS {
-				if val, ok := dMap[column]; ok {
+				key := strings.ReplaceAll(column, "`", "")
+				if val, ok := dMap[key]; ok {
 					rowsTMP = append(rowsTMP, val)
 				}
 			}
