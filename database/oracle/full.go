@@ -166,11 +166,18 @@ func (o *Oracle) GetOracleTableRowsDataCSV(querySQL, sourceDBCharset, targetDBCh
 			// Oracle 空字符串与 NULL 归于一类，统一 NULL 处理 （is null 可以查询 NULL 以及空字符串值，空字符串查询无法查询到空字符串值）
 			// Mysql 空字符串与 NULL 非一类，NULL 是 NULL，空字符串是空字符串（is null 只查询 NULL 值，空字符串查询只查询到空字符串值）
 			// 按照 Oracle 特性来，转换同步统一转换成 NULL 即可，但需要注意业务逻辑中空字符串得写入，需要变更
-			// Oracle/Mysql 对于 'NULL' 统一字符 NULL 处理，查询出来转成 NULL,所以需要判断处理
 			if raw == nil {
-				rowsMap[columnNames[i]] = fmt.Sprintf("%v", `NULL`)
+				if cfg.CSVConfig.NullValue != "" {
+					rowsMap[columnNames[i]] = fmt.Sprintf("%v", cfg.CSVConfig.NullValue)
+				} else {
+					rowsMap[columnNames[i]] = fmt.Sprintf("%v", `NULL`)
+				}
 			} else if string(raw) == "" {
-				rowsMap[columnNames[i]] = fmt.Sprintf("%v", `NULL`)
+				if cfg.CSVConfig.NullValue != "" {
+					rowsMap[columnNames[i]] = fmt.Sprintf("%v", cfg.CSVConfig.NullValue)
+				} else {
+					rowsMap[columnNames[i]] = fmt.Sprintf("%v", `NULL`)
+				}
 			} else {
 				switch columnTypes[i] {
 				case "int64":

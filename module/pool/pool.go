@@ -164,7 +164,7 @@ func (p *pool) Release() {
 	p.workerStack = nil
 }
 
-// dispatch dispatches tasks to workers.
+// dispatch tasks to workers.
 func (p *pool) dispatch() {
 	for t := range p.taskQueue {
 		p.cond.L.Lock()

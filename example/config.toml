@@ -74,6 +74,8 @@ terminator = "|+|\r\n"
 charset = "UTF8MB4"
 # 字符串引用定界符，支持一个或多个字符，设置为空表示字符串未加引号
 delimiter = '"'
+# 数据 NULL 空值表示，设置为空默认 NULL -> NULL
+null-value = 'NULL'
 # 使用反斜杠 (\) 来转义导出文件中的特殊字符
 escape-backslash = true
 # 1、任务行数数，固定动作，一旦确认，不能更改，除非设置 enable-checkpoint = false，重新导出导入

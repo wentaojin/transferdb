@@ -81,6 +81,7 @@ type CSVConfig struct {
 	Charset          string `toml:"charset" json:"charset"`
 	Delimiter        string `toml:"delimiter" json:"delimiter"`
 	EscapeBackslash  bool   `toml:"escape-backslash" json:"escape-backslash"`
+	NullValue        string `toml:"null-value" json:"null-value"`
 	Rows             int    `toml:"rows" json:"rows"`
 	OutputDir        string `toml:"output-dir" json:"output-dir"`
 	TaskThreads      int    `toml:"task-threads" json:"task-threads"`
