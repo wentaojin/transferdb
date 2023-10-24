@@ -28,9 +28,9 @@ func main() {
 	ctx := context.Background()
 
 	engine, err := oracle.NewOracleDBEngine(ctx, config.OracleConfig{
-		Username:    "findpt",
-		Password:    "findpt",
-		Host:        "10.2.103.33",
+		Username:    "find",
+		Password:    "find",
+		Host:        "10.2.1.303",
 		Port:        1521,
 		ServiceName: "utf8",
 		Charset:     "al32utf8",
