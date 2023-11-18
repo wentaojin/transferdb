@@ -184,7 +184,7 @@ func (r *Rule) GenTableSuffix() (string, error) {
 				return tableSuffix, fmt.Errorf("oracle schema collation [%v] table collation [%v] isn't support", r.SourceSchemaCollation, r.SourceTableCollation)
 			}
 		}
-		if r.SourceTableName == "" && r.SourceSchemaCollation == "" {
+		if r.SourceTableCollation == "" && r.SourceSchemaCollation == "" {
 			return tableSuffix, fmt.Errorf("oracle schema collation [%v] table collation [%v] isn't support", r.SourceSchemaCollation, r.SourceTableCollation)
 		}
 	} else {

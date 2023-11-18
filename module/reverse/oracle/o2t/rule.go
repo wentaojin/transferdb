@@ -218,7 +218,7 @@ func (r *Rule) GenTableSuffix() (string, error) {
 				return tableSuffix, fmt.Errorf("oracle schema collation [%v] table collation [%v] isn't support", r.SourceSchemaCollation, r.SourceTableCollation)
 			}
 		}
-		if r.SourceTableName == "" && r.SourceSchemaCollation == "" {
+		if r.SourceTableCollation == "" && r.SourceSchemaCollation == "" {
 			return tableSuffix, fmt.Errorf("oracle schema collation [%v] table collation [%v] isn't support", r.SourceSchemaCollation, r.SourceTableCollation)
 		}
 	} else {
@@ -228,6 +228,28 @@ func (r *Rule) GenTableSuffix() (string, error) {
 		} else {
 			return tableSuffix, fmt.Errorf("oracle db nls_comp [%v] nls_sort [%v] isn't support", r.SourceDBNLSComp, r.SourceDBNLSSort)
 		}
+	}
+
+	if val, ok := r.TargetTableNonClustered[r.SourceTableName]; ok {
+		tableSuffix = fmt.Sprintf("ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s %s",
+			tableCharset, tableCollation, common.StringUPPER(val))
+		zap.L().Info("reverse oracle table suffix",
+			zap.String("table", r.String()),
+			zap.String("create table suffix", tableSuffix))
+
+		return tableSuffix, nil
+	}
+
+	// clustered index table must exist primary key
+	if _, ok := r.TargetTableClustered[r.SourceTableName]; ok && len(primaryColumns) != 0 {
+		tableSuffix = fmt.Sprintf("ENGINE=InnoDB DEFAULT CHARSET=%s COLLATE=%s",
+			tableCharset, tableCollation)
+
+		zap.L().Info("reverse oracle table suffix",
+			zap.String("table", r.String()),
+			zap.String("create table suffix", tableSuffix))
+
+		return tableSuffix, nil
 	}
 
 	// table-option 表后缀可选项
@@ -366,8 +388,21 @@ func (r *Rule) GenTablePrimaryKey() (primaryKeys []string, err error) {
 		for _, col := range strings.Split(columnList, ",") {
 			primaryColumns = append(primaryColumns, fmt.Sprintf("`%s`", col))
 		}
-		pk := fmt.Sprintf("PRIMARY KEY (%s)", strings.Join(primaryColumns, ","))
+
+		var pk string
+		if _, ok := r.TargetTableNonClustered[r.SourceTableName]; ok {
+			pk = fmt.Sprintf("PRIMARY KEY (%s) NONCLUSTERED", strings.Join(primaryColumns, ","))
+			primaryKeys = append(primaryKeys, pk)
+			return primaryKeys, nil
+		}
+		if _, ok := r.TargetTableClustered[r.SourceTableName]; ok {
+			pk = fmt.Sprintf("PRIMARY KEY (%s) CLUSTERED", strings.Join(primaryColumns, ","))
+			primaryKeys = append(primaryKeys, pk)
+			return primaryKeys, nil
+		}
+		pk = fmt.Sprintf("PRIMARY KEY (%s)", strings.Join(primaryColumns, ","))
 		primaryKeys = append(primaryKeys, pk)
+		return primaryKeys, nil
 	}
 
 	return primaryKeys, nil

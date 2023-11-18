@@ -143,6 +143,26 @@ func (r *Reverse) Reverse() error {
 
 	// 获取规则
 	ruleTime := time.Now()
+	nonClusteredTableMap := make(map[string]string)
+	clusteredTableMap := make(map[string]struct{})
+
+	var nonClusteredTables []string
+
+	for _, sc := range r.Cfg.SchemaConfig.StructNonClusteredConfig {
+		nonClusteredTables = append(nonClusteredTables, sc.SourceTable...)
+		for _, t := range sc.SourceTable {
+			nonClusteredTableMap[strings.ToUpper(t)] = sc.NonClusteredTableOption
+		}
+	}
+	interTables := common.FilterIntersectionStringItems(nonClusteredTables, r.Cfg.SchemaConfig.StructClusteredConfig.SourceTable)
+	if len(interTables) > 0 {
+		return fmt.Errorf("oracle schema config [struct_nonclustered_config] and [struct_clustered_config] tables has the same table name, please remove duplicat table")
+	}
+
+	for _, t := range r.Cfg.SchemaConfig.StructClusteredConfig.SourceTable {
+		clusteredTableMap[strings.ToUpper(t)] = struct{}{}
+	}
+
 	tableNameRuleMap, tableColumnRuleMap, tableDefaultRuleSourceMap, tableDefaultRuleMap, err := IChanger(&public.Change{
 		Ctx:              r.Ctx,
 		DBTypeS:          r.Cfg.DBTypeS,
@@ -163,7 +183,7 @@ func (r *Reverse) Reverse() error {
 		zap.String("cost", time.Now().Sub(ruleTime).String()))
 
 	// 获取 reverse 表任务列表
-	tables, err := GenReverseTableTask(r, tableNameRuleMap, tableColumnRuleMap, tableDefaultRuleSourceMap, tableDefaultRuleMap, oracleDBVersion, oracleDBCharset, r.Cfg.MySQLConfig.Charset, oracleCollation, r.Cfg.ReverseConfig.LowerCaseFieldName, exporterTables, nlsSort, nlsComp)
+	tables, err := GenReverseTableTask(r, tableNameRuleMap, tableColumnRuleMap, tableDefaultRuleSourceMap, tableDefaultRuleMap, clusteredTableMap, nonClusteredTableMap, oracleDBVersion, oracleDBCharset, r.Cfg.MySQLConfig.Charset, oracleCollation, r.Cfg.ReverseConfig.LowerCaseFieldName, exporterTables, nlsSort, nlsComp)
 	if err != nil {
 		return err
 	}

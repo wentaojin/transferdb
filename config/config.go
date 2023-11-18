@@ -112,12 +112,15 @@ type AllConfig struct {
 }
 
 type SchemaConfig struct {
-	SourceSchema       string          `toml:"source-schema" json:"source-schema"`
-	SourceIncludeTable []string        `toml:"source-include-table" json:"source-include-table"`
-	SourceExcludeTable []string        `toml:"source-exclude-table" json:"source-exclude-table"`
-	TargetSchema       string          `toml:"target-schema" json:"target-schema"`
-	CompareConfig      []CompareConfig `toml:"compare-config" json:"compare-config"`
-	MigrateConfig      []MigrateConfig `toml:"migrate-config" json:"migrate-config"`
+	SourceSchema             string                     `toml:"source-schema" json:"source-schema"`
+	SourceIncludeTable       []string                   `toml:"source-include-table" json:"source-include-table"`
+	SourceExcludeTable       []string                   `toml:"source-exclude-table" json:"source-exclude-table"`
+	TargetSchema             string                     `toml:"target-schema" json:"target-schema"`
+	GlobalTableOption        string                     `toml:"global-table-option" json:"global-table-option"`
+	CompareConfig            []CompareConfig            `toml:"compare-config" json:"compare-config"`
+	MigrateConfig            []MigrateConfig            `toml:"migrate-config" json:"migrate-config"`
+	StructNonClusteredConfig []StructNonClusteredConfig `toml:"struct-nonclustered-config" json:"struct-nonclustered-config"`
+	StructClusteredConfig    StructClusteredConfig      `toml:"struct-clustered-config" json:"struct-clustered-config"`
 }
 
 type CompareConfig struct {
@@ -131,6 +134,15 @@ type MigrateConfig struct {
 	EnableSplit bool   `toml:"enable-split" json:"enable-split"`
 	Range       string `toml:"range" json:"range"`
 	SQLHint     string `toml:"sql-hint" json:"sql-hint"`
+}
+
+type StructNonClusteredConfig struct {
+	SourceTable             []string `toml:"source-table" json:"source-table"`
+	NonClusteredTableOption string   `toml:"nonclustered-table-option" json:"nonclustered-table-option"`
+}
+
+type StructClusteredConfig struct {
+	SourceTable []string `toml:"source-table" json:"source-table"`
 }
 
 type OracleConfig struct {
@@ -153,7 +165,6 @@ type MySQLConfig struct {
 	Port          int    `toml:"port" json:"port"`
 	Charset       string `toml:"charset" json:"charset"`
 	ConnectParams string `toml:"connect-params" json:"connect-params"`
-	TableOption   string `toml:"table-option" json:"table-option"`
 	Overwrite     bool   `toml:"overwrite" json:"overwrite"`
 }
 

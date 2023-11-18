@@ -31,7 +31,8 @@ func main() {
 			}
 		}),
 		pool.WithExecuteTask(func(t pool.Task) error {
-			if t.Job.(int) == 5 {
+			if t.Job == 5 {
+				fmt.Println("策四")
 				return fmt.Errorf("task meet error")
 			}
 			return nil

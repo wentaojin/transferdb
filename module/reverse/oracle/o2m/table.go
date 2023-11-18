@@ -38,7 +38,6 @@ type Table struct {
 	SourceTableName       string          `json:"source_table_name"`
 	TargetDBVersion       string          `json:"target_db_version"`
 	TargetTableName       string          `json:"target_table_name"`
-	TargetTableOption     string          `json:"target_table_option"`
 	OracleCollation       bool            `json:"oracle_collation"`
 	SourceDBCharset       string          `json:"sourcedb_charset"`
 	TargetDBCharset       string          `json:"targetdb_charset"`
@@ -159,7 +158,6 @@ func GenReverseTableTask(r *Reverse, tableNameRule map[string]string, tableColum
 					SourceTableName:                 common.StringUPPER(t),
 					TargetDBVersion:                 dbVersion,
 					TargetTableName:                 targetTableName,
-					TargetTableOption:               common.StringUPPER(r.Cfg.MySQLConfig.TableOption),
 					SourceTableType:                 tablesMap[t],
 					SourceDBCharset:                 oracleDBCharset,
 					TargetDBCharset:                 targetDBCharset,

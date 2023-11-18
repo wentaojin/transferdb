@@ -32,22 +32,24 @@ import (
 )
 
 type Table struct {
-	Ctx                   context.Context `json:"-"`
-	SourceSchemaName      string          `json:"source_schema_name"`
-	TargetSchemaName      string          `json:"target_schema_name"`
-	SourceTableName       string          `json:"source_table_name"`
-	TargetDBVersion       string          `json:"target_db_version"`
-	TargetTableName       string          `json:"target_table_name"`
-	TargetTableOption     string          `json:"target_table_option"`
-	SourceDBCharset       string          `json:"sourcedb_charset"`
-	TargetDBCharset       string          `json:"targetdb_charset"`
-	OracleCollation       bool            `json:"oracle_collation"`
-	SourceSchemaCollation string          `json:"source_schema_collation"` // 可为空
-	SourceTableCollation  string          `json:"source_table_collation"`  // 可为空
-	SourceDBNLSSort       string          `json:"sourcedb_nlssort"`
-	SourceDBNLSComp       string          `json:"sourcedb_nlscomp"`
-	SourceTableType       string          `json:"source_table_type"`
-	LowerCaseFieldName    string          `json:"lower_case_field_name"`
+	Ctx                     context.Context     `json:"-"`
+	SourceSchemaName        string              `json:"source_schema_name"`
+	TargetSchemaName        string              `json:"target_schema_name"`
+	SourceTableName         string              `json:"source_table_name"`
+	TargetDBVersion         string              `json:"target_db_version"`
+	TargetTableName         string              `json:"target_table_name"`
+	TargetTableOption       string              `json:"target_table_option"`
+	TargetTableNonClustered map[string]string   `json:"target_table_nonclustered"`
+	TargetTableClustered    map[string]struct{} `json:"target_table_clustered"`
+	SourceDBCharset         string              `json:"sourcedb_charset"`
+	TargetDBCharset         string              `json:"targetdb_charset"`
+	OracleCollation         bool                `json:"oracle_collation"`
+	SourceSchemaCollation   string              `json:"source_schema_collation"` // 可为空
+	SourceTableCollation    string              `json:"source_table_collation"`  // 可为空
+	SourceDBNLSSort         string              `json:"sourcedb_nlssort"`
+	SourceDBNLSComp         string              `json:"sourcedb_nlscomp"`
+	SourceTableType         string              `json:"source_table_type"`
+	LowerCaseFieldName      string              `json:"lower_case_field_name"`
 
 	TableColumnDatatypeRule         map[string]string `json:"table_column_datatype_rule"`
 	TableColumnDefaultValRule       map[string]string `json:"table_column_default_val_rule"`
@@ -58,7 +60,7 @@ type Table struct {
 	MetaDB                          *meta.Meta        `json:"-"`
 }
 
-func GenReverseTableTask(r *Reverse, tableNameRule map[string]string, tableColumnRule map[string]map[string]string, tableDefaultSourceRule map[string]map[string]bool, tableDefaultRule map[string]map[string]string, oracleDBVersion string, oracleDBCharset, targetDBCharset string, oracleCollation bool, lowerCaseFieldName string, exporters []string, nlsSort, nlsComp string) ([]*Table, error) {
+func GenReverseTableTask(r *Reverse, tableNameRule map[string]string, tableColumnRule map[string]map[string]string, tableDefaultSourceRule map[string]map[string]bool, tableDefaultRule map[string]map[string]string, tableClusteredRuleMap map[string]struct{}, tableNonClusteredRuleMap map[string]string, oracleDBVersion string, oracleDBCharset, targetDBCharset string, oracleCollation bool, lowerCaseFieldName string, exporters []string, nlsSort, nlsComp string) ([]*Table, error) {
 	var tables []*Table
 
 	beginTime := time.Now()
@@ -148,7 +150,9 @@ func GenReverseTableTask(r *Reverse, tableNameRule map[string]string, tableColum
 					SourceTableName:                 common.StringUPPER(t),
 					TargetDBVersion:                 mysqlVersion,
 					TargetTableName:                 targetTableName,
-					TargetTableOption:               common.StringUPPER(r.Cfg.MySQLConfig.TableOption),
+					TargetTableOption:               r.Cfg.SchemaConfig.GlobalTableOption,
+					TargetTableClustered:            tableClusteredRuleMap,
+					TargetTableNonClustered:         tableNonClusteredRuleMap,
 					SourceDBCharset:                 oracleDBCharset,
 					TargetDBCharset:                 targetDBCharset,
 					SourceTableType:                 tablesMap[t],
