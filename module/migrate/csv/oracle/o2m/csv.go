@@ -673,53 +673,6 @@ func (r *CSV) initWaitSyncTableChunk(csvWaitTables []string, oracleCollation boo
 			if err != nil {
 				return err
 			}
-			// 1、统计信息数据行数 0，直接全表扫
-			// 2、基于数据切分策略，获取指定数据迁移表的查询范围
-			if tableRowsByStatistics == 0 {
-				switch {
-				case enableSplit && !strings.EqualFold(wherePrefix, ""):
-					whereRange = common.StringsBuilder(`1 = 1 AND `, wherePrefix)
-				default:
-					whereRange = `1 = 1`
-				}
-
-				err = meta.NewCommonModel(r.MetaDB).CreateFullSyncMetaAndUpdateWaitSyncMeta(r.Ctx, &meta.FullSyncMeta{
-					DBTypeS:        r.Cfg.DBTypeS,
-					DBTypeT:        r.Cfg.DBTypeT,
-					SchemaNameS:    common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema),
-					TableNameS:     common.StringUPPER(t),
-					SchemaNameT:    common.StringUPPER(r.Cfg.SchemaConfig.TargetSchema),
-					TableNameT:     common.StringUPPER(targetTableName),
-					GlobalScnS:     globalSCN,
-					ConsistentRead: isConsistentRead,
-					SQLHint:        sqlHint,
-					ColumnDetailS:  sourceColumnInfo,
-					ChunkDetailS:   whereRange,
-					TaskMode:       r.Cfg.TaskMode,
-					TaskStatus:     common.TaskStatusWaiting,
-					CSVFile: filepath.Join(r.Cfg.CSVConfig.OutputDir,
-						common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema), common.StringUPPER(t),
-						common.StringsBuilder(common.StringUPPER(r.Cfg.SchemaConfig.TargetSchema),
-							`.`, common.StringUPPER(targetTableName), `.0.csv`)),
-				}, &meta.WaitSyncMeta{
-					DBTypeS:          r.Cfg.DBTypeS,
-					DBTypeT:          r.Cfg.DBTypeT,
-					SchemaNameS:      common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema),
-					TableNameS:       common.StringUPPER(t),
-					TaskMode:         r.Cfg.TaskMode,
-					GlobalScnS:       globalSCN,
-					ConsistentRead:   isConsistentRead,
-					TableNumRows:     uint64(tableRowsByStatistics),
-					ChunkTotalNums:   1,
-					ChunkSuccessNums: 0,
-					ChunkFailedNums:  0,
-					IsPartition:      isPartition,
-				})
-				if err != nil {
-					return err
-				}
-				return nil
-			}
 
 			taskName := uuid.New().String()
 

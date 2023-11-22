@@ -184,12 +184,12 @@ global-table-option = "SHARD_ROW_ID_BITS = 4 PRE_SPLIT_REGIONS = 4"
 # 表结构迁移
 # Only Oracle -> TiDB 设置
 # 参数配置 only nonclustered-table 生效，统一设置成非聚簇表
-[[schema-config.struct-nonclustered-config]]
-source-table = ["marvin01"]
-nonclustered-table-option = "SHARD_ROW_ID_BITS = 6 PRE_SPLIT_REGIONS = 6"
+#[[schema-config.struct-nonclustered-config]]
+#source-table = ["marvin01"]
+#nonclustered-table-option = "SHARD_ROW_ID_BITS = 6 PRE_SPLIT_REGIONS = 6"
 # 参数配置 only clustered-table 生效，不会自动读取下游数据库 tidb 参数，但会判断是否存在主键，存在主键设置成聚簇表，不存在主键则使用 global-table-option 设置
-[schema-config.struct-clustered-config]
-source-table = []
+#[schema-config.struct-clustered-config]
+#source-table = []
 
 [oracle]
 # 特别说明
