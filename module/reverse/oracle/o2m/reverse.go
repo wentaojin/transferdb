@@ -152,6 +152,8 @@ func (r *Reverse) Reverse() error {
 		TargetSchemaName: common.StringUPPER(r.Cfg.SchemaConfig.TargetSchema),
 		SourceTables:     exporterTables,
 		OracleCollation:  oracleCollation,
+		SourceDBCharset:  common.StringUPPER(r.Cfg.OracleConfig.Charset),
+		TargetDBCharset:  common.StringUPPER(r.Cfg.MySQLConfig.Charset),
 		Threads:          r.Cfg.ReverseConfig.ReverseThreads,
 		Oracle:           r.Oracle,
 		MetaDB:           r.MetaDB,

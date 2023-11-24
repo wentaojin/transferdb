@@ -134,6 +134,8 @@ func (r *Reverse) Reverse() error {
 		SourceSchemaName: common.StringUPPER(r.cfg.SchemaConfig.SourceSchema),
 		TargetSchemaName: common.StringUPPER(r.cfg.SchemaConfig.TargetSchema),
 		SourceTables:     reverseTaskTables,
+		SourceDBCharset:  common.StringUPPER(r.cfg.MySQLConfig.Charset),
+		TargetDBCharset:  common.StringUPPER(r.cfg.OracleConfig.Charset),
 		Threads:          r.cfg.ReverseConfig.ReverseThreads,
 		MySQL:            r.mysql,
 		MetaDB:           r.metaDB,

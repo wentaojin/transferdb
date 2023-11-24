@@ -36,6 +36,8 @@ type Change struct {
 	SourceSchemaName string          `json:"source_schema_name"`
 	TargetSchemaName string          `json:"target_schema_name"`
 	SourceTables     []string        `json:"source_tables"`
+	SourceDBCharset  string          `json:"source_db_charset"`
+	TargetDBCharset  string          `json:"target_db_charset"`
 	Threads          int             `json:"threads"`
 	MySQL            *mysql.MySQL    `json:"-"`
 	MetaDB           *meta.Meta      `json:"-"`
@@ -198,14 +200,27 @@ func (r *Change) ChangeTableColumnDatatype() (map[string]map[string]string, erro
 					return err
 				}
 
+				// charset
+				columnName := rowCol["COLUMN_NAME"]
+				convUtf8Raw, err := common.CharsetConvert([]byte(columnName), common.MigrateOracleCharsetStringConvertMapping[common.StringUPPER(r.SourceDBCharset)], common.CharsetUTF8MB4)
+				if err != nil {
+					return fmt.Errorf("table column name rule [%s] charset convert failed, %v", columnName, err)
+				}
+
+				convTargetRaw, err := common.CharsetConvert(convUtf8Raw, common.CharsetUTF8MB4, common.MigrateMYSQLCompatibleCharsetStringConvertMapping[common.StringUPPER(r.TargetDBCharset)])
+				if err != nil {
+					return fmt.Errorf("table column name rule [%s] charset convert failed, %v", columnName, err)
+				}
+				columnName = string(convTargetRaw)
+
 				// 优先级
 				// column > table > schema > buildin
 				if len(columnDataTypeMapSlice) == 0 {
-					columnDatatypeMap[rowCol["COLUMN_NAME"]] = LoadDataTypeRuleUsingTableOrSchema(originColumnType, buildInColumnType, tableDataTypeMapSlice, schemaDataTypeMapSlice)
+					columnDatatypeMap[columnName] = LoadDataTypeRuleUsingTableOrSchema(originColumnType, buildInColumnType, tableDataTypeMapSlice, schemaDataTypeMapSlice)
 				}
 
 				// only column rule
-				columnTypeFromColumn := loadColumnTypeRuleOnlyUsingColumn(rowCol["COLUMN_NAME"], originColumnType, buildInColumnType, columnDataTypeMapSlice)
+				columnTypeFromColumn := loadColumnTypeRuleOnlyUsingColumn(columnName, originColumnType, buildInColumnType, columnDataTypeMapSlice)
 
 				// table or schema rule check, return column type
 				columnTypeFromOther := LoadDataTypeRuleUsingTableOrSchema(originColumnType, buildInColumnType, tableDataTypeMapSlice, schemaDataTypeMapSlice)
@@ -213,13 +228,13 @@ func (r *Change) ChangeTableColumnDatatype() (map[string]map[string]string, erro
 				// column or other rule check, return column type
 				switch {
 				case columnTypeFromColumn != buildInColumnType && columnTypeFromOther == buildInColumnType:
-					columnDatatypeMap[rowCol["COLUMN_NAME"]] = common.StringUPPER(columnTypeFromColumn)
+					columnDatatypeMap[columnName] = common.StringUPPER(columnTypeFromColumn)
 				case columnTypeFromColumn != buildInColumnType && columnTypeFromOther != buildInColumnType:
-					columnDatatypeMap[rowCol["COLUMN_NAME"]] = common.StringUPPER(columnTypeFromColumn)
+					columnDatatypeMap[columnName] = common.StringUPPER(columnTypeFromColumn)
 				case columnTypeFromColumn == buildInColumnType && columnTypeFromOther != buildInColumnType:
-					columnDatatypeMap[rowCol["COLUMN_NAME"]] = common.StringUPPER(columnTypeFromOther)
+					columnDatatypeMap[columnName] = common.StringUPPER(columnTypeFromOther)
 				default:
-					columnDatatypeMap[rowCol["COLUMN_NAME"]] = common.StringUPPER(buildInColumnType)
+					columnDatatypeMap[columnName] = common.StringUPPER(buildInColumnType)
 				}
 			}
 
@@ -355,10 +370,21 @@ func (r *Change) ChangeTableColumnDefaultValue() (map[string]map[string]bool, ma
 
 				// 优先级
 				// column > global
-				fromDB, dataDefault = LoadColumnDefaultValueRule(rowCol["COLUMN_NAME"], regDataDefault, columnDefaultValueMapSlice, globalDefaultValueMapSlice)
+				columnName := rowCol["COLUMN_NAME"]
+				convUtf8Raw, err := common.CharsetConvert([]byte(columnName), common.MigrateOracleCharsetStringConvertMapping[common.StringUPPER(r.SourceDBCharset)], common.CharsetUTF8MB4)
+				if err != nil {
+					return fmt.Errorf("table column default value rule [%s] charset convert failed, %v", columnName, err)
+				}
 
-				columnDataDefaultValSource[rowCol["COLUMN_NAME"]] = fromDB
-				columnDataDefaultValMap[rowCol["COLUMN_NAME"]] = dataDefault
+				convTargetRaw, err := common.CharsetConvert(convUtf8Raw, common.CharsetUTF8MB4, common.MigrateMYSQLCompatibleCharsetStringConvertMapping[common.StringUPPER(r.TargetDBCharset)])
+				if err != nil {
+					return fmt.Errorf("table column default value rule [%s] charset convert failed, %v", columnName, err)
+				}
+				columnName = string(convTargetRaw)
+				fromDB, dataDefault = LoadColumnDefaultValueRule(columnName, regDataDefault, columnDefaultValueMapSlice, globalDefaultValueMapSlice)
+
+				columnDataDefaultValSource[columnName] = fromDB
+				columnDataDefaultValMap[columnName] = dataDefault
 			}
 
 			tableDefaultValTempMap[sourceTable] = columnDataDefaultValMap

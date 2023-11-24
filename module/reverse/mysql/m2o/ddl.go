@@ -31,7 +31,6 @@ type DDL struct {
 	SourceTableDDL       string   `json:"-"` // 忽略
 	TargetSchemaName     string   `json:"target_schema"`
 	TargetTableName      string   `json:"target_table_name"`
-	TablePrefix          string   `json:"table_prefix"`
 	TableColumns         []string `json:"table_columns"`
 	TableKeys            []string `json:"table_keys"`
 	TableIndexes         []string `json:"table_indexes"`
@@ -170,25 +169,29 @@ func (d *DDL) GenDDLStructure() ([]string, []string) {
 	var reverseDDL string
 	if strings.EqualFold(d.TablePartitionDetail, "") {
 		if len(d.TableKeys) > 0 {
-			reverseDDL = fmt.Sprintf("%s (\n%s,\n%s\n);",
-				d.TablePrefix,
+			reverseDDL = fmt.Sprintf("CREATE TABLE %s.%s (\n%s,\n%s\n);",
+				d.TargetSchemaName,
+				d.TargetTableName,
 				strings.Join(d.TableColumns, ",\n"),
 				strings.Join(d.TableKeys, ",\n"))
 		} else {
-			reverseDDL = fmt.Sprintf("%s (\n%s\n);",
-				d.TablePrefix,
+			reverseDDL = fmt.Sprintf("CREATE TABLE %s.%s (\n%s\n);",
+				d.TargetSchemaName,
+				d.TargetTableName,
 				strings.Join(d.TableColumns, ",\n"))
 		}
 	} else {
 		if len(d.TableKeys) > 0 {
-			reverseDDL = fmt.Sprintf("%s (\n%s,\n%s\n) PARTITION BY %s;",
-				d.TablePrefix,
+			reverseDDL = fmt.Sprintf("CREATE TABLE %s.%s (\n%s,\n%s\n) PARTITION BY %s;",
+				d.TargetSchemaName,
+				d.TargetTableName,
 				strings.Join(d.TableColumns, ",\n"),
 				strings.Join(d.TableKeys, ",\n"),
 				d.TablePartitionDetail)
 		} else {
-			reverseDDL = fmt.Sprintf("%s (\n%s\n) PARTITION BY %s;",
-				d.TablePrefix,
+			reverseDDL = fmt.Sprintf("CREATE TABLE %s.%s (\n%s\n) PARTITION BY %s;",
+				d.TargetSchemaName,
+				d.TargetTableName,
 				strings.Join(d.TableColumns, ",\n"),
 				d.TablePartitionDetail)
 		}

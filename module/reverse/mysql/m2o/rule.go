@@ -43,8 +43,14 @@ type Info struct {
 }
 
 func (r *Rule) GenCreateTableDDL() (interface{}, error) {
-	targetSchema, targetTable := r.GenTablePrefix()
-
+	schema, err := r.GenSchemaName()
+	if err != nil {
+		return nil, err
+	}
+	table, err := r.GenTableName()
+	if err != nil {
+		return nil, err
+	}
 	tableColumnMetas, err := r.GenTableColumn()
 	if err != nil {
 		return nil, err
@@ -54,8 +60,6 @@ func (r *Rule) GenCreateTableDDL() (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	tablePrefix := fmt.Sprintf("CREATE TABLE %s.%s", r.GenSchemaName(), r.GenTableName())
 
 	tableSuffix, err := r.GenTableSuffix()
 	if err != nil {
@@ -92,9 +96,8 @@ func (r *Rule) GenCreateTableDDL() (interface{}, error) {
 		SourceTableName:      r.SourceTableName,
 		SourceTableType:      "NORMAL", // MySQL/TiDB table type
 		SourceTableDDL:       r.SourceTableDDL,
-		TargetSchemaName:     targetSchema, // change schema name
-		TargetTableName:      targetTable,  // change table name
-		TablePrefix:          tablePrefix,
+		TargetSchemaName:     schema, // change schema name
+		TargetTableName:      table,  // change table name
 		TableColumns:         tableColumnMetas,
 		TableKeys:            tableKeyMetas,
 		TableIndexes:         tableNormalIndex,
@@ -320,6 +323,14 @@ func (r *Rule) GenTableUniqueIndex() (uniqueIndexes []string, compatibilityIndex
 
 func (r *Rule) GenTableNormalIndex() (normalIndexes []string, compatibilityIndexSQL []string, err error) {
 	if len(r.NormalIndexINFO) > 0 {
+		schema, err := r.GenSchemaName()
+		if err != nil {
+			return normalIndexes, compatibilityIndexSQL, err
+		}
+		table, err := r.GenTableName()
+		if err != nil {
+			return normalIndexes, compatibilityIndexSQL, err
+		}
 		for _, kv := range r.NormalIndexINFO {
 			var idx, columnList string
 			if strings.EqualFold(r.LowerCaseFieldName, common.MigrateTableStructFieldNameLowerCase) {
@@ -334,14 +345,14 @@ func (r *Rule) GenTableNormalIndex() (normalIndexes []string, compatibilityIndex
 			if strings.EqualFold(kv["UNIQUENESS"], "UNIQUE") {
 				idx = fmt.Sprintf("CREATE UNIQUE INDEX %s ON %s.%s (%s);",
 					strings.ToUpper(kv["INDEX_NAME"]),
-					r.GenSchemaName(),
-					r.GenTableName(),
+					schema,
+					table,
 					columnList)
 			} else {
 				idx = fmt.Sprintf("CREATE INDEX %s ON %s.%s (%s);",
 					strings.ToUpper(kv["INDEX_NAME"]),
-					r.GenSchemaName(),
-					r.GenTableName(),
+					schema,
+					table,
 					columnList)
 			}
 			normalIndexes = append(normalIndexes, idx)
@@ -361,8 +372,16 @@ func (r *Rule) GenTableComment() (tableComment string, err error) {
 		if err != nil {
 			return tableComment, fmt.Errorf("table comments [%s] charset convert failed, %v", r.TableCommentINFO[0]["TABLE_COMMENT"], err)
 		}
+		schema, err := r.GenSchemaName()
+		if err != nil {
+			return tableComment, err
+		}
+		table, err := r.GenTableName()
+		if err != nil {
+			return tableComment, err
+		}
 
-		tableComment = fmt.Sprintf(`COMMENT ON TABLE %s.%s IS '%s';`, r.GenSchemaName(), r.GenTableName(), string(convertTargetRaw))
+		tableComment = fmt.Sprintf(`COMMENT ON TABLE %s.%s IS '%s';`, schema, table, string(convertTargetRaw))
 	}
 	return tableComment, nil
 }
@@ -550,8 +569,16 @@ func (r *Rule) GenTableColumnComment() (columnComments []string, err error) {
 				if strings.EqualFold(r.LowerCaseFieldName, common.MigrateTableStructFieldNameUpperCase) {
 					columnName = strings.ToUpper(columnName)
 				}
+				schema, err := r.GenSchemaName()
+				if err != nil {
+					return columnComments, err
+				}
+				table, err := r.GenTableName()
+				if err != nil {
+					return columnComments, err
+				}
 
-				columnComments = append(columnComments, fmt.Sprintf(`COMMENT ON COLUMN %s.%s.%s IS '%s';`, r.GenSchemaName(), r.GenTableName(), columnName, string(convertTargetRaw)))
+				columnComments = append(columnComments, fmt.Sprintf(`COMMENT ON COLUMN %s.%s.%s IS '%s';`, schema, table, columnName, string(convertTargetRaw)))
 
 			}
 		}
@@ -559,19 +586,12 @@ func (r *Rule) GenTableColumnComment() (columnComments []string, err error) {
 	return columnComments, nil
 }
 
-func (r *Rule) GenTablePrefix() (string, string) {
-	targetSchema := r.GenSchemaName()
-	targetTable := r.GenTableName()
-
-	return targetSchema, targetTable
-}
-
 func (r *Rule) GenTableSuffix() (string, error) {
 	// m2o null
 	return "", nil
 }
 
-func (r *Rule) GenSchemaName() string {
+func (r *Rule) GenSchemaName() (string, error) {
 	var sourceSchema, targetSchema string
 	if strings.EqualFold(r.LowerCaseFieldName, common.MigrateTableStructFieldNameLowerCase) {
 		sourceSchema = strings.ToLower(r.SourceSchemaName)
@@ -589,15 +609,15 @@ func (r *Rule) GenSchemaName() string {
 	}
 
 	if targetSchema == "" {
-		return sourceSchema
+		return sourceSchema, nil
 	}
 	if targetSchema != "" {
-		return targetSchema
+		return targetSchema, nil
 	}
-	return sourceSchema
+	return sourceSchema, nil
 }
 
-func (r *Rule) GenTableName() string {
+func (r *Rule) GenTableName() (string, error) {
 	var sourceTable, targetTable string
 
 	if strings.EqualFold(r.LowerCaseFieldName, common.MigrateTableStructFieldNameLowerCase) {
@@ -614,12 +634,12 @@ func (r *Rule) GenTableName() string {
 	}
 
 	if targetTable == "" {
-		return sourceTable
+		return sourceTable, nil
 	}
 	if targetTable != "" {
-		return targetTable
+		return targetTable, nil
 	}
-	return sourceTable
+	return sourceTable, nil
 }
 
 func (r *Rule) String() string {

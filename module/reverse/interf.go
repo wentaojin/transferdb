@@ -35,9 +35,8 @@ type Reader interface {
 }
 
 type Generator interface {
-	GenSchemaName() string
-	GenTableName() string
-	GenTablePrefix() (string, string)
+	GenSchemaName() (string, error)
+	GenTableName() (string, error)
 	GenTableSuffix() (string, error)
 	GenTableKeys() (tableKeys []string, compatibilityIndexSQL []string, err error)
 	GenTablePrimaryKey() (primaryKeys []string, err error)

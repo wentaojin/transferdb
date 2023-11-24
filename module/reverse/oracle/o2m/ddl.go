@@ -33,7 +33,6 @@ type DDL struct {
 	TargetSchemaName   string   `json:"target_schema"`
 	TargetTableName    string   `json:"target_table_name"`
 	TargetDBVersion    string   `json:"target_db_version"`
-	TablePrefix        string   `json:"table_prefix"`
 	TableColumns       []string `json:"table_columns"`
 	TableKeys          []string `json:"table_keys"`
 	TableSuffix        string   `json:"table_suffix"`
@@ -167,13 +166,15 @@ func (d *DDL) GenDDLStructure() ([]string, []string) {
 	// 表 with 主键
 	var structDDL string
 	if len(d.TableKeys) > 0 {
-		structDDL = fmt.Sprintf("%s (\n%s,\n%s\n)",
-			d.TablePrefix,
+		structDDL = fmt.Sprintf("CREATE TABLE `%s`.`%s` (\n%s,\n%s\n)",
+			d.TargetSchemaName,
+			d.TargetTableName,
 			strings.Join(d.TableColumns, ",\n"),
 			strings.Join(d.TableKeys, ",\n"))
 	} else {
-		structDDL = fmt.Sprintf("%s (\n%s\n)",
-			d.TablePrefix,
+		structDDL = fmt.Sprintf("CREATE TABLE `%s`.`%s` (\n%s\n)",
+			d.TargetSchemaName,
+			d.TargetTableName,
 			strings.Join(d.TableColumns, ",\n"))
 	}
 
