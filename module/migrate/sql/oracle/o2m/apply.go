@@ -126,8 +126,8 @@ func (p *IncrTask) IncrApply() error {
 		if err != nil {
 			return fmt.Errorf("single increment table [%s] data oracle redo [%v] insert mysql redo [%v] transaction start falied: %v", p.SourceTable, p.OracleRedo, p.MySQLRedo, err)
 		}
-		for _, sql := range p.MySQLRedo {
-			if _, err = txn.ExecContext(p.Ctx, sql); err != nil {
+		for _, s := range p.MySQLRedo {
+			if _, err = txn.ExecContext(p.Ctx, s); err != nil {
 				return fmt.Errorf("single increment table [%s] data oracle redo [%v] insert mysql [%v] transaction doing falied: %v", p.SourceTable, p.OracleRedo, p.MySQLRedo, err)
 			}
 		}

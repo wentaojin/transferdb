@@ -432,7 +432,9 @@ func (r *Migrate) FullPartSyncTable(fullPartTables []string) error {
 
 			columnNameS, err := r.Oracle.GetOracleTableRowsColumn(
 				common.StringsBuilder(`SELECT *`, ` FROM `,
-					common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema), `.`, common.StringUPPER(t), ` WHERE ROWNUM = 1`))
+					common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema), `.`, common.StringUPPER(t), ` WHERE ROWNUM = 1`),
+				common.MigrateOracleCharsetStringConvertMapping[common.StringUPPER(r.Cfg.OracleConfig.Charset)],
+				common.StringUPPER(r.Cfg.MySQLConfig.Charset))
 			if err != nil {
 				return nil
 			}
@@ -861,44 +863,56 @@ func (r *Migrate) AdjustTableSelectColumn(sourceTable string, oracleCollation bo
 	var columnNames []string
 
 	for _, rowCol := range columnsINFO {
+		columnName := rowCol["COLUMN_NAME"]
+		convertUtf8Raw, err := common.CharsetConvert([]byte(columnName), common.MigrateOracleCharsetStringConvertMapping[common.StringUPPER(r.Cfg.OracleConfig.Charset)], common.CharsetUTF8MB4)
+		if err != nil {
+			return "", fmt.Errorf("column [%s] charset convert failed, %v", columnName, err)
+		}
+
+		convertTargetRaw, err := common.CharsetConvert(convertUtf8Raw, common.CharsetUTF8MB4, common.StringUPPER(r.Cfg.MySQLConfig.Charset))
+		if err != nil {
+			return "", fmt.Errorf("column [%s] charset convert failed, %v", columnName, err)
+		}
+		columnName = string(convertTargetRaw)
+
 		switch strings.ToUpper(rowCol["DATA_TYPE"]) {
 		// 数字
 		case "NUMBER":
-			columnNames = append(columnNames, common.StringsBuilder(`"`, rowCol["COLUMN_NAME"], `"`))
+			columnNames = append(columnNames, common.StringsBuilder(`"`, columnName, `"`))
 		case "DECIMAL", "DEC", "DOUBLE PRECISION", "FLOAT", "INTEGER", "INT", "REAL", "NUMERIC", "BINARY_FLOAT", "BINARY_DOUBLE", "SMALLINT":
-			columnNames = append(columnNames, common.StringsBuilder(`"`, rowCol["COLUMN_NAME"], `"`))
+			columnNames = append(columnNames, common.StringsBuilder(`"`, columnName, `"`))
 		// 字符
 		case "BFILE", "CHARACTER", "LONG", "NCHAR VARYING", "ROWID", "UROWID", "VARCHAR", "CHAR", "NCHAR", "NVARCHAR2", "NCLOB", "CLOB":
-			columnNames = append(columnNames, common.StringsBuilder(`"`, rowCol["COLUMN_NAME"], `"`))
+			columnNames = append(columnNames, common.StringsBuilder(`"`, columnName, `"`))
 		// XMLTYPE
 		case "XMLTYPE":
-			columnNames = append(columnNames, fmt.Sprintf(` XMLSERIALIZE(CONTENT "%s" AS CLOB) AS "%s"`, rowCol["COLUMN_NAME"], rowCol["COLUMN_NAME"]))
+			columnNames = append(columnNames, fmt.Sprintf(` XMLSERIALIZE(CONTENT "%s" AS CLOB) AS "%s"`, columnName, columnName))
 		// 二进制
 		case "BLOB", "LONG RAW", "RAW":
-			columnNames = append(columnNames, common.StringsBuilder(`"`, rowCol["COLUMN_NAME"], `"`))
+			columnNames = append(columnNames, common.StringsBuilder(`"`, columnName, `"`))
 		// 时间
 		case "DATE":
-			columnNames = append(columnNames, common.StringsBuilder(`TO_CHAR("`, rowCol["COLUMN_NAME"], `",'yyyy-MM-dd HH24:mi:ss') AS "`, rowCol["COLUMN_NAME"], `"`))
+			columnNames = append(columnNames, common.StringsBuilder(`TO_CHAR("`, columnName, `",'yyyy-MM-dd HH24:mi:ss') AS "`, columnName, `"`))
 		// 默认其他类型
 		default:
 			if strings.Contains(rowCol["DATA_TYPE"], "INTERVAL") {
-				columnNames = append(columnNames, common.StringsBuilder(`TO_CHAR("`, rowCol["COLUMN_NAME"], `") AS "`, rowCol["COLUMN_NAME"], `"`))
+				columnNames = append(columnNames, common.StringsBuilder(`TO_CHAR("`, columnName, `") AS "`, columnName, `"`))
 			} else if strings.Contains(rowCol["DATA_TYPE"], "TIMESTAMP") {
 				dataScale, err := strconv.Atoi(rowCol["DATA_SCALE"])
 				if err != nil {
 					return "", fmt.Errorf("aujust oracle timestamp datatype scale [%s] strconv.Atoi failed: %v", rowCol["DATA_SCALE"], err)
 				}
 				if dataScale == 0 {
-					columnNames = append(columnNames, common.StringsBuilder(`TO_CHAR("`, rowCol["COLUMN_NAME"], `",'yyyy-mm-dd hh24:mi:ss') AS "`, rowCol["COLUMN_NAME"], `"`))
+					columnNames = append(columnNames, common.StringsBuilder(`TO_CHAR("`, columnName, `",'yyyy-mm-dd hh24:mi:ss') AS "`, columnName, `"`))
 				} else if dataScale < 0 && dataScale <= 6 {
-					columnNames = append(columnNames, common.StringsBuilder(`TO_CHAR("`, rowCol["COLUMN_NAME"],
-						`",'yyyy-mm-dd hh24:mi:ss.ff`, rowCol["DATA_SCALE"], `') AS "`, rowCol["COLUMN_NAME"], `"`))
+					columnNames = append(columnNames, common.StringsBuilder(`TO_CHAR("`, columnName,
+						`",'yyyy-mm-dd hh24:mi:ss.ff`, rowCol["DATA_SCALE"], `') AS "`, columnName, `"`))
 				} else {
-					columnNames = append(columnNames, common.StringsBuilder(`TO_CHAR("`, rowCol["COLUMN_NAME"], `",'yyyy-mm-dd hh24:mi:ss.ff6') AS "`, rowCol["COLUMN_NAME"], `"`))
+					columnNames = append(columnNames, common.StringsBuilder(`TO_CHAR("`, columnName, `",'yyyy-mm-dd hh24:mi:ss.ff6') AS "`, columnName, `"`))
 				}
 
 			} else {
-				columnNames = append(columnNames, common.StringsBuilder(`"`, rowCol["COLUMN_NAME"], `"`))
+				columnNames = append(columnNames, common.StringsBuilder(`"`, columnName, `"`))
 			}
 		}
 

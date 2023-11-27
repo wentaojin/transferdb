@@ -103,7 +103,7 @@ END;`)
 }
 
 // 获取表字段以及行数据 -> 用于 CSV
-func (o *Oracle) GetOracleTableRowsColumnCSV(querySQL string) ([]string, error) {
+func (o *Oracle) GetOracleTableRowsColumnCSV(querySQL string, sourceDBCharset, targetDBCharset string) ([]string, error) {
 
 	rows, err := o.OracleDB.QueryContext(o.Ctx, querySQL)
 	if err != nil {
@@ -111,9 +111,23 @@ func (o *Oracle) GetOracleTableRowsColumnCSV(querySQL string) ([]string, error) 
 	}
 	defer rows.Close()
 
-	columns, err := rows.Columns()
+	cols, err := rows.Columns()
 	if err != nil {
 		return []string{}, err
+	}
+
+	var columns []string
+	for _, col := range cols {
+		convertUtf8Raw, err := common.CharsetConvert([]byte(col), sourceDBCharset, common.CharsetUTF8MB4)
+		if err != nil {
+			return columns, fmt.Errorf("column [%s] charset convert failed, %v", col, err)
+		}
+
+		convertTargetRaw, err := common.CharsetConvert(convertUtf8Raw, common.CharsetUTF8MB4, targetDBCharset)
+		if err != nil {
+			return columns, fmt.Errorf("column [%s] charset convert failed, %v", col, err)
+		}
+		columns = append(columns, string(convertTargetRaw))
 	}
 
 	return columns, nil
@@ -276,7 +290,7 @@ func (o *Oracle) GetOracleTableRowsDataCSV(querySQL, sourceDBCharset, targetDBCh
 }
 
 // 获取表字段名以及行数据 -> 用于 FULL/ALL
-func (o *Oracle) GetOracleTableRowsColumn(querySQL string) ([]string, error) {
+func (o *Oracle) GetOracleTableRowsColumn(querySQL string, sourceDBCharset, targetDBCharset string) ([]string, error) {
 	var (
 		err     error
 		columns []string
@@ -295,7 +309,16 @@ func (o *Oracle) GetOracleTableRowsColumn(querySQL string) ([]string, error) {
 
 	// 字段名关键字反引号处理
 	for _, col := range tmpCols {
-		columns = append(columns, common.StringsBuilder("`", col, "`"))
+		convertUtf8Raw, err := common.CharsetConvert([]byte(col), sourceDBCharset, common.CharsetUTF8MB4)
+		if err != nil {
+			return columns, fmt.Errorf("column [%s] charset convert failed, %v", col, err)
+		}
+
+		convertTargetRaw, err := common.CharsetConvert(convertUtf8Raw, common.CharsetUTF8MB4, targetDBCharset)
+		if err != nil {
+			return columns, fmt.Errorf("column [%s] charset convert failed, %v", col, err)
+		}
+		columns = append(columns, common.StringsBuilder("`", string(convertTargetRaw), "`"))
 	}
 	return columns, nil
 }
