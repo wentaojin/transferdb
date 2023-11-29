@@ -155,7 +155,16 @@ func (o *Oracle) GetOracleTableRowsDataCSV(querySQL, sourceDBCharset, targetDBCh
 	}
 
 	for _, ct := range colTypes {
-		columnNames = append(columnNames, ct.Name())
+		convertUtf8Raw, err := common.CharsetConvert([]byte(ct.Name()), sourceDBCharset, common.CharsetUTF8MB4)
+		if err != nil {
+			return fmt.Errorf("column [%s] charset convert failed, %v", ct.Name(), err)
+		}
+
+		convertTargetRaw, err := common.CharsetConvert(convertUtf8Raw, common.CharsetUTF8MB4, targetDBCharset)
+		if err != nil {
+			return fmt.Errorf("column [%s] charset convert failed, %v", ct.Name(), err)
+		}
+		columnNames = append(columnNames, string(convertTargetRaw))
 		// 数据库字段类型 DatabaseTypeName() 映射 go 类型 ScanType()
 		columnTypes = append(columnTypes, ct.ScanType().String())
 	}
@@ -346,7 +355,16 @@ func (o *Oracle) GetOracleTableRowsData(querySQL string, insertBatchSize int, so
 
 	// 字段名关键字反引号处理
 	for _, col := range tmpCols {
-		cols = append(cols, common.StringsBuilder("`", col, "`"))
+		convertUtf8Raw, err := common.CharsetConvert([]byte(col), sourceDBCharset, common.CharsetUTF8MB4)
+		if err != nil {
+			return fmt.Errorf("column [%s] charset convert failed, %v", col, err)
+		}
+
+		convertTargetRaw, err := common.CharsetConvert(convertUtf8Raw, common.CharsetUTF8MB4, targetDBCharset)
+		if err != nil {
+			return fmt.Errorf("column [%s] charset convert failed, %v", col, err)
+		}
+		cols = append(cols, common.StringsBuilder("`", string(convertTargetRaw), "`"))
 	}
 
 	// 用于判断字段值是数字还是字符

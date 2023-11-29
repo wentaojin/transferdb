@@ -65,24 +65,39 @@ func NewRows(ctx context.Context, syncMeta meta.FullSyncMeta,
 
 func (t *Rows) ReadData() error {
 	startTime := time.Now()
-	var querySQL string
+	var (
+		originQuerySQL string
+		execQuerySQL   string
+		columnDetailS  string
+	)
+
+	convertRaw, err := common.CharsetConvert([]byte(t.SyncMeta.ColumnDetailS), common.CharsetUTF8MB4, common.MigrateOracleCharsetStringConvertMapping[common.StringUPPER(t.Cfg.OracleConfig.Charset)])
+	if err != nil {
+		return fmt.Errorf("schema [%s] table [%s] column [%s] charset convert failed, %v", t.SyncMeta.SchemaNameS, t.SyncMeta.TableNameS, t.SyncMeta.ColumnDetailS, err)
+	}
+	columnDetailS = string(convertRaw)
+
 	switch {
 	case strings.EqualFold(t.SyncMeta.ConsistentRead, "YES") && strings.EqualFold(t.SyncMeta.SQLHint, ""):
-		querySQL = common.StringsBuilder(`SELECT `, t.SyncMeta.ColumnDetailS, ` FROM `, t.SyncMeta.SchemaNameS, `.`, t.SyncMeta.TableNameS, ` AS OF SCN `, strconv.FormatUint(t.SyncMeta.GlobalScnS, 10), ` WHERE `, t.SyncMeta.ChunkDetailS)
+		originQuerySQL = common.StringsBuilder(`SELECT `, t.SyncMeta.ColumnDetailS, ` FROM `, t.SyncMeta.SchemaNameS, `.`, t.SyncMeta.TableNameS, ` AS OF SCN `, strconv.FormatUint(t.SyncMeta.GlobalScnS, 10), ` WHERE `, t.SyncMeta.ChunkDetailS)
+		execQuerySQL = common.StringsBuilder(`SELECT `, columnDetailS, ` FROM `, t.SyncMeta.SchemaNameS, `.`, t.SyncMeta.TableNameS, ` AS OF SCN `, strconv.FormatUint(t.SyncMeta.GlobalScnS, 10), ` WHERE `, t.SyncMeta.ChunkDetailS)
 	case strings.EqualFold(t.SyncMeta.ConsistentRead, "YES") && !strings.EqualFold(t.SyncMeta.SQLHint, ""):
-		querySQL = common.StringsBuilder(`SELECT `, t.SyncMeta.SQLHint, ` `, t.SyncMeta.ColumnDetailS, ` FROM `, t.SyncMeta.SchemaNameS, `.`, t.SyncMeta.TableNameS, ` AS OF SCN `, strconv.FormatUint(t.SyncMeta.GlobalScnS, 10), ` WHERE `, t.SyncMeta.ChunkDetailS)
+		originQuerySQL = common.StringsBuilder(`SELECT `, t.SyncMeta.SQLHint, ` `, t.SyncMeta.ColumnDetailS, ` FROM `, t.SyncMeta.SchemaNameS, `.`, t.SyncMeta.TableNameS, ` AS OF SCN `, strconv.FormatUint(t.SyncMeta.GlobalScnS, 10), ` WHERE `, t.SyncMeta.ChunkDetailS)
+		execQuerySQL = common.StringsBuilder(`SELECT `, t.SyncMeta.SQLHint, ` `, columnDetailS, ` FROM `, t.SyncMeta.SchemaNameS, `.`, t.SyncMeta.TableNameS, ` AS OF SCN `, strconv.FormatUint(t.SyncMeta.GlobalScnS, 10), ` WHERE `, t.SyncMeta.ChunkDetailS)
 	case strings.EqualFold(t.SyncMeta.ConsistentRead, "NO") && !strings.EqualFold(t.SyncMeta.SQLHint, ""):
-		querySQL = common.StringsBuilder(`SELECT `, t.SyncMeta.SQLHint, ` `, t.SyncMeta.ColumnDetailS, ` FROM `, t.SyncMeta.SchemaNameS, `.`, t.SyncMeta.TableNameS, ` WHERE `, t.SyncMeta.ChunkDetailS)
+		originQuerySQL = common.StringsBuilder(`SELECT `, t.SyncMeta.SQLHint, ` `, t.SyncMeta.ColumnDetailS, ` FROM `, t.SyncMeta.SchemaNameS, `.`, t.SyncMeta.TableNameS, ` WHERE `, t.SyncMeta.ChunkDetailS)
+		execQuerySQL = common.StringsBuilder(`SELECT `, t.SyncMeta.SQLHint, ` `, columnDetailS, ` FROM `, t.SyncMeta.SchemaNameS, `.`, t.SyncMeta.TableNameS, ` WHERE `, t.SyncMeta.ChunkDetailS)
 	default:
-		querySQL = common.StringsBuilder(`SELECT `, t.SyncMeta.ColumnDetailS, ` FROM `, t.SyncMeta.SchemaNameS, `.`, t.SyncMeta.TableNameS, ` WHERE `, t.SyncMeta.ChunkDetailS)
+		originQuerySQL = common.StringsBuilder(`SELECT `, t.SyncMeta.ColumnDetailS, ` FROM `, t.SyncMeta.SchemaNameS, `.`, t.SyncMeta.TableNameS, ` WHERE `, t.SyncMeta.ChunkDetailS)
+		execQuerySQL = common.StringsBuilder(`SELECT `, columnDetailS, ` FROM `, t.SyncMeta.SchemaNameS, `.`, t.SyncMeta.TableNameS, ` WHERE `, t.SyncMeta.ChunkDetailS)
 	}
 
-	err := t.Oracle.GetOracleTableRowsDataCSV(querySQL, t.DBCharsetS, t.DBCharsetT, t.Cfg, t.ReadChannel)
+	err = t.Oracle.GetOracleTableRowsDataCSV(execQuerySQL, t.DBCharsetS, t.DBCharsetT, t.Cfg, t.ReadChannel)
 	if err != nil {
 		// 通道关闭
 		close(t.ReadChannel)
 
-		return fmt.Errorf("source sql [%v] execute failed: %v", querySQL, err)
+		return fmt.Errorf("source sql [%v] execute failed: %v", execQuerySQL, err)
 	}
 
 	endTime := time.Now()
@@ -90,7 +105,8 @@ func (t *Rows) ReadData() error {
 		zap.String("schema", t.SyncMeta.SchemaNameS),
 		zap.String("table", t.SyncMeta.TableNameS),
 		zap.String("chunk", t.SyncMeta.ChunkDetailS),
-		zap.String("sql", querySQL),
+		zap.String("origin sql", originQuerySQL),
+		zap.String("exec sql", execQuerySQL),
 		zap.String("cost", endTime.Sub(startTime).String()))
 
 	// 通道关闭

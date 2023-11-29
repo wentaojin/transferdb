@@ -864,16 +864,14 @@ func (r *Migrate) AdjustTableSelectColumn(sourceTable string, oracleCollation bo
 
 	for _, rowCol := range columnsINFO {
 		columnName := rowCol["COLUMN_NAME"]
+		// 以 utf8mb4 字符集存储 meta
+
 		convertUtf8Raw, err := common.CharsetConvert([]byte(columnName), common.MigrateOracleCharsetStringConvertMapping[common.StringUPPER(r.Cfg.OracleConfig.Charset)], common.CharsetUTF8MB4)
 		if err != nil {
 			return "", fmt.Errorf("column [%s] charset convert failed, %v", columnName, err)
 		}
-
-		convertTargetRaw, err := common.CharsetConvert(convertUtf8Raw, common.CharsetUTF8MB4, common.StringUPPER(r.Cfg.MySQLConfig.Charset))
-		if err != nil {
-			return "", fmt.Errorf("column [%s] charset convert failed, %v", columnName, err)
-		}
-		columnName = string(convertTargetRaw)
+		
+		columnName = string(convertUtf8Raw)
 
 		switch strings.ToUpper(rowCol["DATA_TYPE"]) {
 		// 数字
