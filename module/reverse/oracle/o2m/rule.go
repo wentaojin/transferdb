@@ -222,16 +222,6 @@ func (r *Rule) GenTablePrimaryKey() (primaryKeys []string, err error) {
 			columnList = r.PrimaryKeyINFO[0]["COLUMN_LIST"]
 		}
 		for _, col := range strings.Split(columnList, ",") {
-			convUtf8Raw, err := common.CharsetConvert([]byte(col), common.MigrateOracleCharsetStringConvertMapping[common.StringUPPER(r.SourceDBCharset)], common.CharsetUTF8MB4)
-			if err != nil {
-				return primaryKeys, fmt.Errorf("table column [%s] charset convert failed, %v", col, err)
-			}
-
-			convTargetRaw, err := common.CharsetConvert(convUtf8Raw, common.CharsetUTF8MB4, common.MigrateMYSQLCompatibleCharsetStringConvertMapping[common.StringUPPER(r.TargetDBCharset)])
-			if err != nil {
-				return primaryKeys, fmt.Errorf("table column [%s] charset convert failed, %v", col, err)
-			}
-			col = string(convTargetRaw)
 			primaryColumns = append(primaryColumns, fmt.Sprintf("`%s`", col))
 		}
 		pk := fmt.Sprintf("PRIMARY KEY (%s)", strings.Join(primaryColumns, ","))
@@ -262,16 +252,6 @@ func (r *Rule) GenTableUniqueKey() (uniqueKeys []string, err error) {
 			}
 			uk := fmt.Sprintf("UNIQUE KEY `%s` (%s)",
 				rowUKCol["CONSTRAINT_NAME"], strings.Join(ukArr, ","))
-			convUtf8Raw, err := common.CharsetConvert([]byte(uk), common.MigrateOracleCharsetStringConvertMapping[common.StringUPPER(r.SourceDBCharset)], common.CharsetUTF8MB4)
-			if err != nil {
-				return uniqueKeys, fmt.Errorf("table unique key [%s] charset convert failed, %v", uk, err)
-			}
-
-			convTargetRaw, err := common.CharsetConvert(convUtf8Raw, common.CharsetUTF8MB4, common.MigrateMYSQLCompatibleCharsetStringConvertMapping[common.StringUPPER(r.TargetDBCharset)])
-			if err != nil {
-				return uniqueKeys, fmt.Errorf("table unique key [%s] charset convert failed, %v", uk, err)
-			}
-			uk = string(convTargetRaw)
 			uniqueKeys = append(uniqueKeys, uk)
 		}
 	}
@@ -331,17 +311,6 @@ func (r *Rule) GenTableForeignKey() (foreignKeys []string, err error) {
 					rTable,
 					rColumnList)
 			}
-
-			convUtf8Raw, err := common.CharsetConvert([]byte(fk), common.MigrateOracleCharsetStringConvertMapping[common.StringUPPER(r.SourceDBCharset)], common.CharsetUTF8MB4)
-			if err != nil {
-				return foreignKeys, fmt.Errorf("table foreign key [%s] charset convert failed, %v", fk, err)
-			}
-
-			convTargetRaw, err := common.CharsetConvert(convUtf8Raw, common.CharsetUTF8MB4, common.MigrateMYSQLCompatibleCharsetStringConvertMapping[common.StringUPPER(r.TargetDBCharset)])
-			if err != nil {
-				return foreignKeys, fmt.Errorf("table foreign key [%s] charset convert failed, %v", fk, err)
-			}
-			fk = string(convTargetRaw)
 			foreignKeys = append(foreignKeys, fk)
 		}
 	}
@@ -444,16 +413,6 @@ func (r *Rule) GenTableCheckKey() (checkKeys []string, err error) {
 				ck := fmt.Sprintf("CONSTRAINT `%s` CHECK (%s)",
 					constraintName,
 					strings.Join(d, " "))
-				convUtf8Raw, err := common.CharsetConvert([]byte(ck), common.MigrateOracleCharsetStringConvertMapping[common.StringUPPER(r.SourceDBCharset)], common.CharsetUTF8MB4)
-				if err != nil {
-					return checkKeys, fmt.Errorf("table check key [%s] charset convert failed, %v", ck, err)
-				}
-
-				convTargetRaw, err := common.CharsetConvert(convUtf8Raw, common.CharsetUTF8MB4, common.MigrateMYSQLCompatibleCharsetStringConvertMapping[common.StringUPPER(r.TargetDBCharset)])
-				if err != nil {
-					return checkKeys, fmt.Errorf("table check key [%s] charset convert failed, %v", ck, err)
-				}
-				ck = string(convTargetRaw)
 				checkKeys = append(checkKeys, ck)
 			}
 		}
@@ -484,16 +443,6 @@ func (r *Rule) GenTableUniqueIndex() (uniqueIndexes []string, compatibilityIndex
 					}
 
 					uniqueIDX := fmt.Sprintf("UNIQUE INDEX `%s` (%s)", idxMeta["INDEX_NAME"], strings.Join(uniqueIndex, ","))
-					convUtf8Raw, err := common.CharsetConvert([]byte(uniqueIDX), common.MigrateOracleCharsetStringConvertMapping[common.StringUPPER(r.SourceDBCharset)], common.CharsetUTF8MB4)
-					if err != nil {
-						return uniqueIndex, compatibilityIndexSQL, fmt.Errorf("table unique index [%s] charset convert failed, %v", uniqueIDX, err)
-					}
-
-					convTargetRaw, err := common.CharsetConvert(convUtf8Raw, common.CharsetUTF8MB4, common.MigrateMYSQLCompatibleCharsetStringConvertMapping[common.StringUPPER(r.TargetDBCharset)])
-					if err != nil {
-						return uniqueIndex, compatibilityIndexSQL, fmt.Errorf("table unique index [%s] charset convert failed, %v", uniqueIDX, err)
-					}
-					uniqueIDX = string(convTargetRaw)
 
 					uniqueIndexes = append(uniqueIndexes, uniqueIDX)
 
@@ -519,16 +468,6 @@ func (r *Rule) GenTableUniqueIndex() (uniqueIndexes []string, compatibilityIndex
 					sql := fmt.Sprintf("CREATE UNIQUE INDEX `%s` ON `%s`.`%s` (%s);",
 						idxMeta["INDEX_NAME"], schema, table,
 						columnList)
-					convUtf8Raw, err := common.CharsetConvert([]byte(sql), common.MigrateOracleCharsetStringConvertMapping[common.StringUPPER(r.SourceDBCharset)], common.CharsetUTF8MB4)
-					if err != nil {
-						return uniqueIndexes, compatibilityIndexSQL, fmt.Errorf("table unique index sql [%s] charset convert failed, %v", sql, err)
-					}
-
-					convTargetRaw, err := common.CharsetConvert(convUtf8Raw, common.CharsetUTF8MB4, common.MigrateMYSQLCompatibleCharsetStringConvertMapping[common.StringUPPER(r.TargetDBCharset)])
-					if err != nil {
-						return uniqueIndexes, compatibilityIndexSQL, fmt.Errorf("table unique index sql [%s] charset convert failed, %v", sql, err)
-					}
-					sql = string(convTargetRaw)
 					compatibilityIndexSQL = append(compatibilityIndexSQL, sql)
 
 					zap.L().Warn("reverse unique key",
@@ -554,17 +493,6 @@ func (r *Rule) GenTableUniqueIndex() (uniqueIndexes []string, compatibilityIndex
 					sql := fmt.Sprintf("CREATE UNIQUE INDEX `%s` ON `%s`.`%s` (%s) REVERSE;",
 						idxMeta["INDEX_NAME"], schema, table,
 						columnList)
-					convUtf8Raw, err := common.CharsetConvert([]byte(sql), common.MigrateOracleCharsetStringConvertMapping[common.StringUPPER(r.SourceDBCharset)], common.CharsetUTF8MB4)
-					if err != nil {
-						return uniqueIndexes, compatibilityIndexSQL, fmt.Errorf("table unique index sql [%s] charset convert failed, %v", sql, err)
-					}
-
-					convTargetRaw, err := common.CharsetConvert(convUtf8Raw, common.CharsetUTF8MB4, common.MigrateMYSQLCompatibleCharsetStringConvertMapping[common.StringUPPER(r.TargetDBCharset)])
-					if err != nil {
-						return uniqueIndexes, compatibilityIndexSQL, fmt.Errorf("table unique index sql [%s] charset convert failed, %v", sql, err)
-					}
-					sql = string(convTargetRaw)
-
 					compatibilityIndexSQL = append(compatibilityIndexSQL, sql)
 
 					zap.L().Warn("reverse unique key",
@@ -639,16 +567,6 @@ func (r *Rule) GenTableNormalIndex() (normalIndexes []string, compatibilityIndex
 
 					keyIndex := fmt.Sprintf("KEY `%s` (%s)", idxMeta["INDEX_NAME"], strings.Join(normalIndex, ","))
 
-					convUtf8Raw, err := common.CharsetConvert([]byte(keyIndex), common.MigrateOracleCharsetStringConvertMapping[common.StringUPPER(r.SourceDBCharset)], common.CharsetUTF8MB4)
-					if err != nil {
-						return normalIndex, compatibilityIndexSQL, fmt.Errorf("table index sql [%s] charset convert failed, %v", keyIndex, err)
-					}
-
-					convTargetRaw, err := common.CharsetConvert(convUtf8Raw, common.CharsetUTF8MB4, common.MigrateMYSQLCompatibleCharsetStringConvertMapping[common.StringUPPER(r.TargetDBCharset)])
-					if err != nil {
-						return normalIndex, compatibilityIndexSQL, fmt.Errorf("table index sql [%s] charset convert failed, %v", keyIndex, err)
-					}
-					keyIndex = string(convTargetRaw)
 					normalIndexes = append(normalIndexes, keyIndex)
 
 					zap.L().Info("reverse normal index",
@@ -675,16 +593,6 @@ func (r *Rule) GenTableNormalIndex() (normalIndexes []string, compatibilityIndex
 						idxMeta["INDEX_NAME"], schema, table,
 						columnList)
 
-					convUtf8Raw, err := common.CharsetConvert([]byte(sql), common.MigrateOracleCharsetStringConvertMapping[common.StringUPPER(r.SourceDBCharset)], common.CharsetUTF8MB4)
-					if err != nil {
-						return normalIndexes, compatibilityIndexSQL, fmt.Errorf("table normal index sql [%s] charset convert failed, %v", sql, err)
-					}
-
-					convTargetRaw, err := common.CharsetConvert(convUtf8Raw, common.CharsetUTF8MB4, common.MigrateMYSQLCompatibleCharsetStringConvertMapping[common.StringUPPER(r.TargetDBCharset)])
-					if err != nil {
-						return normalIndexes, compatibilityIndexSQL, fmt.Errorf("table normal index sql [%s] charset convert failed, %v", sql, err)
-					}
-					sql = string(convTargetRaw)
 					compatibilityIndexSQL = append(compatibilityIndexSQL, sql)
 
 					zap.L().Warn("reverse normal index",
@@ -709,16 +617,6 @@ func (r *Rule) GenTableNormalIndex() (normalIndexes []string, compatibilityIndex
 					sql := fmt.Sprintf("CREATE BITMAP INDEX %s ON %s.%s (%s);",
 						idxMeta["INDEX_NAME"], schema, table,
 						columnList)
-					convUtf8Raw, err := common.CharsetConvert([]byte(sql), common.MigrateOracleCharsetStringConvertMapping[common.StringUPPER(r.SourceDBCharset)], common.CharsetUTF8MB4)
-					if err != nil {
-						return normalIndexes, compatibilityIndexSQL, fmt.Errorf("table normal index sql [%s] charset convert failed, %v", sql, err)
-					}
-
-					convTargetRaw, err := common.CharsetConvert(convUtf8Raw, common.CharsetUTF8MB4, common.MigrateMYSQLCompatibleCharsetStringConvertMapping[common.StringUPPER(r.TargetDBCharset)])
-					if err != nil {
-						return normalIndexes, compatibilityIndexSQL, fmt.Errorf("table normal index sql [%s] charset convert failed, %v", sql, err)
-					}
-					sql = string(convTargetRaw)
 
 					compatibilityIndexSQL = append(compatibilityIndexSQL, sql)
 
@@ -744,16 +642,7 @@ func (r *Rule) GenTableNormalIndex() (normalIndexes []string, compatibilityIndex
 					sql := fmt.Sprintf("CREATE BITMAP INDEX %s ON %s.%s (%s);",
 						idxMeta["INDEX_NAME"], schema, table,
 						columnList)
-					convUtf8Raw, err := common.CharsetConvert([]byte(sql), common.MigrateOracleCharsetStringConvertMapping[common.StringUPPER(r.SourceDBCharset)], common.CharsetUTF8MB4)
-					if err != nil {
-						return normalIndexes, compatibilityIndexSQL, fmt.Errorf("table normal index sql [%s] charset convert failed, %v", sql, err)
-					}
 
-					convTargetRaw, err := common.CharsetConvert(convUtf8Raw, common.CharsetUTF8MB4, common.MigrateMYSQLCompatibleCharsetStringConvertMapping[common.StringUPPER(r.TargetDBCharset)])
-					if err != nil {
-						return normalIndexes, compatibilityIndexSQL, fmt.Errorf("table normal index sql [%s] charset convert failed, %v", sql, err)
-					}
-					sql = string(convTargetRaw)
 					compatibilityIndexSQL = append(compatibilityIndexSQL, sql)
 
 					zap.L().Warn("reverse normal index",
@@ -781,16 +670,6 @@ func (r *Rule) GenTableNormalIndex() (normalIndexes []string, compatibilityIndex
 						itypOwner,
 						itypName,
 						idxMeta["PARAMETERS"])
-					convUtf8Raw, err := common.CharsetConvert([]byte(sql), common.MigrateOracleCharsetStringConvertMapping[common.StringUPPER(r.SourceDBCharset)], common.CharsetUTF8MB4)
-					if err != nil {
-						return normalIndexes, compatibilityIndexSQL, fmt.Errorf("table normal index sql [%s] charset convert failed, %v", sql, err)
-					}
-
-					convTargetRaw, err := common.CharsetConvert(convUtf8Raw, common.CharsetUTF8MB4, common.MigrateMYSQLCompatibleCharsetStringConvertMapping[common.StringUPPER(r.TargetDBCharset)])
-					if err != nil {
-						return normalIndexes, compatibilityIndexSQL, fmt.Errorf("table normal index sql [%s] charset convert failed, %v", sql, err)
-					}
-					sql = string(convTargetRaw)
 					compatibilityIndexSQL = append(compatibilityIndexSQL, sql)
 
 					zap.L().Warn("reverse normal index",
@@ -818,16 +697,7 @@ func (r *Rule) GenTableNormalIndex() (normalIndexes []string, compatibilityIndex
 					sql := fmt.Sprintf("CREATE INDEX %s ON %s.%s (%s) REVERSE;",
 						idxMeta["INDEX_NAME"], schema, table,
 						columnList)
-					convUtf8Raw, err := common.CharsetConvert([]byte(sql), common.MigrateOracleCharsetStringConvertMapping[common.StringUPPER(r.SourceDBCharset)], common.CharsetUTF8MB4)
-					if err != nil {
-						return normalIndexes, compatibilityIndexSQL, fmt.Errorf("table normal index sql [%s] charset convert failed, %v", sql, err)
-					}
 
-					convTargetRaw, err := common.CharsetConvert(convUtf8Raw, common.CharsetUTF8MB4, common.MigrateMYSQLCompatibleCharsetStringConvertMapping[common.StringUPPER(r.TargetDBCharset)])
-					if err != nil {
-						return normalIndexes, compatibilityIndexSQL, fmt.Errorf("table normal index sql [%s] charset convert failed, %v", sql, err)
-					}
-					sql = string(convTargetRaw)
 					compatibilityIndexSQL = append(compatibilityIndexSQL, sql)
 
 					zap.L().Warn("reverse normal index",
@@ -876,16 +746,7 @@ func (r *Rule) GenTableNormalIndex() (normalIndexes []string, compatibilityIndex
 
 func (r *Rule) GenTableComment() (tableComment string, err error) {
 	if len(r.TableColumnINFO) > 0 && r.TableCommentINFO[0]["COMMENTS"] != "" {
-		convertUtf8Raw, err := common.CharsetConvert([]byte(r.TableCommentINFO[0]["COMMENTS"]), common.MigrateOracleCharsetStringConvertMapping[common.StringUPPER(r.SourceDBCharset)], common.CharsetUTF8MB4)
-		if err != nil {
-			return tableComment, fmt.Errorf("column [%s] charset convert failed, %v", r.TableCommentINFO[0]["COMMENTS"], err)
-		}
-
-		convertTargetRaw, err := common.CharsetConvert([]byte(common.SpecialLettersUsingMySQL(convertUtf8Raw)), common.CharsetUTF8MB4, common.MigrateMYSQLCompatibleCharsetStringConvertMapping[common.StringUPPER(r.TargetDBCharset)])
-		if err != nil {
-			return tableComment, fmt.Errorf("column [%s] charset convert failed, %v", r.TableCommentINFO[0]["COMMENTS"], err)
-		}
-		tableComment = fmt.Sprintf("COMMENT='%s'", string(convertTargetRaw))
+		tableComment = fmt.Sprintf("COMMENT='%s'", r.TableCommentINFO[0]["COMMENTS"])
 	}
 	return tableComment, err
 }
@@ -900,17 +761,6 @@ func (r *Rule) GenTableColumn() (tableColumns []string, err error) {
 			columnType      string
 		)
 		columnName := rowCol["COLUMN_NAME"]
-
-		convUtf8Raw, err := common.CharsetConvert([]byte(columnName), common.MigrateOracleCharsetStringConvertMapping[common.StringUPPER(r.SourceDBCharset)], common.CharsetUTF8MB4)
-		if err != nil {
-			return tableColumns, fmt.Errorf("column [%s] comments charset convert failed, %v", columnName, err)
-		}
-
-		convTargetRaw, err := common.CharsetConvert(convUtf8Raw, common.CharsetUTF8MB4, common.MigrateMYSQLCompatibleCharsetStringConvertMapping[common.StringUPPER(r.TargetDBCharset)])
-		if err != nil {
-			return tableColumns, fmt.Errorf("column [%s] comments charset convert failed, %v", columnName, err)
-		}
-		columnName = string(convTargetRaw)
 
 		if r.OracleCollation {
 			// 字段排序规则检查

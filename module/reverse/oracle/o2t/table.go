@@ -206,43 +206,346 @@ func GenReverseTableTask(r *Reverse, tableNameRule map[string]string, tableColum
 }
 
 func (t *Table) GetTablePrimaryKey() ([]map[string]string, error) {
-	return t.Oracle.GetOracleSchemaTablePrimaryKey(t.SourceSchemaName, t.SourceTableName)
+	primaryKeyMap, err := t.Oracle.GetOracleSchemaTablePrimaryKey(t.SourceSchemaName, t.SourceTableName)
+	if err != nil {
+		return nil, err
+	}
+
+	var newMap []map[string]string
+	for _, m := range primaryKeyMap {
+		kmap := make(map[string]string)
+		for key, val := range m {
+			convUtf8Raw, err := common.CharsetConvert([]byte(key), common.MigrateOracleCharsetStringConvertMapping[common.StringUPPER(t.SourceDBCharset)], common.CharsetUTF8MB4)
+			if err != nil {
+				return nil, fmt.Errorf("table primary key [%v] charset convert failed, %v", m, err)
+			}
+
+			convTargetRaw, err := common.CharsetConvert(convUtf8Raw, common.CharsetUTF8MB4, common.MigrateMYSQLCompatibleCharsetStringConvertMapping[common.StringUPPER(t.TargetDBCharset)])
+			if err != nil {
+				return nil, fmt.Errorf("table primary key [%v] charset convert failed, %v", m, err)
+			}
+
+			key = string(convTargetRaw)
+
+			convUtf8Raw, err = common.CharsetConvert([]byte(val), common.MigrateOracleCharsetStringConvertMapping[common.StringUPPER(t.SourceDBCharset)], common.CharsetUTF8MB4)
+			if err != nil {
+				return nil, fmt.Errorf("table primary key [%v] charset convert failed, %v", m, err)
+			}
+
+			convTargetRaw, err = common.CharsetConvert(convUtf8Raw, common.CharsetUTF8MB4, common.MigrateMYSQLCompatibleCharsetStringConvertMapping[common.StringUPPER(t.TargetDBCharset)])
+			if err != nil {
+				return nil, fmt.Errorf("table primary key [%v] charset convert failed, %v", m, err)
+			}
+			kmap[key] = string(convTargetRaw)
+		}
+		newMap = append(newMap, kmap)
+	}
+	return newMap, nil
 }
 
 func (t *Table) GetTableUniqueKey() ([]map[string]string, error) {
-	return t.Oracle.GetOracleSchemaTableUniqueKey(t.SourceSchemaName, t.SourceTableName)
+	uniKeyMap, err := t.Oracle.GetOracleSchemaTableUniqueKey(t.SourceSchemaName, t.SourceTableName)
+	if err != nil {
+		return nil, err
+	}
+
+	var newMap []map[string]string
+	for _, m := range uniKeyMap {
+		kmap := make(map[string]string)
+		for key, val := range m {
+			convUtf8Raw, err := common.CharsetConvert([]byte(key), common.MigrateOracleCharsetStringConvertMapping[common.StringUPPER(t.SourceDBCharset)], common.CharsetUTF8MB4)
+			if err != nil {
+				return nil, fmt.Errorf("table unique key [%v] charset convert failed, %v", m, err)
+			}
+
+			convTargetRaw, err := common.CharsetConvert(convUtf8Raw, common.CharsetUTF8MB4, common.MigrateMYSQLCompatibleCharsetStringConvertMapping[common.StringUPPER(t.TargetDBCharset)])
+			if err != nil {
+				return nil, fmt.Errorf("table unique key [%v] charset convert failed, %v", m, err)
+			}
+
+			key = string(convTargetRaw)
+
+			convUtf8Raw, err = common.CharsetConvert([]byte(val), common.MigrateOracleCharsetStringConvertMapping[common.StringUPPER(t.SourceDBCharset)], common.CharsetUTF8MB4)
+			if err != nil {
+				return nil, fmt.Errorf("table unique key [%v] charset convert failed, %v", m, err)
+			}
+
+			convTargetRaw, err = common.CharsetConvert(convUtf8Raw, common.CharsetUTF8MB4, common.MigrateMYSQLCompatibleCharsetStringConvertMapping[common.StringUPPER(t.TargetDBCharset)])
+			if err != nil {
+				return nil, fmt.Errorf("table unique key [%v] charset convert failed, %v", m, err)
+			}
+			kmap[key] = string(convTargetRaw)
+		}
+		newMap = append(newMap, kmap)
+	}
+	return newMap, nil
 }
 
 func (t *Table) GetTableForeignKey() ([]map[string]string, error) {
-	return t.Oracle.GetOracleSchemaTableForeignKey(t.SourceSchemaName, t.SourceTableName)
+	forignkMap, err := t.Oracle.GetOracleSchemaTableForeignKey(t.SourceSchemaName, t.SourceTableName)
+	if err != nil {
+		return nil, err
+	}
+
+	var newMap []map[string]string
+	for _, m := range forignkMap {
+		kmap := make(map[string]string)
+		for key, val := range m {
+			convUtf8Raw, err := common.CharsetConvert([]byte(key), common.MigrateOracleCharsetStringConvertMapping[common.StringUPPER(t.SourceDBCharset)], common.CharsetUTF8MB4)
+			if err != nil {
+				return nil, fmt.Errorf("table foreign key [%v] charset convert failed, %v", m, err)
+			}
+
+			convTargetRaw, err := common.CharsetConvert(convUtf8Raw, common.CharsetUTF8MB4, common.MigrateMYSQLCompatibleCharsetStringConvertMapping[common.StringUPPER(t.TargetDBCharset)])
+			if err != nil {
+				return nil, fmt.Errorf("table foreign key [%v] charset convert failed, %v", m, err)
+			}
+
+			key = string(convTargetRaw)
+
+			convUtf8Raw, err = common.CharsetConvert([]byte(val), common.MigrateOracleCharsetStringConvertMapping[common.StringUPPER(t.SourceDBCharset)], common.CharsetUTF8MB4)
+			if err != nil {
+				return nil, fmt.Errorf("table foreign key [%v] charset convert failed, %v", m, err)
+			}
+
+			convTargetRaw, err = common.CharsetConvert(convUtf8Raw, common.CharsetUTF8MB4, common.MigrateMYSQLCompatibleCharsetStringConvertMapping[common.StringUPPER(t.TargetDBCharset)])
+			if err != nil {
+				return nil, fmt.Errorf("table foreign key [%v] charset convert failed, %v", m, err)
+			}
+			kmap[key] = string(convTargetRaw)
+		}
+		newMap = append(newMap, kmap)
+	}
+	return newMap, nil
+
 }
 
 func (t *Table) GetTableCheckKey() ([]map[string]string, error) {
-	return t.Oracle.GetOracleSchemaTableCheckKey(t.SourceSchemaName, t.SourceTableName)
+	checkKmap, err := t.Oracle.GetOracleSchemaTableCheckKey(t.SourceSchemaName, t.SourceTableName)
+	if err != nil {
+		return nil, err
+	}
+
+	var newMap []map[string]string
+	for _, m := range checkKmap {
+		kmap := make(map[string]string)
+		for key, val := range m {
+			convUtf8Raw, err := common.CharsetConvert([]byte(key), common.MigrateOracleCharsetStringConvertMapping[common.StringUPPER(t.SourceDBCharset)], common.CharsetUTF8MB4)
+			if err != nil {
+				return nil, fmt.Errorf("table check key [%v] charset convert failed, %v", m, err)
+			}
+
+			convTargetRaw, err := common.CharsetConvert(convUtf8Raw, common.CharsetUTF8MB4, common.MigrateMYSQLCompatibleCharsetStringConvertMapping[common.StringUPPER(t.TargetDBCharset)])
+			if err != nil {
+				return nil, fmt.Errorf("table check key [%v] charset convert failed, %v", m, err)
+			}
+
+			key = string(convTargetRaw)
+
+			convUtf8Raw, err = common.CharsetConvert([]byte(val), common.MigrateOracleCharsetStringConvertMapping[common.StringUPPER(t.SourceDBCharset)], common.CharsetUTF8MB4)
+			if err != nil {
+				return nil, fmt.Errorf("table check key [%v] charset convert failed, %v", m, err)
+			}
+
+			convTargetRaw, err = common.CharsetConvert(convUtf8Raw, common.CharsetUTF8MB4, common.MigrateMYSQLCompatibleCharsetStringConvertMapping[common.StringUPPER(t.TargetDBCharset)])
+			if err != nil {
+				return nil, fmt.Errorf("table check key [%v] charset convert failed, %v", m, err)
+			}
+			kmap[key] = string(convTargetRaw)
+		}
+		newMap = append(newMap, kmap)
+	}
+	return newMap, nil
 }
 
 func (t *Table) GetTableUniqueIndex() ([]map[string]string, error) {
 	// 唯一索引
-	return t.Oracle.GetOracleSchemaTableUniqueIndex(t.SourceSchemaName, t.SourceTableName)
+	uniqIdxMap, err := t.Oracle.GetOracleSchemaTableUniqueIndex(t.SourceSchemaName, t.SourceTableName)
+	if err != nil {
+		return nil, err
+	}
+
+	var newMap []map[string]string
+	for _, m := range uniqIdxMap {
+		kmap := make(map[string]string)
+		for key, val := range m {
+			convUtf8Raw, err := common.CharsetConvert([]byte(key), common.MigrateOracleCharsetStringConvertMapping[common.StringUPPER(t.SourceDBCharset)], common.CharsetUTF8MB4)
+			if err != nil {
+				return nil, fmt.Errorf("table unique index [%v] charset convert failed, %v", m, err)
+			}
+
+			convTargetRaw, err := common.CharsetConvert(convUtf8Raw, common.CharsetUTF8MB4, common.MigrateMYSQLCompatibleCharsetStringConvertMapping[common.StringUPPER(t.TargetDBCharset)])
+			if err != nil {
+				return nil, fmt.Errorf("table unique index [%v] charset convert failed, %v", m, err)
+			}
+
+			key = string(convTargetRaw)
+
+			convUtf8Raw, err = common.CharsetConvert([]byte(val), common.MigrateOracleCharsetStringConvertMapping[common.StringUPPER(t.SourceDBCharset)], common.CharsetUTF8MB4)
+			if err != nil {
+				return nil, fmt.Errorf("table unique index [%v] charset convert failed, %v", m, err)
+			}
+
+			convTargetRaw, err = common.CharsetConvert(convUtf8Raw, common.CharsetUTF8MB4, common.MigrateMYSQLCompatibleCharsetStringConvertMapping[common.StringUPPER(t.TargetDBCharset)])
+			if err != nil {
+				return nil, fmt.Errorf("table unique index [%v] charset convert failed, %v", m, err)
+			}
+			kmap[key] = string(convTargetRaw)
+		}
+		newMap = append(newMap, kmap)
+	}
+	return newMap, nil
 }
 
 func (t *Table) GetTableNormalIndex() ([]map[string]string, error) {
 	// 普通索引【普通索引、函数索引、位图索引、DOMAIN 索引】
-	return t.Oracle.GetOracleSchemaTableNormalIndex(t.SourceSchemaName, t.SourceTableName)
+	normalMap, err := t.Oracle.GetOracleSchemaTableNormalIndex(t.SourceSchemaName, t.SourceTableName)
+	if err != nil {
+		return nil, err
+	}
+	var newMap []map[string]string
+	for _, m := range normalMap {
+		kmap := make(map[string]string)
+		for key, val := range m {
+			convUtf8Raw, err := common.CharsetConvert([]byte(key), common.MigrateOracleCharsetStringConvertMapping[common.StringUPPER(t.SourceDBCharset)], common.CharsetUTF8MB4)
+			if err != nil {
+				return nil, fmt.Errorf("table normal index [%v] charset convert failed, %v", m, err)
+			}
+
+			convTargetRaw, err := common.CharsetConvert(convUtf8Raw, common.CharsetUTF8MB4, common.MigrateMYSQLCompatibleCharsetStringConvertMapping[common.StringUPPER(t.TargetDBCharset)])
+			if err != nil {
+				return nil, fmt.Errorf("table normal index [%v] charset convert failed, %v", m, err)
+			}
+
+			key = string(convTargetRaw)
+
+			convUtf8Raw, err = common.CharsetConvert([]byte(val), common.MigrateOracleCharsetStringConvertMapping[common.StringUPPER(t.SourceDBCharset)], common.CharsetUTF8MB4)
+			if err != nil {
+				return nil, fmt.Errorf("table normal index [%v] charset convert failed, %v", m, err)
+			}
+
+			convTargetRaw, err = common.CharsetConvert(convUtf8Raw, common.CharsetUTF8MB4, common.MigrateMYSQLCompatibleCharsetStringConvertMapping[common.StringUPPER(t.TargetDBCharset)])
+			if err != nil {
+				return nil, fmt.Errorf("table normal index [%v] charset convert failed, %v", m, err)
+			}
+			kmap[key] = string(convTargetRaw)
+		}
+		newMap = append(newMap, kmap)
+	}
+	return newMap, nil
 }
 
 func (t *Table) GetTableComment() ([]map[string]string, error) {
-	return t.Oracle.GetOracleSchemaTableComment(t.SourceSchemaName, t.SourceTableName)
+	commetMap, err := t.Oracle.GetOracleSchemaTableComment(t.SourceSchemaName, t.SourceTableName)
+	if err != nil {
+		return nil, err
+	}
+	var newMap []map[string]string
+	for _, m := range commetMap {
+		kmap := make(map[string]string)
+		for key, val := range m {
+			convUtf8Raw, err := common.CharsetConvert([]byte(key), common.MigrateOracleCharsetStringConvertMapping[common.StringUPPER(t.SourceDBCharset)], common.CharsetUTF8MB4)
+			if err != nil {
+				return nil, fmt.Errorf("table comment [%v] charset convert failed, %v", m, err)
+			}
+
+			convTargetRaw, err := common.CharsetConvert(convUtf8Raw, common.CharsetUTF8MB4, common.MigrateMYSQLCompatibleCharsetStringConvertMapping[common.StringUPPER(t.TargetDBCharset)])
+			if err != nil {
+				return nil, fmt.Errorf("table comment [%v] charset convert failed, %v", m, err)
+			}
+
+			key = string(convTargetRaw)
+
+			convUtf8Raw, err = common.CharsetConvert([]byte(val), common.MigrateOracleCharsetStringConvertMapping[common.StringUPPER(t.SourceDBCharset)], common.CharsetUTF8MB4)
+			if err != nil {
+				return nil, fmt.Errorf("table comment [%v] charset convert failed, %v", m, err)
+			}
+
+			convTargetRaw, err = common.CharsetConvert(convUtf8Raw, common.CharsetUTF8MB4, common.MigrateMYSQLCompatibleCharsetStringConvertMapping[common.StringUPPER(t.TargetDBCharset)])
+			if err != nil {
+				return nil, fmt.Errorf("table comment [%v] charset convert failed, %v", m, err)
+			}
+			kmap[key] = string(convTargetRaw)
+		}
+		newMap = append(newMap, kmap)
+	}
+	return newMap, nil
 }
 
 func (t *Table) GetTableColumnMeta() ([]map[string]string, error) {
 	// 获取表数据字段列信息
-	return t.Oracle.GetOracleSchemaTableColumn(t.SourceSchemaName, t.SourceTableName, t.OracleCollation)
+	columnMap, err := t.Oracle.GetOracleSchemaTableColumn(t.SourceSchemaName, t.SourceTableName, t.OracleCollation)
+	if err != nil {
+		return nil, err
+	}
+	var newMap []map[string]string
+	for _, m := range columnMap {
+		kmap := make(map[string]string)
+		for key, val := range m {
+			convUtf8Raw, err := common.CharsetConvert([]byte(key), common.MigrateOracleCharsetStringConvertMapping[common.StringUPPER(t.SourceDBCharset)], common.CharsetUTF8MB4)
+			if err != nil {
+				return nil, fmt.Errorf("table column [%v] charset convert failed, %v", m, err)
+			}
+
+			convTargetRaw, err := common.CharsetConvert(convUtf8Raw, common.CharsetUTF8MB4, common.MigrateMYSQLCompatibleCharsetStringConvertMapping[common.StringUPPER(t.TargetDBCharset)])
+			if err != nil {
+				return nil, fmt.Errorf("table column [%v] charset convert failed, %v", m, err)
+			}
+
+			key = string(convTargetRaw)
+
+			convUtf8Raw, err = common.CharsetConvert([]byte(val), common.MigrateOracleCharsetStringConvertMapping[common.StringUPPER(t.SourceDBCharset)], common.CharsetUTF8MB4)
+			if err != nil {
+				return nil, fmt.Errorf("table column [%v] charset convert failed, %v", m, err)
+			}
+
+			convTargetRaw, err = common.CharsetConvert(convUtf8Raw, common.CharsetUTF8MB4, common.MigrateMYSQLCompatibleCharsetStringConvertMapping[common.StringUPPER(t.TargetDBCharset)])
+			if err != nil {
+				return nil, fmt.Errorf("table column [%v] charset convert failed, %v", m, err)
+			}
+			kmap[key] = string(convTargetRaw)
+		}
+		newMap = append(newMap, kmap)
+	}
+	return newMap, nil
 }
 
 func (t *Table) GetTableColumnComment() ([]map[string]string, error) {
 	// 获取表数据字段列备注
-	return t.Oracle.GetOracleSchemaTableColumnComment(t.SourceSchemaName, t.SourceTableName)
+	commentMap, err := t.Oracle.GetOracleSchemaTableColumnComment(t.SourceSchemaName, t.SourceTableName)
+	if err != nil {
+		return nil, err
+	}
+	var newMap []map[string]string
+	for _, m := range commentMap {
+		kmap := make(map[string]string)
+		for key, val := range m {
+			convUtf8Raw, err := common.CharsetConvert([]byte(key), common.MigrateOracleCharsetStringConvertMapping[common.StringUPPER(t.SourceDBCharset)], common.CharsetUTF8MB4)
+			if err != nil {
+				return nil, fmt.Errorf("table column comment [%v] charset convert failed, %v", m, err)
+			}
+
+			convTargetRaw, err := common.CharsetConvert(convUtf8Raw, common.CharsetUTF8MB4, common.MigrateMYSQLCompatibleCharsetStringConvertMapping[common.StringUPPER(t.TargetDBCharset)])
+			if err != nil {
+				return nil, fmt.Errorf("table column comment [%v] charset convert failed, %v", m, err)
+			}
+
+			key = string(convTargetRaw)
+
+			convUtf8Raw, err = common.CharsetConvert([]byte(val), common.MigrateOracleCharsetStringConvertMapping[common.StringUPPER(t.SourceDBCharset)], common.CharsetUTF8MB4)
+			if err != nil {
+				return nil, fmt.Errorf("table column comment [%v] charset convert failed, %v", m, err)
+			}
+
+			convTargetRaw, err = common.CharsetConvert(convUtf8Raw, common.CharsetUTF8MB4, common.MigrateMYSQLCompatibleCharsetStringConvertMapping[common.StringUPPER(t.TargetDBCharset)])
+			if err != nil {
+				return nil, fmt.Errorf("table column comment [%v] charset convert failed, %v", m, err)
+			}
+			kmap[key] = string(convTargetRaw)
+		}
+		newMap = append(newMap, kmap)
+	}
+	return newMap, nil
 }
 
 func (t *Table) GetTableInfo() (interface{}, error) {
