@@ -102,6 +102,8 @@ enable-checkpoint = true
 consistent-read = false
 # 指定分片 chunk sql 查询 hint
 sql-hint = "/*+ PARALLEL(8) */"
+# calltimeout，单位：秒
+call-timeout = 36000
 
 [full]
 # 表间串行，表内并发
@@ -126,6 +128,8 @@ enable-checkpoint = true
 consistent-read = false
 # 指定分片 chunk sql 查询 hint
 sql-hint = "/*+ PARALLEL(8) */"
+# calltimeout，单位：秒
+call-timeout = 36000
 
 [all]
 # logminer 单次挖掘最长耗时，单位: 秒

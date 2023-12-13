@@ -21,6 +21,7 @@ import (
 	"github.com/shopspring/decimal"
 	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/config"
+	"time"
 )
 
 func (o *Oracle) GetOracleCurrentSnapshotSCN() (uint64, error) {
@@ -60,8 +61,11 @@ END;`)
 	return nil
 }
 
-func (o *Oracle) StartOracleCreateChunkByRowID(taskName, schemaName, tableName string, chunkSize string) error {
-	ctx, _ := context.WithCancel(o.Ctx)
+func (o *Oracle) StartOracleCreateChunkByRowID(taskName, schemaName, tableName string, chunkSize string, callTimeout int) error {
+
+	deadline := time.Now().Add(time.Duration(callTimeout) * time.Second)
+	ctx, cancel := context.WithDeadline(o.Ctx, deadline)
+	defer cancel()
 
 	chunkSQL := common.StringsBuilder(`BEGIN
   DBMS_PARALLEL_EXECUTE.CREATE_CHUNKS_BY_ROWID (task_name   => '`, taskName, `',
@@ -239,6 +243,9 @@ func (o *Oracle) GetOracleTableRowsDataCSV(querySQL, sourceDBCharset, targetDBCh
 						return fmt.Errorf("column [%s] strconv failed, %v", columnNames[i], err)
 					}
 					rowsMap[columnNames[i]] = fmt.Sprintf("%v", r)
+				case "[]uint8":
+					// binary data -> raw、long raw、blob
+					rowsMap[columnNames[i]] = fmt.Sprintf("%v", raw)
 				default:
 					var convertTargetRaw []byte
 
@@ -332,17 +339,22 @@ func (o *Oracle) GetOracleTableRowsColumn(querySQL string, sourceDBCharset, targ
 	return columns, nil
 }
 
-func (o *Oracle) GetOracleTableRowsData(querySQL string, insertBatchSize int, sourceDBCharset, targetDBCharset string, dataChan chan []map[string]string) error {
+func (o *Oracle) GetOracleTableRowsData(querySQL string, insertBatchSize, callTimeout int, sourceDBCharset, targetDBCharset string, dataChan chan []map[string]interface{}) error {
 	var (
 		err  error
 		cols []string
 	)
 
 	// 临时数据存放
-	var rowsTMP []map[string]string
-	rowsMap := make(map[string]string)
+	var rowsTMP []map[string]interface{}
+	rowsMap := make(map[string]interface{})
 
-	rows, err := o.OracleDB.QueryContext(o.Ctx, querySQL)
+	deadline := time.Now().Add(time.Duration(callTimeout) * time.Second)
+
+	ctx, cancel := context.WithDeadline(o.Ctx, deadline)
+	defer cancel()
+
+	rows, err := o.OracleDB.QueryContext(ctx, querySQL)
 	if err != nil {
 		return err
 	}
@@ -369,9 +381,8 @@ func (o *Oracle) GetOracleTableRowsData(querySQL string, insertBatchSize int, so
 
 	// 用于判断字段值是数字还是字符
 	var (
-		columnNames   []string
-		columnTypes   []string
-		databaseTypes []string
+		columnNames []string
+		columnTypes []string
 	)
 	colTypes, err := rows.ColumnTypes()
 	if err != nil {
@@ -382,7 +393,6 @@ func (o *Oracle) GetOracleTableRowsData(querySQL string, insertBatchSize int, so
 		columnNames = append(columnNames, ct.Name())
 		// 数据库字段类型 DatabaseTypeName() 映射 go 类型 ScanType()
 		columnTypes = append(columnTypes, ct.ScanType().String())
-		databaseTypes = append(databaseTypes, ct.DatabaseTypeName())
 	}
 
 	// 数据 Scan
@@ -448,6 +458,9 @@ func (o *Oracle) GetOracleTableRowsData(querySQL string, insertBatchSize int, so
 						return fmt.Errorf("column [%s] NewFromString strconv failed, %v", columnNames[i], err)
 					}
 					rowsMap[cols[i]] = fmt.Sprintf("%v", r)
+				case "[]uint8":
+					// binary data -> raw、long raw、blob
+					rowsMap[cols[i]] = fmt.Sprintf("%v", raw)
 				default:
 					// 特殊字符
 					convertUtf8Raw, err := common.CharsetConvert(raw, sourceDBCharset, common.CharsetUTF8MB4)
@@ -459,25 +472,22 @@ func (o *Oracle) GetOracleTableRowsData(querySQL string, insertBatchSize int, so
 					if err != nil {
 						return fmt.Errorf("column [%s] charset convert failed, %v", columnNames[i], err)
 					}
-
-					rowsMap[cols[i]] = fmt.Sprintf("'%v'", string(convertTargetRaw))
+					rowsMap[cols[i]] = fmt.Sprintf("%v", string(convertTargetRaw))
 				}
 			}
 		}
 
 		// 临时数组
 		rowsTMP = append(rowsTMP, rowsMap)
-
 		// MAP 清空
-		rowsMap = make(map[string]string)
+		rowsMap = make(map[string]interface{})
 
 		// batch 批次
 		if len(rowsTMP) == insertBatchSize {
-
 			dataChan <- rowsTMP
 
 			// 数组清空
-			rowsTMP = make([]map[string]string, 0)
+			rowsTMP = make([]map[string]interface{}, 0)
 		}
 	}
 

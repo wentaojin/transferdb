@@ -456,7 +456,7 @@ func SpecialLettersUsingMySQL(bs []byte) string {
 		chars []rune
 	)
 	for _, r := range bytes.Runes(bs) {
-		if unicode.IsPunct(r) || unicode.IsSymbol(r) || unicode.IsSpace(r) {
+		if unicode.IsPunct(r) || unicode.IsSymbol(r) {
 			// mysql/tidb % 字符, /% 代表 /%，% 代表 % ,无需转义
 			// mysql/tidb _ 字符, /_ 代表 /_，_ 代表 _ ,无需转义
 			if r == '%' || r == '_' {

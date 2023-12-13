@@ -27,7 +27,6 @@ import (
 	"github.com/wentaojin/transferdb/module/migrate/sql/oracle/public"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -334,14 +333,19 @@ func (r *Migrate) Full() error {
 	// 数据迁移
 	// 优先存在断点的表
 	// partSyncTables -> waitSyncTables
+	// 获取自定义库表名规则
+	tableNameRule, err := r.GetTableNameRule()
+	if err != nil {
+		return err
+	}
 	if len(partSyncTables) > 0 {
-		err = r.FullPartSyncTable(partSyncTables)
+		err = r.FullPartSyncTable(partSyncTables, tableNameRule)
 		if err != nil {
 			return err
 		}
 	}
 	if len(waitSyncTables) > 0 {
-		err = r.FullWaitSyncTable(waitSyncTables, oracleCollation)
+		err = r.FullWaitSyncTable(waitSyncTables, tableNameRule, oracleCollation)
 		if err != nil {
 			return err
 		}
@@ -379,11 +383,13 @@ func (r *Migrate) Full() error {
 	return nil
 }
 
-func (r *Migrate) FullPartSyncTable(fullPartTables []string) error {
+func (r *Migrate) FullPartSyncTable(fullPartTables []string, tableNameRule map[string]string) error {
 	taskTime := time.Now()
 
-	// 获取报错 sql
-	re := regexp.MustCompile("sql \\[(?s).*] execute")
+	zap.L().Info("source schema all table data loader starting",
+		zap.String("schema", r.Cfg.SchemaConfig.SourceSchema),
+		zap.Int("table totals", len(fullPartTables)),
+		zap.String("startTime", taskTime.String()))
 
 	g := &errgroup.Group{}
 	g.SetLimit(r.Cfg.FullConfig.TableThreads)
@@ -427,8 +433,20 @@ func (r *Migrate) FullPartSyncTable(fullPartTables []string) error {
 			if err != nil {
 				return err
 			}
+			runFullMetas, err := meta.NewFullSyncMetaModel(r.MetaDB).DetailFullSyncMeta(r.Ctx, &meta.FullSyncMeta{
+				DBTypeS:     r.Cfg.DBTypeS,
+				DBTypeT:     r.Cfg.DBTypeT,
+				SchemaNameS: common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema),
+				TableNameS:  common.StringUPPER(t),
+				TaskMode:    r.Cfg.TaskMode,
+				TaskStatus:  common.TaskStatusRunning,
+			})
+			if err != nil {
+				return err
+			}
 
 			waitFullMetas = append(waitFullMetas, failedFullMetas...)
+			waitFullMetas = append(waitFullMetas, runFullMetas...)
 
 			columnNameS, err := r.Oracle.GetOracleTableRowsColumn(
 				common.StringsBuilder(`SELECT *`, ` FROM `,
@@ -439,29 +457,44 @@ func (r *Migrate) FullPartSyncTable(fullPartTables []string) error {
 				return nil
 			}
 
+			var targetTableName string
+			if val, ok := tableNameRule[common.StringUPPER(t)]; ok {
+				targetTableName = val
+			} else {
+				targetTableName = common.StringUPPER(t)
+			}
+
+			sqlStr00 := GenMySQLTablePrepareStmt(common.StringUPPER(r.Cfg.SchemaConfig.TargetSchema), targetTableName, columnNameS, r.Cfg.AppConfig.InsertBatchSize, true)
+			stmt, err := r.Mysql.MySQLDB.PrepareContext(r.Ctx, sqlStr00)
+			if err != nil {
+				return err
+			}
+			defer stmt.Close()
+
 			g1 := &errgroup.Group{}
 			g1.SetLimit(r.Cfg.FullConfig.SQLThreads)
 			for _, fullMeta := range waitFullMetas {
 				m := fullMeta
 				g1.Go(func() error {
+					if errf := meta.NewFullSyncMetaModel(r.MetaDB).UpdateFullSyncMetaChunk(r.Ctx, &meta.FullSyncMeta{
+						DBTypeS:      m.DBTypeS,
+						DBTypeT:      m.DBTypeT,
+						SchemaNameS:  m.SchemaNameS,
+						TableNameS:   m.TableNameS,
+						TaskMode:     m.TaskMode,
+						ChunkDetailS: m.ChunkDetailS,
+					}, map[string]interface{}{
+						"TaskStatus": common.TaskStatusRunning,
+					}); errf != nil {
+						return fmt.Errorf("update full_sync_meta table [%v] failed: %v", m.String(), errf)
+					}
 					// 数据写入
-					err = public.IMigrate(NewRows(r.Ctx, m, r.Oracle, r.Mysql,
+					err = public.IMigrate(NewRows(r.Ctx, m, r.Oracle, r.Mysql, stmt,
 						common.MigrateOracleCharsetStringConvertMapping[common.StringUPPER(r.Cfg.OracleConfig.Charset)],
 						common.StringUPPER(r.Cfg.MySQLConfig.Charset),
-						r.Cfg.FullConfig.ApplyThreads, r.Cfg.AppConfig.InsertBatchSize, true, columnNameS))
+						r.Cfg.FullConfig.ApplyThreads, r.Cfg.AppConfig.InsertBatchSize, r.Cfg.FullConfig.CallTimeout, true, columnNameS))
 
 					if err != nil {
-						var (
-							errorSQL string
-							errMsg   string
-						)
-						errMsg = err.Error()
-
-						if re.MatchString(errMsg) {
-							errorSQL = re.FindStringSubmatch(errMsg)[0]
-							errMsg = re.ReplaceAllString(errMsg, "sql execute")
-						}
-
 						// record error, skip error
 						errf := meta.NewCommonModel(r.MetaDB).UpdateFullSyncMetaChunkAndCreateChunkErrorDetail(r.Ctx, &meta.FullSyncMeta{
 							DBTypeS:      m.DBTypeS,
@@ -482,8 +515,7 @@ func (r *Migrate) FullPartSyncTable(fullPartTables []string) error {
 							TaskMode:     m.TaskMode,
 							ChunkDetailS: m.ChunkDetailS,
 							InfoDetail:   m.String(),
-							ErrorSQL:     errorSQL,
-							ErrorDetail:  errMsg,
+							ErrorDetail:  err.Error(),
 						})
 						if errf != nil {
 							return fmt.Errorf("get oracle schema table [%v] IMigrate failed: %v", m.String(), errf)
@@ -600,12 +632,12 @@ func (r *Migrate) FullPartSyncTable(fullPartTables []string) error {
 	return nil
 }
 
-func (r *Migrate) FullWaitSyncTable(fullWaitTables []string, oracleCollation bool) error {
-	err := r.InitWaitSyncTableChunk(fullWaitTables, oracleCollation)
+func (r *Migrate) FullWaitSyncTable(fullWaitTables []string, tableNameRule map[string]string, oracleCollation bool) error {
+	err := r.InitWaitSyncTableChunk(fullWaitTables, tableNameRule, oracleCollation)
 	if err != nil {
 		return err
 	}
-	err = r.FullPartSyncTable(fullWaitTables)
+	err = r.FullPartSyncTable(fullWaitTables, tableNameRule)
 	if err != nil {
 		return err
 	}
@@ -613,13 +645,11 @@ func (r *Migrate) FullWaitSyncTable(fullWaitTables []string, oracleCollation boo
 	return nil
 }
 
-func (r *Migrate) InitWaitSyncTableChunk(fullWaitTables []string, oracleCollation bool) error {
+func (r *Migrate) InitWaitSyncTableChunk(fullWaitTables []string, tableNameRule map[string]string, oracleCollation bool) error {
 	startTask := time.Now()
-	// 获取自定义库表名规则
-	tableNameRule, err := r.GetTableNameRule()
-	if err != nil {
-		return err
-	}
+	zap.L().Info("init source schema table wait_sync_meta and full_sync_meta starting",
+		zap.String("schema", r.Cfg.SchemaConfig.SourceSchema),
+		zap.String("startTime", startTask.String()))
 
 	// 获取自定义库表迁移配置
 	tableMigrateRule := r.GetCustomMigrateConfig()
@@ -697,7 +727,7 @@ func (r *Migrate) InitWaitSyncTableChunk(fullWaitTables []string, oracleCollatio
 				return err
 			}
 
-			if err = r.Oracle.StartOracleCreateChunkByRowID(taskName, common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema), common.StringUPPER(t), strconv.Itoa(r.Cfg.CSVConfig.Rows)); err != nil {
+			if err = r.Oracle.StartOracleCreateChunkByRowID(taskName, common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema), common.StringUPPER(t), strconv.Itoa(r.Cfg.CSVConfig.Rows), r.Cfg.FullConfig.CallTimeout); err != nil {
 				return err
 			}
 
@@ -870,7 +900,7 @@ func (r *Migrate) AdjustTableSelectColumn(sourceTable string, oracleCollation bo
 		if err != nil {
 			return "", fmt.Errorf("column [%s] charset convert failed, %v", columnName, err)
 		}
-		
+
 		columnName = string(convertUtf8Raw)
 
 		switch strings.ToUpper(rowCol["DATA_TYPE"]) {

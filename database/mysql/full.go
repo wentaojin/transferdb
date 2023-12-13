@@ -27,8 +27,8 @@ func (m *MySQL) TruncateMySQLTable(targetSchema string, targetTable string) erro
 	return nil
 }
 
-func (m *MySQL) WriteMySQLTable(sql string) error {
-	_, err := m.MySQLDB.ExecContext(m.Ctx, sql)
+func (m *MySQL) WriteMySQLTable(sql string, args ...any) error {
+	_, err := m.MySQLDB.ExecContext(m.Ctx, sql, args...)
 	if err != nil {
 		return err
 	}

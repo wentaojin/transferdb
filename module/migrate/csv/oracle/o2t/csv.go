@@ -28,7 +28,6 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -366,9 +365,6 @@ func (r *CSV) CSV() error {
 func (r *CSV) csvPartSyncTable(csvPartTables []string, sourceDBCharset string) error {
 	startTime := time.Now()
 
-	// 获取报错 sql
-	re := regexp.MustCompile("sql \\[(?s).*] execute")
-
 	g := &errgroup.Group{}
 	g.SetLimit(r.Cfg.CSVConfig.TableThreads)
 
@@ -432,17 +428,6 @@ func (r *CSV) csvPartSyncTable(csvPartTables []string, sourceDBCharset string) e
 				g1.Go(func() error {
 					err = public.IMigrate(NewRows(r.Ctx, m, r.Oracle, r.Cfg, columnNameS, common.MigrateOracleCharsetStringConvertMapping[sourceDBCharset]))
 					if err != nil {
-						var (
-							errorSQL string
-							errMsg   string
-						)
-						errMsg = err.Error()
-
-						if re.MatchString(errMsg) {
-							errorSQL = re.FindStringSubmatch(errMsg)[0]
-							errMsg = re.ReplaceAllString(errMsg, "sql execute")
-						}
-
 						// record error, skip error
 						errf := meta.NewCommonModel(r.MetaDB).UpdateFullSyncMetaChunkAndCreateChunkErrorDetail(r.Ctx, &meta.FullSyncMeta{
 							DBTypeS:      m.DBTypeS,
@@ -463,8 +448,7 @@ func (r *CSV) csvPartSyncTable(csvPartTables []string, sourceDBCharset string) e
 							TaskMode:     m.TaskMode,
 							ChunkDetailS: m.ChunkDetailS,
 							InfoDetail:   m.String(),
-							ErrorSQL:     errorSQL,
-							ErrorDetail:  errMsg,
+							ErrorDetail:  err.Error(),
 						})
 						if errf != nil {
 							return fmt.Errorf("get oracle schema table [%v] IMigrate failed: %v", m.String(), errf)
@@ -683,7 +667,7 @@ func (r *CSV) initWaitSyncTableChunk(csvWaitTables []string, oracleCollation boo
 				return err
 			}
 
-			if err = r.Oracle.StartOracleCreateChunkByRowID(taskName, common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema), common.StringUPPER(t), strconv.Itoa(r.Cfg.CSVConfig.Rows)); err != nil {
+			if err = r.Oracle.StartOracleCreateChunkByRowID(taskName, common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema), common.StringUPPER(t), strconv.Itoa(r.Cfg.CSVConfig.Rows), r.Cfg.CSVConfig.CallTimeout); err != nil {
 				return err
 			}
 

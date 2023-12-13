@@ -33,7 +33,6 @@ type ChunkErrorDetail struct {
 	TaskMode     string `gorm:"type:varchar(30);not null;index:idx_dbtype_st_map;comment:'任务模式'" json:"task_mode"`
 	ChunkDetailS string `gorm:"type:varchar(300);not null;index:idx_dbtype_st_map;comment:'表 chunk 切分信息'" json:"chunk_detail_s"`
 	InfoDetail   string `gorm:"type:longtext;not null;comment:'信息详情'" json:"info_detail"`
-	ErrorSQL     string `gorm:"type:longtext;not null;comment:'错误 SQL'" json:"error_sql"`
 	ErrorDetail  string `gorm:"type:longtext;not null;comment:'错误详情'" json:"error_detail"`
 	*BaseModel
 }

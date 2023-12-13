@@ -90,6 +90,7 @@ type CSVConfig struct {
 	EnableCheckpoint bool   `toml:"enable-checkpoint" json:"enable-checkpoint"`
 	ConsistentRead   bool   `toml:"consistent-read" json:"consistent-read"`
 	SQLHint          string `toml:"sql-hint" json:"sql-hint"`
+	CallTimeout      int    `toml:"call-timeout" json:"call-timeout"`
 }
 
 type FullConfig struct {
@@ -101,6 +102,7 @@ type FullConfig struct {
 	EnableCheckpoint bool   `toml:"enable-checkpoint" json:"enable-checkpoint"`
 	ConsistentRead   bool   `toml:"consistent-read" json:"consistent-read"`
 	SQLHint          string `toml:"sql-hint" json:"sql-hint"`
+	CallTimeout      int    `toml:"call-timeout" json:"call-timeout"`
 }
 
 type AllConfig struct {
@@ -249,6 +251,12 @@ func (c *Config) AdjustConfig() error {
 	c.SchemaConfig.SourceSchema = common.StringUPPER(c.SchemaConfig.SourceSchema)
 	c.SchemaConfig.TargetSchema = common.StringUPPER(c.SchemaConfig.TargetSchema)
 
+	if c.FullConfig.CallTimeout == 0 {
+		c.FullConfig.CallTimeout = 36000
+	}
+	if c.CSVConfig.CallTimeout == 0 {
+		c.CSVConfig.CallTimeout = 36000
+	}
 	return nil
 }
 

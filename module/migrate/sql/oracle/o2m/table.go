@@ -17,8 +17,8 @@ package o2m
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
-	"github.com/thinkeridea/go-extend/exstrings"
 	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/database/meta"
 	"github.com/wentaojin/transferdb/database/mysql"
@@ -35,33 +35,37 @@ type Rows struct {
 	SyncMeta        meta.FullSyncMeta
 	Oracle          *oracle.Oracle
 	MySQL           *mysql.MySQL
+	Stmt            *sql.Stmt
 	SourceDBCharset string
 	TargetDBCharset string
 	ApplyThreads    int
 	BatchSize       int
+	CallTimeout     int
 	SafeMode        bool
 	ColumnNameS     []string
-	ReadChannel     chan []map[string]string
-	WriteChannel    chan string
+	ReadChannel     chan []map[string]interface{}
+	WriteChannel    chan []interface{}
 }
 
 func NewRows(ctx context.Context, syncMeta meta.FullSyncMeta,
-	oracle *oracle.Oracle, mysql *mysql.MySQL, sourceDBCharset string, targetDBCharset string, applyThreads, batchSize int, safeMode bool,
+	oracle *oracle.Oracle, mysql *mysql.MySQL, stmt *sql.Stmt, sourceDBCharset string, targetDBCharset string, applyThreads, batchSize, callTimeout int, safeMode bool,
 	columnNameS []string) *Rows {
 
-	readChannel := make(chan []map[string]string, common.ChannelBufferSize)
-	writeChannel := make(chan string, common.ChannelBufferSize)
+	readChannel := make(chan []map[string]interface{}, common.ChannelBufferSize)
+	writeChannel := make(chan []interface{}, common.ChannelBufferSize)
 
 	return &Rows{
 		Ctx:             ctx,
 		SyncMeta:        syncMeta,
 		Oracle:          oracle,
 		MySQL:           mysql,
+		Stmt:            stmt,
 		SourceDBCharset: sourceDBCharset,
 		TargetDBCharset: targetDBCharset,
 		ApplyThreads:    applyThreads,
 		SafeMode:        safeMode,
 		BatchSize:       batchSize,
+		CallTimeout:     callTimeout,
 		ColumnNameS:     columnNameS,
 		ReadChannel:     readChannel,
 		WriteChannel:    writeChannel,
@@ -97,7 +101,15 @@ func (t *Rows) ReadData() error {
 		execQuerySQL = common.StringsBuilder(`SELECT `, columnDetailS, ` FROM `, t.SyncMeta.SchemaNameS, `.`, t.SyncMeta.TableNameS, ` WHERE `, t.SyncMeta.ChunkDetailS)
 	}
 
-	err = t.Oracle.GetOracleTableRowsData(execQuerySQL, t.BatchSize, t.SourceDBCharset, t.TargetDBCharset, t.ReadChannel)
+	zap.L().Info("source schema table chunk rows extractor starting",
+		zap.String("schema", t.SyncMeta.SchemaNameS),
+		zap.String("table", t.SyncMeta.TableNameS),
+		zap.String("chunk", t.SyncMeta.ChunkDetailS),
+		zap.String("origin sql", originQuerySQL),
+		zap.String("exec sql", execQuerySQL),
+		zap.String("startTime", startTime.String()))
+
+	err = t.Oracle.GetOracleTableRowsData(execQuerySQL, t.BatchSize, t.CallTimeout, t.SourceDBCharset, t.TargetDBCharset, t.ReadChannel)
 	if err != nil {
 		// 通道关闭
 		close(t.ReadChannel)
@@ -122,12 +134,12 @@ func (t *Rows) ReadData() error {
 func (t *Rows) ProcessData() error {
 
 	for dataC := range t.ReadChannel {
-		var batchRows []string
+		var batchRows []any
 
 		for _, dMap := range dataC {
-			// 按字段名顺序遍历获取对应值
+			// get value order by column
 			var (
-				rowsTMP []string
+				rowsTMP []any
 			)
 			for _, column := range t.ColumnNameS {
 				if val, ok := dMap[column]; ok {
@@ -138,19 +150,14 @@ func (t *Rows) ProcessData() error {
 			if len(rowsTMP) != len(t.ColumnNameS) {
 				// 通道关闭
 				close(t.WriteChannel)
-
 				return fmt.Errorf("source schema table column counts vs data counts isn't match")
 			} else {
-				batchRows = append(batchRows, common.StringsBuilder("(", exstrings.Join(rowsTMP, ","), ")"))
+				batchRows = append(batchRows, rowsTMP...)
 			}
 		}
 
 		// 数据输入
-		t.WriteChannel <- common.StringsBuilder(GenMySQLInsertSQLStmtPrefix(
-			t.SyncMeta.SchemaNameT,
-			t.SyncMeta.TableNameT,
-			t.ColumnNameS,
-			t.SafeMode), exstrings.Join(batchRows, ","))
+		t.WriteChannel <- batchRows
 	}
 
 	// 通道关闭
@@ -162,15 +169,33 @@ func (t *Rows) ProcessData() error {
 func (t *Rows) ApplyData() error {
 	startTime := time.Now()
 
+	zap.L().Info("target schema table chunk data applier starting",
+		zap.String("schema", t.SyncMeta.SchemaNameT),
+		zap.String("table", t.SyncMeta.TableNameT),
+		zap.String("chunk", t.SyncMeta.ChunkDetailS),
+		zap.String("startTime", startTime.String()))
+
+	preArgNums := len(t.ColumnNameS) * t.BatchSize
+
 	g := &errgroup.Group{}
 	g.SetLimit(t.ApplyThreads)
 
 	for dataC := range t.WriteChannel {
-		querySql := dataC
+		vals := dataC
 		g.Go(func() error {
-			err := t.MySQL.WriteMySQLTable(querySql)
-			if err != nil {
-				return fmt.Errorf("target sql [%v] execute failed: %v", querySql, err)
+			// prepare exec
+			if len(vals) == preArgNums {
+				_, err := t.Stmt.ExecContext(t.Ctx, vals...)
+				if err != nil {
+					return fmt.Errorf("target sql execute failed: %v", err)
+				}
+			} else {
+				bathSize := len(vals) / len(t.ColumnNameS)
+				sqlStr01 := GenMySQLTablePrepareStmt(t.SyncMeta.SchemaNameT, t.SyncMeta.TableNameT, t.ColumnNameS, bathSize, t.SafeMode)
+				err := t.MySQL.WriteMySQLTable(sqlStr01, vals...)
+				if err != nil {
+					return fmt.Errorf("target sql execute failed: %v", err)
+				}
 			}
 			return nil
 		})
