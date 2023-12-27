@@ -40,7 +40,7 @@ type Rows struct {
 	DBCharsetS   string
 	DBCharsetT   string
 	ColumnNameS  []string
-	ReadChannel  chan []map[string]string
+	ReadChannel  chan [][]string
 	WriteChannel chan string
 }
 
@@ -48,7 +48,7 @@ func NewRows(ctx context.Context, syncMeta meta.FullSyncMeta,
 	oracle *oracle.Oracle, cfg *config.Config, columnNameS []string, sourceDBCharset string) *Rows {
 
 	writeChannel := make(chan string, common.ChannelBufferSize)
-	readChannel := make(chan []map[string]string, common.ChannelBufferSize)
+	readChannel := make(chan [][]string, common.ChannelBufferSize)
 
 	return &Rows{
 		Ctx:          ctx,
@@ -92,7 +92,7 @@ func (t *Rows) ReadData() error {
 		execQuerySQL = common.StringsBuilder(`SELECT `, columnDetailS, ` FROM `, t.SyncMeta.SchemaNameS, `.`, t.SyncMeta.TableNameS, ` WHERE `, t.SyncMeta.ChunkDetailS)
 	}
 
-	err = t.Oracle.GetOracleTableRowsDataCSV(execQuerySQL, t.DBCharsetS, t.DBCharsetT, t.Cfg, t.ReadChannel)
+	err = t.Oracle.GetOracleTableRowsDataCSV(execQuerySQL, t.DBCharsetS, t.DBCharsetT, t.Cfg, t.ReadChannel, t.ColumnNameS)
 	if err != nil {
 		// 通道关闭
 		close(t.ReadChannel)
@@ -118,21 +118,12 @@ func (t *Rows) ReadData() error {
 func (t *Rows) ProcessData() error {
 
 	for dataC := range t.ReadChannel {
-		for _, dMap := range dataC {
-			// 按字段名顺序遍历获取对应值
-			var (
-				rowsTMP []string
-			)
-			for _, column := range t.ColumnNameS {
-				if val, ok := dMap[column]; ok {
-					rowsTMP = append(rowsTMP, val)
-				}
-			}
-			if len(rowsTMP) != len(t.ColumnNameS) {
+		for _, dSlice := range dataC {
+			if len(dSlice) != len(t.ColumnNameS) {
 				return fmt.Errorf("source schema table column counts vs data counts isn't match")
-			} else {
+			} else  {
 				// csv 文件行数据输入
-				t.WriteChannel <- common.StringsBuilder(exstrings.Join(rowsTMP, t.Cfg.CSVConfig.Separator), t.Cfg.CSVConfig.Terminator)
+				t.WriteChannel <- common.StringsBuilder(exstrings.Join(dSlice, t.Cfg.CSVConfig.Separator), t.Cfg.CSVConfig.Terminator)
 			}
 		}
 	}

@@ -30,6 +30,7 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+	"unsafe"
 
 	"github.com/scylladb/go-set"
 	"github.com/scylladb/go-set/strset"
@@ -450,6 +451,32 @@ func CharsetConvert(data []byte, fromCharset, toCharset string) ([]byte, error) 
 判断是否为中文：unicode.Han(v)
 */
 func SpecialLettersUsingMySQL(bs []byte) string {
+	var b strings.Builder
+
+	for _, r := range bytes.Runes(bs) {
+		if unicode.IsPunct(r) || unicode.IsSymbol(r) {
+			// mysql/tidb % 字符, /% 代表 /%，% 代表 % ,无需转义
+			// mysql/tidb _ 字符, /_ 代表 /_，_ 代表 _ ,无需转义
+			if r == '%' || r == '_' {
+				b.WriteRune(r)
+			} else {
+				b.WriteRune('\\')
+				b.WriteRune(r)
+			}
+		} else {
+			b.WriteRune(r)
+		}
+	}
+
+	return b.String()
+}
+
+func BytesToString(b []byte) string {
+	return *(*string)(unsafe.Pointer(&b))
+}
+
+// SpecialLettersUsingMySQLOld deprecated version
+func SpecialLettersUsingMySQLOld(bs []byte) string {
 
 	var (
 		b     strings.Builder
