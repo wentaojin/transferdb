@@ -21,6 +21,7 @@ import (
 	"github.com/shopspring/decimal"
 	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/config"
+	"strconv"
 	"time"
 )
 
@@ -137,15 +138,20 @@ func (o *Oracle) GetOracleTableRowsColumnCSV(querySQL string, sourceDBCharset, t
 	return columns, nil
 }
 
-func (o *Oracle) GetOracleTableRowsDataCSV(querySQL, sourceDBCharset, targetDBCharset string, cfg *config.Config, dataChan chan []map[string]string) error {
+func (o *Oracle) GetOracleTableRowsDataCSV(querySQL, sourceDBCharset, targetDBCharset string, cfg *config.Config, dataChan chan [][]string, tableColumnNames []string) error {
+
 	var (
 		err         error
 		columnNames []string
 		columnTypes []string
 	)
 	// 临时数据存放
-	var rowsTMP []map[string]string
-	rowsMap := make(map[string]string)
+	rowsTMP := make([][]string, 0, cfg.AppConfig.InsertBatchSize)
+	rowData := make([]string, len(tableColumnNames))
+	tableColumnNameIndex := make(map[string]int)
+	for i, v := range tableColumnNames {
+		tableColumnNameIndex[v] = i
+	}
 
 	rows, err := o.OracleDB.QueryContext(o.Ctx, querySQL)
 	if err != nil {
@@ -168,7 +174,7 @@ func (o *Oracle) GetOracleTableRowsDataCSV(querySQL, sourceDBCharset, targetDBCh
 		if err != nil {
 			return fmt.Errorf("column [%s] charset convert failed, %v", ct.Name(), err)
 		}
-		columnNames = append(columnNames, string(convertTargetRaw))
+		columnNames = append(columnNames, common.BytesToString(convertTargetRaw))
 		// 数据库字段类型 DatabaseTypeName() 映射 go 类型 ScanType()
 		columnTypes = append(columnTypes, ct.ScanType().String())
 	}
@@ -195,57 +201,57 @@ func (o *Oracle) GetOracleTableRowsDataCSV(querySQL, sourceDBCharset, targetDBCh
 			// 按照 Oracle 特性来，转换同步统一转换成 NULL 即可，但需要注意业务逻辑中空字符串得写入，需要变更
 			if raw == nil {
 				if cfg.CSVConfig.NullValue != "" {
-					rowsMap[columnNames[i]] = fmt.Sprintf("%v", cfg.CSVConfig.NullValue)
+					rowData[tableColumnNameIndex[columnNames[i]]] = cfg.CSVConfig.NullValue
 				} else {
-					rowsMap[columnNames[i]] = fmt.Sprintf("%v", `NULL`)
+					rowData[tableColumnNameIndex[columnNames[i]]] = `NULL`
 				}
-			} else if string(raw) == "" {
+			} else if common.BytesToString(raw) == "" {
 				if cfg.CSVConfig.NullValue != "" {
-					rowsMap[columnNames[i]] = fmt.Sprintf("%v", cfg.CSVConfig.NullValue)
+					rowData[tableColumnNameIndex[columnNames[i]]] = cfg.CSVConfig.NullValue
 				} else {
-					rowsMap[columnNames[i]] = fmt.Sprintf("%v", `NULL`)
+					rowData[tableColumnNameIndex[columnNames[i]]] = `NULL`
 				}
 			} else {
 				switch columnTypes[i] {
 				case "int64":
-					r, err := common.StrconvIntBitSize(string(raw), 64)
+					r, err := common.StrconvIntBitSize(common.BytesToString(raw), 64)
 					if err != nil {
 						return fmt.Errorf("column [%s] strconv failed, %v", columnNames[i], err)
 					}
-					rowsMap[columnNames[i]] = fmt.Sprintf("%v", r)
+					rowData[tableColumnNameIndex[columnNames[i]]] = strconv.FormatInt(r, 10)
 				case "uint64":
-					r, err := common.StrconvUintBitSize(string(raw), 64)
+					r, err := common.StrconvUintBitSize(common.BytesToString(raw), 64)
 					if err != nil {
 						return fmt.Errorf("column [%s] strconv failed, %v", columnNames[i], err)
 					}
-					rowsMap[columnNames[i]] = fmt.Sprintf("%v", r)
+					rowData[tableColumnNameIndex[columnNames[i]]] = strconv.FormatUint(r, 10)
 				case "float32":
-					r, err := common.StrconvFloatBitSize(string(raw), 32)
+					r, err := common.StrconvFloatBitSize(common.BytesToString(raw), 32)
 					if err != nil {
 						return fmt.Errorf("column [%s] strconv failed, %v", columnNames[i], err)
 					}
-					rowsMap[columnNames[i]] = fmt.Sprintf("%v", r)
+					rowData[tableColumnNameIndex[columnNames[i]]] = strconv.FormatFloat(r, 'f', -1, 32)
 				case "float64":
-					r, err := common.StrconvFloatBitSize(string(raw), 64)
+					r, err := common.StrconvFloatBitSize(common.BytesToString(raw), 64)
 					if err != nil {
 						return fmt.Errorf("column [%s] strconv failed, %v", columnNames[i], err)
 					}
-					rowsMap[columnNames[i]] = fmt.Sprintf("%v", r)
+					rowData[tableColumnNameIndex[columnNames[i]]] = strconv.FormatFloat(r, 'f', -1, 64)
 				case "rune":
-					r, err := common.StrconvRune(string(raw))
+					r, err := common.StrconvRune(common.BytesToString(raw))
 					if err != nil {
 						return fmt.Errorf("column [%s] strconv failed, %v", columnNames[i], err)
 					}
-					rowsMap[columnNames[i]] = fmt.Sprintf("%v", r)
+					rowData[tableColumnNameIndex[columnNames[i]]] = string(r)
 				case "godror.Number":
-					r, err := decimal.NewFromString(string(raw))
+					r, err := decimal.NewFromString(common.BytesToString(raw))
 					if err != nil {
 						return fmt.Errorf("column [%s] strconv failed, %v", columnNames[i], err)
 					}
-					rowsMap[columnNames[i]] = fmt.Sprintf("%v", r)
+					rowData[tableColumnNameIndex[columnNames[i]]] = r.String()
 				case "[]uint8":
 					// binary data -> raw、long raw、blob
-					rowsMap[columnNames[i]] = fmt.Sprintf("%v", raw)
+					rowData[tableColumnNameIndex[columnNames[i]]] = fmt.Sprintf("%v", raw)
 				default:
 					var convertTargetRaw []byte
 
@@ -268,19 +274,19 @@ func (o *Oracle) GetOracleTableRowsDataCSV(querySQL, sourceDBCharset, targetDBCh
 					}
 
 					if cfg.CSVConfig.Delimiter == "" {
-						rowsMap[columnNames[i]] = fmt.Sprintf("%v", string(convertTargetRaw))
+						rowData[tableColumnNameIndex[columnNames[i]]] = common.BytesToString(convertTargetRaw)
 					} else {
-						rowsMap[columnNames[i]] = fmt.Sprintf("%v", common.StringsBuilder(cfg.CSVConfig.Delimiter, string(convertTargetRaw), cfg.CSVConfig.Delimiter))
+						rowData[tableColumnNameIndex[columnNames[i]]] = common.StringsBuilder(cfg.CSVConfig.Delimiter, common.BytesToString(convertTargetRaw), cfg.CSVConfig.Delimiter)
 					}
 				}
 			}
 		}
 
 		// 临时数组
-		rowsTMP = append(rowsTMP, rowsMap)
+		rowsTMP = append(rowsTMP, rowData)
 
 		// MAP 清空
-		rowsMap = make(map[string]string)
+		rowData = make([]string, len(tableColumnNames))
 
 		// batch 批次
 		if len(rowsTMP) == cfg.AppConfig.InsertBatchSize {
@@ -288,7 +294,7 @@ func (o *Oracle) GetOracleTableRowsDataCSV(querySQL, sourceDBCharset, targetDBCh
 			dataChan <- rowsTMP
 
 			// 数组清空
-			rowsTMP = make([]map[string]string, 0)
+			rowsTMP = make([][]string, 0, cfg.AppConfig.InsertBatchSize)
 		}
 	}
 
@@ -298,7 +304,6 @@ func (o *Oracle) GetOracleTableRowsDataCSV(querySQL, sourceDBCharset, targetDBCh
 
 	// 非 batch 批次
 	if len(rowsTMP) > 0 {
-
 		dataChan <- rowsTMP
 	}
 
@@ -417,9 +422,9 @@ func (o *Oracle) GetOracleTableRowsData(querySQL string, insertBatchSize, callTi
 			// 按照 Oracle 特性来，转换同步统一转换成 NULL 即可，但需要注意业务逻辑中空字符串得写入，需要变更
 			// Oracle/Mysql 对于 'NULL' 统一字符 NULL 处理，查询出来转成 NULL,所以需要判断处理
 			if raw == nil {
-				rowsMap[cols[i]] = fmt.Sprintf("%v", `NULL`)
+				rowsMap[cols[i]] = `NULL`
 			} else if string(raw) == "" {
-				rowsMap[cols[i]] = fmt.Sprintf("%v", `NULL`)
+				rowsMap[cols[i]] = `NULL`
 			} else {
 				switch columnTypes[i] {
 				case "int64":
