@@ -473,7 +473,7 @@ func (o *Oracle) GetOracleTableRowsData(querySQL string, insertBatchSize, callTi
 						return fmt.Errorf("column [%s] charset convert failed, %v", columnNames[i], err)
 					}
 
-					convertTargetRaw, err := common.CharsetConvert([]byte(common.SpecialLettersUsingMySQL(convertUtf8Raw)), common.CharsetUTF8MB4, targetDBCharset)
+					convertTargetRaw, err := common.CharsetConvert(convertUtf8Raw, common.CharsetUTF8MB4, targetDBCharset)
 					if err != nil {
 						return fmt.Errorf("column [%s] charset convert failed, %v", columnNames[i], err)
 					}

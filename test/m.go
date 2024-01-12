@@ -24,7 +24,7 @@ import (
 
 func main() {
 	// MySQL 数据库连接信息
-	dsn := "root:@tcp(123.912.139.333:4000)/marvin"
+	dsn := "root:@tcp(120.92.19.233:4000)/marvin"
 
 	// 打开数据库连接
 	db, err := sql.Open("mysql", dsn)
@@ -34,7 +34,7 @@ func main() {
 	defer db.Close()
 
 	// 准备 SQL 语句
-	sqlStatement := "INSERT INTO user (name, age) VALUES (?, ?)"
+	sqlStatement := "INSERT INTO marvin01 (mdate) VALUES (?)"
 	stmt, err := db.Prepare(sqlStatement)
 	if err != nil {
 		log.Fatal(err)
@@ -55,14 +55,13 @@ func main() {
 
 	// 批量插入数据
 	for _, data := range []struct {
-		Name string
-		Age  int
+		mdate string
 	}{
-		{"John", 25},
-		{"Alice", 30},
-		{"Bob", 22},
+		{"18\\:49\\:26"},
+		{"18\\:49\\:26"},
+		{"18\\:49\\:26"},
 	} {
-		_, err := tx.Stmt(stmt).Exec(data.Name, data.Age)
+		_, err := tx.Stmt(stmt).Exec(data.mdate)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -72,6 +71,32 @@ func main() {
 	err = tx.Commit()
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	for _, data := range []struct {
+		mdate string
+	}{
+		{"18\\:50\\:26"},
+		{"18\\:50\\:26"},
+		{"18\\:50\\:26"},
+	} {
+		_, err = db.Exec("INSERT INTO marvin01 (mdate) VALUES (?)", data.mdate)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	for _, data := range []struct {
+		mdate string
+	}{
+		{"18\\:52\\:26"},
+		{"18\\:52\\:26"},
+		{"18\\:52\\:26"},
+	} {
+		_, err = db.Exec(fmt.Sprintf("INSERT INTO marvin01 (mdate) VALUES ('%v')", data.mdate))
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 
 	fmt.Println("Batch insert successful.")
