@@ -17,8 +17,9 @@ package oracle
 
 import (
 	"fmt"
-	"github.com/wentaojin/transferdb/common"
 	"strings"
+
+	"github.com/wentaojin/transferdb/common"
 )
 
 func (o *Oracle) GetOracleDBCharacterNLSSortCollation() (string, error) {
@@ -59,7 +60,7 @@ func (o *Oracle) GetOracleDBCharacterSet() (string, error) {
 
 func (o *Oracle) GetOracleSchemaCollation(schemaName string) (string, error) {
 	querySQL := fmt.Sprintf(`SELECT DECODE(DEFAULT_COLLATION,
-'USING_NLS_COMP',(SELECT VALUE from NLS_DATABASE_PARAMETERS WHERE PARAMETER = 'NLS_COMP'),DEFAULT_COLLATION) DEFAULT_COLLATION FROM DBA_USERS WHERE USERNAME = '%s'`, strings.ToUpper(schemaName))
+'USING_NLS_COMP',(SELECT VALUE from NLS_DATABASE_PARAMETERS WHERE PARAMETER = 'NLS_COMP'),DEFAULT_COLLATION) DEFAULT_COLLATION FROM DBA_USERS WHERE USERNAME = '%s'`, schemaName)
 	_, res, err := Query(o.Ctx, o.OracleDB, querySQL)
 	if err != nil {
 		return "", err
@@ -114,7 +115,7 @@ FROM
 	DBA_TABLES tmp, DBA_TABLES w
 WHERE tmp.owner=w.owner AND tmp.table_name = w.table_name AND tmp.owner  = '%s' AND (w.IOT_TYPE IS NUll OR w.IOT_TYPE='IOT')) f left join (
 select owner,iot_name,iot_type from DBA_TABLES WHERE owner  = '%s')t 
-ON f.owner = t.owner AND f.table_name = t.iot_name`, strings.ToUpper(schemaName), strings.ToUpper(schemaName)))
+ON f.owner = t.owner AND f.table_name = t.iot_name`, schemaName, schemaName))
 	if err != nil {
 		return tableMap, err
 	}

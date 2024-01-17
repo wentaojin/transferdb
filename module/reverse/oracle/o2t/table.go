@@ -19,6 +19,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
+	"time"
+
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/database/meta"
@@ -27,8 +30,6 @@ import (
 	"github.com/wentaojin/transferdb/module/reverse"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
-	"strings"
-	"time"
 )
 
 type Table struct {
@@ -87,11 +88,11 @@ func GenReverseTableTask(r *Reverse, tableNameRule map[string]string, tableColum
 
 	if oracleCollation {
 		startTime := time.Now()
-		schemaCollation, err := r.Oracle.GetOracleSchemaCollation(common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema))
+		schemaCollation, err := r.Oracle.GetOracleSchemaCollation(r.Cfg.SchemaConfig.SourceSchema)
 		if err != nil {
 			return tables, err
 		}
-		tblCollation, err = r.Oracle.GetOracleSchemaTableCollation(common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema), schemaCollation)
+		tblCollation, err = r.Oracle.GetOracleSchemaTableCollation(r.Cfg.SchemaConfig.SourceSchema, schemaCollation)
 		if err != nil {
 			return tables, err
 		}
@@ -106,7 +107,7 @@ func GenReverseTableTask(r *Reverse, tableNameRule map[string]string, tableColum
 	}
 
 	startTime := time.Now()
-	tablesMap, err := r.Oracle.GetOracleSchemaTableType(common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema))
+	tablesMap, err := r.Oracle.GetOracleSchemaTableType(r.Cfg.SchemaConfig.SourceSchema)
 	if err != nil {
 		return tables, err
 	}
@@ -145,9 +146,9 @@ func GenReverseTableTask(r *Reverse, tableNameRule map[string]string, tableColum
 
 				tbl := &Table{
 					Ctx:                             r.Ctx,
-					SourceSchemaName:                common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema),
+					SourceSchemaName:                r.Cfg.SchemaConfig.SourceSchema,
 					TargetSchemaName:                common.StringUPPER(r.Cfg.SchemaConfig.TargetSchema),
-					SourceTableName:                 common.StringUPPER(t),
+					SourceTableName:                 t,
 					TargetDBVersion:                 mysqlVersion,
 					TargetTableName:                 targetTableName,
 					TargetTableOption:               r.Cfg.SchemaConfig.GlobalTableOption,
