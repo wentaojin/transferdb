@@ -16,6 +16,7 @@ limitations under the License.
 package oracle
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"github.com/shopspring/decimal"
@@ -251,7 +252,8 @@ func (o *Oracle) GetOracleTableRowsDataCSV(querySQL, sourceDBCharset, targetDBCh
 					rowData[tableColumnNameIndex[columnNames[i]]] = r.String()
 				case "[]uint8":
 					// binary data -> raw、long raw、blob
-					rowData[tableColumnNameIndex[columnNames[i]]] = fmt.Sprintf("%v", raw)
+					// 参考dumpling csv导出代码 https://github.com/pingcap/tidb/blob/75a6833d22af87111ac21631e830f5957b9cc854/dumpling/export/sql_type.go#L151
+					rowData[tableColumnNameIndex[columnNames[i]]] = escapeCSV(raw, &cfg.CSVConfig)
 				default:
 					var convertTargetRaw []byte
 
@@ -465,7 +467,8 @@ func (o *Oracle) GetOracleTableRowsData(querySQL string, insertBatchSize, callTi
 					rowsMap[cols[i]] = fmt.Sprintf("%v", r)
 				case "[]uint8":
 					// binary data -> raw、long raw、blob
-					rowsMap[cols[i]] = fmt.Sprintf("%v", raw)
+					// 参考dumpling sql导出代码 https://github.com/pingcap/tidb/blob/75a6833d22af87111ac21631e830f5957b9cc854/dumpling/export/sql_type.go#L298
+					rowsMap[cols[i]] = string(raw)
 				default:
 					// 特殊字符
 					convertUtf8Raw, err := common.CharsetConvert(raw, sourceDBCharset, common.CharsetUTF8MB4)
@@ -506,4 +509,61 @@ func (o *Oracle) GetOracleTableRowsData(querySQL string, insertBatchSize, callTi
 	}
 
 	return nil
+}
+
+func escapeCSV(s []byte, opt *config.CSVConfig) string {
+	switch {
+	case opt.EscapeBackslash:
+		return escapeBackslashCSV(s, opt)
+	case len(opt.Delimiter) > 0:
+		delimiter := []byte(opt.Delimiter)
+		return string(bytes.ReplaceAll(s, delimiter, append(delimiter, delimiter...)))
+	default:
+		return string(s)
+	}
+}
+
+func escapeBackslashCSV(s []byte, opt *config.CSVConfig) string {
+	bf := bytes.Buffer{}
+
+	var (
+		escape  byte
+		last         = 0
+		specCmt byte = 0
+	)
+
+	delimiter := []byte(opt.Delimiter)
+	separator := []byte(opt.Separator)
+
+	if len(delimiter) > 0 {
+		specCmt = delimiter[0] // if csv has a delimiter, we should use backslash to comment the delimiter in field value
+	} else if len(separator) > 0 {
+		specCmt = separator[0] // if csv's delimiter is "", we should escape the separator to avoid error
+	}
+
+	for i := 0; i < len(s); i++ {
+		escape = 0
+
+		switch s[i] {
+		case 0: /* Must be escaped for 'mysql' */
+			escape = '0'
+		case '\r':
+			escape = 'r'
+		case '\n': /* escaped for line terminators */
+			escape = 'n'
+		case '\\':
+			escape = '\\'
+		case specCmt:
+			escape = specCmt
+		}
+
+		if escape != 0 {
+			bf.Write(s[last:i])
+			bf.WriteByte('\\')
+			bf.WriteByte(escape)
+			last = i + 1
+		}
+	}
+	bf.Write(s[last:])
+	return bf.String()
 }
