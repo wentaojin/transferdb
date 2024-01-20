@@ -60,6 +60,7 @@ var (
 	MYSQLCharsetBIG5          = "BIG5"
 	MYSQLCharsetGBK           = "GBK"
 	MYSQLCharsetGB18030       = "GB18030"
+	ORACLECharsetUTF8         = "UTF8"
 	ORACLECharsetAL32UTF8     = "AL32UTF8"
 	ORACLECharsetZHT16BIG5    = "ZHT16BIG5"
 	ORACLECharsetZHS16GBK     = "ZHS16GBK"
@@ -80,6 +81,7 @@ const (
 var MigrateDataSupportCharset = []string{CharsetUTF8MB4, CharsetGBK, CharsetBIG5, CharsetGB18030}
 
 var MigrateOracleCharsetStringConvertMapping = map[string]string{
+	ORACLECharsetUTF8:         CharsetUTF8MB4,
 	ORACLECharsetAL32UTF8:     CharsetUTF8MB4,
 	ORACLECharsetZHT16BIG5:    CharsetBIG5,
 	ORACLECharsetZHS16GBK:     CharsetGBK,
@@ -87,6 +89,7 @@ var MigrateOracleCharsetStringConvertMapping = map[string]string{
 }
 
 var MigrateMYSQLCompatibleCharsetStringConvertMapping = map[string]string{
+	ORACLECharsetUTF8:   CharsetUTF8MB4,
 	MYSQLCharsetUTF8MB4: CharsetUTF8MB4,
 	MYSQLCharsetUTF8:    CharsetUTF8MB4,
 	MYSQLCharsetBIG5:    CharsetBIG5,
@@ -98,6 +101,7 @@ var MigrateMYSQLCompatibleCharsetStringConvertMapping = map[string]string{
 // 用于表结构以及字段属性字符集映射规则
 var MigrateTableStructureDatabaseCharsetMap = map[string]map[string]string{
 	TaskTypeOracle2MySQL: {
+		ORACLECharsetUTF8:         MYSQLCharsetUTF8MB4,
 		ORACLECharsetAL32UTF8:     MYSQLCharsetUTF8MB4,
 		ORACLECharsetZHT16BIG5:    MYSQLCharsetBIG5,
 		ORACLECharsetZHS16GBK:     MYSQLCharsetGBK,
@@ -105,6 +109,7 @@ var MigrateTableStructureDatabaseCharsetMap = map[string]map[string]string{
 	},
 	// TiDB 表结构以及字段属性统一使用 UTF8MB4 字符集，适用于 check、compare、reverse 模式下 o2t、t2o
 	TaskTypeOracle2TiDB: {
+		ORACLECharsetUTF8:         MYSQLCharsetUTF8MB4,
 		ORACLECharsetAL32UTF8:     MYSQLCharsetUTF8MB4,
 		ORACLECharsetZHT16BIG5:    MYSQLCharsetUTF8MB4,
 		ORACLECharsetZHS16GBK:     MYSQLCharsetUTF8MB4,

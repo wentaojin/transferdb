@@ -24,7 +24,7 @@ import (
 
 func main() {
 	// MySQL 数据库连接信息
-	dsn := "root:@tcp(120.92.19.233:4000)/marvin"
+	dsn := "root:@tcp(10.12.109.105:4000)/marvin"
 
 	// 打开数据库连接
 	db, err := sql.Open("mysql", dsn)

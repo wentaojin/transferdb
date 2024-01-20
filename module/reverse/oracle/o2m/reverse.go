@@ -114,10 +114,10 @@ func (r *Reverse) Reverse() error {
 		return err
 	}
 	if _, ok := common.MigrateTableStructureDatabaseCollationMap[common.TaskTypeOracle2MySQL][common.StringUPPER(nlsComp)][common.MigrateTableStructureDatabaseCharsetMap[common.TaskTypeOracle2MySQL][oracleDBCharset]]; !ok {
-		return fmt.Errorf("oracle db nls comp [%s] , mysql db isn't support", nlsComp)
+		return fmt.Errorf("oracle db nls comp [%s] db charset [%v], mysql db isn't support", nlsComp, oracleDBCharset)
 	}
 	if _, ok := common.MigrateTableStructureDatabaseCollationMap[common.TaskTypeOracle2MySQL][common.StringUPPER(nlsSort)][common.MigrateTableStructureDatabaseCharsetMap[common.TaskTypeOracle2MySQL][oracleDBCharset]]; !ok {
-		return fmt.Errorf("oracle db nls sort [%s] , mysql db isn't support", nlsSort)
+		return fmt.Errorf("oracle db nls sort [%s] db charset [%v], mysql db isn't support", nlsSort, oracleDBCharset)
 	}
 
 	if !strings.EqualFold(nlsSort, nlsComp) {
