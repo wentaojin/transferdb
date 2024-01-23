@@ -251,7 +251,7 @@ func (o *Oracle) GetOracleTableRowsDataCSV(querySQL, sourceDBCharset, targetDBCh
 					rowData[tableColumnNameIndex[columnNames[i]]] = r.String()
 				case "[]uint8":
 					// binary data -> raw、long raw、blob
-					rowData[tableColumnNameIndex[columnNames[i]]] = fmt.Sprintf("%v", raw)
+					rowData[tableColumnNameIndex[columnNames[i]]] = common.EscapeBinaryCSV(raw, cfg.CSVConfig.EscapeBackslash, cfg.CSVConfig.Delimiter, cfg.CSVConfig.Separator)
 				default:
 					var convertTargetRaw []byte
 
@@ -416,15 +416,12 @@ func (o *Oracle) GetOracleTableRowsData(querySQL string, insertBatchSize, callTi
 		}
 
 		for i, raw := range rawResult {
-			// 注意 Oracle/Mysql NULL VS 空字符串区别
-			// Oracle 空字符串与 NULL 归于一类，统一 NULL 处理 （is null 可以查询 NULL 以及空字符串值，空字符串查询无法查询到空字符串值）
-			// Mysql 空字符串与 NULL 非一类，NULL 是 NULL，空字符串是空字符串（is null 只查询 NULL 值，空字符串查询只查询到空字符串值）
-			// 按照 Oracle 特性来，转换同步统一转换成 NULL 即可，但需要注意业务逻辑中空字符串得写入，需要变更
-			// Oracle/Mysql 对于 'NULL' 统一字符 NULL 处理，查询出来转成 NULL,所以需要判断处理
 			if raw == nil {
-				rowsMap[cols[i]] = `NULL`
+				//rowsMap[cols[i]] = `NULL` -> sql
+				rowsMap[cols[i]] = nil
 			} else if string(raw) == "" {
-				rowsMap[cols[i]] = `NULL`
+				//rowsMap[cols[i]] = `NULL` -> sql
+				rowsMap[cols[i]] = nil
 			} else {
 				switch columnTypes[i] {
 				case "int64":
@@ -465,7 +462,7 @@ func (o *Oracle) GetOracleTableRowsData(querySQL string, insertBatchSize, callTi
 					rowsMap[cols[i]] = fmt.Sprintf("%v", r)
 				case "[]uint8":
 					// binary data -> raw、long raw、blob
-					rowsMap[cols[i]] = fmt.Sprintf("%v", raw)
+					rowsMap[cols[i]] = raw
 				default:
 					// 特殊字符
 					convertUtf8Raw, err := common.CharsetConvert(raw, sourceDBCharset, common.CharsetUTF8MB4)

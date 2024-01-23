@@ -535,3 +535,61 @@ func PathExist(path string) error {
 	}
 	return err
 }
+
+// EscapeBinaryCSV 转义二进制数据
+func EscapeBinaryCSV(s []byte, escapeBackslash bool, delimiterCsv, separatorCsv string) string {
+	switch {
+	case escapeBackslash:
+		return escapeBackslashCSV(s, delimiterCsv, separatorCsv)
+	case len(delimiterCsv) > 0:
+		delimiter := []byte(delimiterCsv)
+		return string(bytes.ReplaceAll(s, delimiter, append(delimiter, delimiter...)))
+	default:
+		return string(s)
+	}
+}
+
+func escapeBackslashCSV(s []byte, delimiterCsv, separatorCsv string) string {
+	bf := bytes.Buffer{}
+
+	var (
+		escape  byte
+		last         = 0
+		specCmt byte = 0
+	)
+
+	delimiter := []byte(delimiterCsv)
+	separator := []byte(separatorCsv)
+
+	if len(delimiter) > 0 {
+		specCmt = delimiter[0] // if csv has a delimiter, we should use backslash to comment the delimiter in field value
+	} else if len(separator) > 0 {
+		specCmt = separator[0] // if csv's delimiter is "", we should escape the separator to avoid error
+	}
+
+	for i := 0; i < len(s); i++ {
+		escape = 0
+
+		switch s[i] {
+		case 0: /* Must be escaped for 'mysql' */
+			escape = '0'
+		case '\r':
+			escape = 'r'
+		case '\n': /* escaped for line terminators */
+			escape = 'n'
+		case '\\':
+			escape = '\\'
+		case specCmt:
+			escape = specCmt
+		}
+
+		if escape != 0 {
+			bf.Write(s[last:i])
+			bf.WriteByte('\\')
+			bf.WriteByte(escape)
+			last = i + 1
+		}
+	}
+	bf.Write(s[last:])
+	return bf.String()
+}
