@@ -19,17 +19,18 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
+
 	"github.com/thinkeridea/go-extend/exstrings"
 	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/config"
 	"github.com/wentaojin/transferdb/database/meta"
 	"github.com/wentaojin/transferdb/database/oracle"
 	"go.uber.org/zap"
-	"os"
-	"path/filepath"
-	"strconv"
-	"strings"
-	"time"
 )
 
 type Rows struct {
@@ -40,7 +41,7 @@ type Rows struct {
 	DBCharsetS   string
 	DBCharsetT   string
 	ColumnNameS  []string
-	ReadChannel chan [][]string
+	ReadChannel  chan [][]string
 	WriteChannel chan string
 }
 
@@ -139,8 +140,8 @@ func (t *Rows) ApplyData() error {
 	if err := common.PathExist(
 		filepath.Join(
 			t.Cfg.CSVConfig.OutputDir,
-			strings.ToUpper(t.SyncMeta.SchemaNameS),
-			strings.ToUpper(t.SyncMeta.TableNameS))); err != nil {
+			strings.ToUpper(strings.Trim(t.SyncMeta.SchemaNameS, "\"")),
+			strings.ToUpper(strings.Trim(t.SyncMeta.TableNameS, "\"")))); err != nil {
 		return err
 	}
 

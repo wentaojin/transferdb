@@ -23,6 +23,7 @@ type ReportOverview struct {
 	HostName          string `json:"host_name"`
 	PlatformName      string `json:"platform_name"`
 	DBName            string `json:"db_name"`
+	DBVersion         string `json:"db_version"`
 	GlobalDBName      string `json:"global_db_name"`
 	ClusterDB         string `json:"cluster_db"`
 	ClusterDBInstance string `json:"cluster_db_instance"`

@@ -17,11 +17,12 @@ package o2t
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/database/meta"
 	"github.com/wentaojin/transferdb/database/oracle"
 	"github.com/wentaojin/transferdb/module/assess/oracle/public"
-	"strings"
 )
 
 /*
@@ -30,6 +31,11 @@ Oracle Database Overview
 func AssessOracleDBOverview(oracle *oracle.Oracle, objAssessCompsMap map[string]meta.BuildinObjectCompatible, reportName, reportUser string) (*public.ReportOverview, public.ReportSummary, error) {
 
 	dbName, platformID, platformName, err := oracle.GetOracleDBName()
+	if err != nil {
+		return nil, public.ReportSummary{}, err
+	}
+
+	dbVersion, err := oracle.GetOracleSoftVersion()
 	if err != nil {
 		return nil, public.ReportSummary{}, err
 	}
@@ -91,6 +97,7 @@ func AssessOracleDBOverview(oracle *oracle.Oracle, objAssessCompsMap map[string]
 			HostName:          instanceRes[0]["HOST_NAME"],
 			PlatformName:      fmt.Sprintf("%s/%s", platformName, platformID),
 			DBName:            dbName,
+			DBVersion:         dbVersion,
 			GlobalDBName:      globalName,
 			ClusterDB:         clusterDatabase,
 			ClusterDBInstance: CLusterDatabaseInstance,

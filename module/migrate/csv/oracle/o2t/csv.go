@@ -18,6 +18,11 @@ package o2t
 import (
 	"context"
 	"fmt"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
+
 	"github.com/google/uuid"
 	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/config"
@@ -27,10 +32,6 @@ import (
 	"github.com/wentaojin/transferdb/module/migrate/csv/oracle/public"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
-	"path/filepath"
-	"strconv"
-	"strings"
-	"time"
 )
 
 type CSV struct {
@@ -700,9 +701,9 @@ func (r *CSV) initWaitSyncTableChunk(csvWaitTables []string, oracleCollation boo
 					TaskMode:       r.Cfg.TaskMode,
 					TaskStatus:     common.TaskStatusWaiting,
 					CSVFile: filepath.Join(r.Cfg.CSVConfig.OutputDir,
-						common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema), common.StringUPPER(t),
-						common.StringsBuilder(common.StringUPPER(r.Cfg.SchemaConfig.TargetSchema),
-							`.`, common.StringUPPER(targetTableName), `.0.csv`)),
+						common.StringUPPER(strings.Trim(r.Cfg.SchemaConfig.SourceSchema, "\"")), common.StringUPPER(strings.Trim(t, "\"")),
+						common.StringsBuilder(common.StringUPPER(strings.Trim(r.Cfg.SchemaConfig.TargetSchema, "\"")),
+							`.`, common.StringUPPER(strings.Trim(targetTableName, "\"")), `.0.csv`)),
 				}, &meta.WaitSyncMeta{
 					DBTypeS:          r.Cfg.DBTypeS,
 					DBTypeT:          r.Cfg.DBTypeT,
@@ -728,9 +729,9 @@ func (r *CSV) initWaitSyncTableChunk(csvWaitTables []string, oracleCollation boo
 			for i, res := range chunkRes {
 				var csvFile string
 				csvFile = filepath.Join(r.Cfg.CSVConfig.OutputDir,
-					common.StringUPPER(r.Cfg.SchemaConfig.SourceSchema), common.StringUPPER(t),
-					common.StringsBuilder(common.StringUPPER(r.Cfg.SchemaConfig.TargetSchema), `.`,
-						common.StringUPPER(targetTableName), `.`, strconv.Itoa(i), `.csv`))
+					common.StringUPPER(strings.Trim(r.Cfg.SchemaConfig.SourceSchema, "\"")), common.StringUPPER(strings.Trim(t, "\"")),
+					common.StringsBuilder(common.StringUPPER(strings.Trim(r.Cfg.SchemaConfig.TargetSchema, "\"")), `.`,
+						common.StringUPPER(strings.Trim(targetTableName, "\"")), `.`, strconv.Itoa(i), `.csv`))
 
 				switch {
 				case enableSplit && !strings.EqualFold(wherePrefix, ""):

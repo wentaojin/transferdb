@@ -19,17 +19,18 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
+
 	"github.com/thinkeridea/go-extend/exstrings"
 	"github.com/wentaojin/transferdb/common"
 	"github.com/wentaojin/transferdb/config"
 	"github.com/wentaojin/transferdb/database/meta"
 	"github.com/wentaojin/transferdb/database/oracle"
 	"go.uber.org/zap"
-	"os"
-	"path/filepath"
-	"strconv"
-	"strings"
-	"time"
 )
 
 type Rows struct {
@@ -121,7 +122,7 @@ func (t *Rows) ProcessData() error {
 		for _, dSlice := range dataC {
 			if len(dSlice) != len(t.ColumnNameS) {
 				return fmt.Errorf("source schema table column counts vs data counts isn't match")
-			} else  {
+			} else {
 				// csv 文件行数据输入
 				t.WriteChannel <- common.StringsBuilder(exstrings.Join(dSlice, t.Cfg.CSVConfig.Separator), t.Cfg.CSVConfig.Terminator)
 			}
@@ -140,8 +141,8 @@ func (t *Rows) ApplyData() error {
 	if err := common.PathExist(
 		filepath.Join(
 			t.Cfg.CSVConfig.OutputDir,
-			strings.ToUpper(t.SyncMeta.SchemaNameS),
-			strings.ToUpper(t.SyncMeta.TableNameS))); err != nil {
+			strings.ToUpper(strings.Trim(t.SyncMeta.SchemaNameS, "\"")),
+			strings.ToUpper(strings.Trim(t.SyncMeta.TableNameS, "\"")))); err != nil {
 		return err
 	}
 
