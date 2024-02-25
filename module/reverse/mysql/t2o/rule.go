@@ -18,9 +18,10 @@ package t2o
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/wentaojin/transferdb/common"
 	"regexp"
 	"strings"
+
+	"github.com/wentaojin/transferdb/common"
 )
 
 type Rule struct {
@@ -362,7 +363,7 @@ func (r *Rule) GenTableNormalIndex() (normalIndexes []string, compatibilityIndex
 }
 
 func (r *Rule) GenTableComment() (tableComment string, err error) {
-	if len(r.TableColumnINFO) > 0 && r.TableCommentINFO[0]["TABLE_COMMENT"] != "" {
+	if len(r.TableCommentINFO) > 0 && r.TableCommentINFO[0]["TABLE_COMMENT"] != "" {
 		convertUtf8Raw, err := common.CharsetConvert([]byte(r.TableCommentINFO[0]["TABLE_COMMENT"]), common.MigrateMYSQLCompatibleCharsetStringConvertMapping[common.StringUPPER(r.SourceDBCharset)], common.CharsetUTF8MB4)
 		if err != nil {
 			return tableComment, fmt.Errorf("table comments [%s] charset convert failed, %v", r.TableCommentINFO[0]["TABLE_COMMENT"], err)
