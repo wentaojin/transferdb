@@ -18,11 +18,12 @@ package o2t
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
+	"strings"
+
 	"github.com/valyala/fastjson"
 	"github.com/wentaojin/transferdb/common"
 	"go.uber.org/zap"
-	"regexp"
-	"strings"
 )
 
 type Rule struct {
@@ -921,7 +922,7 @@ func (r *Rule) GenTableNormalIndex() (normalIndexes []string, compatibilityIndex
 }
 
 func (r *Rule) GenTableComment() (tableComment string, err error) {
-	if len(r.TableColumnINFO) > 0 && r.TableCommentINFO[0]["COMMENTS"] != "" {
+	if len(r.TableCommentINFO) > 0 && r.TableCommentINFO[0]["COMMENTS"] != "" {
 		tableComment = fmt.Sprintf("COMMENT='%s'", r.TableCommentINFO[0]["COMMENTS"])
 	}
 	return tableComment, err
@@ -967,18 +968,7 @@ func (r *Rule) GenTableColumn() (tableColumns []string, err error) {
 		}
 
 		if !strings.EqualFold(rowCol["COMMENTS"], "") {
-			// 字符数据处理 MigrateStringDataTypeDatabaseCharsetMap
-			convertUtf8Raw, err := common.CharsetConvert([]byte(rowCol["COMMENTS"]), common.MigrateOracleCharsetStringConvertMapping[common.StringUPPER(r.SourceDBCharset)], common.CharsetUTF8MB4)
-			if err != nil {
-				return tableColumns, fmt.Errorf("column [%s] comments charset convert failed, %v", columnName, err)
-			}
-
-			convertTargetRaw, err := common.CharsetConvert([]byte(common.SpecialLettersUsingMySQL(convertUtf8Raw)), common.CharsetUTF8MB4, common.MigrateMYSQLCompatibleCharsetStringConvertMapping[common.StringUPPER(r.TargetDBCharset)])
-			if err != nil {
-				return tableColumns, fmt.Errorf("column [%s] comments charset convert failed, %v", columnName, err)
-			}
-
-			comment = "'" + string(convertTargetRaw) + "'"
+			comment = "'" + rowCol["COMMENTS"] + "'"
 		} else {
 			comment = rowCol["COMMENTS"]
 		}
