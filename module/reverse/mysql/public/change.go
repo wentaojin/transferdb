@@ -134,26 +134,6 @@ func (r *Change) ChangeTableColumnDatatype() (map[string]map[string]string, erro
 		return tableColumnDatatypeMap, err
 	}
 
-	// 获取自定义 table 级别数据类型映射规则
-	tableDataTypeMapSlice, err := meta.NewTableDatatypeRuleModel(r.MetaDB).DetailTableRule(r.Ctx, &meta.TableDatatypeRule{
-		DBTypeS:     r.DBTypeS,
-		DBTypeT:     r.DBTypeT,
-		SchemaNameS: r.SourceSchemaName,
-	})
-	if err != nil {
-		return tableColumnDatatypeMap, err
-	}
-
-	// 获取自定义 column 映射规则
-	columnDataTypeMapSlice, err := meta.NewColumnDatatypeRuleModel(r.MetaDB).DetailColumnRule(r.Ctx, &meta.ColumnDatatypeRule{
-		DBTypeS:     r.DBTypeS,
-		DBTypeT:     r.DBTypeT,
-		SchemaNameS: r.SourceSchemaName,
-	})
-	if err != nil {
-		return tableColumnDatatypeMap, err
-	}
-
 	wg := &errgroup.Group{}
 	wg.SetLimit(r.Threads)
 
@@ -174,6 +154,17 @@ func (r *Change) ChangeTableColumnDatatype() (map[string]map[string]string, erro
 	for _, table := range r.SourceTables {
 		sourceTable := table
 		wg.Go(func() error {
+			// 获取自定义 table 级别数据类型映射规则
+			tableDataTypeMapSlice, err := meta.NewTableDatatypeRuleModel(r.MetaDB).DetailTableRule(r.Ctx, &meta.TableDatatypeRule{
+				DBTypeS:     r.DBTypeS,
+				DBTypeT:     r.DBTypeT,
+				SchemaNameS: r.SourceSchemaName,
+				TableNameS:  sourceTable,
+			})
+			if err != nil {
+				return err
+			}
+
 			// 获取表字段信息
 			tableColumnINFO, err := r.MySQL.GetMySQLTableColumn(r.SourceSchemaName, sourceTable)
 			if err != nil {
@@ -205,6 +196,17 @@ func (r *Change) ChangeTableColumnDatatype() (map[string]map[string]string, erro
 				convUtf8Raw, err := common.CharsetConvert([]byte(columnName), common.MigrateOracleCharsetStringConvertMapping[common.StringUPPER(r.SourceDBCharset)], common.CharsetUTF8MB4)
 				if err != nil {
 					return fmt.Errorf("table column name rule [%s] charset convert failed, %v", columnName, err)
+				}
+
+				// 获取自定义 column 映射规则
+				columnDataTypeMapSlice, err := meta.NewColumnDatatypeRuleModel(r.MetaDB).DetailColumnRule(r.Ctx, &meta.ColumnDatatypeRule{
+					DBTypeS:     r.DBTypeS,
+					DBTypeT:     r.DBTypeT,
+					SchemaNameS: r.SourceSchemaName,
+					ColumnNameS: columnName,
+				})
+				if err != nil {
+					return err
 				}
 
 				convTargetRaw, err := common.CharsetConvert(convUtf8Raw, common.CharsetUTF8MB4, common.MigrateMYSQLCompatibleCharsetStringConvertMapping[common.StringUPPER(r.TargetDBCharset)])
