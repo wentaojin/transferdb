@@ -792,7 +792,8 @@ func (r *Rule) GenTableColumn() (tableColumns []string, err error) {
 		}
 
 		if !strings.EqualFold(rowCol["COMMENTS"], "") {
-			comment = "'" + rowCol["COMMENTS"] + "'"
+			r := strings.NewReplacer("'", "\"", "\\", "/")
+			comment = "'" + r.Replace(rowCol["COMMENTS"]) + "'"
 		} else {
 			comment = rowCol["COMMENTS"]
 		}
