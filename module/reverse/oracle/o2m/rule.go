@@ -747,7 +747,7 @@ func (r *Rule) GenTableNormalIndex() (normalIndexes []string, compatibilityIndex
 
 func (r *Rule) GenTableComment() (tableComment string, err error) {
 	if len(r.TableCommentINFO) > 0 && r.TableCommentINFO[0]["COMMENTS"] != "" {
-		tableComment = fmt.Sprintf("COMMENT='%s'", r.TableCommentINFO[0]["COMMENTS"])
+		tableComment = fmt.Sprintf("COMMENT='%s'", common.SpecialLettersUsingMySQL([]byte(r.TableCommentINFO[0]["COMMENTS"])))
 	}
 	return tableComment, err
 }
@@ -792,7 +792,7 @@ func (r *Rule) GenTableColumn() (tableColumns []string, err error) {
 		}
 
 		if !strings.EqualFold(rowCol["COMMENTS"], "") {
-			comment = "'" + rowCol["COMMENTS"] + "'"
+			comment = "'" + common.SpecialLettersUsingMySQL([]byte(rowCol["COMMENTS"])) + "'"
 		} else {
 			comment = rowCol["COMMENTS"]
 		}
