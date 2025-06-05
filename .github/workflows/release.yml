@@ -26,7 +26,7 @@ jobs:
       - name: Setup Golang Env
         uses: actions/setup-go@v3
         with:
-          go-version: '1.19'
+          go-version: '1.24'
           cache: true
       - name: View Golang Env
         run: |
@@ -46,7 +46,7 @@ jobs:
         run: |
           go install src.techknowlogick.com/xgo@latest
           cd ${{ github.workspace }}
-          xgo -ldflags='${{ env.ldflags }}' -buildmode=default -dest bin -go go-1.19.x -out=transferdb-${{ github.ref_name }} -targets=linux/amd64,linux/arm64,darwin/arm64,darwin/amd64,windows/amd64 -pkg cmd ${{ github.workspace }}
+          xgo -ldflags='${{ env.ldflags }}' -buildmode=default -dest bin -go go-1.24.x -out=transferdb-${{ github.ref_name }} -targets=linux/amd64,linux/arm64,darwin/arm64,darwin/amd64,windows/amd64 -pkg cmd ${{ github.workspace }}
       - name: Prepare XGO Binary
         run: |
           cd ${{ github.workspace }}
